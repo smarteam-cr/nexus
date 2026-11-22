@@ -46,10 +46,10 @@ igual en la arquitectura de cada empresa; cambia solo lo que se PRESENTA.
   líneas y 220 caracteres) no se manda: se ve tal cual.
 - **La huella:** FNV-1a de las líneas que muestra la tarjeta. Si la guardada no coincide con la de hoy, se muestra lo de
   siempre recortado.
-- **Verificación antes de guardar:** toda cifra de la versión compacta tiene que estar en el original, toda cifra del
-  original tiene que seguir en la compacta y ningún rango queda al revés (`cifrasQueNoCuadran`). La que no pasa se pide
+- **Verificación antes de guardar:** toda cifra de la versión compacta tiene que estar en el original y ningún rango
+  queda al revés (`cifrasQueNoCuadran`). Desde la segunda vuelta, soltar cifras se permite. La que no pasa se pide
   una vez más con el motivo; si tampoco, se descarta y sigue lo de siempre.
-- **Tamaño:** como mucho 8 puntos por tarjeta (tope duro 12).
+- **Tamaño:** como mucho 4 puntos de una línea por tarjeta (ver «Segunda vuelta», abajo; la primera fue de 8).
 - **Dónde se guarda:** `contenido.tarjetasCompactas[clave] = { huella, lineas, en }`, en el JSON que ya tiene la
   exploración. **Sin SQL.** No sube la versión (como la descripción de la escala): es material de pantalla, no algo
   confirmado. Tampoco mueve la fecha de actividad de la preventa (`updatedAt`).
@@ -76,3 +76,17 @@ tiene que pasar).
 - «La exploración desde el vendedor» › «El Resumen arriba» (sin hallazgos; tarjetas compactas; particularidades).
 - «La exploración guiada» › «Dónde quedó (punto 16)» (sale del inicio).
 - «La exploración son sus sesiones» › la página de inicio (fuentes manuales e instrucciones).
+
+## Segunda vuelta (22 nov, tarde): 4 puntos por tarjeta
+
+Elías vio Cemaco · Ecuador en producción y las tarjetas casi no se acortaron (8 puntos largos; Retos con «+17 más»).
+Regla nueva:
+
+- Como mucho 4 puntos por tarjeta, de una línea (unas 15 palabras; tope duro 26 y 200 letras).
+- Fusionar de verdad lo que repite la misma idea y juntar en un punto lo de un mismo departamento o flujo.
+- Solo las cifras que importan para proponer. Nunca una inventada ni al revés; soltar cifras sí se permite.
+- La huella lleva la versión de las reglas: las compactas de la primera vuelta dejan de mostrarse hasta rearmarlas
+  (`scripts/compactar-tarjetas-del-resumen.ts --todas --apply`).
+
+Simulacro de solo lectura contra producción (Cemaco · Costa Rica y Cemaco · Ecuador): 10 de 10 tarjetas pasan. Costa
+Rica: metas de 11 a 4 puntos, retos de 16 a 4. Ecuador: metas de 11 a 4, planes de 11 a 4, retos de 21 a 4.

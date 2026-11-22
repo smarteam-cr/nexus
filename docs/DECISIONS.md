@@ -14034,24 +14034,29 @@ exploración pesa y se nota** en la guía. Lo que sigue es el estado después de
     ya está en «Lo que aprendimos» de esa sesión. `propuesta.hallazgos` se sigue guardando y la guía lo sigue leyendo.
 - **El Resumen liviano** (22 nov, Elías; docs/resumen-liviano-plan.md, `lib/exploraciones/tarjetas-compactas.ts`). Todo
   se sigue guardando igual; cambia lo que se ve:
-  - **Cada tarjeta del marco se ve en su versión compacta.** La arma Haiku con cuatro reglas de Elías: fusionar los puntos
-    que repiten la misma idea, meter la línea base dentro de su objetivo, agrupar por equipo o flujo, y quitar relleno sin
-    perder métricas, canales ni restricciones (como mucho 8 puntos, `puntosMaximos` por tarjeta en el pedido, y tope duro
-    de 12). Es SOLO para mostrar: vive en `contenido.tarjetasCompactas[clave]` con la huella de las líneas de las que
-    salió, no sube la versión, no mueve `updatedAt` (no es actividad: el script dejaría todas las preventas «tocadas hoy»
-    y volverían a entrar a las ventanas que miran la actividad) y nunca reemplaza lo guardado. Al tocar la tarjeta se abre la casilla con todo, como antes.
+  - **Cada tarjeta del marco se ve en su versión compacta: como mucho 4 puntos, de una línea (unas 15 palabras).** La
+    arma Haiku. *Cambió la misma tarde (Elías, al ver Cemaco · Ecuador en producción con 8 puntos largos por tarjeta y
+    Retos con «+17 más»):* la primera versión pedía conservar TODAS las cifras y llegaba a 8 puntos; la regla de ahora es
+    fusionar de verdad lo que repite la misma idea, juntar en un punto lo de un mismo departamento o flujo (crédito y
+    cobro, marketing, e-commerce, TI…), y dejar solo las cifras que importan para proponer. Retos de 22 puntos también
+    queda en 4. Es SOLO para mostrar: vive en `contenido.tarjetasCompactas[clave]` con la huella de las líneas de las que
+    salió y de la versión de las reglas (`VERSION_DE_LAS_REGLAS`: con reglas nuevas, las de antes dejan de mostrarse
+    hasta rearmarlas), no sube la versión, no mueve `updatedAt` (no es actividad: el script dejaría todas las preventas
+    «tocadas hoy» y volverían a entrar a las ventanas que miran la actividad) y nunca reemplaza lo guardado. Al tocar la
+    tarjeta se abre la casilla con todo, con todas las cifras, como antes.
   - **Cuándo se arma:** después de un cambio confirmado de esa tarjeta (el PATCH de la preventa, en segundo plano), solo
     la que cambió (lo que llega mientras corre se suma a la cola con sus claves, no rehace las demás). Nunca al abrir la
-    página. Una tarjeta de hasta 2 líneas cortas no se manda: se ve tal cual. Las que ya
-    existían se compactan con `scripts/compactar-tarjetas-del-resumen.ts` (simulacro por default).
+    página. Una tarjeta de hasta 4 puntos de una línea no se manda: se ve tal cual. Las que ya existían, o las de reglas
+    viejas, se rearman con `scripts/compactar-tarjetas-del-resumen.ts --todas` (simulacro por default; `--solo-lectura`
+    para mirar producción sin escribir).
   - **Sin versión compacta, o de una huella vieja:** lo de siempre, recortado a 4 líneas con «+N más». Nunca vacío ni en
     espera.
-  - **Las cifras se comprueban** (`motivosParaDescartar`): toda cifra de la compacta tiene que estar en el original y toda
-    cifra del original tiene que seguir en la compacta; un rango no puede quedar al revés («de 2 % a 5 %» → «de 5 % a
-    2 %»); un decimal no se confunde con un entero («2,5» no es «25»); tampoco puede ser más larga. No ve la unidad, un
-    número en palabras ni un número repetido que se pierde en un contexto si sigue en otro («3 vendedores», «3 meses»). La que no pasa se pide una vez más con
-    el motivo; si tampoco, no se guarda. *Por qué:* una cifra inventada en el Resumen llega a la propuesta en la cabeza
-    del vendedor.
+  - **Se comprueba** (`motivosParaDescartar`): como mucho 4 puntos, cada uno de hasta 26 palabras (la meta es 15) y 200
+    letras; no más larga que el original; ninguna cifra inventada (toda cifra de la compacta está en el original, y un
+    decimal no se confunde con un entero: «2,5» no es «25»); y ningún rango al revés («de 2 % a 5 %» → «de 5 % a 2 %»).
+    Soltar cifras SÍ se permite desde la segunda vuelta. No ve la unidad ni un número en palabras. La que no pasa se pide
+    una vez más con el motivo (qué punto, de cuántas palabras); si tampoco, no se guarda. *Por qué:* una cifra inventada
+    en el Resumen llega a la propuesta en la cabeza del vendedor.
   - **El contexto** es SOLO lo confirmado de esa exploración y el nombre de su empresa (invariante 1). Medido con el
     `agentSlug` de la exploración y `origen: exploraciones/agente:tarjetas-compactas`, con su `AgentRun`.
   - **Particularidades:** se siguen generando y guardando todas. A la vista, las 5 más recientes, cada una con el día en

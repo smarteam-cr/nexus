@@ -5,10 +5,13 @@
  *
  *   - Simulacro (por default): imprime, por tarjeta, lo de siempre, lo que escribiría Haiku y si pasó la comprobación de
  *     las cifras. No guarda nada. Llama a Claude (Haiku, unos centavos) y lo mide como cualquier llamada.
+ *   - --solo-lectura: el simulacro con la conexión en `default_transaction_read_only` (para mirar producción sin escribir
+ *     una fila: el medidor tampoco escribe, así que ese gasto no aparece en «Gasto de la IA»). No va con --apply.
  *   - --apply: guarda las que pasan (`compactarTarjetasDelResumen`, la misma función de la app). Contra producción exige
  *     ALLOW_PROD_WRITE=1 (el guard imprime el host).
  *
  *   npx tsx scripts/compactar-tarjetas-del-resumen.ts --exploracion <id>[,<id>…]
+ *   npx tsx scripts/compactar-tarjetas-del-resumen.ts --empresa "Cemaco" --solo-lectura   # por nombre de la empresa
  *   npx tsx scripts/compactar-tarjetas-del-resumen.ts --todas            # las vivas con alguna tarjeta por compactar
  *   npx tsx scripts/compactar-tarjetas-del-resumen.ts --todas --apply
  */
@@ -17,6 +20,10 @@ import "./lib/permitir-server-only";
 import { assertProdWriteAllowed, imprimirDestino } from "./lib/guard";
 
 process.env.DB_POOL_MAX ??= "2";
+const soloLectura = process.argv.includes("--solo-lectura");
+if (soloLectura) {
+  process.env.PGOPTIONS = [process.env.PGOPTIONS, "-c default_transaction_read_only=on -c statement_timeout=60000"].filter(Boolean).join(" ");
+}
 
 const arg = (n: string) => {
   const i = process.argv.indexOf(n);
@@ -26,9 +33,11 @@ const arg = (n: string) => {
 async function main() {
   const aplicar = process.argv.includes("--apply");
   imprimirDestino();
+  if (aplicar && soloLectura) throw new Error("--apply y --solo-lectura no van juntos");
   if (aplicar) assertProdWriteAllowed("compactar las tarjetas del Resumen");
   const ids = arg("--exploracion")?.split(",").map((s) => s.trim()).filter(Boolean);
-  if (!ids?.length && !process.argv.includes("--todas")) throw new Error("Falta --exploracion <id> o --todas");
+  const empresa = arg("--empresa")?.trim();
+  if (!ids?.length && !empresa && !process.argv.includes("--todas")) throw new Error("Falta --exploracion <id>, --empresa <nombre> o --todas");
 
   const { prisma } = await import("@/lib/db/prisma");
   const { leerContenido } = await import("@/lib/exploraciones/esquemas");
@@ -40,7 +49,11 @@ async function main() {
   const { AGENTE_DE_LA_EXPLORACION } = await import("@/lib/exploraciones/agente");
 
   const filas = await prisma.exploracionDeVenta.findMany({
-    where: { archivadaEn: null, ...(ids?.length ? { id: { in: ids } } : {}) },
+    where: {
+      archivadaEn: null,
+      ...(ids?.length ? { id: { in: ids } } : {}),
+      ...(empresa ? { client: { name: { contains: empresa, mode: "insensitive" as const } } } : {}),
+    },
     select: { id: true, clientId: true, projectId: true, contenido: true, client: { select: { name: true } } },
   });
   let total = 0;

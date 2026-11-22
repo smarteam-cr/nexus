@@ -6,10 +6,11 @@
  * huella de las líneas de las que salió; si la casilla cambió, la huella ya no coincide y la tarjeta vuelve a lo de siempre
  * recortado (`loQueMuestraLaTarjeta`). Al tocar la tarjeta se abre la casilla entera, como siempre.
  *
- * Las cuatro reglas de Elías (las lee el agente en `REGLAS_DE_LA_TARJETA_COMPACTA`): fusionar lo que repite la misma idea,
- * meter la línea base dentro de su objetivo, agrupar por equipo o flujo, y quitar relleno sin perder métricas, canales ni
- * restricciones. La última se COMPRUEBA: toda cifra de la compacta tiene que estar en el original y toda cifra del
- * original tiene que seguir en la compacta (`cifrasQueNoCuadran`). La que no pasa no se guarda.
+ * Las reglas de Elías (las lee el agente en `REGLAS_DE_LA_TARJETA_COMPACTA`). Segunda vuelta, el mismo 22 nov, al ver
+ * Cemaco · Ecuador con 8 puntos largos por tarjeta: como mucho 4 puntos por tarjeta, de una línea (unas 15 palabras);
+ * fusionar DE VERDAD lo que repite la misma idea y juntar en un punto lo de un mismo departamento o flujo; y solo las
+ * cifras que importan para proponer. Se COMPRUEBA que ninguna cifra sea inventada ni quede al revés (`cifrasQueNoCuadran`);
+ * soltar cifras está permitido: al tocar la tarjeta se ven todas.
  */
 import {
   CASILLAS_DEL_RESUMEN,
@@ -35,12 +36,19 @@ export interface TarjetaCompacta {
 
 /** Cuántas líneas de lo de siempre se ven sin versión compacta vigente; el resto se cuenta («+N más»). */
 export const LINEAS_A_LA_VISTA = 4;
-/** Hasta acá una tarjeta ya es corta: no se le pide nada al agente y se ve tal cual. */
-const LINEAS_CORTAS = 2;
-const CARACTERES_CORTOS = 220;
-/** Topes de lo que se guarda (lo valida también esquemas.ts). */
-export const MAX_LINEAS_COMPACTAS = 12;
-export const MAX_CARACTERES_DE_LINEA_COMPACTA = 400;
+/** Como mucho 4 puntos por tarjeta (Elías, 22 nov): lo valida también esquemas.ts. */
+export const MAX_LINEAS_COMPACTAS = 4;
+/** Cada punto, de una línea: unas 15 palabras. El tope duro deja margen para un nombre propio o una cifra con su unidad. */
+export const PALABRAS_POR_PUNTO = 15;
+const MAX_PALABRAS_POR_PUNTO = 26;
+export const MAX_CARACTERES_DE_LINEA_COMPACTA = 200;
+/**
+ * La versión de las reglas: entra a la huella. Con reglas nuevas, las compactas de antes dejan de coincidir y la tarjeta
+ * vuelve a lo de siempre recortado hasta que se rearme (el script `--todas`). 2 = la de 4 puntos (22 nov, tarde).
+ */
+const VERSION_DE_LAS_REGLAS = "2";
+
+const palabras = (l: string) => l.trim().split(/\s+/).filter(Boolean).length;
 
 /**
  * Los tres niveles (2026-11-07): los retos y las metas de un equipo del cliente van juntos y con su nombre («Ventas · …»),
@@ -76,18 +84,20 @@ export function lineasDe(clave: ClaveDeCasilla, valor: unknown): string[] {
   }
 }
 
-/** La huella de las líneas de una tarjeta (FNV-1a de 32 bits, en hexa): cambia si cambia cualquier letra. */
+/**
+ * La huella de las líneas de una tarjeta con la versión de las reglas (FNV-1a de 32 bits, en hexa): cambia si cambia
+ * cualquier letra o si cambian las reglas.
+ */
 export function huellaDeLasLineas(lineas: readonly string[]): string {
-  const t = lineas.map((l) => l.trim()).join("\n");
+  const t = `v${VERSION_DE_LAS_REGLAS}\n${lineas.map((l) => l.trim()).join("\n")}`;
   let h = 0x811c9dc5;
   for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 0x01000193) >>> 0;
   return h.toString(16).padStart(8, "0");
 }
 
-/** ¿Vale la pena pedirle la versión compacta? Una tarjeta de una o dos líneas cortas ya se lee de un vistazo. */
+/** ¿Vale la pena pedirle la versión compacta? Una tarjeta de hasta 4 puntos de una línea ya se lee de un vistazo. */
 export function pideCompactar(lineas: readonly string[]): boolean {
-  const total = lineas.reduce((n, l) => n + l.trim().length, 0);
-  return lineas.length > LINEAS_CORTAS || total > CARACTERES_CORTOS;
+  return lineas.length > MAX_LINEAS_COMPACTAS || lineas.some((l) => palabras(l) > MAX_PALABRAS_POR_PUNTO);
 }
 
 /** Lo que muestra la tarjeta del Resumen: la compacta si es de estas líneas, o lo de siempre recortado. */
@@ -146,9 +156,9 @@ const paresDe = (lineas: readonly string[]) =>
   );
 
 /**
- * Las cifras que no cuadran entre el original y la compacta: las que la compacta inventó, las que perdió y los pares que
- * dio vuelta («de 2 % a 5 %» escrito «de 5 % a 2 %»: un par que la compacta tiene al revés y el original nunca así).
- * No ve un número repetido que se pierde en un contexto si sigue en otro («3 vendedores», «3 meses»), ni la unidad.
+ * Las cifras que no cuadran entre el original y la compacta: las que la compacta inventó, las que soltó (se informan, no
+ * descartan: desde el 22 nov solo van las que importan) y los pares que dio vuelta («de 2 % a 5 %» escrito «de 5 % a 2 %»:
+ * un par que la compacta tiene al revés y el original nunca así). No ve la unidad ni un número en palabras.
  */
 export function cifrasQueNoCuadran(original: readonly string[], compacta: readonly string[]): { inventadas: string[]; perdidas: string[]; invertidas: string[] } {
   const deAntes = cifrasDe(original.join("\n"));
@@ -166,47 +176,45 @@ export function cifrasQueNoCuadran(original: readonly string[], compacta: readon
 }
 
 /**
- * ¿La compacta sirve? Sin líneas vacías, no más larga que el original (ni en líneas ni en letras) y con las mismas cifras.
- * Devuelve los motivos por los que no sirve (vacío = sirve).
+ * ¿La compacta sirve? Sin líneas vacías; como mucho 4 puntos de una línea; no más larga que el original; y ninguna cifra
+ * inventada ni al revés. Soltar cifras SÍ se permite (22 nov): solo van las que importan para proponer. Devuelve los
+ * motivos por los que no sirve (vacío = sirve).
  */
 export function motivosParaDescartar(original: readonly string[], compacta: readonly string[]): string[] {
   const motivos: string[] = [];
   const limpias = compacta.map((l) => l.trim()).filter(Boolean);
   if (!limpias.length) return ["vino vacía"];
   if (limpias.length > Math.max(original.length, 1)) motivos.push(`tiene más líneas (${limpias.length}) que el original (${original.length})`);
-  if (limpias.length > MAX_LINEAS_COMPACTAS) motivos.push(`pasa de ${MAX_LINEAS_COMPACTAS} líneas`);
-  if (limpias.some((l) => l.length > MAX_CARACTERES_DE_LINEA_COMPACTA)) motivos.push(`una línea pasa de ${MAX_CARACTERES_DE_LINEA_COMPACTA} letras`);
+  if (limpias.length > MAX_LINEAS_COMPACTAS) motivos.push(`tiene ${limpias.length} puntos y el tope es ${MAX_LINEAS_COMPACTAS}`);
+  // Con cuál y cuánto: el reintento le dice al agente qué punto acortar (el 3, de 39 palabras).
+  const largas = limpias.flatMap((l, i) => (l.length > MAX_CARACTERES_DE_LINEA_COMPACTA || palabras(l) > MAX_PALABRAS_POR_PUNTO ? [`el ${i + 1}, de ${palabras(l)} palabras`] : []));
+  if (largas.length) motivos.push(`pasan de una línea (más de ${MAX_PALABRAS_POR_PUNTO} palabras; la meta es ${PALABRAS_POR_PUNTO}): ${largas.join("; ")}`);
   const largo = (xs: readonly string[]) => xs.reduce((n, l) => n + l.trim().length, 0);
   if (largo(limpias) > largo(original)) motivos.push("es más larga que el original");
-  const { inventadas, perdidas, invertidas } = cifrasQueNoCuadran(original, limpias);
+  const { inventadas, invertidas } = cifrasQueNoCuadran(original, limpias);
   if (inventadas.length) motivos.push(`trae cifras que no están en el original: ${inventadas.join(", ")}`);
-  if (perdidas.length) motivos.push(`perdió cifras del original: ${perdidas.join(", ")}`);
   if (invertidas.length) motivos.push(`dio vuelta el orden de las cifras: ${invertidas.join(", ")} (el original dice al revés)`);
   return motivos;
 }
 
 // ── El pedido al agente ───────────────────────────────────────────────────────
 
-/** Cuántos puntos busca el agente por tarjeta (el tope duro es `MAX_LINEAS_COMPACTAS`). */
-export const PUNTOS_OBJETIVO = 8;
+export const REGLAS_DE_LA_TARJETA_COMPACTA = `Eres el editor del Resumen de una preventa de Smarteam (una agencia de HubSpot). Recibes tarjetas con lo que el equipo confirmó de UNA empresa: metas, planes, retos, tiempos, presupuesto, quién decide, consecuencias, implicaciones, cómo gana dinero y cómo convierte. Para cada tarjeta escribe una versión COMPACTA que el vendedor lea de un vistazo antes de proponer. Lo original no se borra: al tocar la tarjeta se ve entero, con todas sus cifras.
 
-export const REGLAS_DE_LA_TARJETA_COMPACTA = `Eres el editor del Resumen de una preventa de Smarteam (una agencia de HubSpot). Recibes tarjetas con lo que el equipo confirmó de UNA empresa: metas, planes, retos, tiempos, presupuesto, quién decide, consecuencias, implicaciones, cómo gana dinero y cómo convierte. Para cada tarjeta escribe una versión COMPACTA que se lea de un vistazo. Lo original no se borra: tu versión solo se muestra.
+El tamaño manda: cada tarjeta trae «puntosMaximos» (nunca más de ${MAX_LINEAS_COMPACTAS}). Tu versión NO puede tener más puntos que ese número. Cada punto es UNA línea de unas ${PALABRAS_POR_PUNTO} palabras: cuéntalas, y un punto de más de ${MAX_PALABRAS_POR_PUNTO} se descarta entero. Una tarjeta de 22 puntos también queda en ${MAX_LINEAS_COMPACTAS}: para que entre, suelta detalle, no juntes más ideas con punto y coma.
 
-Reglas, en este orden:
-1. Elimina duplicados: fusiona en un solo punto los que repiten la misma idea con distintas palabras.
-2. Subordina las cifras: si hay un dato de línea base (dónde está hoy) y un objetivo sobre lo mismo, mételos en un solo punto («Subir la conversión de 2 % a 5 % para junio»), en vez de dejarlos sueltos.
-3. Agrupa por área: une lo que pertenece al mismo equipo o al mismo flujo operativo («Ventas: …», «Servicio: …»). Si una línea ya trae el equipo adelante («Ventas · …»), respétalo.
-4. Acorta la redacción: quita el relleno y deja el hecho. Conserva INTACTAS todas las cifras (montos, porcentajes, plazos, fechas, cantidades), los canales (WhatsApp, correo, teléfono, formulario, etc.), las herramientas y las restricciones.
+Cómo llegar:
+1. Fusiona de verdad: los puntos que repiten la misma idea con otras palabras son UN punto.
+2. Agrupa por departamento o flujo: lo que pertenece al mismo equipo o proceso (ventas, crédito y cobro, marketing, servicio, e-commerce, TI, operación…) va en un solo punto, que abre con su nombre («Crédito y cobro: …»).
+3. Subordina las cifras: la línea base va dentro de su objetivo («conversión de 2 % a 5 %»), no suelta.
+4. Quédate con lo que importa para proponer: el problema o la meta de fondo, y solo las cifras que la dimensionan. Suelta el detalle, los ejemplos y el relleno.
 
 Prohibido:
-- Agregar algo que no esté en la tarjeta: ni una cifra, ni una fecha, ni una conclusión, ni una recomendación.
-- Perder una cifra: cada número del original tiene que aparecer, escrito igual.
+- Inventar: ni una cifra, ni una fecha, ni un nombre, ni una conclusión que no esté en la tarjeta. Cada cifra que escribas tiene que estar en el original, escrita igual.
+- Dar vuelta una cifra: si el original dice «de 2 % a 5 %», nunca «de 5 % a 2 %».
 - Mezclar tarjetas: lo de una tarjeta se queda en esa tarjeta.
-- Hacer la tarjeta más larga que el original.
 
-El tamaño: cada tarjeta trae «puntosMaximos» (como mucho ${PUNTOS_OBJETIVO}); tu versión NO puede tener más puntos que ese número, y puede tener menos. Si el original tiene más, agrupa por área o por flujo hasta llegar: un punto puede juntar varias ideas del mismo equipo, separadas por punto y coma («Servicio: …; …»). Una tarjeta de pocos puntos que ya son distintos se queda con sus puntos, más cortos.
-
-Escribe en español neutro, con frases cortas y sin viñetas dentro de las líneas. Cada línea es un punto de la tarjeta.
+Escribe en español neutro, sin viñetas dentro de las líneas. Cada línea es un punto de la tarjeta.
 
 Responde SOLO con un objeto JSON, sin texto antes ni después:
 {"tarjetas":[{"clave":"<la clave que recibiste>","lineas":["…","…"]}]}`;
@@ -218,7 +226,7 @@ export interface TarjetaParaCompactar {
 
 /** El mensaje del usuario: la empresa (solo su nombre) y sus tarjetas, cada una con su clave. */
 export function mensajeParaCompactar(empresa: string, tarjetas: readonly TarjetaParaCompactar[]): string {
-  const cuerpo = tarjetas.map((t) => ({ clave: t.clave, nombre: definicionDe(t.clave).etiqueta, puntosMaximos: Math.min(PUNTOS_OBJETIVO, t.lineas.length), lineas: t.lineas }));
+  const cuerpo = tarjetas.map((t) => ({ clave: t.clave, nombre: definicionDe(t.clave).etiqueta, puntosMaximos: Math.min(MAX_LINEAS_COMPACTAS, t.lineas.length), lineas: t.lineas }));
   return `Empresa: ${empresa}\n\nTarjetas:\n${JSON.stringify(cuerpo, null, 2)}`;
 }
 
