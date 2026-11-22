@@ -90,3 +90,33 @@ Regla nueva:
 
 Simulacro de solo lectura contra producción (Cemaco · Costa Rica y Cemaco · Ecuador): 10 de 10 tarjetas pasan. Costa
 Rica: metas de 11 a 4 puntos, retos de 16 a 4. Ecuador: metas de 11 a 4, planes de 11 a 4, retos de 21 a 4.
+
+## Tercera vuelta (22 nov, noche): la IA propone, tú ordenas
+
+Elías: la casilla abierta era un montón de cartas con «Editar» y «Quitar», difícil de leer y de editar; y el Resumen ya
+no muestra una versión que reescribe la IA. Ahora cada casilla de lista es una lista simple que se edita en el lugar y se
+ordena arrastrando (o con el teclado). El Resumen muestra los 4 primeros en el orden que dejó la persona; en la lista,
+debajo de esos 4, el subtítulo «Más metas» (o «Más planes»…) con el resto. La IA, dentro de la lista y cuando se le pide,
+sugiere qué juntar (la misma idea con otras palabras, o el mismo departamento) y qué subir; cada sugerencia se usa o se
+descarta. El orden es el de la lista guardada: no hace falta un campo nuevo.
+
+### Lo compacto que se quita, y su destino
+
+| Pieza | Destino |
+|---|---|
+| La tarjeta compacta en el Resumen (`loQueMuestraLaTarjeta`, la versión de Haiku) | **Sale.** El Resumen muestra los 4 primeros de lo guardado, en su orden, y «y N más» |
+| `contenido.tarjetasCompactas` (lo guardado por el agente, con su huella) | **Deja de leerse.** El esquema ya no lo conserva, así que se cae solo en la próxima escritura de cada exploración. Lo confirmado no se toca |
+| La huella (`huellaDeLasLineas`, `VERSION_DE_LAS_REGLAS`) | **Sale**: solo servía para saber si la compacta seguía vigente |
+| El agente de las compactas (`tarjetas-compactas-server.ts`, su cola y su `AgentRun` «Resumen: las tarjetas compactas») | **Sale.** Lo reemplaza el agente del orden de la lista (`orden-de-las-listas-server.ts`), que corre solo a pedido desde la casilla |
+| El disparo en el PATCH de la preventa (compactar tras un cambio) | **Sale.** Nada corre solo |
+| El script `scripts/compactar-tarjetas-del-resumen.ts` | **Sale**, con su permiso en `marco.test.ts` |
+| La comprobación de cifras (`cifrasQueNoCuadran`: ninguna inventada ni al revés) | **Queda**, ahora para el texto de una fusión sugerida (`lib/exploraciones/lineas-del-resumen.ts`) |
+| `lineasDe` | **Queda** (`lineas-del-resumen.ts`), sin reordenar por equipo: el orden es el de la persona |
+| Las particularidades recientes con su fecha | **Quedan** igual |
+
+### Resultado del negocio desde las metas
+
+En el inicio de Exploración, «Resultado del negocio» vacío con metas confirmadas ahora ofrece «Sugerirlo con las metas»:
+Haiku lo escribe con las 4 primeras metas (en su orden) y queda como la sugerencia de siempre (Usar · Editar ·
+Descartar). Nunca se guarda solo, y el contexto es solo esa exploración. Además, la propuesta del contexto que se pide
+una vez por exploración ya lee esas metas.

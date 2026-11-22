@@ -7,7 +7,7 @@
  * y guardarla a medias en cada tecla dejaría versiones raras en la historia. En una lista, cada ítem
  * se ve como una tarjeta y se abre de a uno. Lo propuesto se usa o se descarta desde la propia casilla.
  */
-import { useLayoutEffect, useRef, useState } from "react";
+import { Children, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Badge, Button, Field, Input, Segmentado, Select, Textarea } from "@/components/ui";
 import {
@@ -45,7 +45,11 @@ import { PerdidaCalculada } from "./PerdidaCalculada";
 import { definicionEnElMarco } from "@/lib/exploraciones/marco";
 import { claveDeItemDeLista } from "@/lib/exploraciones/contenido";
 import { diaCorto } from "@/lib/exploraciones/fechas";
-import { particularidadesRecientes } from "@/lib/exploraciones/tarjetas-compactas";
+import { particularidadesRecientes, PRIMERAS_A_LA_VISTA, rotuloDelResto } from "@/lib/exploraciones/lineas-del-resumen";
+import { aplicarSugerenciaDeOrden, MINIMO_PARA_SUGERIR, tieneOrden, type SugerenciaDeOrden } from "@/lib/exploraciones/orden-de-las-listas";
+import { EQUIPOS } from "@/lib/exploraciones/equipos";
+import { SortableItems } from "@/components/landing/sortable";
+import { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia } from "@/components/ui/sistema";
 
 const APERTURA: { clave: Apertura["valor"]; etiqueta: string }[] = [
   { clave: "si", etiqueta: "Sí, quiere acompañamiento" },
@@ -279,7 +283,23 @@ export function Vista({ clave, valor }: { clave: ClaveDeCasilla; valor: unknown 
 // textos crecen con lo escrito: nada queda cortado detrás de una barra de desplazamiento.
 
 /** Un cuadro de texto que crece con lo escrito. */
-function TextoQueCrece({ value, onChange, minFilas = 2, ...resto }: { value: string; onChange: (v: string) => void; minFilas?: number; placeholder?: string; "aria-label"?: string; autoFocus?: boolean }) {
+function TextoQueCrece({
+  value,
+  onChange,
+  minFilas = 2,
+  className,
+  ...resto
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  minFilas?: number;
+  placeholder?: string;
+  "aria-label"?: string;
+  autoFocus?: boolean;
+  onBlur?: () => void;
+  onKeyDown?: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
+  className?: string;
+}) {
   const ref = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
@@ -293,90 +313,274 @@ function TextoQueCrece({ value, onChange, minFilas = 2, ...resto }: { value: str
       rows={minFilas}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="overflow-hidden leading-relaxed"
+      className={cn("overflow-hidden leading-relaxed", className)}
       {...resto}
     />
   );
 }
 
 /**
- * Una lista editable de a un ítem. `abierto` es el que muestra sus campos; los demás se ven como
- * tarjetas. «Listo» lo cierra (y lo quita si quedó vacío); «Agregar» suma uno vacío, ya abierto.
+ * La lista de una casilla (22 nov, noche, Elías: «las cartas cuestan leerlas y editarlas»). Se ve como una lista simple,
+ * una línea por punto:
+ *   · un clic en el texto lo edita en el lugar (Enter o salir del campo lo deja; vacío, se quita);
+ *   · el ⠿ lo mueve arrastrando, o con el teclado (Enter levanta, flechas mueven, Enter suelta);
+ *   · lo que no es el texto (las cifras de una meta, la dimensión de un reto, el papel de una persona) se ve en la misma
+ *     línea y se abre en un desplegable debajo de ella;
+ *   · se agrega al final, escribiendo y con Enter. Lo escrito ahí sin Enter también entra al salir del campo (revisión
+ *     del 22 nov): si no, «Guardar» lo perdía sin aviso.
+ * El orden ES lo guardado: el Resumen muestra los 4 primeros. Con `rotuloDelResto`, la lista lo dice con un subtítulo
+ * («Más metas») debajo del cuarto. `arriba`: lo que sugiere Nexus para ordenarla (SugerenciasDelOrden).
  */
 function EditorDeItems<T>({
   items,
   onCambio,
   nuevo,
   estaVacio,
-  verItem,
-  campos,
+  texto,
+  conTexto,
+  detalle,
   agregar,
+  rotuloDelResto: rotulo,
+  arriba,
+  abrirAlAgregar = false,
 }: {
   items: T[];
   onCambio: (v: T[]) => void;
   nuevo: () => T;
   estaVacio: (x: T) => boolean;
-  verItem: (x: T) => React.ReactNode;
-  campos: (x: T, set: (cambio: Partial<T>) => void) => React.ReactNode;
+  /** El texto de la línea, el que se edita en el lugar. */
+  texto: (x: T) => string;
+  conTexto: (x: T, t: string) => T;
+  /** Lo demás del punto: cómo se ve en la línea (`ver`, que abre el desplegable) y sus campos. */
+  detalle?: { ver: (x: T) => ReactNode; campos: (x: T, set: (cambio: Partial<T>) => void) => ReactNode };
   agregar: string;
+  rotuloDelResto?: string | null;
+  arriba?: ReactNode;
+  /** Al agregar, abre el desplegable del punto nuevo: lo que le falta para guardarse (el enlace de un hito) queda a la vista. */
+  abrirAlAgregar?: boolean;
 }) {
-  // Sin nada todavía, el primero ya está abierto: tocar la tarjeta es querer llenarla.
-  const [abierto, setAbierto] = useState<number | null>(items.length === 0 ? 0 : null);
-  const lista = items.length === 0 && abierto === 0 ? [nuevo()] : items;
+  const [editando, setEditando] = useState<number | null>(null);
+  const [abierto, setAbierto] = useState<number | null>(null);
+  const [nuevoTexto, setNuevoTexto] = useState("");
 
-  const set = (i: number, cambio: Partial<T>) => onCambio(lista.map((x, j) => (j === i ? { ...x, ...cambio } : x)));
+  const set = (i: number, x: T) => onCambio(items.map((y, j) => (j === i ? x : y)));
   const quitar = (i: number) => {
-    onCambio(lista.filter((_, j) => j !== i));
+    onCambio(items.filter((_, j) => j !== i));
+    setEditando(null);
     setAbierto(null);
   };
-  const cerrar = (i: number) => {
-    if (estaVacio(lista[i])) onCambio(lista.filter((_, j) => j !== i));
-    setAbierto(null);
+  const dejar = (i: number) => {
+    if (items[i] !== undefined && estaVacio(items[i])) quitar(i);
+    else setEditando(null);
+  };
+  const sumar = () => {
+    const t = nuevoTexto.trim();
+    if (!t) return;
+    onCambio([...items, conTexto(nuevo(), t)]);
+    setNuevoTexto("");
+    if (abrirAlAgregar && detalle) setAbierto(items.length);
+  };
+  const alTeclear = (i: number) => (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.key === "Enter" && !e.shiftKey) || e.key === "Escape") {
+      e.preventDefault();
+      dejar(i);
+    }
+  };
+  // El subtítulo del resto va DENTRO de la lista, después del cuarto: se mueve solo cuando se reordena.
+  const conElCorte = (nodos: ReactNode) => {
+    const xs = Children.toArray(nodos);
+    if (!rotulo || xs.length <= PRIMERAS_A_LA_VISTA) return xs;
+    return [
+      ...xs.slice(0, PRIMERAS_A_LA_VISTA),
+      <li key="corte" role="presentation" className="pb-1 pt-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
+        {rotulo}
+      </li>,
+      ...xs.slice(PRIMERAS_A_LA_VISTA),
+    ];
   };
 
   return (
-    <div className="space-y-2">
-      {lista.map((x, i) =>
-        i === abierto ? (
-          <div key={i} className="space-y-3 rounded-xl border border-info-line bg-surface p-4 shadow-sm">
-            {campos(x, (cambio) => set(i, cambio))}
-            <div className="flex items-center justify-between gap-2 pt-1">
-              <button type="button" className="text-xs text-fg-muted hover:text-fg hover:underline" onClick={() => quitar(i)}>
-                Quitar
-              </button>
-              <Button size="sm" variant="secondary" onClick={() => cerrar(i)}>
-                Listo
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div key={i} className="flex items-start justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3">
-            <div className="min-w-0 flex-1 text-sm">{verItem(x)}</div>
-            <div className="flex flex-shrink-0 items-center gap-3 text-xs">
-              <button type="button" className="font-medium text-brand hover:underline" onClick={() => setAbierto(i)}>
-                Editar
-              </button>
-              <button type="button" className="text-fg-muted hover:text-fg hover:underline" onClick={() => quitar(i)}>
-                Quitar
-              </button>
-            </div>
-          </div>
-        ),
-      )}
-      {abierto === null && (
-        <button
-          type="button"
-          className="w-full rounded-xl border border-dashed border-line px-4 py-3 text-left text-sm font-medium text-brand transition-colors hover:bg-surface-hover"
-          onClick={() => {
-            onCambio([...lista, nuevo()]);
-            setAbierto(lista.length);
+    <div className="space-y-3">
+      {arriba}
+      {items.length > 0 && (
+        <SortableItems
+          items={items}
+          onReorder={(v) => {
+            onCambio(v);
+            setEditando(null);
+            setAbierto(null);
           }}
+          elemento="li"
+          itemClassName="group flex items-start gap-2 border-b border-line py-2 last:border-b-0"
+          claseDelHandle="mt-0.5 flex-none cursor-grab touch-none select-none rounded px-1 text-sm leading-5 text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand active:cursor-grabbing"
+          container={(nodos) => <ol className="rounded-xl border border-line bg-surface px-3">{conElCorte(nodos)}</ol>}
         >
-          + {agregar}
-        </button>
+          {(x, i, handle) => (
+            <>
+              {handle ?? <span aria-hidden className="w-[22px] flex-none" />}
+              <div className="min-w-0 flex-1">
+                {editando === i ? (
+                  <TextoQueCrece
+                    minFilas={1}
+                    autoFocus
+                    aria-label={`Punto ${i + 1}`}
+                    value={texto(x)}
+                    onChange={(t) => set(i, conTexto(x, t))}
+                    onBlur={() => dejar(i)}
+                    onKeyDown={alTeclear(i)}
+                    className="py-1 text-sm"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setEditando(i)}
+                    className="-mx-1 block w-full rounded px-1 text-left text-sm leading-[1.5] text-fg transition-colors hover:bg-surface-hover"
+                    title="Editar"
+                  >
+                    {texto(x).trim() || <span className="text-fg-muted">Sin texto</span>}
+                  </button>
+                )}
+                {detalle && (
+                  <button
+                    type="button"
+                    aria-expanded={abierto === i}
+                    onClick={() => setAbierto(abierto === i ? null : i)}
+                    className="mt-1 flex flex-wrap items-center gap-1.5 text-left text-xs text-fg-secondary"
+                  >
+                    {detalle.ver(x)}
+                    <span className="text-brand">{abierto === i ? "▴" : "▾"}</span>
+                  </button>
+                )}
+                {detalle && abierto === i && <div className="mt-2 space-y-3 rounded-lg bg-surface-muted p-3">{detalle.campos(x, (cambio) => set(i, { ...x, ...cambio }))}</div>}
+              </div>
+              <button
+                type="button"
+                // Sin esto, el punto que se está editando pierde el foco primero: si quedó vacío se quita solo, y el clic
+                // cae sobre el que subió a su lugar (revisión del 22 nov: un clic borraba dos).
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => quitar(i)}
+                aria-label={`Quitar «${texto(x).slice(0, 40)}»`}
+                title="Quitar"
+                className="mt-0.5 flex-none rounded px-1.5 text-sm leading-5 text-fg-muted opacity-0 transition-opacity hover:bg-surface-hover hover:text-fg focus:opacity-100 group-hover:opacity-100"
+              >
+                ×
+              </button>
+            </>
+          )}
+        </SortableItems>
       )}
+      <div className="flex items-center gap-2">
+        <Input
+          value={nuevoTexto}
+          onChange={(e) => setNuevoTexto(e.target.value)}
+          onBlur={sumar}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              sumar();
+            }
+          }}
+          autoFocus={items.length === 0}
+          placeholder={`${agregar} y Enter`}
+          aria-label={agregar}
+        />
+        <BotonBlanco disabled={!nuevoTexto.trim()} onClick={sumar}>
+          Agregar
+        </BotonBlanco>
+      </div>
     </div>
   );
+}
+
+/**
+ * «La IA propone, tú ordenas» (22 nov, noche): arriba de la lista, a pedido, Nexus sugiere qué juntar y qué subir a los 4
+ * primeros. Lee lo GUARDADO de la casilla (POST …/list-order); cada sugerencia se usa o se descarta en la lista que se
+ * está editando, y nada queda hasta «Guardar». Una que nombra un punto que ya cambió no se puede usar.
+ */
+function SugerenciasDelOrden<T>({ clave, lista, onCambio }: { clave: ClaveDeCasilla; lista: T[]; onCambio: (v: T[]) => void }) {
+  const { exp, puedeEditar } = useLienzo();
+  const [estado, setEstado] = useState<"nada" | "pidiendo" | "listas" | "error">("nada");
+  const [sugerencias, setSugerencias] = useState<SugerenciaDeOrden[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  if (!tieneOrden(clave) || !puedeEditar || lista.length < MINIMO_PARA_SUGERIR) return null;
+
+  const pedir = async () => {
+    setEstado("pidiendo");
+    setError(null);
+    try {
+      const r = await fetch(`/api/sales/exploraciones/${exp.id}/list-order`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clave }) });
+      const j = (await r.json().catch(() => ({}))) as { sugerencias?: SugerenciaDeOrden[]; error?: string };
+      if (!r.ok) throw new Error(j.error ?? "No se pudo pedir.");
+      setSugerencias(j.sugerencias ?? []);
+      setEstado("listas");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo pedir.");
+      setEstado("error");
+    }
+  };
+  const quitarla = (id: string) => setSugerencias((xs) => xs.filter((x) => x.id !== id));
+  const usar = (s: SugerenciaDeOrden) => {
+    const nueva = aplicarSugerenciaDeOrden(clave, lista, s);
+    if (nueva) onCambio(nueva);
+    quitarla(s.id);
+  };
+
+  return (
+    <div className="space-y-2 rounded-lg border border-info-line bg-info-surface px-3.5 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="flex min-w-0 flex-1 items-center gap-1.5 text-[13px] text-fg-secondary">
+          <IconoDeSugerencia className="h-[14px] w-[14px] flex-none text-brand" />
+          {estado === "listas"
+            ? sugerencias.length
+              ? "Nexus sugiere esto. Lo que uses cambia la lista; queda al guardar."
+              : "Nexus no ve nada que juntar ni subir."
+            : "La IA propone, tú ordenas: Nexus puede sugerir qué juntar y qué subir a los 4 primeros."}
+        </p>
+        {estado !== "listas" && (
+          <BotonBlanco disabled={estado === "pidiendo"} onClick={() => void pedir()}>
+            {estado === "pidiendo" ? "Leyendo la lista…" : "Sugerir"}
+          </BotonBlanco>
+        )}
+      </div>
+      {error && <p className="text-xs text-warn-ink">{error}</p>}
+      {sugerencias.map((s) => {
+        const sePuede = aplicarSugerenciaDeOrden(clave, lista, s) !== null;
+        return (
+          <div key={s.id} className="space-y-1.5 rounded-lg border border-line bg-surface px-3 py-2.5">
+            {s.tipo === "juntar" ? (
+              <>
+                <p className="text-xs font-semibold text-fg-secondary">Juntar {s.textos.length} puntos en uno</p>
+                <ul className="list-disc space-y-0.5 pl-4 text-xs text-fg-muted">
+                  {s.textos.map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
+                </ul>
+                <p className="text-sm text-fg">→ {s.texto}</p>
+              </>
+            ) : (
+              <>
+                <p className="text-xs font-semibold text-fg-secondary">Subir a los primeros</p>
+                <p className="text-sm text-fg">{s.textoDelPunto}</p>
+              </>
+            )}
+            {s.porque && <p className="text-xs text-fg-muted">Por qué: {s.porque}</p>}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {!sePuede && <span className="mr-auto text-xs text-fg-muted">Ya no se puede: cambiaste esos puntos, o tienen cifras, dimensión o equipo distintos.</span>}
+              <BotonTexto onClick={() => quitarla(s.id)}>Descartar</BotonTexto>
+              <BotonAzul disabled={!sePuede} onClick={() => usar(s)}>
+                Usar
+              </BotonAzul>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** El equipo del cliente de una meta o un reto, como chip de la línea. */
+function ChipDelEquipo({ equipo }: { equipo?: keyof typeof EQUIPOS }) {
+  return equipo ? <Badge size="xs">{EQUIPOS[equipo].nombre}</Badge> : null;
 }
 
 const vacioDeTexto = (s: string | undefined) => !s || !s.trim();
@@ -393,15 +597,18 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
     case "lista": {
       type Fila = { t: string };
       const filas = ((borrador as string[]) ?? []).map((t) => ({ t }));
+      const alCambiar = (v: Fila[]) => setBorrador(v.map((f) => f.t));
       return (
         <EditorDeItems<Fila>
           items={filas}
-          onCambio={(v) => setBorrador(v.map((f) => f.t))}
+          onCambio={alCambiar}
           nuevo={() => ({ t: "" })}
           estaVacio={(f) => vacioDeTexto(f.t)}
-          verItem={(f) => <p className="text-fg">{f.t}</p>}
-          campos={(f, set) => <TextoQueCrece autoFocus aria-label={definicionDe(clave).etiqueta} value={f.t} onChange={(t) => set({ t })} />}
+          texto={(f) => f.t}
+          conTexto={(_f, t) => ({ t })}
           agregar="Agregar otro"
+          rotuloDelResto={rotuloDelResto(clave)}
+          arriba={<SugerenciasDelOrden clave={clave} lista={(borrador as string[]) ?? []} onCambio={setBorrador} />}
         />
       );
     }
@@ -412,24 +619,21 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
           onCambio={setBorrador}
           nuevo={() => ({ que: "" })}
           estaVacio={(m) => vacioDeTexto(m.que)}
-          verItem={(m) => (
-            <div className="space-y-1">
-              <p className="font-medium text-fg">{m.que}</p>
-              {(m.actual || m.objetivo || m.para) && (
-                <p className="text-xs text-fg-secondary">
-                  {[m.actual && `Hoy: ${m.actual}`, m.objetivo && `Meta: ${m.objetivo}`, m.para && `Para: ${m.para}`].filter(Boolean).join(" · ")}
-                </p>
-              )}
-              <Badge variant={metaEnCifras(m) ? "success" : "warning"} size="xs">
-                {metaEnCifras(m) ? "En cifras" : "Sin cifra"}
-              </Badge>
-            </div>
-          )}
-          campos={(m, set) => (
-            <>
-              <Field label="Qué quiere lograr">
-                <TextoQueCrece autoFocus value={m.que} onChange={(que) => set({ que })} placeholder="Cerrar más de lo que entra" />
-              </Field>
+          texto={(m) => m.que}
+          conTexto={(m, que) => ({ ...m, que })}
+          detalle={{
+            ver: (m) => (
+              <>
+                <ChipDelEquipo equipo={m.equipo} />
+                {(m.actual || m.objetivo || m.para) && (
+                  <span>{[m.actual && `Hoy: ${m.actual}`, m.objetivo && `Meta: ${m.objetivo}`, m.para && `Para: ${m.para}`].filter(Boolean).join(" · ")}</span>
+                )}
+                <Badge variant={metaEnCifras(m) ? "success" : "warning"} size="xs">
+                  {metaEnCifras(m) ? "En cifras" : "Sin cifra"}
+                </Badge>
+              </>
+            ),
+            campos: (m, set) => (
               <div className="grid gap-3 sm:grid-cols-3">
                 <Field label="Hoy">
                   <Input value={m.actual ?? ""} onChange={(e) => set({ actual: e.target.value })} placeholder="4 de cada 10" />
@@ -441,9 +645,11 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
                   <Input value={m.para ?? ""} onChange={(e) => set({ para: e.target.value })} placeholder="Diciembre" />
                 </Field>
               </div>
-            </>
-          )}
+            ),
+          }}
           agregar="Agregar una meta"
+          rotuloDelResto={rotuloDelResto(clave)}
+          arriba={<SugerenciasDelOrden clave={clave} lista={(borrador as Meta[]) ?? []} onCambio={setBorrador} />}
         />
       );
     case "retos":
@@ -453,17 +659,16 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
           onCambio={setBorrador}
           nuevo={() => ({ texto: "" })}
           estaVacio={(r) => vacioDeTexto(r.texto)}
-          verItem={(r) => (
-            <div className="space-y-1">
-              <p className="text-fg">{r.texto}</p>
-              {nombreDim(r.dimensionId) && <p className="text-xs text-fg-muted">{nombreDim(r.dimensionId)}</p>}
-            </div>
-          )}
-          campos={(r, set) => (
-            <>
-              <Field label="Qué los frena">
-                <TextoQueCrece autoFocus value={r.texto} onChange={(texto) => set({ texto })} />
-              </Field>
+          texto={(r) => r.texto}
+          conTexto={(r, texto) => ({ ...r, texto })}
+          detalle={{
+            ver: (r) => (
+              <>
+                <ChipDelEquipo equipo={r.equipo} />
+                <span className="text-fg-muted">{nombreDim(r.dimensionId) ?? "Sin dimensión"}</span>
+              </>
+            ),
+            campos: (r, set) => (
               <Field label="Dimensión de la escala" hint="Opcional: de qué parte de la operación sale.">
                 <Select value={r.dimensionId ?? ""} onChange={(e) => set({ dimensionId: e.target.value || undefined })}>
                   <option value="">Sin dimensión</option>
@@ -474,9 +679,11 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
                   ))}
                 </Select>
               </Field>
-            </>
-          )}
-          agregar="Agregar un reto"
+            ),
+          }}
+          agregar={clave === "obstaculos" ? "Agregar un obstáculo" : "Agregar un reto"}
+          rotuloDelResto={rotuloDelResto(clave)}
+          arriba={<SugerenciasDelOrden clave={clave} lista={(borrador as Reto[]) ?? []} onCambio={setBorrador} />}
         />
       );
     case "autoridad":
@@ -486,44 +693,41 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
           onCambio={setBorrador}
           nuevo={() => ({ nombre: "", rol: "decide" })}
           estaVacio={(p) => vacioDeTexto(p.nombre)}
-          verItem={(p) => (
-            <div className="space-y-1">
-              <p className="flex flex-wrap items-center gap-2">
-                <span className="font-medium text-fg">{p.nombre}</span>
-                {p.cargo && <span className="text-xs text-fg-muted">{p.cargo}</span>}
+          texto={(p) => p.nombre}
+          conTexto={(p, nombre) => ({ ...p, nombre })}
+          detalle={{
+            ver: (p) => (
+              <>
+                {p.cargo && <span>{p.cargo}</span>}
                 <Badge variant={p.rol === "firma" ? "primary" : "default"} size="xs">
                   {ETIQUETA_DEL_ROL[p.rol]}
                 </Badge>
-              </p>
-              {p.nota && <p className="text-xs text-fg-secondary">{p.nota}</p>}
-            </div>
-          )}
-          campos={(p, set) => (
-            <>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Nombre">
-                  <Input autoFocus value={p.nombre} onChange={(e) => set({ nombre: e.target.value })} />
-                </Field>
+                {p.nota && <span className="text-fg-muted">· {p.nota}</span>}
+              </>
+            ),
+            campos: (p, set) => (
+              <>
                 <Field label="Cargo">
                   <Input value={p.cargo ?? ""} onChange={(e) => set({ cargo: e.target.value })} />
                 </Field>
-              </div>
-              <div className="space-y-1.5">
-                <p className="text-xs font-medium text-fg-secondary">Papel en la decisión</p>
-                <Segmentado
-                  etiqueta="Papel en la decisión"
-                  opciones={ROLES_EN_LA_DECISION.map((r) => ({ clave: r, etiqueta: ETIQUETA_DEL_ROL[r] }))}
-                  valor={p.rol}
-                  onCambio={(rol) => set({ rol })}
-                />
-                <p className="text-xs text-fg-muted">{QUE_HACE_EL_ROL[p.rol]}</p>
-              </div>
-              <Field label="Nota" hint="Cómo le afecta, qué le preocupa.">
-                <TextoQueCrece value={p.nota ?? ""} onChange={(nota) => set({ nota })} />
-              </Field>
-            </>
-          )}
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-fg-secondary">Papel en la decisión</p>
+                  <Segmentado
+                    etiqueta="Papel en la decisión"
+                    opciones={ROLES_EN_LA_DECISION.map((r) => ({ clave: r, etiqueta: ETIQUETA_DEL_ROL[r] }))}
+                    valor={p.rol}
+                    onCambio={(rol) => set({ rol })}
+                  />
+                  <p className="text-xs text-fg-muted">{QUE_HACE_EL_ROL[p.rol]}</p>
+                </div>
+                <Field label="Nota" hint="Cómo le afecta, qué le preocupa.">
+                  <TextoQueCrece value={p.nota ?? ""} onChange={(nota) => set({ nota })} />
+                </Field>
+              </>
+            ),
+          }}
           agregar="Agregar una persona"
+          rotuloDelResto={rotuloDelResto(clave)}
         />
       );
     case "objeciones":
@@ -533,39 +737,38 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
           onCambio={setBorrador}
           nuevo={() => ({ texto: "", clase: "otra" })}
           estaVacio={(o) => vacioDeTexto(o.texto)}
-          verItem={(o) => (
-            <div className="space-y-1">
-              <p className="flex flex-wrap items-center gap-2">
-                <span className="text-fg">{o.texto}</span>
+          texto={(o) => o.texto}
+          conTexto={(o, texto) => ({ ...o, texto })}
+          detalle={{
+            ver: (o) => (
+              <>
                 <Badge size="xs">{ETIQUETA_DE_LA_OBJECION[o.clase]}</Badge>
-                {!o.respuesta && (
+                {o.respuesta ? (
+                  <span>Se respondió: {o.respuesta}</span>
+                ) : (
                   <Badge variant="warning" size="xs">
                     Sin responder
                   </Badge>
                 )}
-              </p>
-              {o.respuesta && <p className="text-xs text-fg-secondary">Se respondió: {o.respuesta}</p>}
-            </div>
-          )}
-          campos={(o, set) => (
-            <>
-              <Field label="Qué dijo que lo frena">
-                <TextoQueCrece autoFocus value={o.texto} onChange={(texto) => set({ texto })} />
-              </Field>
-              <Field label="De qué tipo es">
-                <Select value={o.clase} onChange={(e) => set({ clase: e.target.value as Objecion["clase"] })}>
-                  {CLASES_DE_OBJECION.map((c) => (
-                    <option key={c} value={c}>
-                      {ETIQUETA_DE_LA_OBJECION[c]}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Cómo se respondió" hint="Si no se respondió, déjalo vacío: queda abierta.">
-                <TextoQueCrece value={o.respuesta ?? ""} onChange={(respuesta) => set({ respuesta })} />
-              </Field>
-            </>
-          )}
+              </>
+            ),
+            campos: (o, set) => (
+              <>
+                <Field label="De qué tipo es">
+                  <Select value={o.clase} onChange={(e) => set({ clase: e.target.value as Objecion["clase"] })}>
+                    {CLASES_DE_OBJECION.map((c) => (
+                      <option key={c} value={c}>
+                        {ETIQUETA_DE_LA_OBJECION[c]}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Cómo se respondió" hint="Si no se respondió, déjalo vacío: queda abierta.">
+                  <TextoQueCrece value={o.respuesta ?? ""} onChange={(respuesta) => set({ respuesta })} />
+                </Field>
+              </>
+            ),
+          }}
           agregar="Agregar una objeción"
         />
       );
@@ -635,17 +838,18 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
               onCambio={(hitos) => set({ hitos })}
               nuevo={() => ({ texto: "", url: "" })}
               estaVacio={(h) => vacioDeTexto(h.texto)}
-              verItem={(h) => (
-                <p className="text-fg">
-                  {h.fecha && <span className="mr-2 text-xs tabular-nums text-fg-muted">{h.fecha}</span>}
-                  {h.texto}
-                </p>
-              )}
-              campos={(h, setH) => (
-                <>
-                  <Field label="Qué pasó">
-                    <TextoQueCrece autoFocus value={h.texto} onChange={(texto) => setH({ texto })} />
-                  </Field>
+              texto={(h) => h.texto}
+              conTexto={(h, texto) => ({ ...h, texto })}
+              detalle={{
+                ver: (h) =>
+                  h.url?.trim() ? (
+                    <span className="text-fg-muted">{[h.fecha, h.url].filter(Boolean).join(" · ")}</span>
+                  ) : (
+                    <Badge variant="warning" size="xs">
+                      Falta el enlace: sin él no se guarda
+                    </Badge>
+                  ),
+                campos: (h, setH) => (
                   <div className="grid gap-3 sm:grid-cols-[8rem_1fr]">
                     <Field label="Cuándo">
                       <Input value={h.fecha ?? ""} onChange={(e) => setH({ fecha: e.target.value || undefined })} placeholder="2026-03" />
@@ -654,9 +858,10 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
                       <Input value={h.url} onChange={(e) => setH({ url: e.target.value })} placeholder="https://…" />
                     </Field>
                   </div>
-                </>
-              )}
+                ),
+              }}
               agregar="Agregar un hito"
+              abrirAlAgregar
             />
           </div>
         </div>

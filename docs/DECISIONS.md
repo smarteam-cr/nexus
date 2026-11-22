@@ -13907,6 +13907,18 @@ exploración pesa y se nota** en la guía. Lo que sigue es el estado después de
   esos y no los deja editar desde acá. Si no, el resultado validado en la exploración va a su propia línea de «Retos
   estratégicos», «- Resultado que buscan: …» (`CAMPO_DEL_RESULTADO`, `retosConElResultado`): ahí ya iban las metas de la
   preventa.
+- **El resultado del negocio se sugiere con las metas** (22 nov, noche, Elías: Cemaco · Ecuador tenía muchas metas
+  confirmadas y la tarjeta decía «Nexus todavía no tiene de dónde sugerirlo»; `resultado-desde-las-metas.ts`,
+  `contexto-server.ts` › `sugerirElResultadoConLasMetas`). Las metas principales (las 4 primeras de su lista, en el orden
+  que dejó la persona) son una fuente más de la llamada única. Y si esa llamada ya pasó, la tarjeta vacía ofrece
+  «Sugerirlo con las metas»: una llamada a Haiku, medida, que lee solo esas metas y el nombre de la empresa, y deja el
+  texto en `propuesta.contextoPropuesto.resultado`, con Usar · Editar · Descartar como siempre. Nunca va solo a la ficha.
+  Lo que trae una cifra que no está en las metas, una cifra al revés o voseo no se sugiere (422, «escríbelo tú»). Si esa
+  exploración todavía no pidió su propuesta del contexto, se pide primero (para el objetivo y el desafío), pero su
+  resultado lo reemplaza el de las metas, que sí pasa la comprobación. Deja su `AgentRun`; si la IA falla, dice el
+  motivo real. *Por qué a pedido y no al abrir:* un descarte no tiene dónde quedar sin un campo nuevo, y al abrir se
+  volvería a gastar. *Lo que trae, dicho:* como las metas son una fuente de la llamada única, una preventa que solo tiene
+  metas (sin notas, sesiones ni traspaso) ahora también pide esa llamada al abrir el inicio, una vez, como las demás.
 - **Lo que se valida va a la ficha como PROPUESTA**, por la puerta sin IA de la preventa (`validarEnLaFicha` ›
   `proponerALaFichaSinIA`). Lo confirma Customer Success, como todo lo que llega a la ficha, y solo entonces va a
   HubSpot y a un documento del cliente. Mientras tanto se muestra la corrección propuesta, «esperando que Customer
@@ -14034,31 +14046,35 @@ exploración pesa y se nota** en la guía. Lo que sigue es el estado después de
     ya está en «Lo que aprendimos» de esa sesión. `propuesta.hallazgos` se sigue guardando y la guía lo sigue leyendo.
 - **El Resumen liviano** (22 nov, Elías; docs/resumen-liviano-plan.md, `lib/exploraciones/tarjetas-compactas.ts`). Todo
   se sigue guardando igual; cambia lo que se ve:
-  - **Cada tarjeta del marco se ve en su versión compacta: como mucho 4 puntos, de una línea (unas 15 palabras).** La
-    arma Haiku. *Cambió la misma tarde (Elías, al ver Cemaco · Ecuador en producción con 8 puntos largos por tarjeta y
-    Retos con «+17 más»):* la primera versión pedía conservar TODAS las cifras y llegaba a 8 puntos; la regla de ahora es
-    fusionar de verdad lo que repite la misma idea, juntar en un punto lo de un mismo departamento o flujo (crédito y
-    cobro, marketing, e-commerce, TI…), y dejar solo las cifras que importan para proponer. Retos de 22 puntos también
-    queda en 4. Es SOLO para mostrar: vive en `contenido.tarjetasCompactas[clave]` con la huella de las líneas de las que
-    salió y de la versión de las reglas (`VERSION_DE_LAS_REGLAS`: con reglas nuevas, las de antes dejan de mostrarse
-    hasta rearmarlas), no sube la versión, no mueve `updatedAt` (no es actividad: el script dejaría todas las preventas
-    «tocadas hoy» y volverían a entrar a las ventanas que miran la actividad) y nunca reemplaza lo guardado. Al tocar la
-    tarjeta se abre la casilla con todo, con todas las cifras, como antes.
-  - **Cuándo se arma:** después de un cambio confirmado de esa tarjeta (el PATCH de la preventa, en segundo plano), solo
-    la que cambió (lo que llega mientras corre se suma a la cola con sus claves, no rehace las demás). Nunca al abrir la
-    página. Una tarjeta de hasta 4 puntos de una línea no se manda: se ve tal cual. Las que ya existían, o las de reglas
-    viejas, se rearman con `scripts/compactar-tarjetas-del-resumen.ts --todas` (simulacro por default; `--solo-lectura`
-    para mirar producción sin escribir).
-  - **Sin versión compacta, o de una huella vieja:** lo de siempre, recortado a 4 líneas con «+N más». Nunca vacío ni en
-    espera.
-  - **Se comprueba** (`motivosParaDescartar`): como mucho 4 puntos, cada uno de hasta 26 palabras (la meta es 15) y 200
-    letras; no más larga que el original; ninguna cifra inventada (toda cifra de la compacta está en el original, y un
-    decimal no se confunde con un entero: «2,5» no es «25»); y ningún rango al revés («de 2 % a 5 %» → «de 5 % a 2 %»).
-    Soltar cifras SÍ se permite desde la segunda vuelta. No ve la unidad ni un número en palabras. La que no pasa se pide
-    una vez más con el motivo (qué punto, de cuántas palabras); si tampoco, no se guarda. *Por qué:* una cifra inventada
-    en el Resumen llega a la propuesta en la cabeza del vendedor.
-  - **El contexto** es SOLO lo confirmado de esa exploración y el nombre de su empresa (invariante 1). Medido con el
-    `agentSlug` de la exploración y `origen: exploraciones/agente:tarjetas-compactas`, con su `AgentRun`.
+  - **La IA propone, tú ordenas** (la misma noche, Elías; `lineas-del-resumen.ts`, `orden-de-las-listas.ts`). Cada tarjeta
+    del marco muestra sus **4 primeros puntos en el orden que dejó la persona**, con «y N más». Al abrir la casilla, cada
+    lista es una lista simple, una línea por punto: un clic en el texto lo edita en el lugar, el ⠿ lo mueve arrastrando
+    o con el teclado (`SortableItems` del motor, con `claseDelHandle`), y se agrega al final escribiendo y con Enter (lo
+    escrito sin Enter también entra al salir del campo: si no, «Guardar» lo perdía). Lo
+    que no es el texto (las cifras de una meta, la dimensión de un reto, el papel de una persona) se ve en la línea y se
+    abre en un desplegable debajo. Debajo del cuarto, un subtítulo «Más metas» (o «Más planes»…) separa el resto. El
+    orden ES lo guardado: no hay un campo aparte, y `lineasDe` ya no reordena por equipo.
+  - **Lo que sugiere Nexus en la lista** (`orden-de-las-listas-server.ts`, POST `…/list-order`): a pedido («Sugerir»),
+    con Haiku y medido, lee lo GUARDADO de esa casilla y el nombre de la empresa y sugiere JUNTAR los puntos que dicen la
+    misma idea con otras palabras o que son del mismo departamento o flujo (con el texto del punto que queda), y SUBIR a
+    los primeros los que importan para proponer. Cada sugerencia se usa o se descarta en la lista y queda al guardar. Se
+    comprueba antes de mostrarla: el texto no trae cifras que no estén en los puntos que junta ni las da vuelta
+    (`cifrasQueNoCuadran`), un punto no va en dos grupos y solo se sube lo que está del 5 en adelante. Juntar no pierde
+    nada guardado (`sePuedenJuntar`): dos metas con cifras distintas, dos retos con dimensiones distintas o dos puntos de
+    equipos distintos no se juntan, y el punto que queda toma las cifras, la dimensión y el equipo del que los tenía. Se
+    mira con lo guardado al sugerir y otra vez con la lista sin guardar al usar. Las sugerencias nombran los puntos por su
+    texto: si la persona ya cambió uno, esa sugerencia no se puede usar. Validado
+    con Cemaco · Ecuador: retos de 21 a 13 y planes de 11 a 6 usando todas.
+  - *SUPERSEDED la misma noche: la versión compacta del Resumen.* Primero Haiku reescribía cada tarjeta (8 puntos, después
+    4 de una línea) y el Resumen mostraba eso, guardado en `contenido.tarjetasCompactas` con una huella. Elías: «la IA
+    propone, tú ordenas»; el Resumen no muestra un texto reescrito. Se retiraron la tarjeta compacta, su agente, su
+    disparo en el PATCH, la huella y el script `compactar-tarjetas-del-resumen.ts`; `tarjetasCompactas` ya no se lee y
+    se cae sola en la próxima escritura (lo confirmado no se toca). La comprobación de cifras quedó para las fusiones.
+    Detalle pieza por pieza: docs/resumen-liviano-plan.md › «Tercera vuelta».
+  - **El contexto** de los dos agentes (el orden de la lista y el resultado con las metas) es SOLO lo confirmado de esa
+    exploración y el nombre de su empresa (invariante 1). Medidos con su `agentSlug` y su `origen`
+    (`exploraciones/agente:orden-de-la-lista`, `exploraciones/contexto:resultado-con-las-metas`); el orden, con su
+    `AgentRun`.
   - **Particularidades:** se siguen generando y guardando todas. A la vista, las 5 más recientes, cada una con el día en
     que entró, y «Ver todas (N)» abre la lista completa. El día se registra desde el 22 nov
     (`contenido.fechasDeLasParticularidades`, lo pone `aplicarOperaciones` a la que es nueva); las de antes no tienen

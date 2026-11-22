@@ -9,7 +9,9 @@
  *     La guía ya no lo espera.
  *   · Lo de la EMPRESA, de su ficha (Información del cliente): el desafío principal («Dolor principal») y el resultado del
  *     negocio (los resultados de sus proyectos o, en la preventa, su línea de «Retos estratégicos»). Si la ficha no los
- *     tiene, los propone Nexus y, al validarlos, van a la ficha como propuesta: ahí los confirma Customer Success.
+ *     tiene, los propone Nexus y, al validarlos, van a la ficha como propuesta: ahí los confirma Customer Success. Desde el
+ *     22 nov (noche), el resultado vacío con metas confirmadas ofrece «Sugerirlo con las metas»: Nexus lo escribe con las 4
+ *     primeras (lib/exploraciones/resultado-desde-las-metas.ts) y queda como sugerencia, con Usar · Editar · Descartar.
  * Lo de la compra y lo de cada equipo explorado viven en el Resumen.
  */
 import { useState } from "react";
@@ -18,6 +20,7 @@ import { useToast } from "@/components/ui/Toast";
 import { MAX_DESAFIO_PROPUESTO, MAX_OBJETIVO_DE_LA_EXPLORACION } from "@/lib/exploraciones/contexto-de-la-exploracion";
 import { ajusteSugerido, objetivoDeSmarteam } from "@/lib/exploraciones/objetivo-y-hallazgos";
 import { NOMBRE_DE_LA_VIA } from "@/lib/exploraciones/como-llego";
+import { metasPrincipales } from "@/lib/exploraciones/resultado-desde-las-metas";
 import { cn } from "@/lib/cn";
 import { useLienzo } from "./contexto";
 import { usePropuestaDelContexto } from "./ContextoDeLaPreparacion";
@@ -40,6 +43,7 @@ function TarjetaQueSeValida({
   usar,
   descartar,
   editable = true,
+  sugerirCon,
 }: {
   rotulo: string;
   valido: { texto: string; pie: string } | null;
@@ -51,6 +55,8 @@ function TarjetaQueSeValida({
   descartar?: () => Promise<boolean>;
   /** false: lo que vale no se cambia desde acá (el resultado que sale de los proyectos). */
   editable?: boolean;
+  /** Vacía, pedirle a Nexus que lo sugiera con algo que ya está (el resultado, con las metas principales). */
+  sugerirCon?: { etiqueta: string; correr: () => Promise<boolean> };
 }) {
   const { puedeEditar, guardando } = useLienzo();
   const [editando, setEditando] = useState(false);
@@ -129,7 +135,18 @@ function TarjetaQueSeValida({
         <p className={ROTULO_DEL_SISTEMA}>{rotulo}</p>
         <p className="mt-1 text-[13px] text-fg-muted">{cargando ? "Nexus está leyendo lo que ya sabe de la empresa…" : vacio}</p>
       </div>
-      {puedeEditar && !cargando && <BotonBlanco onClick={() => abrir("")}>Escribirlo</BotonBlanco>}
+      {puedeEditar && !cargando && (
+        <div className="flex flex-wrap items-center gap-2">
+          {sugerirCon && (
+            <BotonBlanco disabled={ocupado} onClick={() => void correr(sugerirCon.correr)}>
+              {enviando ? "Nexus lo está escribiendo…" : sugerirCon.etiqueta}
+            </BotonBlanco>
+          )}
+          <BotonBlanco disabled={ocupado} onClick={() => abrir("")}>
+            Escribirlo
+          </BotonBlanco>
+        </div>
+      )}
     </section>
   );
 }
@@ -262,7 +279,7 @@ export function ObjetivoDeLaExploracion() {
  * explorado viven en el Resumen: acá solo se dice dónde.
  */
 export default function ObjetivoYDesafio() {
-  const { marco, irA } = useLienzo();
+  const { exp, marco, irA, recargar } = useLienzo();
   const { todas } = useSesiones();
   const toast = useToast();
   const { propuesto, empresa, proponiendo, validarEnLaFicha } = useElContexto();
@@ -284,6 +301,20 @@ export default function ObjetivoYDesafio() {
     toast.success("Quedó en la ficha de la empresa, para que Customer Success lo confirme.", {
       action: { label: "Ver Información del cliente", onClick: () => irA("informacion") },
     });
+    return true;
+  };
+  /* 22 nov: con metas confirmadas, el resultado vacío se sugiere con las 4 primeras (en el orden de la persona). A pedido:
+     nunca corre al abrir la página ni va solo a la ficha. */
+  const conMetas = metasPrincipales(exp.estado.contenido.casillas.metas).length > 0;
+  const sugerirElResultado = async (): Promise<boolean> => {
+    const r = await fetch(`/api/sales/exploraciones/${exp.id}/contexto`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resultadoConLasMetas: true }) }).catch(() => null);
+    const j = r ? ((await r.json().catch(() => ({}))) as { resultado?: string | null; error?: string }) : {};
+    if (!r?.ok) {
+      toast.error(j.error ?? "No se pudo sugerir. Vuelve a intentarlo.");
+      return false;
+    }
+    if (!j.resultado) toast.error("Nexus no encontró en las metas de qué sacar el resultado. Escríbelo tú.");
+    await recargar();
     return true;
   };
   const descartar = (que: "desafio" | "resultado") => async () => {
@@ -323,9 +354,14 @@ export default function ObjetivoYDesafio() {
           valido={deLaFicha(empresa?.resultado)}
           sugerido={resultadoSugerido}
           cargando={proponiendo}
-          vacio="La ficha de la empresa no lo tiene y Nexus todavía no tiene de dónde sugerirlo: sale de las sesiones."
+          vacio={
+            conMetas
+              ? "La ficha de la empresa no lo tiene. Nexus puede sugerirlo con las metas principales del Resumen."
+              : "La ficha de la empresa no lo tiene y Nexus todavía no tiene de dónde sugerirlo: sale de las metas y de las sesiones."
+          }
           max={MAX_DESAFIO_PROPUESTO}
           usar={aLaFicha("resultado")}
+          sugerirCon={conMetas && !empresa?.resultado ? { etiqueta: "Sugerirlo con las metas", correr: sugerirElResultado } : undefined}
           editable={!empresa?.resultado?.deLosProyectos}
           descartar={propuesto?.resultado ? descartar("resultado") : undefined}
         />

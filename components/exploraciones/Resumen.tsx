@@ -27,9 +27,9 @@
  * (lib/exploraciones/objetivo-y-hallazgos.ts). Las tarjetas quedan debajo.
  *
  * Liviano (Elías, 22 nov: «el Resumen muestra demasiado»; docs/resumen-liviano-plan.md). Lo guardado no cambia, cambia lo
- * que se ve: los hallazgos salieron (viven en «Lo que aprendimos» de cada sesión); cada tarjeta se ve en su versión
- * compacta (lib/exploraciones/tarjetas-compactas.ts) o, sin ella, con lo de siempre recortado; y de las particularidades
- * se ven las 5 más recientes con su fecha.
+ * que se ve: los hallazgos salieron (viven en «Lo que aprendimos» de cada sesión); cada tarjeta muestra sus 4 primeros
+ * puntos EN EL ORDEN QUE DEJÓ LA PERSONA en la lista de la casilla («la IA propone, tú ordenas», la misma noche: la
+ * versión que reescribía la IA se retiró), con «y N más»; y de las particularidades se ven las 5 más recientes con su fecha.
  */
 import { CASILLAS_DE_LAS_REUNIONES, CASILLAS_DEL_RESUMEN, definicionDe, type ClaveDeCasilla } from "@/lib/exploraciones/casillas";
 import { claveDeLaReunion, type DestinoDePropuesta, type ItemPropuesto, type LecturaDeReunion } from "@/lib/exploraciones/contenido";
@@ -38,7 +38,7 @@ import { esDeUnaSesion } from "@/lib/exploraciones/despues-de-la-sesion";
 import { BotonAzul, BotonEnlace, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { diaCorto } from "@/lib/exploraciones/fechas";
 import { momentoDeLaExploracion } from "@/lib/exploraciones/objetivo-y-hallazgos";
-import { lineasDe, loQueMuestraLaTarjeta, PARTICULARIDADES_A_LA_VISTA } from "@/lib/exploraciones/tarjetas-compactas";
+import { lineasDe, PARTICULARIDADES_A_LA_VISTA, primerasDe } from "@/lib/exploraciones/lineas-del-resumen";
 import { useSesiones } from "./useSesiones";
 import { cn } from "@/lib/cn";
 import { Casilla } from "./Casilla";
@@ -84,8 +84,8 @@ function Fila({ clave, sugeridas, onAbrir, ultima }: { clave: (typeof CASILLAS_D
   const def = definicionDe(clave);
   const lineas = lineasDe(clave, exp.estado.contenido.casillas[clave]);
   const vacia = lineas.length === 0;
-  // 22 nov: la versión compacta si es de estas líneas; si no, lo de siempre recortado. Al tocar la fila se ve todo.
-  const muestra = loQueMuestraLaTarjeta(lineas, exp.estado.contenido.tarjetasCompactas?.[clave]);
+  // 22 nov: los 4 primeros, en el orden que dejó la persona en la lista de la casilla. Al tocar la fila se ve todo.
+  const muestra = primerasDe(lineas);
   const n = sugeridas.length;
   const { letra, marco } = LETRA_DEL_MARCO[clave];
   return (
@@ -128,7 +128,7 @@ function Fila({ clave, sugeridas, onAbrir, ultima }: { clave: (typeof CASILLAS_D
                 </li>
               ))}
             </ul>
-            {muestra.ocultas > 0 && <span className="mt-1 block pl-[18px] text-xs text-fg-muted">+{muestra.ocultas} más</span>}
+            {muestra.mas > 0 && <span className="mt-1 block pl-[18px] text-xs text-fg-muted">y {muestra.mas} más</span>}
           </>
         ) : n > 0 ? (
           <ul className="space-y-1">
