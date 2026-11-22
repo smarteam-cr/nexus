@@ -284,6 +284,9 @@ describe("⛔ una exploración de proyecto no es una preventa", () => {
        mudan de ficha: la preventa va con su propuesta y la exploración de un proyecto va con su proyecto. Nunca las
        mezcla: cada una sigue a lo suyo (lib/sessions/separar-en-unidades.ts › destinosDePreventas). */
     "scripts/separar-en-unidades.ts",
+    /* Las tarjetas compactas del Resumen (22 nov): el Resumen es el mismo en la preventa y en la exploración de un
+       proyecto, así que el simulacro recorre las dos clases. Cada fila se compacta sola, con lo suyo: nunca se mezclan. */
+    "scripts/compactar-tarjetas-del-resumen.ts",
   ]);
   function archivos(dir: string): string[] {
     const abs = path.join(RAIZ, dir);

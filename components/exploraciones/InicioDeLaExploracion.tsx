@@ -13,12 +13,16 @@
  *     En un prospecto cada reunión con la empresa entra sola: se sacan de a una o varias
  *     (con casillas) a «Fuera de la exploración». En un cliente o un proyecto nada entra solo y se
  *     quitan con su X. Sacar se deshace (Ctrl+Z) y no borra ninguna reunión;
- *   · las fuentes manuales (lo que no quedó en Meet) y las instrucciones adicionales de la exploración
- *     (las leen la lectura de cada sesión y la guía; no son evidencia);
- *   · «Lo que la IA ya sabe, sin que elijas nada»: los conteos de la memoria (etapa 3), en tarjetas.
+ *   · si hay instrucciones de la exploración escritas, una línea «Nexus sigue tus instrucciones: …» con «Editar» (las
+ *     leen la lectura de cada sesión y la guía; no son evidencia). Sin texto, nada: lo nuevo se le cuenta a «Hablar con
+ *     Nexus»;
+ *   · «Lo que sabes del cliente» y «Lo que la IA ya sabe, sin que elijas nada»: los conteos de la memoria (etapa 3).
+ *
+ * Liviano (Elías, 22 nov; docs/resumen-liviano-plan.md): salieron «Dónde quedó» (lo dicen el Resumen y cada sesión), las
+ * «Fuentes manuales» (viven en Preparación › Contexto adicional, adonde llega también «Con una transcripción») y la caja
+ * de «Instrucciones adicionales».
  */
 import { useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { Textarea } from "@/components/ui";
 import { BotonAzul, BotonBlanco, BotonEnlace, BotonTexto, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import ListaDeReuniones, { type ReunionDeLaLista } from "@/components/contexto/ListaDeReuniones";
@@ -51,13 +55,11 @@ import {
 import { claveDeInstrucciones, MAX_NOTA_DE_SESION } from "@/lib/exploraciones/notas-de-sesion";
 import { tarjetasDeLoQueSabeLaIA } from "@/lib/exploraciones/lo-que-sabe-la-ia";
 import AgregarSesion from "./AgregarSesion";
-import SumarAMano from "./SumarAMano";
 import { useLienzo } from "./contexto";
 import { useCambiosDesdeLaGuia } from "./piezas-de-la-sesion";
 import { useCorrida } from "./useCorrida";
 import { useSesiones } from "./useSesiones";
 import LoQueSabes from "./LoQueSabes";
-import { DondeQuedo } from "./LoQueDejoLaSesion";
 import ObjetivoYDesafio from "./ObjetivoYDesafio";
 
 const ORIGEN = { meet: "Google Meet", hubspot: "HubSpot", documento: "Sumada a mano" } as const;
@@ -328,39 +330,13 @@ function LasSesiones() {
   );
 }
 
-// ── Las fuentes manuales y las instrucciones ──────────────────────────────────
+// ── Las instrucciones ya escritas ─────────────────────────────────────────────
 
-function IconoDeDocumento() {
-  return (
-    <svg className="h-4 w-4 flex-none text-secondary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-      <path d="M14 3v5h5M9 13h6M9 17h4" />
-    </svg>
-  );
-}
-
-function FuentesManuales() {
-  const { documentos } = useLienzo();
-  // La preventa que se abre «Con una transcripción» llega con `?sumar=1`: el formulario, abierto.
-  const sumarAlAbrir = useSearchParams().get("sumar") === "1";
-  return (
-    <section aria-labelledby="exploracion-fuentes" className="flex min-w-0 flex-[1_1_340px] flex-col gap-2.5 rounded-xl border border-line bg-surface px-4 py-3.5">
-      <div className="flex items-center gap-2">
-        <IconoDeDocumento />
-        <h3 id="exploracion-fuentes" className="text-sm font-semibold text-fg">
-          Fuentes manuales
-        </h3>
-        <span className="flex-1" />
-        <Contador n={documentos.length} />
-      </div>
-      {documentos.length === 0 && (
-        <p className="text-[13px] leading-[19px] text-fg-muted">Lo que no quedó en Meet: una llamada de Gong, una minuta o un documento del cliente. El agente lo lee como una sesión más.</p>
-      )}
-      <SumarAMano abiertoAlInicio={sumarAlAbrir} sinVacio />
-    </section>
-  );
-}
-
+/**
+ * Las instrucciones de la exploración (22 nov): si hay texto, una línea «Nexus sigue tus instrucciones: …» con «Editar»
+ * (vaciarlas las quita). Sin texto no aparece nada: lo nuevo se le cuenta a «Hablar con Nexus». La IA las sigue leyendo
+ * igual (`claveDeInstrucciones("exploracion")`, notas-de-sesion.ts).
+ */
 function Instrucciones() {
   const { exp, puedeEditar, cambiar } = useLienzo();
   const clave = claveDeInstrucciones("exploracion");
@@ -379,16 +355,9 @@ function Instrucciones() {
     }
   };
 
+  if (!guardadas.trim() && !editando) return null;
   return (
-    <section aria-labelledby="exploracion-instrucciones" className="flex min-w-0 flex-[1_1_340px] flex-col gap-2.5 rounded-xl border border-line bg-surface px-4 py-3.5">
-      <div className="flex items-center gap-2">
-        <svg className="h-4 w-4 flex-none text-fg-secondary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M4 6h16M4 12h10M4 18h7" />
-        </svg>
-        <h3 id="exploracion-instrucciones" className="text-sm font-semibold text-fg">
-          Instrucciones adicionales
-        </h3>
-      </div>
+    <section aria-label="Instrucciones de la exploración" className="flex flex-col gap-2 rounded-xl border border-line bg-surface-muted px-4 py-2.5">
       {editando ? (
         <>
           <Textarea
@@ -397,12 +366,11 @@ function Instrucciones() {
             rows={4}
             maxLength={MAX_NOTA_DE_SESION}
             autoFocus
-            aria-label="Instrucciones adicionales de la exploración"
-            placeholder='Ej.: "Pregunta sobre todo por Servicio: es donde el cliente siente que pierde clientes."'
+            aria-label="Instrucciones de la exploración"
           />
           <div className="flex items-center justify-between gap-2">
             <p className={cn("text-2xs", texto.length >= MAX_NOTA_DE_SESION ? "text-warn-ink" : "text-fg-muted")} aria-live="polite">
-              {texto.length.toLocaleString("es-CR")} / {MAX_NOTA_DE_SESION.toLocaleString("es-CR")}
+              {texto.length.toLocaleString("es-CR")} / {MAX_NOTA_DE_SESION.toLocaleString("es-CR")} · vacías, Nexus deja de seguirlas
             </p>
             <div className="flex items-center gap-1">
               <BotonTexto
@@ -419,23 +387,23 @@ function Instrucciones() {
             </div>
           </div>
         </>
-      ) : guardadas.trim() ? (
-        <p className="whitespace-pre-wrap text-[13px] leading-[19px] text-fg-secondary">«{guardadas.trim()}»</p>
       ) : (
-        <p className="text-[13px] leading-[19px] text-fg-muted">
-          Lo que la IA tiene que tener en cuenta al preparar y leer las sesiones. Pesa más que lo demás y no cuenta como algo que dijo el cliente.
+        <p className="flex flex-wrap items-baseline gap-x-2 text-[13px] leading-[19px] text-fg-secondary">
+          <span className="min-w-0 flex-1">
+            <span className="font-medium text-fg">Nexus sigue tus instrucciones:</span> <span className="whitespace-pre-wrap">«{guardadas.trim()}»</span>
+          </span>
+          {puedeEditar && (
+            <BotonEnlace
+              className="text-[13px]"
+              onClick={() => {
+                setTexto(guardadas);
+                setEditando(true);
+              }}
+            >
+              Editar
+            </BotonEnlace>
+          )}
         </p>
-      )}
-      {puedeEditar && !editando && (
-        <BotonEnlace
-          className="self-start text-[13px]"
-          onClick={() => {
-            setTexto(guardadas);
-            setEditando(true);
-          }}
-        >
-          {guardadas.trim() ? "Editar" : "Escribirlas"}
-        </BotonEnlace>
       )}
     </section>
   );
@@ -492,13 +460,8 @@ export default function InicioDeLaExploracion() {
       </header>
       {/* 2026-11-07: el objetivo de la exploración y el desafío principal, para validar o corregir (nada que llenar). */}
       <ObjetivoYDesafio />
-      {/* Punto 16 (2026-11-06): cualquiera del equipo ve en qué sesión quedó, qué se averiguó y qué queda. */}
-      <DondeQuedo />
       <LasSesiones />
-      <div data-recorrido="preventa.inicio.fuentes" className="flex flex-wrap gap-4">
-        <FuentesManuales />
-        <Instrucciones />
-      </div>
+      <Instrucciones />
       {/* K6 (2026-10-27): lo que alguien del equipo sabe y no quedó en ninguna reunión; entra entero a la guía. */}
       <LoQueSabes />
       <LoQueSabeLaIA />

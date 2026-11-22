@@ -43,6 +43,9 @@ import { useLienzo } from "./contexto";
 import { Propuestas } from "./Propuestas";
 import { PerdidaCalculada } from "./PerdidaCalculada";
 import { definicionEnElMarco } from "@/lib/exploraciones/marco";
+import { claveDeItemDeLista } from "@/lib/exploraciones/contenido";
+import { diaCorto } from "@/lib/exploraciones/fechas";
+import { particularidadesRecientes } from "@/lib/exploraciones/tarjetas-compactas";
 
 const APERTURA: { clave: Apertura["valor"]; etiqueta: string }[] = [
   { clave: "si", etiqueta: "Sí, quiere acompañamiento" },
@@ -761,6 +764,35 @@ function limpiar(clave: ClaveDeCasilla, v: unknown): unknown {
   }
 }
 
+/**
+ * Las particularidades en el Resumen (22 nov, Elías): las `n` más recientes, cada una con el día en que entró, y
+ * «Ver todas (N)» para la lista completa. Las que entraron antes del 22 nov no tienen fecha registrada: van sin fecha.
+ */
+function VistaDeLasRecientes({ lista, n }: { lista: string[]; n: number }) {
+  const { exp } = useLienzo();
+  const [todas, setTodas] = useState(false);
+  const fechas = exp.estado.contenido.fechasDeLasParticularidades;
+  const claveDe = (t: string) => claveDeItemDeLista("particularidades", t);
+  const visibles = particularidadesRecientes(lista, fechas, claveDe, todas ? undefined : n);
+  return (
+    <div className="space-y-1.5">
+      <ul className="space-y-1.5">
+        {visibles.map((p, i) => (
+          <li key={i} className="flex items-baseline gap-3 text-sm text-fg-secondary">
+            <span className="min-w-0 flex-1">{p.texto}</span>
+            {p.fecha && <span className="flex-shrink-0 text-xs tabular-nums text-fg-muted">{diaCorto(p.fecha)}</span>}
+          </li>
+        ))}
+      </ul>
+      {lista.length > n && (
+        <button type="button" onClick={() => setTodas((v) => !v)} className="text-xs font-semibold text-brand hover:text-brand-light">
+          {todas ? "Ver solo las más recientes" : `Ver todas (${lista.length})`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** ¿El borrador quedó vacío? Entonces guardar = borrar la casilla. */
 function vacio(v: unknown): boolean {
   return v === undefined || v === "" || (Array.isArray(v) && v.length === 0);
@@ -773,6 +805,7 @@ const igual = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.str
  * `editarDeEntrada`: abre directo en el formulario, sin «Completar» ni «Editar» (el cajón del
  * resumen: tocar la tarjeta ya es querer llenarla). Al guardar o cancelar avisa con `onListo`.
  * `pie`: dónde van «Guardar» y «Cancelar» (el pie del cajón, fijo abajo); sin él, debajo del editor.
+ * `recientes`: en una lista de textos, cuántos se ven (los más nuevos, con su fecha); el resto, con «Ver todas (N)».
  */
 export function Casilla({
   clave,
@@ -781,6 +814,7 @@ export function Casilla({
   editarDeEntrada = false,
   onListo,
   pie,
+  recientes,
 }: {
   clave: ClaveDeCasilla;
   className?: string;
@@ -788,6 +822,7 @@ export function Casilla({
   editarDeEntrada?: boolean;
   onListo?: () => void;
   pie?: HTMLElement | null;
+  recientes?: number;
 }) {
   const { exp, marco, cambiar, puedeEditar, guardando, pendientesPara } = useLienzo();
   // Con el nombre de su marco: en un proyecto, «Metas» es «Resultados que persigue».
@@ -883,7 +918,11 @@ export function Casilla({
           )}
         </div>
       ) : valor !== undefined ? (
-        <Vista clave={clave} valor={valor} />
+        recientes && clave === "particularidades" && Array.isArray(valor) ? (
+          <VistaDeLasRecientes lista={valor as string[]} n={recientes} />
+        ) : (
+          <Vista clave={clave} valor={valor} />
+        )
       ) : (
         <p className="text-sm text-fg-muted">Sin completar.</p>
       )}

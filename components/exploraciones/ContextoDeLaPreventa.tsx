@@ -5,11 +5,13 @@
  * desde el 2026-10-09, sin lista de reuniones).
  *
  * Las reuniones de la exploración son sus SESIONES (etapa A): viven en la página de inicio de
- * Exploración, que también tiene las fuentes manuales y sus instrucciones. Acá queda lo de cada pieza
+ * Exploración. Acá queda lo de cada pieza
  * (diseño «Piezas»), y nunca una lista de reuniones: mostrarlas donde ningún agente las lee le hacía
  * creer al vendedor que esa pieza las usaba.
  *   · `preparacion` — la preparación lee las 3 sesiones más recientes de Exploración, las fuentes
- *     manuales (que se suman acá o en Exploración) y sus instrucciones.
+ *     manuales y sus instrucciones. Desde el 22 nov las fuentes manuales viven SOLO acá (el inicio de Exploración ya no
+ *     las muestra), y la preventa que se abre «Con una transcripción» (`?pieza=preparacion&sumar=1`, EmpresasDeHubspot)
+ *     llega con este bloque desplegado y el formulario abierto.
  *   · `casos` — los casos de uso salen del lienzo. Desde el 2026-11-09 sus instrucciones son «Tu lectura del cliente»,
  *     arriba de la lista del paso (LecturaDelConsultor.tsx); aquí queda dónde encontrarla.
  *   · `sinAgente` — La escala no tiene agente propio: solo la explicación.
@@ -17,6 +19,7 @@
  * evidencia.
  */
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ContextColumn, CTX_ICONS } from "@/components/clients/context-column";
 import ContextoAdicional from "@/components/contexto/ContextoAdicional";
 import InstruccionesAdicionales from "@/components/contexto/InstruccionesAdicionales";
@@ -47,7 +50,9 @@ export default function ContextoDeLaPreventa({ modo }: { modo: ModoDelContexto }
   const { exp, marco, documentos, puedeEditar, cambiar, irA, sesion } = useLienzo();
   const { pestanas, estadoDeLaReunion } = useSesiones();
   const enProyecto = marco.clave === "cs";
-  const [abierto, setAbierto] = useState(false);
+  // «Con una transcripción» (22 nov): el bloque desplegado y el formulario de las fuentes manuales, abierto.
+  const sumarAlAbrir = useSearchParams().get("sumar") === "1" && modo === "preparacion";
+  const [abierto, setAbierto] = useState(sumarAlAbrir);
 
   const leidas = pestanas.filter((p) => estadoDeLaReunion(p) === "leida").length;
   const verLasSesiones = () => {
@@ -88,7 +93,7 @@ export default function ContextoDeLaPreventa({ modo }: { modo: ModoDelContexto }
             </div>
             {modo === "preparacion" && (
               <ContextColumn icon={CTX_ICONS.note} color="var(--color-secondary)" title="Fuentes manuales" count={documentos.length}>
-                <SumarAMano />
+                <SumarAMano abiertoAlInicio={sumarAlAbrir} />
               </ContextColumn>
             )}
             {/* 2026-11-09 (Marco): en Casos de uso, las instrucciones pasaron a «Tu lectura del cliente», arriba de la

@@ -17,6 +17,7 @@ import {
   CAMPOS_DEL_EMBUDO,
   CAMPOS_DEL_NEGOCIO,
   CANALES_DE_CONEXION,
+  CASILLAS_DEL_RESUMEN,
   CLASES_DE_OBJECION,
   CLAVES_DE_CASILLA,
   MODELOS_DE_NEGOCIO,
@@ -145,6 +146,7 @@ import {
   type CambioDeLaGuia,
 } from "./ajustes-de-la-guia";
 import { MAX_CLAVE_DE_NOTA } from "./notas-de-sesion";
+import { MAX_CARACTERES_DE_LINEA_COMPACTA, MAX_LINEAS_COMPACTAS } from "./tarjetas-compactas";
 import { MAX_REFERIDO_POR, VIAS_DE_LLEGADA, type ComoLlego } from "./como-llego";
 import {
   MAX_AJUSTES_DESCARTADOS,
@@ -1239,6 +1241,19 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   if (resumen) c.resumenDeLaEscala = resumen;
   const anterior = leerResumenAnterior(raw.resumenAnterior);
   if (anterior) c.resumenAnterior = anterior;
+  // 22 nov: la versión compacta de cada tarjeta del Resumen (tarjetas-compactas.ts) y el día de cada particularidad.
+  const compactas = registroValido(
+    raw.tarjetasCompactas,
+    z.enum(CASILLAS_DEL_RESUMEN),
+    z.object({
+      huella: z.string().max(40),
+      lineas: z.array(z.string().max(MAX_CARACTERES_DE_LINEA_COMPACTA)).min(1).max(MAX_LINEAS_COMPACTAS),
+      en: z.string().max(40),
+    }),
+  );
+  if (Object.keys(compactas).length) c.tarjetasCompactas = compactas;
+  const fechas = registroValido(raw.fechasDeLasParticularidades, z.string().max(2000), z.string().regex(/^\d{4}-\d{2}-\d{2}$/));
+  if (Object.keys(fechas).length) c.fechasDeLasParticularidades = fechas;
   c.reunionesElegidas = listaDeTextos(raw.reunionesElegidas, MAX_REUNIONES_ELEGIDAS).filter((id) => id.length <= MAX_ID_DE_REUNION);
   c.fuera = Array.isArray(raw.fuera)
     ? raw.fuera.filter((k): k is string => typeof k === "string" && CLAVE_DE_REUNION.safeParse(k).success).slice(-MAX_FUERA)

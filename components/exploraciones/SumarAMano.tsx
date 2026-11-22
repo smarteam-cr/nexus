@@ -43,14 +43,11 @@ function mensajeDelError(r: { error?: string; detalle?: unknown }): string {
 export default function SumarAMano({
   abiertoAlInicio = false,
   paraSesion,
-  sinVacio = false,
   sinLista = false,
 }: {
   abiertoAlInicio?: boolean;
   /** La sesión de la que es la minuta: lo sumado pasa a ser su reunión, con su nombre y su fecha. */
   paraSesion?: { id: string; titulo: string; fecha: string | null };
-  /** Sin documentos, no dice nada (quien la monta ya lo explica). */
-  sinVacio?: boolean;
   /** Solo el formulario, sin la lista de lo sumado. */
   sinLista?: boolean;
 } = {}) {
@@ -123,7 +120,7 @@ export default function SumarAMano({
   // Igual que la columna de Reuniones: la lista arriba y el enlace al pie, a la misma altura (Elías, 2026-10-07).
   return (
     <div className="flex flex-1 flex-col gap-2">
-      {!sinLista && !(sinVacio && documentos.length === 0) && (
+      {!sinLista && (
         <ContextColumnList empty={VACIO_DE_LAS_FUENTES}>
           {documentos.map((d) => (
             <ContextRow

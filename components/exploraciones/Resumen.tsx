@@ -23,28 +23,22 @@
  * Solo avisa; «Entendido» lo cierra hasta que otra reunión vuelva a ponerse técnica.
  *
  * Un resumen de verdad (Elías, 2026-11-08, tercera vuelta con Centauro): arriba, en qué va la exploración (activa, en qué
- * sesión va), los hallazgos generales y el botón del momento: «Analizar la sesión N» si la última ya pasó y no se leyó, o
- * «Preparar la sesión N» (lib/exploraciones/objetivo-y-hallazgos.ts). Las tarjetas quedan debajo.
+ * sesión va) y el botón del momento: «Analizar la sesión N» si la última ya pasó y no se leyó, o «Preparar la sesión N»
+ * (lib/exploraciones/objetivo-y-hallazgos.ts). Las tarjetas quedan debajo.
+ *
+ * Liviano (Elías, 22 nov: «el Resumen muestra demasiado»; docs/resumen-liviano-plan.md). Lo guardado no cambia, cambia lo
+ * que se ve: los hallazgos salieron (viven en «Lo que aprendimos» de cada sesión); cada tarjeta se ve en su versión
+ * compacta (lib/exploraciones/tarjetas-compactas.ts) o, sin ella, con lo de siempre recortado; y de las particularidades
+ * se ven las 5 más recientes con su fecha.
  */
-import {
-  CASILLAS_DE_LAS_REUNIONES,
-  CASILLAS_DEL_RESUMEN,
-  definicionDe,
-  esDeCifras,
-  ETIQUETA_DEL_ROL,
-  lineasDeLasCifras,
-  type ClaveDeCasilla,
-  type Meta,
-  type Persona,
-  type Reto,
-} from "@/lib/exploraciones/casillas";
+import { CASILLAS_DE_LAS_REUNIONES, CASILLAS_DEL_RESUMEN, definicionDe, type ClaveDeCasilla } from "@/lib/exploraciones/casillas";
 import { claveDeLaReunion, type DestinoDePropuesta, type ItemPropuesto, type LecturaDeReunion } from "@/lib/exploraciones/contenido";
 import type { PestanaDeSesion } from "@/lib/exploraciones/guia";
-import { EQUIPOS, EQUIPOS_DEL_CLIENTE, type ClaveDeEquipo } from "@/lib/exploraciones/equipos";
 import { esDeUnaSesion } from "@/lib/exploraciones/despues-de-la-sesion";
 import { BotonAzul, BotonEnlace, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
-import { diaCorto, diaYHora } from "@/lib/exploraciones/fechas";
-import { hallazgosParaMostrar, momentoDeLaExploracion } from "@/lib/exploraciones/objetivo-y-hallazgos";
+import { diaCorto } from "@/lib/exploraciones/fechas";
+import { momentoDeLaExploracion } from "@/lib/exploraciones/objetivo-y-hallazgos";
+import { lineasDe, loQueMuestraLaTarjeta, PARTICULARIDADES_A_LA_VISTA } from "@/lib/exploraciones/tarjetas-compactas";
 import { useSesiones } from "./useSesiones";
 import { cn } from "@/lib/cn";
 import { Casilla } from "./Casilla";
@@ -66,39 +60,8 @@ export const LETRA_DEL_MARCO: Record<(typeof CASILLAS_DEL_RESUMEN)[number], { le
   embudo: { letra: "E", marco: "Embudo: cómo convierte" },
 };
 
-/**
- * Los tres niveles (2026-11-07): los retos y las metas de un equipo del cliente van juntos y con su nombre («Ventas · …»),
- * después de los de la empresa entera.
- */
-function porEquipo<T extends { equipo?: ClaveDeEquipo }>(xs: readonly T[], texto: (x: T) => string): string[] {
-  const orden = (x: T) => (x.equipo ? EQUIPOS_DEL_CLIENTE.indexOf(x.equipo) + 1 : 0);
-  return [...xs].sort((a, b) => orden(a) - orden(b)).map((x) => (x.equipo ? `${EQUIPOS[x.equipo].nombre} · ${texto(x)}` : texto(x)));
-}
-
-/** Lo confirmado de una casilla, en líneas cortas para la tarjeta. */
-export function lineasDe(clave: ClaveDeCasilla, valor: unknown): string[] {
-  if (valor === undefined || valor === null) return [];
-  const tipo = definicionDe(clave).tipo;
-  switch (tipo) {
-    case "texto":
-      return typeof valor === "string" && valor.trim() ? [valor] : [];
-    case "lista":
-      return valor as string[];
-    case "metas":
-      return porEquipo(valor as Meta[], (m) => {
-        const cifras = [m.actual && `de ${m.actual}`, m.objetivo && `a ${m.objetivo}`, m.para && `para ${m.para}`].filter(Boolean).join(" ");
-        return cifras ? `${m.que}: ${cifras}` : m.que;
-      });
-    case "retos":
-      return porEquipo(valor as Reto[], (r) => r.texto);
-    case "autoridad":
-      return (valor as Persona[]).map((p) => `${p.nombre} · ${ETIQUETA_DEL_ROL[p.rol]}`);
-    case "cifras":
-      return esDeCifras(clave) ? lineasDeLasCifras(clave, valor) : [];
-    default:
-      return [];
-  }
-}
+/** Lo confirmado de una casilla, en líneas cortas (vive en lib desde el 22 nov: lo usa también el agente de las compactas). */
+export { lineasDe };
 
 /** La pastilla azul que cuenta lo sugerido. */
 function Sugeridas({ n, mas }: { n: number; mas: boolean }) {
@@ -121,6 +84,8 @@ function Fila({ clave, sugeridas, onAbrir, ultima }: { clave: (typeof CASILLAS_D
   const def = definicionDe(clave);
   const lineas = lineasDe(clave, exp.estado.contenido.casillas[clave]);
   const vacia = lineas.length === 0;
+  // 22 nov: la versión compacta si es de estas líneas; si no, lo de siempre recortado. Al tocar la fila se ve todo.
+  const muestra = loQueMuestraLaTarjeta(lineas, exp.estado.contenido.tarjetasCompactas?.[clave]);
   const n = sugeridas.length;
   const { letra, marco } = LETRA_DEL_MARCO[clave];
   return (
@@ -155,13 +120,16 @@ function Fila({ clave, sugeridas, onAbrir, ultima }: { clave: (typeof CASILLAS_D
       </span>
       <span className="min-w-0">
         {!vacia ? (
-          <ul className="list-disc space-y-1 pl-[18px] marker:text-fg-muted">
-            {lineas.map((l, i) => (
-              <li key={i} className="text-sm leading-[1.5] text-fg-secondary">
-                {l}
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="list-disc space-y-1 pl-[18px] marker:text-fg-muted">
+              {muestra.lineas.map((l, i) => (
+                <li key={i} className="text-sm leading-[1.5] text-fg-secondary">
+                  {l}
+                </li>
+              ))}
+            </ul>
+            {muestra.ocultas > 0 && <span className="mt-1 block pl-[18px] text-xs text-fg-muted">+{muestra.ocultas} más</span>}
+          </>
         ) : n > 0 ? (
           <ul className="space-y-1">
             {sugeridas.map((it) => (
@@ -215,7 +183,10 @@ function AvisoTecnico() {
   );
 }
 
-/** Arriba del Resumen: en qué va la exploración, el botón del momento y los hallazgos generales. */
+/**
+ * Arriba del Resumen: en qué va la exploración y el botón del momento. Los hallazgos generales salieron el 22 nov (Elías):
+ * el resumen de cada sesión ya está en «Lo que aprendimos» de esa sesión. `propuesta.hallazgos` se sigue guardando.
+ */
 function EstadoDeLaExploracion() {
   const { exp, irA, sesion } = useLienzo();
   const { todas, claveDeLaProxima, estadoDeLaReunion } = useSesiones();
@@ -225,18 +196,13 @@ function EstadoDeLaExploracion() {
     { clave: proxima.clave, numero: proxima.numero },
     { archivada: exp.estado.archivada, diaCorto },
   );
-  const leidas = todas.flatMap((p) => {
-    const l = p.hecha && p.reunion ? exp.estado.propuesta.lecturas[claveDeLaReunion(p.reunion)] : undefined;
-    return l?.resumen ? [{ numero: p.numero, resumen: l.resumen }] : [];
-  });
-  const hallazgos = hallazgosParaMostrar(exp.estado.propuesta.hallazgos, leidas);
   const ir = (a: NonNullable<typeof momento.accion>) => {
     irA("exploracion");
     sesion.elegir(a.clave);
     sesion.ponerMomento(a.clave, a.tipo === "analizar" ? "despues" : "antes");
   };
   return (
-    <section data-recorrido="preventa.resumen.estado" className="space-y-3 rounded-xl border border-line bg-surface px-[18px] py-4">
+    <section data-recorrido="preventa.resumen.estado" className="rounded-xl border border-line bg-surface px-[18px] py-4">
       <div className="flex flex-wrap items-center gap-3">
         <div className="min-w-0 flex-[1_1_320px] space-y-0.5">
           <p className={ROTULO_DEL_SISTEMA}>La exploración</p>
@@ -247,27 +213,6 @@ function EstadoDeLaExploracion() {
           <BotonAzul onClick={() => ir(momento.accion!)}>
             {momento.accion.tipo === "analizar" ? "Analizar" : "Preparar"} la sesión {momento.accion.numero}
           </BotonAzul>
-        )}
-      </div>
-      <div className="space-y-1.5 border-t border-line pt-3">
-        <p className={ROTULO_DEL_SISTEMA}>Hallazgos</p>
-        {hallazgos.lista.length ? (
-          <>
-            <ul className="list-disc space-y-1 pl-[18px] marker:text-fg-muted">
-              {hallazgos.lista.map((h) => (
-                <li key={h} className="text-sm leading-[1.5] text-fg">
-                  {h}
-                </li>
-              ))}
-            </ul>
-            <p className="text-xs text-fg-muted">
-              {hallazgos.de === "nexus"
-                ? `Los escribió Nexus al armar la última guía${hallazgos.en ? `, el ${diaYHora(hallazgos.en)}` : ""}, con todo lo que se sabe hasta hoy.`
-                : "Lo que dejó cada sesión. Nexus los junta al armar la próxima guía."}
-            </p>
-          </>
-        ) : (
-          <p className="text-[13px] text-fg-muted">Todavía no hay hallazgos: salen de las sesiones.</p>
         )}
       </div>
     </section>
@@ -368,7 +313,8 @@ export default function Resumen() {
       {/* Lo que sale de cada reunión: lo propone el agente al leerla, con la frase del cliente. */}
       <div data-recorrido="preventa.resumen.casillas" className="grid gap-4 lg:grid-cols-2">
         {CASILLAS_DE_LAS_REUNIONES.map((clave) => (
-          <Casilla key={clave} clave={clave} />
+          // 22 nov: de las particularidades se ven las 5 más recientes, con su fecha; «Ver todas (N)» abre la lista.
+          <Casilla key={clave} clave={clave} recientes={clave === "particularidades" ? PARTICULARIDADES_A_LA_VISTA : undefined} />
         ))}
       </div>
     </div>
