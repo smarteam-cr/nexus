@@ -24,6 +24,8 @@ import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { inicioDelDiaCr } from "@/lib/ai/presupuesto";
 import { prisma } from "@/lib/db/prisma";
 import {
+  esPreguntaSinDuda,
+  laPreguntaDeLaPersona,
   leerElTurno,
   loQueConto,
   NO_SE_PUDO_LEER,
@@ -51,8 +53,6 @@ export interface DondeConversa {
   clientId: string;
   projectId: string | null;
   email: string;
-  /** Cómo se llama quien conversa (para el pedido). */
-  nombre: string;
   /** Lo que identifica el lugar en `filters` (la exploración). */
   filtros: Record<string, string>;
 }
@@ -127,8 +127,12 @@ export async function correrUnaVuelta(o: {
   donde: DondeConversa;
   valorValido: (destino: string, valor: unknown) => unknown;
   leerLaCuenta: LeerLaCuenta;
+  /** «Guardarlo como nota» debajo de una respuesta: lo último se cuenta aunque tenga forma de pregunta. */
+  contar?: boolean;
 }): Promise<VueltaDeNexus> {
   const { contexto, mensajes, conversacion, donde } = o;
+  // Si es pregunta lo decide el código, no el modelo: ante la duda, es algo que la persona cuenta y va a la nota.
+  const laPregunta = laPreguntaDeLaPersona(mensajes, o.contar);
   const vueltas = await vueltasHastaAhora(donde.email, conversacion);
   const tope = porQueNoSigue(vueltas.deLaConversacion, vueltas.deHoy);
   if (tope) return { ok: false, status: 429, error: tope };
@@ -152,12 +156,14 @@ export async function correrUnaVuelta(o: {
   const ia = { agentSlug: donde.agentSlug, agentRunId: run.id, clientId: donde.clientId, projectId: donde.projectId, triggeredByEmail: donde.email, origen: `chat:${donde.superficie}` };
   let turno: ResultadoDelTurno;
   try {
-    const respuesta = await conContextoDeIA(ia, () => getAnthropic().messages.create(pedidoDelTurno(contexto, mensajes, donde.nombre)));
+    const respuesta = await conContextoDeIA(ia, () => getAnthropic().messages.create(pedidoDelTurno(contexto, mensajes, laPregunta !== null)));
     turno = leerElTurno(respuesta, {
       destinos: new Set(contexto.destinos.map((d) => d.clave)),
       valorValido: o.valorValido,
       loQueDijo: loQueConto(mensajes),
       puedePreguntar: puedePreguntar(mensajes),
+      laPregunta,
+      sinDuda: esPreguntaSinDuda(mensajes, o.contar),
     });
     await prisma.agentRun.update({ where: { id: run.id }, data: { status: "DONE", output: JSON.stringify({ ...turno, mensajes } satisfies SalidaDeLaVuelta) } });
   } catch (e) {
