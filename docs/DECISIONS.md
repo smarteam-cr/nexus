@@ -16183,7 +16183,9 @@ guarda sin un clic (ni la nota ni los cambios a las tarjetas). Convive con «Agr
   `CASILLAS_PARA_NEXUS`), con un valor que pasa el esquema de la tarjeta (`VALIDADOR_ESTRICTO.valorDelDestino`, el mismo
   del «Usar») y una cita que la persona dijo, palabra por palabra (una respuesta corta, «200 al mes», vale entera). Sin
   cita no hay cambio. Lo que no pasa se descarta y se cuenta.
-- **Nada se guarda sin un clic** (Elías, 21 nov, en Cemaco · Ecuador: después de una respuesta escribió «resumelos», se
+- **Nada se guarda sin un clic** (⚠ con UNA excepción decidida el 22 nov: un dato de la empresa que una persona cambia en
+  algo que ve el cliente se guarda solo, con aviso y «Deshacer»; ver «Hablar con Nexus, el plan maestro», al final. En la
+  conversación sigue «Guardar».) (Elías, 21 nov, en Cemaco · Ecuador: después de una respuesta escribió «resumelos», se
   leyó como algo que contaba y quedó guardado como nota, sin responderle). Cuando Nexus entiende lo que contaste, el
   cajón muestra «Esto cambia lo que se sabe del cliente»: la nota con tus palabras y lo que Nexus entendió (las frases de
   los hechos, sin verificar: se verifican al guardar), con «Guardar», «No guardar» (no queda nada y empieza otra
@@ -16379,3 +16381,44 @@ propuesta comercial y cronograma).
   guarda leyendo el documento justo DESPUÉS de publicar, así que una edición en ese instante quedaría marcada como lo que
   ve el cliente sin serlo; el freno de «Usar esta versión» mira la corrida del agente de la pieza y la de una copia, no
   otras que escriban en el mismo documento; un «Subir» del cronograma con un motivo propio sale como «Editado».
+
+## Hablar con Nexus, el plan maestro: una puerta, la memoria de la empresa y lo que vuelve de lo que ve el cliente (2026-11-22)
+
+Elías, 22 nov: que «Hablar con Nexus» sea tan potente como hablar con Claude Code: que pregunte, valide y sugiera qué
+guardar; que lo guardado sirva a todo documento; que mejore lo que ve el cliente («cambia el título», «agrega esta
+parte»); y que «Mejorar con IA» sea Nexus abierto donde se hizo clic. El plan, con el inventario, los vacíos y las siete
+etapas, está en `docs/plan-maestro-hablar-con-nexus.md`. Al leer el código se encontraron seis puertas a la IA con
+motores y memorias distintas (lib/chat-de-nexus, lib/nexus-chat, «Agregar algo que sabes», lib/ai/assist.ts,
+lib/asistente y los chats de tareas y de la guía), y que lo contado a «Hablar con Nexus» no llega a la memoria de la
+cuenta (lib/memoria) ni a casos de uso. Elías respondió las cinco preguntas del plan el mismo día. Nada se construyó
+todavía: cada etapa arranca cuando él lo dice.
+
+- **Una sola puerta «Nexus».** El botón de arriba a la derecha es el único, en toda pantalla de una empresa; «Hablar
+  con Nexus» deja el riel de la preventa, y «Lo que sabes del cliente» queda como la lista de lo guardado, con un «+»
+  que abre Nexus. «✨ Mejorar con IA» se reemplaza por «✨ Pedirle a Nexus», que abre el mismo cajón con el lugar marcado.
+  Las puertas viejas se retiran de a una, cuando la nueva cubra lo que hacían, y con la lista de qué se va. *Enmienda* lo
+  del 21 nov («convive con «Agregar algo que sabes», que no se quita»): *por qué:* tres puertas en la misma pantalla de la
+  preventa, dos guardando en lugares distintos, confundían.
+- **Lo que se le cuenta a Nexus es de la EMPRESA**, no de una preventa, y cada cosa recuerda dónde se contó (en qué
+  preventa o proyecto). Lo leen todas sus preventas y proyectos; dos unidades separadas (dos `Client`) no comparten.
+  **No va a HubSpot.** *Por qué:* lleva lo interno (presupuesto, quién decide, objeciones) y HubSpot no sabe cortarlo;
+  las notas del chat de la cuenta, que sí van, siguen siendo otra cosa hasta unificarlas.
+- **Lo que una persona cambia en algo que ve el cliente se guarda SOLO en lo que sabe Nexus**, con aviso y «Deshacer»,
+  cuando es un dato de la empresa (cifras, retos, metas, sistemas, fechas; la redacción no). Vale solo al aplicar un
+  cambio de Nexus o al publicar o presentar ese documento, nunca a cada tecla. Es la única excepción a «nada se guarda
+  sin un clic» (21 nov); en la conversación sigue «Guardar». *Por qué:* el cambio ya lo hizo una persona sobre algo que va
+  al cliente, y eso es lo más cierto que hay. *El cuidado que pide:* un error al clasificar ya no lo frena un clic, así
+  que antes de encenderlo se prueba con 20 cambios reales clasificados a mano, se mide cuánto se deshace en la semana
+  (si pasa de 1 de cada 10, se vuelve a conversar) y nunca reemplaza solo lo que aceptó el cliente: lo guarda al lado,
+  con la duda a la vista.
+- **Mejorar con Nexus empieza por La escala** (el Resumen y la página de cada área, que hoy solo tienen «Rehacer con
+  IA») **y sigue con casos de uso**, en la misma etapa. Todo cambio deja una versión «Cambiado con Nexus» en el
+  historial de versiones y nunca publica.
+- **Tope de US$ 100 al mes para Nexus conversando** (contar, preguntar, mejorar documentos, el agente de impacto y lo
+  que vuelve a la memoria), dentro de los US$ 300 de toda la IA, con aviso al 80 % y los topes por persona de hoy (60
+  vueltas y 20 preguntas al día).
+- **Se mantiene:** nada se publica solo; el modelo nunca elige la empresa (el lugar lo fija y verifica el servidor);
+  las reuniones solo por el chokepoint de sesiones; la escalera de peso decide qué manda y nada de más peso se pisa en
+  silencio; lo interno nunca llega a un documento que ve el cliente, y el corte lo hace el código.
+- **Estado del 22 nov:** los SQL del 21 nov (hechos de una nota, historial de versiones) corrieron y «Hablar con Nexus»
+  y el historial están en producción (3deb62b0); las dos notas «resumelos» de Cemaco · Ecuador se borraron.
