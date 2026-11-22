@@ -5,7 +5,10 @@
  *
  * La conversación es la genérica (components/chat-de-nexus/PanelDeNexus.tsx): la persona cuenta algo o pregunta algo de
  * la cuenta. Cuando Nexus entiende lo que contó, acá pasa lo de la preventa, en este orden:
- *   1. la nota se guarda SIEMPRE en «Lo que sabes del cliente», con las palabras de la persona, su nombre y la hora
+ *   0. NADA se guarda solo (Elías, 21 nov: «resumelos» quedó guardado como nota). Se ve «Esto cambia lo que se sabe del
+ *      cliente»: la nota con sus palabras y lo que Nexus entendió (los hechos), con «Guardar» y «No guardar», y
+ *      «¿Era una pregunta? Respóndela» debajo de lo que escribió;
+ *   1. con «Guardar», la nota va a «Lo que sabes del cliente», con las palabras de la persona, su nombre y la hora
  *      (la operación `nota` de siempre: el servidor pone quién y cuándo);
  *   2. el servidor deja sus hechos (destino: esta preventa; se ven debajo de la nota) y pregunta al agente de impacto si
  *      cambia la página de La escala: si cambia, la cuenta regresiva de 10 s (components/impacto/AvisoDeImpacto.tsx), y
@@ -15,8 +18,9 @@
  * Lo propuesto, lo aplicado y el aviso viven acá y no en el cajón: cerrarlo y volver a abrirlo no los pierde. Cerrarlo
  * con la cuenta regresiva a la vista la CANCELA, y al volver no arranca otra.
  * GUARDADA (21 nov): al volver a la preventa, el cajón trae la última conversación de quien mira en esta preventa
- * (…/nexus/conversacion, lib/chat-de-nexus/guardada.ts), con lo propuesto y lo que se hizo con cada cambio. La cuenta
- * regresiva de una conversación de antes no vuelve a correr. «Nueva conversación» la cierra.
+ * (…/nexus/conversacion, lib/chat-de-nexus/guardada.ts), con lo propuesto y lo que se hizo con cada cambio; lo que no se
+ * guardó vuelve con su «Guardar». La cuenta regresiva de una conversación de antes no vuelve a correr. «Nueva
+ * conversación» (y «No guardar») la cierra.
  * Convive con «Agregar algo que sabes» (components/exploraciones/LoQueSabes.tsx): es otra puerta a las mismas notas.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -58,12 +62,18 @@ type EstadoDelCambio = EstadoDelCambioEnPantalla;
 type EstadoDelAviso = "abierto" | "cerrado" | "cancelado-al-cerrar" | "de-antes";
 
 interface Listo {
-  /** La nota guardada; null si la conversación volvió del servidor sin saber si se guardó. */
+  /** La nota guardada; null mientras la persona no apretó «Guardar» (o si volvió del servidor sin saber si se guardó). */
   clave: string | null;
   conversacion: string;
   cambios: CambioPropuesto[];
+  /** Lo que Nexus entendió: las frases de los hechos, sin verificar (se verifican al guardar, contra la nota). */
+  hechos: string[];
   /** Lo que contó la persona, tal cual: con esto se busca (o se vuelve a guardar) una nota que no se sabe si quedó. */
   nota: string;
+  /** Volvió del servidor al abrir la página (no es de esta visita): solo entonces se busca su nota por el texto. */
+  deAntes: boolean;
+  /** Salió de «Guardarlo como nota» en una visita de antes: «¿Era una pregunta?» no vuelve. */
+  contado: boolean;
 }
 
 const urlDeLaConversacion = (id: string) => `/api/sales/exploraciones/${id}/nexus/conversacion`;
@@ -74,28 +84,52 @@ function anotar(exploracionId: string, cuerpo: { conversacion: string; estados: 
 }
 
 /**
- * La nota de una conversación que volvió del servidor sin su clave (la página se cerró antes de guardarla, o la revisión
- * no llegó): si ya está en «Lo que sabes» con las mismas palabras, es esa; si no, no quedó y se puede guardar ahora.
+ * La nota de una conversación que volvió del servidor sin su clave (la página se cerró entre guardarla y su revisión): si
+ * ya está en «Lo que sabes» con las mismas palabras, es esa; si no, no quedó y se puede guardar ahora. Solo para lo que
+ * vuelve de antes: lo de esta visita sin clave no se guardó, aunque una nota vieja diga lo mismo.
  */
 function claveDeLaNota(notas: Record<string, string>, listo: Listo): string | null {
   if (listo.clave) return listo.clave;
+  if (!listo.deAntes) return null;
   const t = listo.nota.trim();
   return t ? (loQueSabeElEquipo(notas).find((n) => n.texto.trim() === t)?.clave ?? null) : null;
 }
 
-function QuedoGuardada({ clave, onGuardar }: { clave: string | null; onGuardar: () => void }) {
+/** Lo que va a «Lo que sabes del cliente» si la persona aprieta «Guardar»: sus palabras y lo que Nexus entendió. */
+function PorGuardar({ listo, guardando, onGuardar, onNoGuardar }: { listo: Listo; guardando: boolean; onGuardar: () => void; onNoGuardar: () => void }) {
   const { exp, puedeEditar } = useLienzo();
-  if (!clave)
-    return (
-      <Alert variant="warning">
-        <span className="block">La nota de esta conversación no quedó guardada en «Lo que sabes del cliente» (saliste de la página antes de que terminara).</span>
-        {puedeEditar && (
-          <span className="mt-2 block">
-            <BotonBlanco onClick={onGuardar}>Guardar la nota</BotonBlanco>
-          </span>
-        )}
-      </Alert>
-    );
+  const llena = loQueSabeElEquipo(exp.estado.contenido.notas).length >= MAX_LO_QUE_SABES;
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-fg-secondary">En «Lo que sabes del cliente», con tu nombre:</p>
+      <p className="whitespace-pre-wrap rounded-lg border border-line bg-surface px-3 py-2 text-[13px] text-fg">{listo.nota}</p>
+      {listo.hechos.length > 0 && (
+        <>
+          <p className="text-xs text-fg-secondary">Lo que Nexus entendió (queda como hechos de la cuenta, debajo de la nota):</p>
+          <ul className="list-disc space-y-0.5 pl-5 text-[13px] text-fg marker:text-fg-muted">
+            {listo.hechos.map((h, i) => (
+              <li key={i}>{h}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      {llena && <Alert variant="warning">«Lo que sabes del cliente» ya tiene {MAX_LO_QUE_SABES} notas: quita una en la Preparación antes de guardar esta.</Alert>}
+      {puedeEditar && (
+        <div className="flex items-center gap-2">
+          <BotonAzul disabled={guardando || llena} onClick={onGuardar}>
+            {guardando ? "Guardando…" : "Guardar"}
+          </BotonAzul>
+          <BotonTexto disabled={guardando} onClick={onNoGuardar}>
+            No guardar
+          </BotonTexto>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuedoGuardada({ clave }: { clave: string }) {
+  const { exp } = useLienzo();
   const autor = exp.estado.contenido.autoresDeLasNotas?.[clave];
   const cuando = autor
     ? ` el ${diaConAnio(Date.parse(autor.en))}, a las ${new Date(autor.en).toLocaleTimeString("es-CR", { hour: "numeric", minute: "2-digit" })}${autor.por ? `, por ${autor.por.split("@")[0]}` : ""}`
@@ -110,7 +144,22 @@ function QuedoGuardada({ clave, onGuardar }: { clave: string | null; onGuardar: 
   );
 }
 
-function Cambio({ cambio, estado, ocupado, onAplicar, onNo }: { cambio: CambioPropuesto; estado: EstadoDelCambio; ocupado: boolean; onAplicar: () => void; onNo: () => void }) {
+function Cambio({
+  cambio,
+  estado,
+  ocupado,
+  sinGuardar,
+  onAplicar,
+  onNo,
+}: {
+  cambio: CambioPropuesto;
+  estado: EstadoDelCambio;
+  ocupado: boolean;
+  /** La nota todavía no se guardó: el cambio se ve, y se aplica después (la nota es lo que lo respalda). */
+  sinGuardar: boolean;
+  onAplicar: () => void;
+  onNo: () => void;
+}) {
   const { exp, puedeEditar } = useLienzo();
   const se = comoSeVeElCambio(exp.estado.contenido, cambio.destino, cambio.valor);
   if (!se) return null;
@@ -138,6 +187,8 @@ function Cambio({ cambio, estado, ocupado, onAplicar, onNo }: { cambio: CambioPr
           <span className="text-xs text-fg-muted">No se aplicó</span>
         ) : se.yaEsta ? (
           <span className="text-xs text-fg-muted">Ya está en la tarjeta</span>
+        ) : sinGuardar ? (
+          <span className="text-xs text-fg-muted">Lo aplicas después de guardar la nota.</span>
         ) : (
           puedeEditar && (
             <>
@@ -258,22 +309,27 @@ function AplicarTodo({
 function LoQueQuedo({
   listo,
   guardado,
+  guardando,
   errorAlGuardar,
   estados,
   ponerEstado,
   aviso,
   ponerAviso,
   guardarLaNota,
+  noGuardar,
 }: {
   listo: Listo;
   guardado: Guardado | null;
+  guardando: boolean;
   errorAlGuardar: string | null;
   estados: Record<string, EstadoDelCambio>;
   ponerEstado: (id: string, e: EstadoDelCambio) => void;
   aviso: EstadoDelAviso;
   ponerAviso: (a: EstadoDelAviso) => void;
-  /** Guardar ahora la nota de una conversación que volvió sin ella. */
+  /** «Guardar»: la nota va a «Lo que sabes del cliente». */
   guardarLaNota: () => void;
+  /** «No guardar»: no queda nada y empieza una conversación nueva. */
+  noGuardar: () => void;
 }) {
   const { cambiar, exp } = useLienzo();
   const clave = claveDeLaNota(exp.estado.contenido.notas, listo);
@@ -284,7 +340,8 @@ function LoQueQuedo({
   const cambios = listo.cambios.filter((c) => esCasillaParaNexus(c.destino));
 
   const aplicar = async (c: CambioPropuesto) => {
-    if (!esCasillaParaNexus(c.destino)) return;
+    // Sin la nota guardada no se aplica: es lo que respalda el cambio («Lo dijiste: …»).
+    if (!clave || !esCasillaParaNexus(c.destino)) return;
     ponerEstado(c.id, "aplicando");
     setError(null);
     const ok = await cambiar([{ op: "sumarACasilla", clave: c.destino, valor: c.valor }]);
@@ -321,16 +378,17 @@ function LoQueQuedo({
   }
 
   return (
-    <section aria-label="Adónde va lo que contaste" className="flex flex-col gap-3 rounded-xl border border-line bg-surface-muted p-4">
-      <h3 className="text-sm font-semibold text-fg">Adónde va lo que contaste</h3>
-      {errorAlGuardar ? <Alert variant="danger">{errorAlGuardar}</Alert> : <QuedoGuardada clave={clave} onGuardar={guardarLaNota} />}
+    <section aria-label="Esto cambia lo que se sabe del cliente" className="flex flex-col gap-3 rounded-xl border border-line bg-surface-muted p-4">
+      <h3 className="text-sm font-semibold text-fg">Esto cambia lo que se sabe del cliente</h3>
+      {clave ? <QuedoGuardada clave={clave} /> : <PorGuardar listo={listo} guardando={guardando} onGuardar={guardarLaNota} onNoGuardar={noGuardar} />}
+      {errorAlGuardar && <Alert variant="danger">{errorAlGuardar}</Alert>}
       {guardado && <TextoDeLosHechos g={guardado.hechos} />}
       {escala}
 
       {cambios.length > 0 ? (
         <>
           <p className="text-xs text-fg-secondary">{cambios.length === 1 ? "Un cambio para la arquitectura de la venta:" : `${cambios.length} cambios para la arquitectura de la venta:`}</p>
-          <AplicarTodo cambios={cambios} estados={estados} ponerEstado={ponerEstado} ocupado={ocupado} setOcupado={setOcupado} />
+          {clave && <AplicarTodo cambios={cambios} estados={estados} ponerEstado={ponerEstado} ocupado={ocupado} setOcupado={setOcupado} />}
           <ul className="flex flex-col gap-2">
             {cambios.map((c) => (
               <Cambio
@@ -338,6 +396,7 @@ function LoQueQuedo({
                 cambio={c}
                 estado={estados[c.id] ?? "propuesto"}
                 ocupado={ocupado}
+                sinGuardar={!clave}
                 onAplicar={() => void aplicar(c)}
                 onNo={() => ponerEstado(c.id, "descartado")}
               />
@@ -358,6 +417,7 @@ export default function HablarConNexus() {
   const [listo, setListo] = useState<Listo | null>(null);
   const [guardado, setGuardado] = useState<Guardado | null>(null);
   const [errorAlGuardar, setErrorAlGuardar] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
   const [estados, setEstados] = useState<Record<string, EstadoDelCambio>>({});
   const [aviso, setAviso] = useState<EstadoDelAviso>("abierto");
   // La conversación vive acá y no en el cajón: cerrarlo no la borra.
@@ -381,7 +441,7 @@ export default function HablarConNexus() {
         setConversacion({ id: c.id, mensajes: c.mensajes });
         if (c.listo) {
           viva.current = c.listo.notaClave;
-          setListo({ clave: c.listo.notaClave, conversacion: c.id, cambios: c.listo.cambios, nota: notaDeLaConversacion(c.mensajes) });
+          setListo({ clave: c.listo.notaClave, conversacion: c.id, cambios: c.listo.cambios, hechos: c.listo.hechos, nota: notaDeLaConversacion(c.mensajes), deAntes: true, contado: c.listo.contado });
           setEstados(c.listo.estados);
           setGuardado(
             // Sin la revisión guardada no se sabe si cambiaba La escala: se dice así, nunca «no cambia».
@@ -420,21 +480,43 @@ export default function HablarConNexus() {
     }
   };
 
+  /** Nexus entendió lo que contó: se muestra qué cambia y NO se guarda nada hasta el «Guardar». */
   const alQuedarListo = async ({ conversacion, nota, turno }: { conversacion: string; nota: string; turno: TurnoListo }) => {
-    const clave = claveNuevaDeLoQueSabes();
-    viva.current = clave;
-    setListo({ clave, conversacion, cambios: turno.cambios, nota });
+    viva.current = null;
+    setListo({ clave: null, conversacion, cambios: turno.cambios, hechos: turno.hechos.map((h) => h.frase), nota, deAntes: false, contado: false });
     setGuardado(null);
     setErrorAlGuardar(null);
     setEstados({});
     setAviso("abierto");
-    const ok = await cambiar([{ op: "nota", paso: clave, texto: nota }]);
+  };
+
+  /** «Guardar»: la nota va a «Lo que sabes del cliente»; después, de fondo, sus hechos y la revisión de La escala. */
+  const guardar = async () => {
+    if (!listo || guardando) return;
+    const clave = claveNuevaDeLoQueSabes();
+    setGuardando(true);
+    setErrorAlGuardar(null);
+    setGuardado(null);
+    setAviso("abierto");
+    const ok = await cambiar([{ op: "nota", paso: clave, texto: listo.nota }]);
+    setGuardando(false);
     if (!ok) {
-      setErrorAlGuardar(`No se pudo guardar la nota. Cópiala antes de cerrar: «${nota}»`);
+      setErrorAlGuardar("No se pudo guardar la nota. Vuelve a intentarlo: lo que contaste sigue acá.");
       return;
     }
-    // Los hechos y la revisión de La escala van de fondo: el panel ya muestra adónde va cada cosa.
-    void revisar(conversacion, clave);
+    viva.current = clave;
+    setListo((l) => (l && l.conversacion === listo.conversacion ? { ...l, clave } : l));
+    void revisar(listo.conversacion, clave);
+  };
+
+  /** «¿Era una pregunta? Respóndela»: lo que iba a guardarse se olvida y la conversación sigue (el panel la responde). */
+  const volverAConversar = () => {
+    viva.current = null;
+    setListo(null);
+    setGuardado(null);
+    setErrorAlGuardar(null);
+    setEstados({});
+    setAviso("abierto");
   };
 
   const ponerEstado = (id: string, e: EstadoDelCambio) => {
@@ -472,10 +554,11 @@ export default function HablarConNexus() {
         open={abierto}
         onClose={cerrar}
         title="Hablar con Nexus"
-        description="Cuéntale lo que sabes del cliente, o pregúntale lo que se habló, escrito o dictado. Si le cuentas algo, te pregunta lo que falte y te dice adónde va cada cosa."
+        description="Cuéntale lo que sabes del cliente, o pregúntale lo que se habló, escrito o dictado. Si le cuentas algo, te pregunta lo que falte y te muestra qué cambia antes de guardarlo."
         size="lg"
       >
-        {llena && !listo ? (
+        {/* Lleno, solo al empezar: a media conversación el aviso va junto al «Guardar» y la conversación sigue a la vista. */}
+        {llena && !listo && !conversacion.mensajes.length ? (
           <Alert variant="warning">«Lo que sabes del cliente» ya tiene {MAX_LO_QUE_SABES} notas: quita una en la Preparación antes de contar otra.</Alert>
         ) : (
           <PanelDeNexus
@@ -489,20 +572,22 @@ export default function HablarConNexus() {
               setConversacion(c);
             }}
             alReiniciar={olvidar}
+            sePuedePreguntar={!!listo && !listo.clave && !listo.contado && !guardando && !claveDeLaNota(exp.estado.contenido.notas, listo)}
+            alVolverAConversar={volverAConversar}
           >
             {listo && (
               <LoQueQuedo
                 key={listo.clave ?? listo.conversacion}
                 listo={listo}
                 guardado={guardado}
+                guardando={guardando}
                 errorAlGuardar={errorAlGuardar}
                 estados={estados}
                 ponerEstado={ponerEstado}
                 aviso={aviso}
                 ponerAviso={setAviso}
-                guardarLaNota={() =>
-                  void alQuedarListo({ conversacion: listo.conversacion, nota: listo.nota, turno: { tipo: "listo", cambios: listo.cambios, hechos: [], descartados: 0 } })
-                }
+                guardarLaNota={() => void guardar()}
+                noGuardar={olvidar}
               />
             )}
           </PanelDeNexus>

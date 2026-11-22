@@ -24,8 +24,7 @@ import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { inicioDelDiaCr } from "@/lib/ai/presupuesto";
 import { prisma } from "@/lib/db/prisma";
 import {
-  esPreguntaSinDuda,
-  laPreguntaDeLaPersona,
+  comoSeLee,
   leerElTurno,
   loQueConto,
   NO_SE_PUDO_LEER,
@@ -81,8 +80,11 @@ const NO_SE_PUDO_RESPONDER = (afuera: LoQueQuedoAfuera): RespuestaDeNexus => ({
   texto: "No pude leer la cuenta ahora. Vuelve a preguntarme en un rato.",
   citas: [],
   sinRespaldo: false,
+  noSePudo: true,
   afuera,
 });
+
+const topeDePreguntas = () => `Hoy ya le hiciste ${PREGUNTAS_POR_DIA} preguntas a Nexus, el tope del día: cada una lee todo lo de la cuenta. Mañana sigues.`;
 
 /** La acción «leer el contexto de la cuenta» cuando responde: una llamada, medida, con su corrida y su tope. */
 async function responder(o: { pregunta: string; mensajes: MensajeDeLaConversacion[]; conversacion: string; contexto: ContextoParaNexus; donde: DondeConversa; leerLaCuenta: LeerLaCuenta }): Promise<RespuestaDeNexus> {
@@ -129,13 +131,19 @@ export async function correrUnaVuelta(o: {
   leerLaCuenta: LeerLaCuenta;
   /** «Guardarlo como nota» debajo de una respuesta: lo último se cuenta aunque tenga forma de pregunta. */
   contar?: boolean;
+  /** «Era una pregunta» debajo de lo que iba a guardarse: lo último se responde. */
+  preguntar?: boolean;
 }): Promise<VueltaDeNexus> {
   const { contexto, mensajes, conversacion, donde } = o;
-  // Si es pregunta lo decide el código, no el modelo: ante la duda, es algo que la persona cuenta y va a la nota.
-  const laPregunta = laPreguntaDeLaPersona(mensajes, o.contar);
+  // Lo seguro lo decide el código (`comoSeLee`); lo dudoso, el modelo con la conversación a la vista.
+  const lectura = comoSeLee(mensajes, { contar: o.contar, preguntar: o.preguntar });
+  const loUltimo = mensajes[mensajes.length - 1]?.texto.trim().slice(0, TOPES.largoDelMensaje) ?? "";
   const vueltas = await vueltasHastaAhora(donde.email, conversacion);
   const tope = porQueNoSigue(vueltas.deLaConversacion, vueltas.deHoy);
   if (tope) return { ok: false, status: 429, error: tope };
+  // Una pregunta segura con el tope del día ya cumplido no deja corrida: si la dejara, al volver la conversación la
+  // mostraría como pregunta sin responder y lo que iba a guardarse no volvería («¿Era una pregunta?»).
+  if (lectura === "pregunta" && vueltas.preguntasDeHoy >= PREGUNTAS_POR_DIA) return { ok: false, status: 429, error: topeDePreguntas() };
   /** Las vueltas que le quedan a la conversación después de esta. */
   const quedan = Math.max(0, TOPES.turnosPorConversacion - vueltas.deLaConversacion - 1);
 
@@ -156,16 +164,22 @@ export async function correrUnaVuelta(o: {
   const ia = { agentSlug: donde.agentSlug, agentRunId: run.id, clientId: donde.clientId, projectId: donde.projectId, triggeredByEmail: donde.email, origen: `chat:${donde.superficie}` };
   let turno: ResultadoDelTurno;
   try {
-    const respuesta = await conContextoDeIA(ia, () => getAnthropic().messages.create(pedidoDelTurno(contexto, mensajes, laPregunta !== null)));
-    turno = leerElTurno(respuesta, {
-      destinos: new Set(contexto.destinos.map((d) => d.clave)),
-      valorValido: o.valorValido,
-      loQueDijo: loQueConto(mensajes),
-      puedePreguntar: puedePreguntar(mensajes),
-      laPregunta,
-      sinDuda: esPreguntaSinDuda(mensajes, o.contar),
-    });
-    await prisma.agentRun.update({ where: { id: run.id }, data: { status: "DONE", output: JSON.stringify({ ...turno, mensajes } satisfies SalidaDeLaVuelta) } });
+    if (lectura === "pregunta") {
+      // Una pregunta segura no pasa por el modelo que clasifica: se responde con las palabras de la persona.
+      turno = { tipo: "consulta", pregunta: loUltimo };
+    } else {
+      const respuesta = await conContextoDeIA(ia, () => getAnthropic().messages.create(pedidoDelTurno(contexto, mensajes, lectura)));
+      turno = leerElTurno(respuesta, {
+        destinos: new Set(contexto.destinos.map((d) => d.clave)),
+        valorValido: o.valorValido,
+        loQueDijo: loQueConto(mensajes),
+        puedePreguntar: puedePreguntar(mensajes),
+        laPregunta: lectura === "duda" ? loUltimo : null,
+      });
+    }
+    // `contado`: la persona eligió «Guardarlo como nota»; al volver, «¿Era una pregunta?» no reaparece.
+    const salida: SalidaDeLaVuelta = { ...turno, mensajes, ...(o.contar && turno.tipo === "listo" ? { contado: true as const } : {}) };
+    await prisma.agentRun.update({ where: { id: run.id }, data: { status: "DONE", output: JSON.stringify(salida) } });
   } catch (e) {
     console.error("[chat-de-nexus] la IA no respondió", e);
     await prisma.agentRun
@@ -175,10 +189,21 @@ export async function correrUnaVuelta(o: {
   }
 
   if (turno.tipo === "consulta") {
-    if (vueltas.preguntasDeHoy >= PREGUNTAS_POR_DIA) {
-      return { ok: false, status: 429, error: `Hoy ya le hiciste ${PREGUNTAS_POR_DIA} preguntas a Nexus, el tope del día: cada una lee todo lo de la cuenta. Mañana sigues.` };
+    if (vueltas.preguntasDeHoy >= PREGUNTAS_POR_DIA) return { ok: false, status: 429, error: topeDePreguntas() };
+    let respuesta: RespuestaDeNexus;
+    try {
+      respuesta = await responder({ pregunta: turno.pregunta, mensajes, conversacion, contexto, donde, leerLaCuenta: o.leerLaCuenta });
+    } catch (e) {
+      // Leer la cuenta falló (la base, el chokepoint): como si la IA no hubiera respondido.
+      console.error("[chat-de-nexus] no se pudo leer la cuenta", e);
+      respuesta = NO_SE_PUDO_RESPONDER({ reuniones: 0, ejemplos: [] });
     }
-    const respuesta = await responder({ pregunta: turno.pregunta, mensajes, conversacion, contexto, donde, leerLaCuenta: o.leerLaCuenta });
+    if (respuesta.noSePudo && o.preguntar) {
+      // «¿Era una pregunta?» sin respuesta: la vuelta no queda (ERROR), así lo que iba a guardarse vuelve igual, en la
+      // pantalla y al recargar.
+      await prisma.agentRun.update({ where: { id: run.id }, data: { status: "ERROR" } }).catch(() => {});
+      return { ok: false, status: 502, error: "Nexus no pudo responder ahora. Lo que ibas a guardar sigue acá: vuelve a intentarlo en un rato." };
+    }
     // La respuesta con sus citas queda en la vuelta: al volver, la conversación la muestra igual.
     await anotarLaVuelta(run.id, { respuesta });
     return { ok: true, turno: { tipo: "respuesta", respuesta }, quedan };

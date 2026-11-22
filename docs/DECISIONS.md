@@ -16107,9 +16107,8 @@ idea es aprovechar a Claude, no pisarlo»). Este es el mínimo viable: UN lugar 
 ## Hablar con Nexus en la preventa: preguntar, responder, decir adónde va y dejar hechos (2026-11-21)
 
 Elías, 21 nov: la siguiente pieza después del agente de impacto, para simplificar cómo el equipo le da contexto a Nexus.
-Vive adentro de Nexus (un cajón que habla con Claude por `lib/anthropic.ts`), primero en la preventa, y propone: la nota
-se guarda siempre y los cambios a las tarjetas se aplican con un clic. Convive con «Agregar algo que sabes», que no se
-quita. El mismo día, Elías sumó que también RESPONDA preguntas sobre la cuenta.
+Vive adentro de Nexus (un cajón que habla con Claude por `lib/anthropic.ts`), primero en la preventa, y propone: NADA se
+guarda sin un clic (ni la nota ni los cambios a las tarjetas). Convive con «Agregar algo que sabes», que no se quita. El mismo día, Elías sumó que también RESPONDA preguntas sobre la cuenta.
 
 - **Dónde está:** el botón «Hablar con Nexus» arriba de la barra de piezas de la preventa (todas las piezas). No en la
   escala de la cuenta ni en la exploración de un proyecto (`lugar !== "preventa"` no lo pinta; las rutas responden 400).
@@ -16121,30 +16120,58 @@ quita. El mismo día, Elías sumó que también RESPONDA preguntas sobre la cuen
   impacto con su cuenta de 10 s. Otro lugar (la ficha del cliente, un documento) pone su contexto y sus destinos
   (`ContextoParaNexus`) y su validación (`valorValido`); un conector «afuera» llamaría las mismas rutas.
 - **El código decide, no el modelo:** como mucho dos rondas de preguntas y dos preguntas por ronda, sin voseo; después,
-  el pedido dice «YA NO PREGUNTES» y una pregunta de más se toma como «listo, sin cambios» (la nota se guarda igual).
+  el pedido dice «YA NO PREGUNTES» y una pregunta de más se toma como «listo, sin cambios» (queda para guardar).
   Cada cambio va a una tarjeta de la lista (las del Resumen con Negocio y Embudo, más objeciones y particularidades:
   `CASILLAS_PARA_NEXUS`), con un valor que pasa el esquema de la tarjeta (`VALIDADOR_ESTRICTO.valorDelDestino`, el mismo
   del «Usar») y una cita que la persona dijo, palabra por palabra (una respuesta corta, «200 al mes», vale entera). Sin
   cita no hay cambio. Lo que no pasa se descarta y se cuenta.
+- **Nada se guarda sin un clic** (Elías, 21 nov, en Cemaco · Ecuador: después de una respuesta escribió «resumelos», se
+  leyó como algo que contaba y quedó guardado como nota, sin responderle). Cuando Nexus entiende lo que contaste, el
+  cajón muestra «Esto cambia lo que se sabe del cliente»: la nota con tus palabras y lo que Nexus entendió (las frases de
+  los hechos, sin verificar: se verifican al guardar), con «Guardar», «No guardar» (no queda nada y empieza otra
+  conversación) y, debajo de lo que escribiste, «¿Era una pregunta? Respóndela» (lo vuelve a mandar con `preguntar`; lo
+  que iba a guardarse se olvida recién cuando llega la respuesta; una pregunta frenada por el tope del día no deja
+  corrida, y una que la IA no pudo responder deja la vuelta en ERROR: si falla, lo propuesto sigue con su «Guardar», en la
+  pantalla y al recargar; mientras espera, «Guardar» y «No guardar» no se pueden apretar). Después de «Guardarlo como
+  nota» ese botón no vuelve, tampoco al recargar (la vuelta lleva `contado`). Los cambios a las tarjetas se VEN antes de guardar y se aplican después («Aplicar», «No», «Aplicar todo»): la
+  nota es lo que respalda su «Lo dijiste: …», y un cambio aplicado con la nota sin guardar quedaba sin respaldo. Lo que no
+  se guardó vuelve al volver a la página, con su «Guardar» (la vuelta del «listo» no tiene `notaClave`); solo ahí se busca
+  la nota por el texto (una nota vieja con las mismas palabras no hace pasar por guardado lo de esta visita). Con «Lo que
+  sabes» lleno, el aviso va junto al «Guardar» desactivado y la conversación sigue a la vista. La razón: ninguna regla
+  acierta siempre si algo es pregunta; lo que hace funcional al chat es que un error cueste un clic y no ensucie
+  «Lo que sabes del cliente».
 - **Responder una pregunta sobre la cuenta** (lib/chat-de-nexus/respuesta.ts; Elías, 21 nov: «¿qué dijo Centauro de la
-  cobranza?», «¿quién decide?»). **Si es una pregunta lo decide el CÓDIGO, no el modelo** (`pareceUnaPregunta`; Elías,
-  21 nov, en Cemaco · Ecuador: «Es importante esto de que crédito cobro contacta a los clientes…» salió como pregunta, el
-  modelo la reescribió como «¿Qué dijo Elías sobre crédito y cobro…?» porque el pedido decía «Te cuenta Elías», nadie la
-  encontró en las reuniones y no se guardó nada). Lo principal es AGREGAR contexto: ante la duda, es contar. Es pregunta
-  solo si abre con «¿» o cierra con «?» (una coletilla como «¿no?» o «¿verdad?» no cuenta), si arranca con una palabra
-  de pregunta CON tilde (qué, quién, cuánto, cuál, dónde, por qué, cómo, cuándo…) o si le pide algo a Nexus («dime»,
-  «resume», «quiero saber», «averigua», «revisa lo que»). Sin tilde no cuenta, a propósito: «Que cada gestor tiene
-  muchas cuentas» o «Quien decide es el gerente» cuentan algo, y el dictado abre muchas frases con «Que…» (lo encontró
-  la revisión del 21 nov con 16 frases). Tampoco «busca», «explica», «lista» ni «hay algo de» solos («Busca crecer en
-  Guatemala»). Si no es pregunta, el pedido lo dice y una «consulta» del modelo se toma como «listo» sin cambios: la nota
-  se guarda igual. Con forma de pregunta, el modelo todavía puede ver que contesta algo que Nexus le preguntó; pero si
-  lleva su signo y no contesta a Nexus (`esPreguntaSinDuda`), se responde aunque el modelo diga «listo»: una pregunta
-  de verdad no se guarda como nota. Lo que se responde son las PALABRAS de la persona, nunca una reescritura del modelo,
-  y el pedido de la vuelta ya no lleva el nombre de quien escribe («te escribe alguien del equipo»; quién y cuándo los
-  pone el servidor en la nota). Debajo de la ÚLTIMA respuesta va «¿Era algo que querías contar? Guardarlo como nota»:
-  saca el par pregunta-respuesta y vuelve a mandar lo escrito con `contar` (se cuenta aunque tenga forma de pregunta; es
-  una vuelta más y cuenta en los topes). Solo la última: una del medio, movida al final, se leería como la respuesta a lo
-  que Nexus preguntó después. Con forma de pregunta (`consulta`), una SEGUNDA llamada responde. Sin RAG ni embeddings:
+  cobranza?», «¿quién decide?»). **Lo seguro lo decide el CÓDIGO y lo dudoso el modelo** (`comoSeLee`). Historia: primero
+  lo decidía el modelo, y «Es importante esto de que crédito cobro contacta a los clientes…» salió como pregunta (el pedido
+  decía «Te cuenta Elías» y el modelo la reescribió como «¿Qué dijo Elías…?»); después lo decidía solo el código con una
+  lista de palabras, y «resumelos» no estaba en la lista. Una lista nunca cubre todas las formas de pedir algo. Hoy:
+  **Contar seguro**: contesta algo que Nexus le preguntó, o arranca contando («Es importante…», «Ojo…», «Anota que…»,
+  «Me dijeron…») sin preguntar nada; una «consulta» del modelo se toma como «listo». **Pregunta segura**: abre con «¿» o
+  cierra con «?» (una coletilla como «¿no?», «¿o no?» o «¿sabes?» no cuenta; una pregunta citada cierra con la comilla),
+  pide algo («dime», «quiero saber», «averigua», «me puedes resumir», y con su tilde «sabes qué», «busca qué», «revisa
+  qué») o es una orden con su pronombre pegado, con tilde o sin ella («resúmelos», «resumelos», «explícame»,
+  «compáralos»: el pronombre solo se pega a una orden). Va directo a la respuesta, sin la llamada que clasifica. **Lo
+  demás** lo decide el modelo, con la conversación a la vista: después de una respuesta, un pedido corto («y el segundo»,
+  «dame los tres más graves») es una pregunta de seguimiento. NO son seguras, a propósito (las encontraron las
+  revisiones del 21 nov): una palabra de pregunta sin signo, con tilde o sin ella («Cómo te decía, tienen 3 marcas», «Qué
+  bárbaro, tienen 40 cuentas por gestor», «¡Qué desorden tienen con la cartera!»: el dictado pone las tildes); los verbos
+  solos («explica», «compara», «busca», «dame», «hazlo»: también son el presente de quien habla del cliente, o «Dame un
+  segundo»); «sabes que», «busca que» y «revisa si» sin tilde («Sabes que el gerente renunció»); y lo que arranca
+  contando y termina preguntando («Nos dijeron que arrancan en enero. ¿Qué sigue?»). Lo que se responde son las PALABRAS de la persona, nunca
+  una reescritura del modelo, y el pedido de la vuelta no lleva el nombre de quien escribe («te escribe alguien del
+  equipo»; quién y cuándo los pone el servidor en la nota). Cada error tiene su salida: debajo de la ÚLTIMA respuesta,
+  «¿Era algo que querías contar? Guardarlo como nota» (saca el par pregunta-respuesta y vuelve a mandar lo escrito con
+  `contar`; solo la última: una del medio, movida al final, se leería como la respuesta a lo que Nexus preguntó
+  después), y debajo de lo que iba a guardarse, «¿Era una pregunta? Respóndela». Cada botón es una vuelta más y cuenta
+  en los topes. Una consulta la responde una SEGUNDA llamada.
+- **Formato y Enter** (Elías, 21 nov: «es importante que se vea bien formateado»; se veían los `**` crudos): la respuesta
+  se pinta como Markdown simple (components/chat-de-nexus/TextoConFormato.tsx: párrafos, listas y negritas; sin
+  `rehype-raw`, el HTML del modelo no se ejecuta). Solo pasan esos elementos y los enlaces: nada de imágenes ni tablas
+  (la respuesta sale de transcripciones y notas que Smarteam no controla, y una imagen se pide sola al abrir el panel:
+  podría llevarse datos de la cuenta en su dirección). La regla de la respuesta pide ese Markdown, como mucho 6 puntos (si
+  hay más, dice cuántos quedaron) y, si le piden resumir, resumir lo ya respondido. Enter envía, como el botón;
+  Shift+Enter baja de renglón, y mientras se compone un acento Enter no envía. En el celular (puntero táctil) Enter baja
+  de renglón: no hay Shift, y se envía con el botón. Sin RAG ni embeddings:
   lee entero lo de esa cuenta y nada más:
   las notas del equipo, las tarjetas, lo aceptado y las reuniones con transcripción, por el chokepoint
   (`reunionesDeLaCuenta`, lib/exploraciones/fuentes.ts: los ids salen de `getClientSessions` de SU empresa; invariante
@@ -16218,16 +16245,18 @@ quita. El mismo día, Elías sumó que también RESPONDA preguntas sobre la cuen
   Leerla no crea corridas: los topes siguen igual. La cuenta regresiva de una conversación de antes no vuelve a correr
   (dice qué avisó y manda a mirar La escala). Una corrida de antes de esto no trae mensajes: esa no vuelve.
 - **Lo que no queda garantizado:** que Sonnet pregunte bien y no de más y elija la tarjeta correcta (no se midió con
-  conversaciones reales; por eso cada cambio espera el clic); que la regla de la forma acierte siempre: una pregunta sin
-  signo ni tilde («que dijeron de la cobranza», dictada) se toma como algo que se cuenta y va a la nota, sin un botón
-  para volverla pregunta (se quita en «Lo que sabes» y se vuelve a preguntar con «¿»); y una exclamación con tilde
-  («¡Qué caos tienen en cobranza!») llega como posible pregunta y la decide el modelo (para eso está «Guardarlo como
-  nota»); que el lado de cada turno
+  conversaciones reales; por eso cada cambio espera el clic); que lo dudoso se lea bien: lo decide el modelo, y se mide
+  solo por cuántas veces se usan «Guardarlo como nota» y «¿Era una pregunta?»; quedan pedidos seguros que pueden contar
+  algo («Dime tú, ellos no saben qué quieren», «Revisa lo que le cobran»: se responden y la salida es «Guardarlo como
+  nota»); un «gracias» u «ok» que
+  el modelo lea como algo contado muestra «Guardar» (se resuelve con «No guardar»); después de guardar, la conversación
+  termina (para seguir, «Nueva conversación»); que el lado de cada turno
   sea el correcto cuando Meet muestra un solo nombre (queda «no se sabe») o un nombre del equipo que no calza con el
   registrado (en una reunión con el cliente puede salir como «del cliente»); que lo que quedó afuera por el tope no tenga
   la respuesta (la respuesta lo avisa); los hechos de una nota que se edita o se borra no se rehacen ni se retiran (los
   de una nota editada siguen mostrándose bajo ella aunque digan otra cosa); si la página se cierra entre guardar la nota
-  y su revisión, la conversación vuelve sin saber si la nota quedó (lo dice y manda a mirar «Lo que sabes»); y un
+  y su revisión, la conversación vuelve con «Guardar» aunque la nota haya quedado (si el texto es el mismo, la reconoce
+  en «Lo que sabes» y dice que está guardada); y un
   «Aplicar» cuya anotación no llegó al servidor vuelve como propuesto (la tarjeta sí cambió, y el panel dice «Ya está»).
 
 ## Historial de versiones: el mismo para todo documento (2026-11-21)
