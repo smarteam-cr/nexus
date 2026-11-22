@@ -414,13 +414,15 @@ describe("cómo se pinta", () => {
     expect(renderToStaticMarkup(createElement(ResultadoDelTestVista, { r: VENTAS, empresa: "E", agenda: "" }))).not.toContain("ed-cuesta");
   });
 
-  it("la escalera de la página del área: la meta que eligió quien presenta, si está por encima de hoy", () => {
+  it("la escalera de la página del área: sin meta (21 nov), aunque haya una guardada de antes", () => {
     const area = (textos: Record<string, string>) =>
       renderToStaticMarkup(createElement(ResultadoDelTestVista, { r: VENTAS, empresa: "E", agenda: "", deLaEscala: { areas: pestanas.slice(1), porExplorar: [], textos } }));
-    expect(area({})).toContain('class="esc-nivel esc-meta" data-nivel="F"');
-    expect(area({ [CLAVES.delArea("1", "meta")]: "E" })).toContain('class="esc-nivel esc-meta" data-nivel="E"');
-    // Una meta guardada que ya no está arriba de hoy no vale: vuelve Funcional.
-    expect(area({ [CLAVES.delArea("1", "meta")]: "D" })).toContain('class="esc-nivel esc-meta" data-nivel="F"');
+    // Las dos capas en Inicial: ese nivel, con su color; una meta elegida antes del 21 nov ya no se dibuja.
+    expect(area({})).toContain('class="esc-nivel is-active" data-nivel="I"');
+    const conMeta = area({ [CLAVES.delArea("1", "meta")]: "E" });
+    expect(conMeta).toContain('class="esc-nivel" data-nivel="E"');
+    expect(conMeta).not.toMatch(/esc-meta|esc-tramo|A dónde lo llevamos/);
+    expect(sinEtiquetas(conMeta)).toContain("Dónde está hoy en la escala.");
     // La escalera va arriba y el radar justo debajo.
     const html = area({});
     expect(html.indexOf("ed-escalera")).toBeLessThan(html.indexOf("ed-radar-seccion"));

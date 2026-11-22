@@ -5,8 +5,8 @@
  * interruptor, sin puntajes en el radar y con el tamaño de hoja que imprime el motor.
  *
  * 20 nov (cambio A PROPÓSITO, pedido de Elías al presentar con Ventas): arriba del radar vuelve la ESCALERA de los cinco
- * niveles (lib/escala/escalera.ts), con dónde está hoy y a dónde lo llevamos, también en el PDF. Lo de antes no se pierde:
- * las pruebas de abajo siguen pidiendo cada texto y el radar.
+ * niveles (lib/escala/escalera.ts), también en el PDF; desde el 21 nov, sin meta e idéntica a la de la app vieja (marca
+ * donde está cada capa). Lo de antes no se pierde: las pruebas de abajo siguen pidiendo cada texto y el radar.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -228,15 +228,18 @@ describe("la página de resultado, como se dibuja", () => {
 });
 
 describe("la escalera de los niveles (20 nov)", () => {
-  it("va arriba y el radar justo debajo, con hoy y la meta (Funcional desde Deficiente), en la pantalla y en el PDF", () => {
+  it("va arriba y el radar justo debajo, marcando las dos capas y sin meta, en la pantalla y en el PDF", () => {
     for (const modo of ["pantalla", "pdf"] as const) {
       const html = dibujar(modo);
       const escalera = html.indexOf('class="esc-svg"');
       expect(escalera, `sin escalera en ${modo}`).toBeGreaterThan(-1);
       expect(html.search(/class="rde[ "]/), `el radar va debajo de la escalera en ${modo}`).toBeGreaterThan(escalera);
-      expect(html).toContain('class="esc-nivel esc-hoy" data-nivel="D"');
-      expect(html).toContain('class="esc-nivel esc-meta" data-nivel="F"');
-      expect(html).toContain('aria-label="Los cinco niveles de la escala: Ventas está hoy en Deficiente y la meta es llevarla a Funcional."');
+      // La base operativa en Inicial y la producción en Deficiente: esos dos, con su color; el resto, en gris.
+      expect(html).toContain('class="esc-nivel is-active" data-nivel="D"');
+      expect(html).toContain('class="esc-nivel is-active" data-nivel="I"');
+      expect(html).toContain('class="esc-nivel" data-nivel="F"');
+      expect(html).not.toMatch(/esc-meta|esc-tramo|Meta</);
+      expect(html).toContain('aria-label="Los cinco niveles de la escala, de Deficiente a Óptimo: tu Producción en Deficiente; tu Base operativa en Inicial."');
       // Estática: nada que dependa de JS.
       expect(html.slice(escalera, html.indexOf("</svg>", escalera))).not.toMatch(/on[A-Z]|<script/);
     }
