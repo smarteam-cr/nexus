@@ -13,6 +13,7 @@ import { leerPropuestaDeMejora, MAX_SUGERIDAS, type PropuestaDeMejora } from "@/
 import { REGLAS_DE_LAS_ACTIVIDADES } from "@/lib/casos-de-uso/orden";
 import { actividadesParaElAgente, bibliotecaParaElAgente, MODELO_DE_LA_EXPLORACION } from "./agente-pedido";
 import { idsPorNombres, type ContextoDePersonalizar } from "./personalizar-pedido";
+import { ROTULO_PARA_LOS_CASOS } from "./lo-que-confirmo-el-equipo";
 
 export const NOMBRE_DE_LA_HERRAMIENTA_DE_MEJORAR = "mejorar_actividades";
 
@@ -86,6 +87,7 @@ ${REGLAS_DE_LAS_ACTIVIDADES}
     ficha +
     (ctx.instrucciones ?? "") +
     `=== LO QUE SE SABE (lo que puede ver el cliente) ===\n${ctx.exploracion || "(nada)"}\n\n` +
+    (ctx.confirmado ? `${ROTULO_PARA_LOS_CASOS}\n${ctx.confirmado}\n\n` : "") +
     `=== LO QUE SE SABE (interno) ===\n${ctx.interno || "(nada)"}\n\n` +
     `=== SUS REUNIONES MÁS RECIENTES (minutas) ===\n${ctx.reuniones || "(ninguna con minuta)"}\n\n` +
     `=== LA BIBLIOTECA DE ACTIVIDADES (las únicas que se pueden usar en «actividades») ===\n${bibliotecaParaElAgente(ctx.biblioteca)}`;

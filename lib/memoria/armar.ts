@@ -25,6 +25,7 @@ import type { MapaDeProceso } from "@/lib/procesos/mapa";
 import { prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
 import { ESTADOS_ABIERTOS, estadoDeSolicitud, rotuloDeSolicitud } from "@/lib/sessions/solicitudes-fuera-de-alcance";
 import { ROTULO_DEL_TEMA, ROTULO_DEL_TIPO } from "@/lib/seguimiento/hechos/tipos";
+import { bloqueDeLoQueConfirmoElEquipo } from "@/lib/exploraciones/lo-que-confirmo-el-equipo";
 import { queCargar } from "./consumidores";
 import type {
   AlcanceDeMemoria,
@@ -56,10 +57,12 @@ export const TOPES_DE_LA_MEMORIA = {
   // + `partes.personas` y `partes.tickets` (etapa 6a de docs/mi-dia-plan.md), también solo del alcance interno.
   // + `partes.notasDelEquipo` (etapa 5), también solo del alcance interno.
   // + `partes.comunicaciones` y `partes.compromisosDeLaCuenta` (iniciativa B, 2026-10-18), también solo del interno.
-  cuenta: 11_200,
+  // + `partes.equipo` (lo que confirmó el equipo, 23 nov): 1.400 más, para que no empuje afuera las partes del final.
+  cuenta: 12_600,
   proyecto: 8900,
   partes: {
     ficha: 2000,
+    equipo: 1400,
     procesos: 800,
     historia: 600,
     fueraDeAlcance: 600,
@@ -100,6 +103,7 @@ export const TOPES_DE_LA_MEMORIA = {
 
 const TITULOS: Record<ClaveDeParte, string> = {
   ficha: "Información del cliente",
+  equipo: "Lo que confirmó el equipo de Smarteam",
   procesos: "Procesos de la cuenta",
   historia: "Historia con Smarteam",
   fueraDeAlcance: "Pedidos fuera de alcance (INTERNO)",
@@ -399,6 +403,9 @@ export function armarMemoriaDeLaCuenta(datos: DatosDeLaCuenta, opts: OpcionesDeL
         T.ficha,
       ),
     },
+    // Va segunda: pesa más que lo dicho en una reunión (lib/impacto/escalera.ts) y no puede quedar afuera por el total.
+    // El bloque vuelve a cortar por el alcance: fuera del interno, solo los hechos que describen a la empresa.
+    { clave: "equipo", cuerpo: q.equipo ? recortarAlTope(bloqueDeLoQueConfirmoElEquipo(datos.equipo ?? [], opts.alcance), T.equipo) : "" },
     { clave: "procesos", cuerpo: recortarAlTope(parteDeProcesos(datos.procesos, q), T.procesos) },
     { clave: "historia", cuerpo: recortarAlTope(parteDeHistoria(datos, q, opts.proyectoActualId ?? null), T.historia) },
     { clave: "fueraDeAlcance", cuerpo: q.fueraDeAlcance ? recortarAlTope(parteDeFueraDeAlcance(datos), T.fueraDeAlcance) : "" },

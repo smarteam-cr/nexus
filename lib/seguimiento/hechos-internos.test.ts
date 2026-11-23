@@ -74,6 +74,23 @@ describe("⛔ una sola mano escribe los hechos", () => {
     expect(escriben).toContain("lib/seguimiento/hechos-server.ts");
   });
 
+  it("⛔ los de una NOTA del equipo llegan a lo del cliente solo por `paraElAlcance` (enmienda del 23 nov)", () => {
+    // La parte «equipo» de la memoria la arma el bloque que vuelve a cortar por el alcance…
+    const armar = soloCodigo(leer("lib/memoria/armar.ts"));
+    expect(armar).toContain("bloqueDeLoQueConfirmoElEquipo(datos.equipo ?? [], opts.alcance)");
+    const corte = soloCodigo(leer("lib/exploraciones/lo-que-confirmo-el-equipo.ts"));
+    expect(corte).toMatch(/const cortadas = paraElAlcance\(notas, alcance\)/);
+    expect(corte).toContain("n.hechos.filter(esHechoParaElCliente)");
+    // …y la lectura trae solo hechos de una nota (con su preventa y su empresa), nunca los de una reunión.
+    const lectura = soloCodigo(leer("lib/exploraciones/lo-que-confirmo-el-equipo-server.ts"));
+    expect(lectura).toContain("OR: notas.map((n) => ({ exploracionId: n.preventa.id, notaClave: n.clave }))");
+    expect(lectura).toContain("return paraElAlcance(completas, alcance)");
+    // El correo y el cuestionario no la reciben.
+    const consumidores = soloCodigo(leer("lib/memoria/consumidores.ts"));
+    expect(consumidores).toContain('sinPartes: ["procesos", "historia", "equipo"]');
+    expect(consumidores).toContain('"preventa", "hechos", "equipo"]');
+  });
+
   it("los hechos entran a la memoria solo en el alcance interno", () => {
     const consumidores = soloCodigo(leer("lib/memoria/consumidores.ts"));
     expect(consumidores).toContain("hechos: interno,");

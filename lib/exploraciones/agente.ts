@@ -155,6 +155,7 @@ import { memoriaDelProyecto } from "@/lib/memoria";
 import { proyectoDeContextoDeLaEmpresa } from "./escala-de-la-cuenta";
 import { fuentesParaPosicionar } from "./posicionar-fuentes";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
+import { loConfirmadoParaLosCasos } from "./lo-que-confirmo-el-equipo-server";
 import {
   bloquearFila,
   chequeoDe,
@@ -899,7 +900,8 @@ async function proponerCasos(
   await fase(runId, "Mirando dónde está cada equipo…");
   const regenerar = opts.regenerar === true;
   const revisar = !regenerar && opts.revisar === true;
-  const ctx = contextoDeLosCasos(ex, { regenerar, revisar });
+  // Lo que confirmó el equipo y lo que aceptó el cliente (23 nov): pesa más que lo estimado.
+  const ctx = { ...contextoDeLosCasos(ex, { regenerar, revisar }), confirmado: await loConfirmadoParaLosCasos(exploracionId, ex.fila.clientId) };
   await fase(
     runId,
     regenerar ? "Volviendo a armar los casos con la biblioteca de actividades…" : revisar ? "Revisando los casos con lo que se sabe hoy…" : "Pensando qué casos de uso sugerir y por qué…",

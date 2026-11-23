@@ -146,10 +146,13 @@ describe("la X de cada documento", () => {
 
 describe("queCargar", () => {
   it("para el cliente no se carga nada interno (las minutas en borrador no lo son: llegan marcadas)", () => {
-    const { minutasSinRevisar, ...resto } = queCargar("cliente");
+    const { minutasSinRevisar, equipo, ...resto } = queCargar("cliente");
     expect(Object.values(resto).every((v) => v === false)).toBe(true);
     // La IA como borrador (2026-10-15): solo sus acuerdos y decisiones, sin montos ni negociación (frontera.test.ts).
     expect(minutasSinRevisar).toBe(true);
+    // Lo que confirmó el equipo (23 nov): llega, cortado por el código a los hechos que describen a la empresa
+    // (lib/exploraciones/lo-que-confirmo-el-equipo.ts; frontera.test.ts prueba que el texto de la nota no llega).
+    expect(equipo).toBe(true);
   });
   it("sin-lo-interno: lo propuesto y lo sin validar, nunca lo interno", () => {
     const q = queCargar("sin-lo-interno");

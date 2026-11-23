@@ -18,6 +18,13 @@ import { DE_LA_PREVENTA } from "./marco";
 import { bloqueParaElHandoff, internoParaElCse } from "./para-el-handoff";
 import { exploracionParaLaPropuesta } from "./servidor";
 
+/**
+ * «Lo que confirmó el equipo» de la empresa (etapa 1 del plan maestro de «Hablar con Nexus», 23 nov): por esta misma
+ * puerta, ya cortado por el alcance de quien lee. A diferencia de lo aprendido en la preventa, llega a todos los
+ * alcances: fuera del interno, solo los hechos que describen a la empresa (./lo-que-confirmo-el-equipo.ts).
+ */
+export { loQueConfirmoElEquipo } from "./lo-que-confirmo-el-equipo-server";
+
 /** El tope de lo aprendido en la preventa (la memoria puede pedir menos). */
 export const TOPE_DE_LA_PREVENTA_EN_LA_MEMORIA = 3000;
 

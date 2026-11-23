@@ -31,6 +31,8 @@ import {
   pedidoDePersonalizar,
   type ContextoDePersonalizar,
 } from "@/lib/exploraciones/personalizar-pedido";
+import { pedidoDeMejorar } from "@/lib/exploraciones/mejorar-pedido";
+import { ROTULO_PARA_LOS_CASOS } from "@/lib/exploraciones/lo-que-confirmo-el-equipo";
 import {
   aplicarOperaciones,
   contenidoVacio,
@@ -358,5 +360,43 @@ describe("quitar un elegido lo devuelve a los sugeridos (pedido 4)", () => {
     const caso: CasoDeUsoElegido = { ...DEL_AGENTE, personalizado: { en: AHORA.toISOString(), cambios: ["CAMBIO_INTERNO"] } };
     const e = estado({ "cat-sistematiza-ventas": caso });
     expect(JSON.stringify(casosElegidosParaLaPropuesta(e.contenido))).not.toContain("CAMBIO_INTERNO");
+  });
+});
+
+describe("lo que confirmó el equipo llega a los tres pedidos de casos de uso (etapa 1, 23 nov)", () => {
+  const CONFIRMADO = "Lo contó alguien del equipo.\n- De la cuenta: Crédito y cobro contacta a 4.800 clientes al mes";
+  const base: ContextoDePersonalizar = {
+    empresa: "Cemaco",
+    caso: { useCaseId: "cat-sistematiza-ventas", titulo: "Ventas ordenadas", descripcion: "Ven cada negocio.", porQue: "Hoy usan Excel.", area: "Ventas" },
+    ficha: null,
+    actuales: null,
+    biblioteca: BIBLIOTECA.slice(0, 3),
+    exploracion: "Reciben 1.200 tickets al mes.",
+    interno: "",
+    reuniones: "",
+    instrucciones: "",
+    confirmado: CONFIRMADO,
+  };
+
+  it("sugerir, personalizar y «Mejorar con IA» lo mandan con su rótulo; sin nada, no hay bloque", () => {
+    const casos = pedidoDeCasos({ empresa: "Cemaco", edicion: "escala general", areas: [], exploracion: "x", yaEstan: [], descartados: [], confirmado: CONFIRMADO });
+    const personalizar = pedidoDePersonalizar(base);
+    const mejorar = pedidoDeMejorar({ ...base, actuales: [], instruccion: "Quita lo que sobra" });
+    for (const [nombre, p] of [["sugerir", casos], ["personalizar", personalizar], ["mejorar", mejorar]] as const) {
+      const cuerpo = JSON.parse(JSON.stringify(p.messages))[0].content as string;
+      expect(cuerpo, nombre).toContain(ROTULO_PARA_LOS_CASOS);
+      expect(cuerpo, nombre).toContain("4.800 clientes al mes");
+    }
+    expect(JSON.parse(JSON.stringify(pedidoDePersonalizar({ ...base, confirmado: "" }).messages))[0].content).not.toContain(ROTULO_PARA_LOS_CASOS);
+  });
+
+  it("una cifra que solo está en lo confirmado no se descarta por inventada", () => {
+    const respuesta = {
+      content: [{ type: "tool_use", id: "t", name: "personalizar_caso", input: { actividades: [], cambios: [], palanca: "Tiempo del equipo", argumento: "Llaman a mano.", numeros: [{ dato: "Crédito y cobro contacta a 4.800 clientes al mes", fuente: "el equipo" }], falta: [] } }],
+    } as unknown as Anthropic.Messages.Message;
+    const lo = leerLaPersonalizacion(respuesta, base, new Date("2026-11-23T12:00:00Z"));
+    expect(lo.valorDeVenta?.numeros.map((n) => n.dato)).toEqual(["Crédito y cobro contacta a 4.800 clientes al mes"]);
+    const sin = leerLaPersonalizacion(respuesta, { ...base, confirmado: "" }, new Date("2026-11-23T12:00:00Z"));
+    expect(sin.valorDeVenta?.numeros ?? []).toEqual([]);
   });
 });

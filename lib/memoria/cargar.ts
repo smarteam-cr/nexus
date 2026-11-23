@@ -11,7 +11,8 @@
  *   · Las reuniones salen SOLO del chokepoint (`getProjectMemberSessions`: incluidas, del cliente, desde el piso) y solo
  *     las que ya ocurrieron; su contenido, con UNA consulta (resumen y minuta, nunca la transcripción).
  *   · Los compromisos salen de Tareas SOLO por lib/tareas/para-agentes.ts, y solo en el alcance interno.
- *   · Lo de la preventa, solo por lib/exploraciones/para-la-memoria.ts, y solo en el alcance interno.
+ *   · Lo de la preventa, solo por lib/exploraciones/para-la-memoria.ts, y solo en el alcance interno. Lo que confirmó el
+ *     equipo (las notas de todas sus preventas), por la misma puerta y en todos los alcances, ya cortado para quien lee.
  *   · Lo que no va a usar el alcance ni se pide a la base (`queCargar`).
  *   · ⛔ Nunca: facturación, Partner (montos o uso), rentabilidad, salarios, el monto de un pedido fuera de alcance, el
  *     `sourceQuote` ni quién creó una desviación. Lo vigila lib/memoria/frontera.test.ts.
@@ -25,7 +26,7 @@ import { ENTREGA_PREVIA_KEYS, loadCanvasContext } from "@/lib/canvas/load-canvas
 import { resumenDeReunion } from "@/lib/contexto/material-cronograma";
 import { prisma } from "@/lib/db/prisma";
 import { ETIQUETA_DE_DECISION, ETIQUETA_DE_SECCION, leerFoto } from "@/lib/auditoria-portal/foto";
-import { loAprendidoEnLaPreventa, ultimaPreventa } from "@/lib/exploraciones/para-la-memoria";
+import { loAprendidoEnLaPreventa, loQueConfirmoElEquipo, ultimaPreventa } from "@/lib/exploraciones/para-la-memoria";
 import { resolverDuenioDelHandoff } from "@/lib/handoff/duenio";
 import { TIPO_CONGELADO, TIPO_REHECHO, viaDelMotivo } from "@/lib/handoff/congelado";
 import { resultadosDelProyecto } from "@/lib/handoff/resultados";
@@ -44,6 +45,7 @@ import { esCerrada } from "@/lib/timeline/particularidad-state";
 import { armarLoEsencial, armarMemoriaDeLaCuenta, armarMemoriaDelProyecto, resumirMapa, TOPES_DE_LA_MEMORIA } from "./armar";
 import { consumidorDeLaMemoria, queCargar, type LectorDeMemoria } from "./consumidores";
 import type {
+  AlcanceDeMemoria,
   AuditoriaDeLaMemoria,
   ClaveDeParte,
   DatosDeLaCuenta,
@@ -183,9 +185,9 @@ async function leerAuditoria(clientId: string): Promise<AuditoriaDeLaMemoria | n
 async function cargarDatosDeLaCuenta(
   clientId: string,
   q: QueCargar,
-  opts: { proyectoActualId: string | null; sinPartes: ReadonlySet<ClaveDeParte> },
+  opts: { proyectoActualId: string | null; sinPartes: ReadonlySet<ClaveDeParte>; alcance: AlcanceDeMemoria },
 ): Promise<DatosDeLaCuenta | null> {
-  const [cliente, procesos, entrega, fueraDeAlcance, preventa, auditoria, hechos, personasYTickets, notasDelEquipo, comunicaciones, compromisosDeLaCuenta] = await Promise.all([
+  const [cliente, procesos, entrega, fueraDeAlcance, preventa, auditoria, hechos, personasYTickets, notasDelEquipo, comunicaciones, compromisosDeLaCuenta, equipo] = await Promise.all([
     seguro(
       "el cliente",
       () =>
@@ -220,6 +222,7 @@ async function cargarDatosDeLaCuenta(
     q.compromisosDeLaCuenta && !opts.sinPartes.has("compromisosDeLaCuenta")
       ? seguro("los compromisos de la cuenta", () => compromisosDeLaCuentaParaAgentes(clientId, TOPES_DE_LA_MEMORIA.compromisosDeLaCuenta), [])
       : Promise.resolve([]),
+    q.equipo && !opts.sinPartes.has("equipo") ? seguro("lo que confirmó el equipo", () => loQueConfirmoElEquipo(clientId, opts.alcance), []) : Promise.resolve([]),
   ]);
   if (!cliente) return null;
   return {
@@ -237,6 +240,7 @@ async function cargarDatosDeLaCuenta(
     entrega,
     fueraDeAlcance,
     preventa,
+    equipo,
     auditoria,
     hechos,
     personas: personasYTickets?.personas ?? [],
@@ -305,7 +309,7 @@ export async function memoriaDeLaCuenta(
 ): Promise<MemoriaArmada> {
   const c = consumidorDeLaMemoria(opts.lector);
   const sinPartes = partesExcluidas(c.sinPartes, opts.tambienLeer);
-  const datos = await cargarDatosDeLaCuenta(clientId, queCargar(c.alcance), { proyectoActualId: opts.projectId ?? null, sinPartes });
+  const datos = await cargarDatosDeLaCuenta(clientId, queCargar(c.alcance), { proyectoActualId: opts.projectId ?? null, sinPartes, alcance: c.alcance });
   if (!datos) return VACIA;
   return armarMemoriaDeLaCuenta(datos, {
     alcance: c.alcance,

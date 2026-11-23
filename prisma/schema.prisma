@@ -8514,8 +8514,9 @@ model LecturaDeReunion {
 // con su cita literal verificada, de la cuenta o de un proyecto vinculado, con su tipo y su estado. Lo escribe SOLO
 // lib/seguimiento/hechos-server.ts; el enrutador (lib/seguimiento/enrutador.ts) decide a dónde va. Tipos y estados como
 // TEXT con CHECK (scripts/sql/2026-10-10-hechos-de-reunion.sql; los valores, lib/seguimiento/hechos/tipos.ts y
-// estado.ts). ⛔ Nunca cruza a nada que vea el cliente (lib/seguimiento/hechos-internos.test.ts). INV45: todo hecho es
-// del cliente de su reunión.
+// estado.ts). ⛔ Nunca cruza a nada que vea el cliente (lib/seguimiento/hechos-internos.test.ts), salvo los de una nota
+// del equipo (`notaClave`), y solo por `paraElAlcance` (lib/exploraciones/lo-que-confirmo-el-equipo.ts, 23 nov). INV45:
+// todo hecho es del cliente de su reunión.
 model HechoDeReunion {
   id               String            @id @default(cuid())
   // nullable porque un hecho puede salir de un texto sumado a mano, sin reunión (lo ata `lecturaId`), o de una nota del

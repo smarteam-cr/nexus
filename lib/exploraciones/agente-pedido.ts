@@ -89,6 +89,7 @@ import {
 } from "./objetivo-y-hallazgos";
 import type { Fuente } from "./fuentes-tipos";
 import { leerTarjetasDelAgente, MAX_PREGUNTAS_DE_LA_TARJETA, type TarjetaDeLaDimension } from "./tarjetas-de-la-escala";
+import { ROTULO_PARA_LOS_CASOS } from "./lo-que-confirmo-el-equipo";
 
 export const MODELO_DE_LA_EXPLORACION = "claude-sonnet-4-6";
 export const NOMBRE_DE_LA_HERRAMIENTA = "proponer";
@@ -1328,6 +1329,11 @@ export interface ContextoDeCasos {
   areas: { id: string; nombre: string; dimensiones: { id: string; nombre: string }[] }[];
   /** Dónde parece estar cada equipo y lo que se sabe del cliente (sin lo interno: lo que propone llega a la propuesta). */
   exploracion: string;
+  /**
+   * Lo que confirmó el equipo de la empresa (cortado para el cliente) y lo que el cliente aceptó de su escala (etapa 1 del
+   * plan maestro de «Hablar con Nexus», 23 nov; lib/exploraciones/lo-que-confirmo-el-equipo-server.ts), o "".
+   */
+  confirmado?: string;
   /** Lo que ya está elegido o propuesto, y lo que el vendedor descartó: no se repite. */
   yaEstan: string[];
   /** El paso más alto del plan entre lo que ya está (los casos nuevos de una tanda van después). 0 si ninguno lo tiene. */
@@ -1556,6 +1562,7 @@ El vendedor te pide REVISAR lo que ya está con lo que se sabe hoy (abajo, «PAR
     (ctx.instrucciones ?? "") +
     (ctx.negocio ? `=== SU NEGOCIO (para armar el título con lo que vende) ===\n${ctx.negocio}\n\n` : "") +
     `=== LA EXPLORACIÓN ===\n${ctx.exploracion}\n\n` +
+    (ctx.confirmado ? `${ROTULO_PARA_LOS_CASOS}\n${ctx.confirmado}\n\n` : "") +
     `=== LAS DIMENSIONES (para el campo «dimensiones») ===\n` +
     ctx.areas.map((a) => `${a.nombre}: ${a.dimensiones.map((d) => `${d.id} ${d.nombre}`).join("; ")}`).join("\n") +
     (conCatalogo
@@ -1614,6 +1621,7 @@ export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: Context
      30 días» no es una cifra del cliente, pero tampoco inventada). */
   const deLasCifras = [
     ctx.exploracion,
+    ctx.confirmado ?? "",
     ...(ctx.biblioteca ?? []).map((a) => a.nombre),
     ...Object.values(ctx.porDefecto ?? {}).flatMap((acts) => acts.map((a) => `${a.nombre} ${a.sobreQue ?? ""}`)),
     ...(ctx.rearmar ?? []).flatMap((r) => r.actividades.map((a) => `${a.nombre} ${a.sobreQue ?? ""}`)),

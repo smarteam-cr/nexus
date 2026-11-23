@@ -5,9 +5,12 @@
 > el cliente («cambia el título», «agrega esta parte, que es crítica»); que «Mejorar con IA» sea Nexus abierto donde
 > hiciste clic; y que lo que cambias en algo que ve el cliente vuelva a lo que se sabe de la empresa.
 >
-> **Estado: solo plan, con tus 5 respuestas del 22 nov ya incorporadas** (sección 6; en DECISIONS, «Hablar con Nexus,
-> el plan maestro»). No se construyó nada. Se armó leyendo el código de `main` del 22 nov (318af67a). Ninguna etapa
-> arranca hasta que lo digas.
+> **Estado (23 nov):** la etapa 0 está en producción (a4e69a80). **Las etapas 2 y 5 esperan** al piloto de dos semanas
+> del conector de Claude (`docs/plan-conector-claude.md`, §0.2): con el conector, la conversación la pondría Claude, que
+> lee y escribe en Nexus, y el cajón de conversar en cada pantalla podría sobrar. Se avanza con las etapas 1, 3 y 4, que
+> sirven con o sin conector. La etapa 3 dependía del cajón de la etapa 2: Elías aprobó su versión sin cajón el 23 nov
+> (en la etapa 3). Tus 5 respuestas del 22 nov siguen en la sección 6 (y en DECISIONS, «Hablar
+> con Nexus, el plan maestro»).
 
 ## En una frase
 
@@ -380,6 +383,9 @@ Etapa 1  Lo que sabe Nexus llega a todos ─┬─> Etapa 2  Una puerta en la pr
 
 ### Etapa 1 · Lo que sabe Nexus llega a todos los documentos y a casos de uso (≈ 1,5 sesiones)
 
+> **Construida el 23 nov, sin SQL y sin desplegar** (DECISIONS, «Hablar con Nexus, el plan maestro», etapa 1). Falta
+> la prueba con Cemaco · Ecuador: regenerar sus casos de uso con sus notas reales y comparar contigo.
+
 Es el cimiento y lo que más vale: hoy lo que cuentas no sale de la preventa.
 
 - **Qué se construye:**
@@ -401,6 +407,9 @@ Es el cimiento y lo que más vale: hoy lo que cuentas no sale de la preventa.
 - **Depende de:** etapa 0 (los hechos limpios).
 
 ### Etapa 2 · Una sola puerta en la preventa (≈ 1,5 sesiones; decidida el 22 nov)
+
+> **En espera desde el 23 nov** hasta que termine el piloto de dos semanas del conector de Claude: si la conversación la
+> pone Claude, este cajón puede sobrar. Se retoma, se cambia o se descarta con lo que diga el piloto.
 
 - **Qué se construye:**
   - En la preventa, el botón «Nexus» de arriba abre el cajón de «Hablar con Nexus» (que suma lo que hacía el de la
@@ -438,7 +447,20 @@ Tu ejemplo: «cambia el título», «agrega esta parte, que es crítica».
   titular y agregar una pieza.
 - **Qué decides:** nada antes de construir: el 22 nov decidiste primero La escala (el Resumen y cada área) y después
   casos de uso, en esta misma etapa. Al final, tu prueba.
-- **Depende de:** etapa 2 (el cajón con el lugar).
+- **Depende de:** etapa 2 (el cajón con el lugar). **Con la etapa 2 en espera (23 nov), la versión sin cajón, aprobada por
+  Elías el 23 nov:**
+  - «✨ Pedirle a Nexus» en el Resumen, en cada área y al pasar por cada pieza abre un **panel en la misma página**, junto
+    a lo que se mejora: una caja para pedir («cambia el título», «agrega esta parte») y, debajo, la propuesta por pieza
+    con el antes y el después, «Aplicar», «Aplicar todo» y «Descartar» (el marco `<AgentProposal>` de siempre). Sin
+    conversación: un pedido, una propuesta. El lugar lo pone el botón y lo verifica el servidor.
+  - El contrato del documento (punto 4.4) se construye igual, como funciones de `lib/` que reciben a la persona y la
+    cuenta: leer la página como la ve el cliente, proponer por pieza, aplicar por el camino de la edición a mano. Es lo
+    mismo que necesita la herramienta `proponer_cambio` del conector, así que sirve a las dos puertas.
+  - Casos de uso: su «Mejorar con IA» de las actividades sigue con su nombre y su lugar; lo que cambia es que lee lo que
+    confirmó el equipo y lo que aceptó el cliente (etapa 1) y deja la versión «Cambiado con Nexus». Renombrarlo a
+    «Pedirle a Nexus» espera al cajón.
+  - Lo demás de la etapa no cambia: el historial, que no publique, que no meta lo interno, el choque si otra persona
+    editó lo mismo, y el origen de su gasto dentro del tope de US$ 100.
 
 ### Etapa 4 · Lo que cambias en lo que ve el cliente vuelve a lo que se sabe (≈ 1,5 sesiones)
 
@@ -466,6 +488,9 @@ Tu punto 4, «casi fijo». Decidido el 22 nov: **se guarda solo**, con aviso y �
 - **Depende de:** etapa 3.
 
 ### Etapa 5 · Nexus en la ficha y en los documentos del proyecto; el impacto en todos (≈ 3 sesiones, en partes)
+
+> **En espera desde el 23 nov**, como la etapa 2, hasta que termine el piloto del conector. El lugar de la empresa para
+> lo que sabe el equipo (la parte con SQL) también lo necesita el conector para guardar: es la pregunta 6 de su plan.
 
 - **Qué se construye:**
   - Lo que sabe Nexus vive en la empresa también cuando no hay preventa (un cliente con proyecto). Esto sí pide SQL
@@ -506,10 +531,10 @@ Tu punto 4, «casi fijo». Decidido el 22 nov: **se guarda solo**, con aviso y �
 |---|---|---|---|---|
 | 0 | Sin cabos sueltos del 21 nov, con el tope de US$ 100 | ½ | No (los del 21 nov ya corrieron) | Exploraciones |
 | 1 | Lo que cuentas llega a casos de uso y a los documentos | 1,5 | No | Casos de uso |
-| 2 | Una puerta «Nexus» en la preventa y la lista de lo que sabe | 1,5 | No | Exploraciones |
+| 2 | Una puerta «Nexus» en la preventa y la lista de lo que sabe (**en espera del piloto del conector**) | 1,5 | No | Exploraciones |
 | 3 | «Cambia el título» en La escala y casos de uso | 2 | No | La escala, casos de uso |
 | 4 | Lo que corriges en lo que ve el cliente se guarda solo en lo que se sabe | 1,5 | No (por confirmar) | La escala |
-| 5 | Nexus en la ficha y en el proyecto; impacto en todos | 3 | Sí | Artefactos |
+| 5 | Nexus en la ficha y en el proyecto; impacto en todos (**en espera del piloto del conector**) | 3 | Sí | Artefactos |
 | 6 | Propuestas | 1 | No | Propuestas |
 | 7 | Lecciones de Smarteam | aparte | Por ver | — |
 

@@ -45,6 +45,13 @@ type Destino =
    */
   | "memoria-interna"
   /**
+   * «LO QUE CONFIRMÓ EL EQUIPO» (etapa 1 del plan maestro de «Hablar con Nexus», 23 nov): las notas de «Lo que sabes del
+   * cliente» de todas las preventas de la empresa y sus hechos, para la memoria de la cuenta en TODOS sus alcances. La
+   * puerta (lib/exploraciones/lo-que-confirmo-el-equipo*.ts) corta por el código: fuera del interno, solo los hechos que
+   * describen a la empresa, sin el texto ni quién lo escribió. Nunca la fila.
+   */
+  | "lo-que-confirmo-el-equipo"
+  /**
    * Las SUGERENCIAS del panel de los documentos del proyecto (etapa 7 de la memoria de la cuenta, 2026-10-10): qué
    * reunión es la de cada sesión de la exploración del proyecto, para sugerirla en el diagnóstico. Pantalla interna; solo
    * las sesiones y su número, nunca lo que se confirmó ni lo que leyó el agente. Nada llega a un documento hasta que una
@@ -457,7 +464,16 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "memoria-interna",
     motivo:
       "La memoria de la cuenta: lo aprendido en la preventa, solo en el alcance interno (queCargar). Por la puerta " +
-      "loAprendidoEnLaPreventa (la escala estimada y lo que dijo el cliente, más lo interno rotulado), nunca la fila.",
+      "loAprendidoEnLaPreventa (la escala estimada y lo que dijo el cliente, más lo interno rotulado), nunca la fila. " +
+      "Desde el 23 nov también lo que confirmó el equipo, por la misma puerta (loQueConfirmoElEquipo), ya cortado por el alcance.",
+  },
+  "lib/memoria/armar.ts": {
+    destino: "lo-que-confirmo-el-equipo",
+    motivo: "El armador de la memoria: arma «Lo que confirmó el equipo» con bloqueDeLoQueConfirmoElEquipo, que vuelve a cortar por el alcance.",
+  },
+  "lib/memoria/tipos.ts": {
+    destino: "lo-que-confirmo-el-equipo",
+    motivo: "Solo el tipo NotaConfirmada, para los datos de la cuenta que lee el armador.",
   },
   "lib/contexto/sugerencias-del-documento.ts": {
     destino: "sugerencias-del-documento",
@@ -590,6 +606,11 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     // Solo la puerta: nada más de lib/exploraciones, ni la fila por una relación, ni el contenido, ni el mapa (trae lo que
     // propone el agente), ni la propuesta o el handoff.
     prohibidas: /@\/lib\/exploraciones\/(?!escala-para-el-cliente-server")|\bexploracion\s*:|\binclude\s*:|leerExploracion\b|leerContenido|\.exploracionDeVenta\b|\bexploracionesDeVenta\b|posicionesDelMapa|\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff/,
+  },
+  "lo-que-confirmo-el-equipo": {
+    permitidas: /\bbloqueDeLoQueConfirmoElEquipo\b|\bNotaConfirmada\b|\bloQueConfirmoElEquipo\b/,
+    // Solo esa puerta: ni la fila, ni el contenido, ni lo interno de la preventa, ni la propuesta o el handoff.
+    prohibidas: /bloqueParaLaPropuesta|\bparaLaPropuesta\b|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerExploracion\b|leerContenido|\.exploracionDeVenta\b|\bloAprendidoEnLaPreventa\b/,
   },
   "memoria-interna": {
     permitidas: /\bloAprendidoEnLaPreventa\b/,
