@@ -152,6 +152,12 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     clase: "contexto",
     motivo: "La regla de servicio del inicio AFIRMA cuál fue «la última reunión» con la cuenta: solo las que ya ocurrieron.",
   },
+  "lib/conector-claude/herramientas-server.ts": {
+    clase: "contexto",
+    motivo:
+      "Nexus como conector de Claude (fase 0): le lista al Claude de la persona las reuniones de una cuenta y le lee una " +
+      "por partes. Solo las que ya ocurrieron y nunca la cancelada sin texto, siempre por whereBelongsToClient.",
+  },
   "lib/nexus-chat/lecturas-server.ts": {
     clase: "contexto",
     motivo:
@@ -473,6 +479,7 @@ const CORTAN_POR_FECHA = [
   "lib/mi-dia/despues-server.ts",
   "lib/mi-dia/servicio-server.ts",
   "lib/nexus-chat/lecturas-server.ts",
+  "lib/conector-claude/herramientas-server.ts",
   "lib/exploraciones/historia-de-las-sesiones-server.ts",
   "lib/exploraciones/resumen-de-la-escala-server.ts",
   "lib/carga/queries.ts",

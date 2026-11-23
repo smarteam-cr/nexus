@@ -21,7 +21,9 @@ import { destinoTrasLogin } from "@/lib/auth/destino-tras-login";
 //     sha del build + estado de DB/pool en números.
 //   - /api/hubspot/webhooks → los avisos de HubSpot (U10, 2026-10-25). HubSpot no tiene sesión: la ruta
 //     verifica la firma v3 con el secreto de la app ANTES de guardar nada (lib/hubspot/webhooks.ts).
-const PUBLIC_PATHS = ["/", "/sw.js", "/api/health", "/api/hubspot/webhooks"];
+//   - /api/mcp → Nexus como conector de Claude (docs/plan-conector-claude.md). Claude no tiene la cookie: la ruta
+//     exige su propio token antes de leer nada (app/api/mcp/route.ts) y sin él responde 401.
+const PUBLIC_PATHS = ["/", "/sw.js", "/api/health", "/api/hubspot/webhooks", "/api/mcp"];
 
 // Prefijos siempre públicos:
 //   - /api/auth/hubspot/*  → flujo OAuth HubSpot (integración, no auth de usuario)
