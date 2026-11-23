@@ -27,12 +27,12 @@ describe("⛔ las rutas de una reunión piden quién eres (app/api/sessions/[id]
   const GUARDA = /guardInternalUser\(|guardAccessToProject\(|guardAccessToClient\(|guardAccesoALaReunion\(|requireConsultantSession\(|withAuth\(/;
   /** Mira el cliente de la reunión (o el del proyecto, en las que cambian un vínculo; la tarjeta lo mira adentro). */
   const MIRA_EL_CLIENTE = /requireAccessToClient\(|guardAccessToClient\(|guardAccessToProject\(|guardAccesoALaReunion\(|cargarTarjeta\(/;
-  /**
-   * Deuda conocida: piden sesión pero no miran el cliente de la reunión. La lista solo encoge. (Hasta el 2026-10-10 la
-   * guarda daba por buena cualquier ruta con `withAuth(`, y GET /api/sessions/[id] servía la transcripción de cualquier
-   * reunión a cualquier usuario interno.)
+  /*
+   * Sin excepciones desde el 2026-11-23. Hasta el 2026-10-10 la guarda daba por buena cualquier ruta con `withAuth(`, y
+   * GET /api/sessions/[id] servía la transcripción de cualquier reunión a cualquier usuario interno; hasta el 2026-11-23
+   * «enrich» y «summarize» quedaban como deuda conocida y hacían lo mismo (docs/evaluacion-de-nexus-2026-11.md §3.1).
+   * No se vuelve a abrir una lista de excepciones: una ruta nueva de una reunión mira su cliente desde el primer día.
    */
-  const SIN_ACCESO_AL_CLIENTE = new Set(["app/api/sessions/[id]/enrich/route.ts", "app/api/sessions/[id]/summarize/route.ts"]);
 
   it("la guarda mira algo", () => {
     expect(RUTAS.length).toBeGreaterThan(4);
@@ -43,8 +43,8 @@ describe("⛔ las rutas de una reunión piden quién eres (app/api/sessions/[id]
     expect(sin, `Rutas de una reunión sin guarda:\n${sin.join("\n")}`).toEqual([]);
   });
 
-  it("cada ruta que no está en la deuda mira el cliente de la reunión (la transcripción no se sirve a cualquiera)", () => {
-    const sin = RUTAS.filter((r) => !SIN_ACCESO_AL_CLIENTE.has(r) && !MIRA_EL_CLIENTE.test(soloCodigo(leer(r))));
+  it("cada ruta mira el cliente de la reunión (la transcripción no se sirve a cualquiera)", () => {
+    const sin = RUTAS.filter((r) => !MIRA_EL_CLIENTE.test(soloCodigo(leer(r))));
     expect(sin, `Rutas de una reunión que no miran su cliente:\n${sin.join("\n")}`).toEqual([]);
     expect(soloCodigo(leer("app/api/sessions/[id]/route.ts")), "el GET de la transcripción").toContain("guardAccesoALaReunion(");
     expect(soloCodigo(leer("app/api/sessions/[id]/projects/route.ts")), "el GET de los proyectos de una reunión").toContain("guardAccesoALaReunion(");
@@ -57,7 +57,12 @@ describe("⛔ las rutas de una reunión piden quién eres (app/api/sessions/[id]
     expect(regla).toContain("requireAccessToClient(");
     expect(regla, "sin acceso, 404").toContain("reunionNoEncontrada()");
     expect(regla, "sin dueño no es un 404: la reunión sigue abierta para el equipo").not.toMatch(/if \(!dueno\) return/);
-    for (const r of ["app/api/sessions/[id]/minute/route.ts", "app/api/sessions/[id]/post-process/route.ts"]) {
+    for (const r of [
+      "app/api/sessions/[id]/minute/route.ts",
+      "app/api/sessions/[id]/post-process/route.ts",
+      "app/api/sessions/[id]/enrich/route.ts",
+      "app/api/sessions/[id]/summarize/route.ts",
+    ]) {
       expect(soloCodigo(leer(r)), r).toContain("guardAccesoALaReunion(");
     }
   });
@@ -72,10 +77,12 @@ describe("⛔ las rutas de una reunión piden quién eres (app/api/sessions/[id]
     expect(soloCodigo(leer("lib/seguimiento/tarjeta-server.ts"))).toContain("requireAccessToClient(");
   });
 
-  it("la deuda solo encoge: si una ruta de la lista ya mira el cliente, sácala", () => {
-    for (const r of SIN_ACCESO_AL_CLIENTE) {
+  it("lo que el resumen y «Volver a buscar en Drive» le piden a Claude se cobra a quien lo pidió y al cliente", () => {
+    for (const r of ["app/api/sessions/[id]/summarize/route.ts", "app/api/sessions/[id]/enrich/route.ts"]) {
       const src = soloCodigo(leer(r));
-      expect(/requireAccessToClient\(|guardAccessToClient\(|guardAccessToProject\(/.test(src), `${r} ya mira el cliente: sácala de la deuda`).toBe(false);
+      expect(src, r).toContain("conContextoDeIA(");
+      expect(src, r).toContain("triggeredByEmail: acceso.user.email");
+      expect(src, r).toContain("clientId: acceso.dueno");
     }
   });
 });

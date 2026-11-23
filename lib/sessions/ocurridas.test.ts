@@ -227,7 +227,9 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
   },
   "app/api/sales/analyze/route.ts": {
     clase: "contexto",
-    motivo: "Acotado por `DONDE_TIENE_TRANSCRIPCION` sobre ids explícitos — una futura no tiene transcripción.",
+    motivo:
+      "Las que entran al prompt salen de `getClientSessions` (que corta en hoy) con los ids que mandó el navegador, y el " +
+      "texto se lee por esos ids con `DONDE_TIENE_TRANSCRIPCION`. La primera consulta solo mira el dueño.",
   },
   "lib/lecturas/recuperacion.ts": {
     clase: "contexto",
@@ -291,8 +293,9 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
   "lib/business-cases/feeding.ts": {
     clase: "agenda",
     motivo:
-      "Arma las CANDIDATAS del business case (panel + preselección), no el prompt. La generación lee ids elegidos y " +
-      "solo su transcripción, así que una futura no llega al modelo. Se deja visible por consistencia con CTX1.2.",
+      "Arma las CANDIDATAS del business case (panel + preselección), no el prompt: por `getClientSessions` con " +
+      "`conAgendadas`. La generación lee ids elegidos y solo su transcripción, así que una futura no llega al modelo. " +
+      "Se deja visible por consistencia con CTX1.2. Sus consultas propias solo hidratan esos ids (texto, proyecto).",
   },
   "lib/clients/meeting-dates.ts": { clase: "agenda", motivo: "Última reunión por equipo, por SQL crudo (DISTINCT ON, C-11). Ya separa pasado de futuro por su cuenta." },
   "lib/handoff/feeding.ts": {
