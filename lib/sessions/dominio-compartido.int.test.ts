@@ -74,14 +74,17 @@ describe("dos fichas que comparten dominio — DB real", () => {
     expect((await resolveAllSessions({ dryRun: true })).changed).toBe(0);
   });
 
-  it("una reunión por decidir no alimenta la propuesta de la dueña, y sin el grupo sí entra por dominio", async () => {
+  it("una reunión por decidir no alimenta la propuesta de la dueña, ni con el grupo ni sin él (sin dueño no entra)", async () => {
     const { tae, ae } = await elTec();
     await resolveAllSessions({ reclassify: false });
     const bc = await prisma.businessCase.create({ data: { clientId: tae.id, name: "Propuesta", slug: "prueba-tae", createdByEmail: "x@smarteamcr.com" } });
     const ids = async () => JSON.stringify(await loadBcFeeding(bc.id));
     expect(await ids()).not.toContain('"duda"');
+    expect(await ids()).toContain('"tae-nombre"');
+    /* Hasta el 2026-11-23, sin la marca la reunión sin dueño entraba por dominio. La propuesta lee ahora por el lugar
+       único (getClientSessions): una reunión sin dueño no es de nadie, con o sin grupo. */
     await prisma.client.update({ where: { id: ae.id }, data: { comparteDominioConId: null } });
-    expect(await ids()).toContain('"duda"');
+    expect(await ids()).not.toContain('"duda"');
   });
 
   it("sin la marca, todo sigue en la ficha más vieja (como antes)", async () => {

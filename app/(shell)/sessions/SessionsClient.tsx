@@ -1049,7 +1049,14 @@ function SessionDetail({
         transcript?: string | null;
         summary?: SessionSummary | null;
         found?: boolean;
+        error?: string;
       };
+      // Sin acceso al cliente de la reunión el servidor responde 404: no es que Drive no tenga el documento, y
+      // reintentar no lo cambia. Se muestra su motivo tal cual.
+      if (!res.ok) {
+        setReEnrichMsg(data.error ?? "No se pudo buscar el transcript.");
+        return;
+      }
       setTranscript(data.transcript ?? null);
       if (data.summary) setLiveSummary(data.summary);
 

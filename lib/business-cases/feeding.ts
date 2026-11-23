@@ -13,20 +13,24 @@
  * (`SessionProject`) ya es la venta o la entrega de ESE proyecto: no alimenta sola una propuesta
  * nueva. Sigue en «Buscar», marcada `enProyecto`, por si sí hace falta.
  *
- * Fuente de sesiones del prospecto: `resolvedClientId` (índice) + suplemento por
- * dominio (raw, sin ventana de fecha). Lo usan el panel (/session-candidates) y la
- * generación (/generate) para no duplicar el criterio. Solo lectura.
+ * ⚠ SOLO LAS REUNIONES DE LA EMPRESA, por el lugar único (2026-11-23). Las reuniones salen de
+ * `getClientSessions` (lib/sessions/project-sources.ts): las que `resolvedClientId` (o la asignación a mano) dan como
+ * de esta empresa, y nada más. Hasta ese día la propuesta tenía su propia regla: sumaba por dominio reuniones SIN
+ * dueño y aceptaba vínculos a mano a reuniones sin dueño. Una reunión sin dueño es justo la que el resolver no pudo
+ * atribuir (por ejemplo, gente de dos empresas que comparten dominio), y meterla al prompt de una propuesta es el
+ * invariante 1 con otra cara (docs/evaluacion-de-nexus-2026-11.md §3.1). Medido ese día en producción: 0 propuestas
+ * usaban alguna. Si una reunión de un prospecto no tiene dueño, se le asigna en Sesiones y entra sola.
+ *
+ * Lo usan el panel (/session-candidates) y la generación (/generate) para no duplicar el criterio. Solo lectura.
+ * El panel muestra también las agendadas (`conAgendadas`): las ve una persona. A la generación (`feedingIds`) solo van
+ * las que ya ocurrieron: una agendada puede traer texto si alguien movió al futuro un evento que ya había pasado.
  */
 import { prisma } from "@/lib/db/prisma";
-import { Prisma } from "@prisma/client";
 import { salesPresenceEmails } from "@/lib/handoff/sales-presence";
+import { getClientSessions, type ProjectSourceSession } from "@/lib/sessions/project-sources";
+import { yaOcurrio } from "@/lib/sessions/ocurridas";
 
 const emailOf = (p: string): string => (p.match(/[\w.+-]+@[\w.-]+/)?.[0] ?? "").toLowerCase();
-const domainOf = (p: string): string => {
-  const e = emailOf(p);
-  const at = e.indexOf("@");
-  return at === -1 ? "" : e.slice(at + 1);
-};
 
 export type BcSessionMeta = {
   sessionId: string;
@@ -39,31 +43,18 @@ export type BcSessionMeta = {
   enProyecto: boolean;
 };
 
-type Row = { id: string; title: string; date: Date; participants: string[]; organizerEmail: string | null };
-
 export interface BcFeedingResult {
   /** Sesiones que alimentan el caso (pre-seleccionadas): override=true o (sin override y aplica). */
   included: BcSessionMeta[];
   /** Las demás sesiones del prospecto (para "Buscar más sesiones"). */
   candidates: (BcSessionMeta & { linkedExcluded: boolean })[];
-  /** Ids que alimentan (para juntar transcripts en la generación). */
+  /** Ids que alimentan (para juntar transcripts en la generación): las incluidas que ya ocurrieron. */
   feedingIds: string[];
 }
 
 export async function loadBcFeeding(businessCaseId: string): Promise<BcFeedingResult | null> {
-  const bc = await prisma.businessCase.findUnique({
-    where: { id: businessCaseId },
-    select: {
-      client: { select: { id: true, emailDomains: true, comparteDominioConId: true, _count: { select: { entidadesDelDominio: true } } } },
-    },
-  });
+  const bc = await prisma.businessCase.findUnique({ where: { id: businessCaseId }, select: { clientId: true } });
   if (!bc) return null;
-
-  /* Una ficha que comparte dominio no se suma las reuniones sin dueño por dominio: ahí están las POR DECIDIR entre sus
-     entidades, y traerlas es alimentar una propuesta con reuniones que pueden ser de la otra (DECISIONS «Dos fichas que
-     comparten dominio»). Las suyas ya llegan por `resolvedClientId`. */
-  const comparteDominio = !!bc.client.comparteDominioConId || bc.client._count.entidadesDelDominio > 0;
-  const domains = comparteDominio ? [] : (bc.client.emailDomains ?? []).map((d) => d.toLowerCase()).filter(Boolean);
 
   const [salesEmails, links] = await Promise.all([
     salesPresenceEmails(),
@@ -73,63 +64,18 @@ export async function loadBcFeeding(businessCaseId: string): Promise<BcFeedingRe
   const override = new Map(links.map((l) => [l.sessionId, l.included]));
   const linkedIds = new Set(links.map((l) => l.sessionId));
 
-  const hasVentas = (participants: string[], organizerEmail: string | null): boolean =>
-    participants.some((p) => salesEmails.has(emailOf(p))) ||
-    (organizerEmail ? salesEmails.has(organizerEmail.toLowerCase()) : false);
+  // `participants` ya trae al organizador (el lugar único lo suma): con eso alcanza para ver si hubo Ventas en la sala.
+  const hasVentas = (participants: string[]): boolean => participants.some((p) => salesEmails.has(emailOf(p)));
 
-  const SELECT = { id: true, title: true, date: true, participants: true, organizerEmail: true } as const;
-
-  const resolved: Row[] = await prisma.firefliesSession.findMany({
-    where: { resolvedClientId: bc.client.id },
-    orderBy: { date: "desc" },
-    take: 200,
-    select: SELECT,
-  });
+  const resolved = await getClientSessions(bc.clientId, { take: 200, conAgendadas: true });
   const seen = new Set(resolved.map((s) => s.id));
 
-  let domainExtra: Row[] = [];
-  if (domains.length) {
-    try {
-      const patterns = domains.map((d) => `%@${d}`);
-      // INVARIANTE #1: el suplemento por dominio NO debe traer sesiones de OTRO cliente (aunque
-      // un participante comparta dominio). Owner = manualClientId ?? resolvedClientId; se permite
-      // del mismo cliente o HUÉRFANA (prospecto sin resolver) — nunca de otro cliente.
-      const cid = bc.client.id;
-      const rows = await prisma.$queryRaw<Row[]>(Prisma.sql`
-        SELECT id, title, date, participants, "organizerEmail"
-        FROM "FirefliesSession"
-        WHERE EXISTS (SELECT 1 FROM unnest(participants) p WHERE lower(p) LIKE ANY(${patterns}))
-          AND (
-            "manualClientId" = ${cid}
-            OR ("manualClientId" IS NULL AND ("resolvedClientId" = ${cid} OR "resolvedClientId" IS NULL))
-          )
-        ORDER BY date DESC LIMIT 100`);
-      domainExtra = rows.filter((s) => !seen.has(s.id));
-      domainExtra.forEach((s) => seen.add(s.id));
-    } catch (e) {
-      console.warn("[bc feeding] suplemento por dominio falló:", e);
-    }
-  }
-
-  // Sesiones con override que no aparezcan arriba (agregadas a mano) → traer su meta.
-  // INVARIANTE #1: filtramos por ownership (solo del mismo cliente o huérfanas) como defensa por si
-  // quedó un link viejo de otro cliente; el borde de escritura (POST /sessions) ya lo previene al atar.
+  // Las agregadas a mano que no salieron arriba (más viejas que las 200): por el mismo lugar único, así que un vínculo
+  // viejo a una reunión de otro cliente o sin dueño no entra.
   const outside = [...linkedIds].filter((sid) => !seen.has(sid));
-  const extra: Row[] = outside.length
-    ? await prisma.firefliesSession.findMany({
-        where: {
-          id: { in: outside },
-          OR: [
-            { manualClientId: bc.client.id },
-            { AND: [{ manualClientId: null }, { resolvedClientId: bc.client.id }] },
-            { AND: [{ manualClientId: null }, { resolvedClientId: null }] },
-          ],
-        },
-        select: SELECT,
-      })
-    : [];
+  const extra = outside.length ? await getClientSessions(bc.clientId, { ids: outside, conAgendadas: true }) : [];
 
-  const all = [...resolved, ...domainExtra, ...extra];
+  const all: ProjectSourceSession[] = [...resolved, ...extra];
 
   const tRows = all.length
     ? await prisma.firefliesSession.findMany({ where: { id: { in: all.map((s) => s.id) } }, select: { id: true, transcript: true } })
@@ -145,19 +91,19 @@ export async function loadBcFeeding(businessCaseId: string): Promise<BcFeedingRe
 
   // Alimenta: override=true → sí; override=false → no; sin override → la regla (Ventas en la sala
   // y todavía no es de ningún proyecto).
-  const feeds = (s: Row): boolean => {
+  const feeds = (s: ProjectSourceSession): boolean => {
     const o = override.get(s.id);
     if (o === true) return true;
     if (o === false) return false;
-    return hasVentas(s.participants, s.organizerEmail) && !deProyecto.has(s.id);
+    return hasVentas(s.participants) && !deProyecto.has(s.id);
   };
 
-  const meta = (s: Row): BcSessionMeta => ({
+  const meta = (s: ProjectSourceSession): BcSessionMeta => ({
     sessionId: s.id,
     title: s.title,
-    date: s.date,
+    date: new Date(s.date),
     participants: s.participants,
-    applies: hasVentas(s.participants, s.organizerEmail),
+    applies: hasVentas(s.participants),
     hasTranscript: hasT.get(s.id) ?? false,
     enProyecto: deProyecto.has(s.id),
   });
@@ -169,5 +115,9 @@ export async function loadBcFeeding(businessCaseId: string): Promise<BcFeedingRe
     .map((s) => ({ ...meta(s), linkedExcluded: override.get(s.id) === false }))
     .sort((a, b) => Number(b.applies) - Number(a.applies) || byDateDesc(a, b));
 
-  return { included, candidates, feedingIds: included.map((s) => s.sessionId) };
+  // Lo que va a la generación: solo las que ya ocurrieron. El panel muestra la agendada como incluida (va a alimentar
+  // cuando pase), pero su texto no llega al modelo: una reunión que alguien movió al futuro conserva la transcripción
+  // vieja (KNOWN-ERRORS), y `conAgendadas` nunca es para un prompt.
+  const feedingIds = included.filter((s) => yaOcurrio(s.date)).map((s) => s.sessionId);
+  return { included, candidates, feedingIds };
 }

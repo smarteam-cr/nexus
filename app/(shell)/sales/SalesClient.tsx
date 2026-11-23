@@ -21,6 +21,8 @@ interface SalesResult {
   pendingItems: SalesPendingItem[];
   /** Reuniones del grupo que eran de otra empresa y no entraron al análisis (un análisis, una empresa). */
   afuera: number;
+  /** Reuniones del grupo que todavía no tienen empresa: no entran al análisis (un análisis, una empresa). */
+  sinEmpresa: number;
 }
 
 type RepFilter = "all" | "M. Salas" | "A. Pinzón";
@@ -126,6 +128,7 @@ export default function SalesClient({
             cards: data.cards ?? [],
             pendingItems: data.pendingItems ?? [],
             afuera: typeof data.afuera === "number" ? data.afuera : 0,
+            sinEmpresa: typeof data.sinEmpresa === "number" ? data.sinEmpresa : 0,
           },
         }));
       }
@@ -321,6 +324,13 @@ export default function SalesClient({
                     {result && result.afuera > 0 && (
                       <span className="max-w-[220px] text-right text-xs text-fg-muted">
                         {result.afuera === 1 ? "1 reunión era de otra empresa y no entró al análisis." : `${result.afuera} reuniones eran de otra empresa y no entraron al análisis.`}
+                      </span>
+                    )}
+                    {result && result.sinEmpresa > 0 && (
+                      <span className="max-w-[220px] text-right text-xs text-fg-muted">
+                        {result.sinEmpresa === 1
+                          ? "1 reunión todavía no tiene empresa y no entró al análisis. Asígnala en Sesiones."
+                          : `${result.sinEmpresa} reuniones todavía no tienen empresa y no entraron al análisis. Asígnalas en Sesiones.`}
                       </span>
                     )}
                     {!canAnalyze && (

@@ -7,7 +7,8 @@ import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { guardAccessToClient } from "@/lib/auth/api-guards";
 import { DOMINIO_PROPIO } from "@/lib/sessions/dominio-propio";
 import { DONDE_TIENE_TRANSCRIPCION } from "@/lib/sessions/tiene-texto";
-import { duenosPorCantidad, sesionesDelDueno } from "@/lib/ventas/dueno-del-analisis";
+import { duenosPorCantidad } from "@/lib/ventas/dueno-del-analisis";
+import { duenoDeLaSesion, getClientSessions } from "@/lib/sessions/project-sources";
 
 const INTERNAL_DOMAIN = DOMINIO_PROPIO;
 
@@ -81,6 +82,12 @@ FORMATO JSON COMPLETO:
  * Si el grupo junta reuniones de varias empresas (se arma por dominio: gmail o un holding), se analizan
  * las de la empresa con más reuniones a la que quien pide tiene acceso, y la respuesta dice cuántas
  * quedaron afuera (`afuera`). La llamada queda medida a nombre del análisis y de quien apretó el botón.
+ *
+ * Desde el 2026-11-23 las reuniones SIN empresa no entran (`sinEmpresa` dice cuántas): antes iban al prompt junto con
+ * las de la empresa elegida, o solas si ninguna tenía dueño, y un grupo de gmail podía juntar así a dos prospectos
+ * (docs/evaluacion-de-nexus-2026-11.md §3.1). Las que entran salen del lugar único (`getClientSessions`). Si ninguna
+ * tiene empresa, 409 con el motivo: se les asigna en Sesiones. Medido ese día: el análisis no tenía ninguna corrida
+ * en el medidor, y 29 de los 180 grupos de /sales no tenían ninguna reunión con empresa.
  */
 export const POST = withPermission("ventas", "read", async (req) => {
   let sessionIds: string[];
@@ -95,7 +102,66 @@ export const POST = withPermission("ventas", "read", async (req) => {
     return NextResponse.json({ error: "sessionIds requerido" }, { status: 400 });
   }
 
-  // 1. Find-or-create (y actualizar prompt) del agente "Análisis de ventas"
+  // 2. De quién son las reuniones que mandó el navegador. Solo el dueño: el texto se carga después, y solo el de las que
+  //    entran al análisis.
+  const pedidas = await prisma.firefliesSession.findMany({
+    where: { id: { in: sessionIds }, ...DONDE_TIENE_TRANSCRIPCION },
+    select: { id: true, resolvedClientId: true, manualClientId: true },
+  });
+
+  if (!pedidas.length) {
+    return NextResponse.json({ error: "No se encontraron sesiones con transcript" }, { status: 404 });
+  }
+
+  // 2b. Un solo cliente por análisis (invariante 1), y con acceso a ese cliente: la empresa con más reuniones a la que
+  // quien pide tiene acceso. Las de otras empresas y las que no tienen empresa quedan afuera, y se avisa cuántas.
+  const sinEmpresa = pedidas.filter((s) => !duenoDeLaSesion(s)).length;
+  const duenos = duenosPorCantidad(pedidas);
+  if (!duenos.length) {
+    return NextResponse.json(
+      {
+        error:
+          "Estas reuniones todavía no tienen empresa en Nexus, y sin empresa no se analizan: el análisis lee las reuniones de una sola. Asígnales la empresa en Sesiones y vuelve a analizar.",
+        sinEmpresa,
+      },
+      { status: 409 },
+    );
+  }
+  let elegido: string | null = null;
+  for (const d of duenos) {
+    const acceso = await guardAccessToClient(d);
+    if (!(acceso instanceof NextResponse)) {
+      elegido = d;
+      break;
+    }
+  }
+  if (!elegido) {
+    return NextResponse.json({ error: "No tienes acceso a la empresa de estas reuniones." }, { status: 403 });
+  }
+  const afuera = pedidas.filter((s) => {
+    const d = duenoDeLaSesion(s);
+    return d !== null && d !== elegido;
+  }).length;
+
+  // 2c. Las que entran: las de esa empresa por el lugar único (`getClientSessions`, que además deja afuera las que no
+  // ocurrieron y las canceladas vacías), y cuyo dueño es esa empresa (las dos reglas del lugar único a la vez: nunca
+  // entra una reunión que sea de otra). Recién acá se lee el texto.
+  const dueno = { clientId: elegido };
+  const deLaEmpresa = new Set((await getClientSessions(elegido, { ids: pedidas.map((s) => s.id) })).map((s) => s.id));
+  const idsQueEntran = pedidas.filter((s) => deLaEmpresa.has(s.id) && duenoDeLaSesion(s) === elegido).map((s) => s.id);
+  const delDueno = idsQueEntran.length
+    ? await prisma.firefliesSession.findMany({
+        where: { id: { in: idsQueEntran }, ...DONDE_TIENE_TRANSCRIPCION },
+        select: { id: true, title: true, date: true, participants: true, transcript: true },
+        orderBy: { date: "asc" },
+      })
+    : [];
+  if (!delDueno.length) {
+    return NextResponse.json({ error: "No se encontraron sesiones con transcript" }, { status: 404 });
+  }
+
+  // 2d. Find-or-create (y actualizar prompt) del agente "Análisis de ventas". Va DESPUÉS de las validaciones: un pedido
+  //    que termina en 404, 409 o 403 no reescribe nada (KNOWN-ERRORS: re-sembrar un prompt puede borrar una edición humana).
   let agent = await prisma.agent.findFirst({ where: { name: "Análisis de ventas" } });
   if (!agent) {
     agent = await prisma.agent.create({
@@ -117,43 +183,6 @@ export const POST = withPermission("ventas", "read", async (req) => {
       data: { systemPrompt: SALES_SYSTEM_PROMPT },
     });
   }
-
-  // 2. Cargar transcripts
-  const sessions = await prisma.firefliesSession.findMany({
-    where: { id: { in: sessionIds }, ...DONDE_TIENE_TRANSCRIPCION },
-    select: {
-      id: true,
-      title: true,
-      date: true,
-      participants: true,
-      transcript: true,
-      resolvedClientId: true,
-      manualClientId: true,
-    },
-    orderBy: { date: "asc" },
-  });
-
-  if (!sessions.length) {
-    return NextResponse.json({ error: "No se encontraron sesiones con transcript" }, { status: 404 });
-  }
-
-  // 2b. De quién son. Un solo cliente por análisis (invariante 1), y con acceso a ese cliente: la empresa con más
-  // reuniones a la que quien pide tiene acceso. Las de las otras quedan afuera y se avisa.
-  const duenos = duenosPorCantidad(sessions);
-  let elegido: string | null = null;
-  for (const d of duenos) {
-    const acceso = await guardAccessToClient(d);
-    if (!(acceso instanceof NextResponse)) {
-      elegido = d;
-      break;
-    }
-  }
-  if (duenos.length && !elegido) {
-    return NextResponse.json({ error: "No tienes acceso a la empresa de estas reuniones." }, { status: 403 });
-  }
-  const dueno = { clientId: elegido };
-  const delDueno = sesionesDelDueno(sessions, elegido);
-  const afuera = sessions.length - delDueno.length;
 
   // 3. Cargar knowledge pineado al agente (sin truncar)
   let knowledgeBlock = "";
@@ -267,5 +296,5 @@ export const POST = withPermission("ventas", "read", async (req) => {
     .filter((it) => it.text.length > 0)
     .slice(0, 5);
 
-  return NextResponse.json({ cards: parsed.cards, pendingItems, analizadas: delDueno.length, afuera });
+  return NextResponse.json({ cards: parsed.cards, pendingItems, analizadas: delDueno.length, afuera, sinEmpresa });
 });

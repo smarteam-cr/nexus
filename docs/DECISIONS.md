@@ -6997,13 +6997,15 @@ producción, medidos el 9-oct con consultas de solo lectura.
   proyecto que están incluidas y son del cliente (`getProjectMemberSessions`), así deja de citar las que una persona
   sacó. El análisis de ventas (`/api/sales/analyze`) pide `ventas.read` y nunca junta dos empresas en el mismo prompt:
   si el grupo de /sales (que se arma por dominio: gmail o un holding juntan varias) trae reuniones de más de una, analiza
-  las de la empresa con más reuniones a la que quien pide tiene acceso y dice cuántas quedaron afuera; queda medido. El
+  las de la empresa con más reuniones a la que quien pide tiene acceso y dice cuántas quedaron afuera; queda medido
+  (desde el 2026-11-23, sin las reuniones sin empresa: ver la sección de ese día). El
   botón se muestra deshabilitado, con el motivo, a quien no tiene `ventas.read`. *Por qué:* los dos leían reuniones sin
   `belongsToClient`, y cualquier interno podía mandar reuniones de dos clientes al mismo prompt. El primer arreglo
   respondía 409 y dejaba el botón sin salida (en /sales no hay cómo elegir reuniones). El vigía del proyecto ya filtra
   por `belongsToClient` (`lib/cs/watchdog-context.ts`), con la entrega 2 de la cartera.
-- **La regla propia de la propuesta comercial se queda** (`lib/business-cases/feeding.ts:84-104`): admite reuniones sin
-  dueño de un prospecto todavía no resuelto, nunca las de otro cliente, así que cumple el invariante 1. Queda escrita la
+- ⚠ **SUPERSEDED el 2026-11-23** (ver «Las lecturas de reuniones que no miraban el cliente se cierran»: la propuesta
+  lee por `getClientSessions` y una reunión sin dueño ya no entra). **La regla propia de la propuesta comercial se
+  queda** (`lib/business-cases/feeding.ts:84-104`): admite reuniones sin dueño de un prospecto todavía no resuelto, nunca las de otro cliente, así que cumple el invariante 1. Queda escrita la
   diferencia de forma: usa «el override manda», que puede dejar afuera una reunión (falso negativo), nunca meter una
   ajena. *Por qué:* pasarla por `getClientSessions` perdería esas reuniones.
 - **El handoff lee la ficha confirmada, RECORTADA** (`fichaParaPrompt` con `paraDocumentoDelCliente: true`), y deja de
@@ -16441,3 +16443,50 @@ todavía: cada etapa arranca cuando él lo dice.
     lo que vuelve a la memoria sumarán su origen cuando existan (lib/ai/tope-de-nexus.ts).
   - **El conteo en «Uso de Nexus»** (pestaña Procesos de IA) sale de las corridas que ya existían; «¿Era una pregunta?» y
     «Guardarlo como nota» se marcan en la corrida desde este día, así que antes cuentan cero.
+
+## Las lecturas de reuniones que no miraban el cliente se cierran (2026-11-23)
+
+**Contexto.** La evaluación del 23 nov (`docs/evaluacion-de-nexus-2026-11.md` §3.1) encontró cuatro lecturas de
+reuniones que no respetaban el acceso por cliente. Había que cerrarlas antes de construir el conector de Claude: una
+puerta nueva copiada de ellas habría multiplicado la fuga. Elías: «Ciérralo ya». Números de producción, medidos ese día
+con consultas de solo lectura.
+
+- **«Volver a buscar en Drive» y «Generar resumen» de una reunión piden poder abrirla**
+  (`app/api/sessions/[id]/enrich` y `summarize`, con `guardAccesoALaReunion`, la misma regla de su página y de las
+  demás rutas de una reunión). Con dueño, acceso a ese cliente; sin acceso, 404 con el mismo texto que «no existe».
+  *Sin dueño: cualquier interno*, como en /sessions, que las lista todas, y como en la página de la reunión: es el
+  criterio que ya tenía `lib/sessions/acceso-a-la-reunion.ts`, no uno nuevo. *Por qué:* las dos se conformaban con
+  tener sesión (`withAuth`), así que cualquiera del equipo que mandara el id recibía la transcripción de cualquier
+  cliente, y «summarize» además la mandaba a Claude. La excepción de `lib/seguimiento/guardas.test.ts` se borró: no
+  queda ninguna ruta de una reunión sin mirar su cliente, y no se vuelve a abrir una lista de excepciones.
+- **El resumen con IA se cobra a quien lo pidió, al cliente y a la reunión.** La llamada ya pasaba por el medidor
+  (`getAnthropic` está medido desde el 2026-08-17), pero sin contexto: caía al presupuesto automático y a ningún
+  cliente. Ahora va con `conContextoDeIA` (`origen: "sessions/summarize"`), y «Volver a buscar en Drive», que le pide
+  el resumen a Claude cuando Drive trae la transcripción sola, igual (`sessions/enrich`). Sin `reunionId`: esa marca es
+  la de la lectura de una reunión, y el panel «Cada reunión leída» de Gasto de la IA cuenta por ella.
+- **La propuesta comercial lee sus reuniones por el lugar único** (`getClientSessions` en
+  `lib/business-cases/feeding.ts`). Deja de sumar por dominio reuniones sin dueño y de leer vínculos a mano a reuniones
+  sin dueño, y el borde que las ata (`POST /api/business-cases/[id]/sessions`) rechaza una sin dueño con «todavía no
+  tiene empresa: asígnala en Sesiones». Supera la línea de la Etapa 0 («la regla propia se queda»). *Por qué:* una
+  reunión sin dueño es justo la que el resolver no pudo atribuir (gente de dos fichas que comparten dominio, un
+  prospecto sin ficha), y meterla al prompt de una propuesta es el invariante 1 con otra cara. La Etapa 0 la había
+  dejado para no perder reuniones de prospectos sin resolver; medido hoy, **0 propuestas** tenían alguna (ni por
+  dominio ni a mano), así que no se pierde nada. Una reunión de un prospecto sin dueño se asigna en Sesiones y entra
+  sola. El panel sigue mostrando las agendadas: `getClientSessions` recibe `conAgendadas`, solo para una lista que ve
+  una persona, nunca para un prompt. A la generación (`feedingIds`) van solo las que ya ocurrieron: una agendada con
+  Ventas se ve incluida, pero su texto no llega al modelo (un evento movido al futuro conserva la transcripción vieja).
+- **El análisis de Ventas no manda reuniones sin empresa a Claude** (`app/api/sales/analyze`). Lo de la Etapa 0 se
+  queda: un análisis, una empresa, la que tiene más reuniones del grupo a la que quien pide tiene acceso, y `afuera`
+  cuenta las de otras empresas. Lo nuevo: las reuniones sin empresa no entran (`sinEmpresa` dice cuántas, y /sales lo
+  avisa), y las que entran salen de `getClientSessions`. Si ninguna del grupo tiene empresa, 409 con el motivo: se les
+  asigna en Sesiones. *Por qué:* antes iban al prompt junto con las de la empresa elegida, o solas, y un grupo de gmail
+  juntaba así a dos prospectos. *Lo que cambia para alguien:* de los 180 grupos de /sales, 132 no cambian, 19 dejan
+  afuera alguna reunión sin empresa y 29 (prospectos sin ficha, casi todos con una o dos reuniones viejas) ya no se
+  pueden analizar hasta asignarles la empresa. El análisis no tiene ninguna corrida en el medidor: hoy no lo usa nadie.
+  De paso, la ruta re-siembra el prompt del agente recién después de validar: un pedido rechazado ya no lo reescribe.
+- **Sin SQL.** Las pruebas: `lib/sessions/lecturas-con-guarda.int.test.ts` (contra `nexus_test`, con el acceso real y
+  solo la identidad y lo de afuera como dobles; diez casos fallan con el código de antes) y la guarda de texto de
+  `lib/seguimiento/guardas.test.ts`.
+- **Lo que sigue abierto, a propósito:** /sessions sigue listando título y participantes de todas las reuniones a
+  cualquier interno (`lib/sessions/cargar-sesiones-categorizadas.ts`), y por eso una reunión sin dueño la abre
+  cualquiera. Es una decisión aparte (la evaluación lo anota en §3.1); cambiarla cambia esta regla en un solo lugar.
