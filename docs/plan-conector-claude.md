@@ -41,6 +41,9 @@ Las tres razones, con el conector:
 Lo que no cambia: el 16 oct (DECISIONS, «Nexus, el sistema de trabajo de cada cuenta») ya dejó escrito que la capa de
 operaciones sirve a la pantalla, al chat «y un MCP, si algún día hace falta». El conector es esa tercera puerta.
 
+**23 nov:** Elías revirtió la decisión del 15 oct, con un piloto de dos semanas y el plan Team (DECISIONS, «Nexus como
+conector de Claude», y la sección 5).
+
 ### 0.2 Cómo encaja con el plan maestro de «Hablar con Nexus»
 
 El conector no es un proyecto aparte: es **otra puerta a los mismos verbos** del plan maestro (§4.2: responder, guardar
@@ -362,9 +365,82 @@ De lo más chico que prueba la idea a lo más grande. Cada fase pasa por `/revis
 - **Qué no prueba:** el login desde claude.ai, que llama desde la nube de Anthropic y necesita una dirección pública.
 - **Ojo:** instalar `mcp-handler` en una copia de trabajo cambia el `node_modules` del main (están enlazados;
   `docs/KNOWN-ERRORS.md`). Se instala desde el main y la rama lleva `package.json` y `package-lock.json`.
-- **Por qué no lo construí en esta sesión:** las dudas de código se respondieron leyendo (las lecturas ya reciben a la
-  persona y la cuenta); la duda que más importa, el login desde claude.ai, no se puede probar en local; y instalar el
-  paquete desde esta copia habría cambiado el `node_modules` del main.
+- **Construida el 23 nov** (en la sesión del plan, sin SQL). Lo que mostró está en «Lo que mostró la fase 0», abajo.
+
+#### Lo que mostró la fase 0 (23 nov)
+
+**Qué quedó:** `app/api/mcp/route.ts` (`mcp-handler` 2.4.0 sobre `@modelcontextprotocol/server` 2.4.0, versiones fijas)
+y `lib/conector-claude/` con las cuatro lecturas (`herramientas-server.ts`), la persona (`persona-server.ts`) y el token
+de prueba (`token-de-prueba.ts`: solo con la base local y fuera de un build de producción, 32 caracteres como mínimo,
+comparado por huella). La cuenta se verifica con `exigirCliente` en cada llamada y las empresas de Smarteam no se leen.
+Las reuniones salen por `whereBelongsToClient` con los mismos cortes que el chokepoint: solo las que ya ocurrieron y
+nunca la cancelada sin texto. Cada una dice su día en Costa Rica y qué texto dejó con la regla única (transcripción,
+solo notas o nada). La memoria entra con un lector nuevo, «conector» (`lib/memoria/consumidores.ts`); el conector está
+en el censo de lectores de reuniones y en la cobertura de proyectos («navegable»). El middleware deja pasar `/api/mcp` y
+la ruta responde 401 sin el token: en producción, a todo.
+
+**Pruebas:**
+- `lib/conector-claude/herramientas.int.test.ts`, 9 casos con filas reales:
+  - una CSE sin acceso recibe «No existe.» en cada herramienta;
+  - una reunión o un proyecto de otra cuenta tampoco existen dentro de la suya;
+  - ni la reunión agendada ni la cancelada sin texto salen; el día es el de Costa Rica;
+  - las de Smarteam no se leen;
+  - quién puede usar el conector.
+- `ruta.test.ts`, 4 casos: la ruta misma responde 401 con la base de producción o en un build de producción, aunque el
+  token esté bien.
+- `token-de-prueba.test.ts`, 4 casos.
+- **Prueba de rojo**, rompiendo a propósito un candado a la vez: sin el chequeo de acceso, sin la pertenencia al leer
+  una reunión, sin el filtro de canceladas y sin la revisión de base local, alguna prueba se pone en rojo en cada caso.
+- **Con datos reales en la base local:** la CSE de Cemaco · Costa Rica ve sus 5 cuentas. Construtecho (de otro CSE) le
+  responde «No existe.», también al pedir una de sus reuniones con el id de Cemaco.
+
+**La revisión ligera (`/revisar`, 23 nov)** dijo «no listo» por un error confirmado: las reuniones canceladas sin texto
+salían como ocurridas. Además había tres reglas del proyecto en rojo (la clase de texto hecha a mano, el censo de
+lectores, la cobertura de proyectos), el día en hora universal, la lista de cuentas sin orden ni páginas, el desempate
+al pasar de página, el error técnico si fallaba la búsqueda de la persona, y dos candados sin prueba. Todo quedó
+arreglado, con su prueba. Lo que no se tocó: el chat «Nexus» de la cuenta (`lib/nexus-chat/lecturas-server.ts`) tiene
+los mismos dos huecos (lista las canceladas sin texto y pone el día en hora universal). Es otro módulo y queda como
+arreglo aparte.
+
+**Las cinco preguntas reales** (`db:local:pull` de las cuatro cuentas: 136 reuniones, 61 con transcripción). Tres son
+las únicas distintas que tiene «Hablar con Nexus» en producción (todas de Elías); las otras dos, del chat «Nexus» de la
+cuenta, de las CSE que las hicieron, con su propia persona. **Cómo se corrió:** Claude Code no se puede lanzar dentro de
+otra sesión de Claude Code (tumba las sesiones abiertas), así que respondió Claude (Sonnet, en un subagente) con un
+único comando que llama a las cuatro herramientas por HTTP, sin acceso a nada más. No es la pantalla de claude.ai, pero
+lo que puede saber es exactamente lo que da el conector.
+
+| # | Pregunta (cuenta) | Nexus respondió (producción) | Claude con el conector (local) |
+|---|---|---|---|
+| 1 | ¿Cuáles son los principales dolores? (Cemaco · Ecuador) | Seis dolores y «hay 4 más», cada uno en una línea | Los mismos temas, agrupados en cinco frentes, con más detalle: quién lo dijo, cifras (800 clientes por gestor, 20 llamadas por hora, 40 a 50 casos por semana a cobranza externa) y la reunión y la fecha de cada cosa. No leyó las tres reuniones más nuevas, y lo dijo. 8 llamadas, 45 s |
+| 2 | ¿Qué dijo Elías sobre crédito y cobro que no estuviera ya? (Cemaco · Ecuador) | «No lo sé»: ninguna fuente menciona a Elías | Tampoco encontró a Elías (revisó quiénes estaban y buscó el nombre en cinco transcripciones), pero ofreció lo que sí se acordó de crédito y cobro y preguntó si se refería a otra persona. 7 llamadas, 46 s |
+| 3 | ¿Qué dijeron de cobranza? (Tecnosagot) | «No lo sé»: se menciona de pasada en un ejemplo hipotético de Smarteam | Encontró ese mismo ejemplo y lo marcó como idea, no requisito; además, que el cliente ya pasa saldo y límite de crédito a su CRM, y cómo pagaría la implementación (cuatro pagos). 7 llamadas (leyó 12 partes de transcripción), 56 s |
+| 4 | ¿Tienes los tipos de segmentos que pidió el cliente? (Cemaco · Costa Rica, como su CSE) | Seis tipos de segmento con la reunión del 27 oct; al repreguntarle, corrigió una fecha y retiró uno que había inventado | Separó lo que propuso Smarteam (frecuencia de compra, ticket promedio, categoría, género, ubicación: diagnóstico del 19 nov) de lo que pidió el cliente (avisar los «semacolones» por vencer y ver el nivel gold o platinum, 20 nov; segmentar por etapa del bebé, 10 nov). No encontró la lista del 27 oct que sí halló Nexus: de esa reunión leyó solo lo de segmentación. No inventó nada. 11 llamadas, 57 s |
+| 5 | ¿Cuál debería ser el siguiente paso de CS? (Construtecho, como su CSE) | Del kickoff del 6 nov: las invitaciones de las sesiones y confirmar el pago; propuso fijarlo como siguiente paso (en producción no se aplicó: dos intentos dicen «No se aplicó») | El mismo paso: confirmar que el pago se reflejó y que las sesiones de Luis Adolfo corren, con las citas del kickoff del 6 nov, lo que sigue después (acceso, quién asiste, cómo se mide el cierre) y lo que Nexus no sabe (si pagaron, si las sesiones se hicieron). No lo puede fijar: solo lee. 6 llamadas, 27 s |
+
+**Lo que se aprende de las respuestas:**
+- Con solo cuatro lecturas, Claude respondió lo mismo o más que Nexus en cuatro de las cinco, y siempre dijo de dónde
+  sale cada cosa. Donde Nexus dijo «No lo sé», buscó más y ofreció lo cercano sin inventar. En la cuarta se le
+  escapó una lista que Nexus sí encontró, pero no inventó nada (Nexus inventó un tipo de segmento y lo retiró al
+  repreguntarle).
+- Le costó leer: para buscar una palabra leyó hasta 12 partes de transcripción (240.000 caracteres). La búsqueda en
+  las reuniones (`buscar_en_reuniones`, ya prevista para la fase 1) lo resuelve en una llamada y gasta mucho menos del
+  plan de la persona.
+- La memoria llega recortada: el cargador la arma para un prompt (la ficha, 2.000 caracteres; la cuenta, 11.200) y
+  Claude lo dijo en tres de las respuestas. Para el conector conviene un tope propio más grande, o la ficha por partes.
+- La base local no tiene lo que el equipo escribió en la preventa (notas, tarjetas), que «Hablar con Nexus» sí leía.
+  Con eso, la comparación favorece a Nexus.
+- **Ojo con esta prueba:** el comando con que respondió Claude corta la salida en 30.000 caracteres, y algunas partes
+  de transcripción medían 31.000 a 33.000: pudo perder el final de algunas. En claude.ai el tope es de unos 150.000.
+
+**Cuánto pesan las respuestas** (Cemaco · Ecuador): `buscar_cuenta` 250 bytes; `memoria_de_la_cuenta` 2.400
+(recortada); `reuniones` 3.800 (diez reuniones); `leer_reunion` unos 31.000 por parte; «No existe.» 19. Todo cabe en
+los topes de claude.ai (unos 150.000 caracteres) y de Claude Code (25.000 tokens).
+
+**Conexiones a la base** (con el tope de producción, 10): `buscar_cuenta`, `reuniones` y `leer_reunion` usan una.
+**`memoria_de_la_cuenta` abre las 10**, con hasta 4 consultas a la vez, durante uno a dos segundos: el cargador lanza
+sus lecturas en paralelo. Con tres personas preguntando a la vez, el pool llegó a 10 abiertas y 6 consultas en curso.
+En producción ese pool es el de toda la app: la fase 1 necesita un tope de lecturas de memoria del conector a la vez
+(una o dos) antes que el de tres llamadas que proponía el plan.
 
 ### Fase 1 · La puerta y la lectura en producción, solo para Elías (2 a 3 sesiones)
 
@@ -372,6 +448,9 @@ De lo más chico que prueba la idea a lo más grande. Cada fase pasa por `/revis
 - La página «Conexiones con Claude» en Nexus: quién conectó, último uso, «Cortar».
 - La celda de permiso del conector, apagada para todos menos Elías.
 - Las diez herramientas de lectura, la lectura de lo publicado sin token, los topes y el registro por llamada.
+- Lo que pidió la fase 0: un tope de lecturas de memoria del conector a la vez (una lectura abre las 10 conexiones de
+  la app); la memoria del conector con un tope propio más grande que el de un prompt; y `buscar_en_reuniones` desde el
+  primer día (sin ella, Claude lee transcripciones enteras para encontrar una palabra).
 - **Antes:** la mejora 1 de la evaluación (cerrar las lecturas de reuniones que se saltan el lugar único).
 - **Prueba:** Elías lo conecta desde claude.ai, la app de escritorio y el teléfono, y hace 10 preguntas reales.
 
@@ -400,7 +479,7 @@ De lo más chico que prueba la idea a lo más grande. Cada fase pasa por `/revis
 
 | Fase | Qué ves al terminar | Sesiones | SQL |
 |---|---|---|---|
-| 0 | Claude Code respondiendo con datos de la base local | 1 | No |
+| 0 | Claude respondiendo con datos de la base local (hecha el 23 nov) | 1 | No |
 | 1 | Nexus en tu Claude, solo lectura | 2 a 3 | Sí (`ConexionDeClaude`) |
 | 2 | Tres personas usándolo dos semanas | 0 | No |
 | 3 | «Guarda esto» desde Claude | 1 a 1,5 | Depende de la pregunta 6 |
@@ -411,16 +490,18 @@ De lo más chico que prueba la idea a lo más grande. Cada fase pasa por `/revis
 
 ## 5. Lo que decide Elías
 
+Respondidas el 23 nov: la 1, la 2 y la 8 (al final de su fila). Las 3 a 7 siguen abiertas.
+
 | # | Pregunta | Contexto | Recomendación |
 |---|---|---|---|
-| 1 | ¿Se vuelve atrás la decisión del 15 oct («el agente vive dentro de Nexus, sin cuentas de Claude por persona»)? | El rumbo del 21 nov dice que Claude ponga la conversación. El conector mantiene lo más importante de esa decisión (ver solo lo propio) y cambia el costo (asientos en vez de API) | **Sí, con el piloto de la fase 2** antes de abrirlo a todos |
-| 2 | ¿Qué plan de Claude usa el equipo? | Con Team, la cuenta es de Smarteam: el dueño agrega el conector una vez, fija qué herramientas piden aprobación y el contenido no se usa para entrenar por defecto. Con planes personales, las transcripciones de los clientes quedan en cuentas personales. Team estándar: US$ 25 por persona al mes (US$ 20 pagando el año) | **Team**, estándar para la mayoría y premium solo para quien lo use mucho |
+| 1 | ¿Se vuelve atrás la decisión del 15 oct («el agente vive dentro de Nexus, sin cuentas de Claude por persona»)? | El rumbo del 21 nov dice que Claude ponga la conversación. El conector mantiene lo más importante de esa decisión (ver solo lo propio) y cambia el costo (asientos en vez de API) | **Sí, con el piloto de la fase 2** antes de abrirlo a todos. **Elías, 23 nov: sí, con un piloto de dos semanas** |
+| 2 | ¿Qué plan de Claude usa el equipo? | Con Team, la cuenta es de Smarteam: el dueño agrega el conector una vez, fija qué herramientas piden aprobación y el contenido no se usa para entrenar por defecto. Con planes personales, las transcripciones de los clientes quedan en cuentas personales. Team estándar: US$ 25 por persona al mes (US$ 20 pagando el año) | **Team**, estándar para la mayoría y premium solo para quien lo use mucho. **Elías, 23 nov: Team** |
 | 3 | ¿Quiénes prueban primero? | Hacen falta personas que conversen con Claude todos los días y cuentas con reuniones recientes | **Elías, una CSE y alguien de Ventas** |
 | 4 | ¿Por dónde se entra? | El servidor OAuth de Supabase está en beta, no emite el token para Nexus y encenderlo cambia el Supabase de producción. Un proveedor externo suma otro sistema de identidad | **Una puerta propia de Nexus** que usa el login de siempre |
 | 5 | ¿Claude puede leer las transcripciones completas o solo minutas, hechos y búsqueda? | Hoy quien ve una cuenta en Nexus ve sus transcripciones. Por el conector, quedan en la conversación de Claude de la persona | **Completas para quien ya las ve,** por partes y con registro; si el plan no es Team, solo minutas y búsqueda |
 | 6 | ¿Dónde guarda Claude lo que le cuentan, mientras no exista el lugar de la empresa? | Hoy lo que sabe el equipo vive en cada preventa; el lugar de la empresa es la etapa 5 del plan maestro, y Nexus y el conector lo necesitan igual | **Adelantar solo esa pieza de la etapa 5** (una tabla chica, SQL aditivo), así las dos puertas guardan en el mismo lugar |
 | 7 | ¿Cuánto pesa lo que se guarda desde Claude? | La escalera: aceptado por el cliente > presentado > confirmado por el equipo > dicho en una reunión > deducido por Nexus | **Lo que dijo la persona, «confirmado por el equipo»** (aprobó guardarlo). Lo que Claude dedujo de una reunión, «dicho en una reunión» solo con la cita verificada; si no, «deducido» |
-| 8 | ¿Se sigue construyendo el cajón de conversar dentro de Nexus (etapas 2 y 5 del plan maestro) mientras se prueba el conector? | Las etapas 0, 1, 3 y 4 sirven a las dos puertas. Las 2 y 5 construyen la conversación dentro de cada pantalla, que es lo que Claude ya hace | **Seguir con 0, 1, 3 y 4; esperar el piloto antes de las 2 y 5** (quien no tenga Claude sigue con «Hablar con Nexus» como está) |
+| 8 | ¿Se sigue construyendo el cajón de conversar dentro de Nexus (etapas 2 y 5 del plan maestro) mientras se prueba el conector? | Las etapas 0, 1, 3 y 4 sirven a las dos puertas. Las 2 y 5 construyen la conversación dentro de cada pantalla, que es lo que Claude ya hace | **Seguir con 0, 1, 3 y 4; esperar el piloto antes de las 2 y 5** (quien no tenga Claude sigue con «Hablar con Nexus» como está). **Elías, 23 nov: las 2 y 5 esperan al piloto; se sigue con las 1, 3 y 4.** La etapa 1 (la memoria de la cuenta) la construye la sesión del plan maestro, con sus lecturas en `lib/` que reciben la persona y la cuenta, para que las herramientas del conector las reusen |
 
 ---
 
@@ -455,10 +536,33 @@ diga que al dueño del servidor no se le cobra (se deduce de que el uso descuent
 
 ## Para el roadmap
 
-- **Qué cambió:** nada en el código. Este plan diseña Nexus como conector de Claude en 6 fases (0 a 5) y lista qué
-  funciones de IA se podrían retirar con él.
+- **Qué cambió (23 nov):**
+  - Elías respondió las preguntas 1, 2 y 8 de la sección 5: se revierte la decisión del 15 oct, con un piloto de dos
+    semanas; el equipo usa el plan Team; y las etapas 2 y 5 del plan maestro esperan al piloto (se sigue con las 1, 3
+    y 4). Quedó en DECISIONS («Nexus como conector de Claude») y en
+    `docs/mi-dia-plan.md`, decisión 8.
+  - La fase 0 está hecha: en local, Nexus responde como conector de Claude con cuatro lecturas (buscar una cuenta, lo
+    que Nexus sabe de ella, sus reuniones y una reunión por partes). Entra con un token de prueba que solo vale con la
+    base local. Sin SQL; en producción, `/api/mcp` responde 401 a todo.
+- **Pruebas:**
+  1. `npx vitest run --project integration lib/conector-claude/herramientas.int.test.ts` → 9 de 9 en verde. Cubre:
+     - una CSE sin acceso recibe «No existe.» en cada herramienta;
+     - una reunión o un proyecto de otra cuenta tampoco existen dentro de la suya;
+     - ni la reunión agendada ni la cancelada sin texto salen, y el día es el de Costa Rica;
+     - las empresas de Smarteam no se leen;
+     - solo un interno activo puede usar el conector.
+  2. `npx vitest run --project unit lib/conector-claude lib/memoria lib/sessions/ocurridas.test.ts lib/projects` → en
+     verde (incluye `ruta.test.ts`: la ruta responde 401 con la base de producción o en un build de producción).
+  3. A mano, con la base local y el token en el entorno del servidor: `POST /api/mcp` sin token o con otro token → 401;
+     con el token → las cuatro herramientas.
+- **Lo que mostró:**
+  - Claude respondió igual o mejor que Nexus en cuatro de cinco preguntas reales, y no inventó nada.
+  - Una lectura de la memoria abre las 10 conexiones de la app.
+  - La memoria llega recortada.
+  - Falta la búsqueda en las reuniones.
+
+  Las tres cosas pasan a la fase 1.
 - **Encaja con:** el plan maestro de «Hablar con Nexus» (las etapas 0, 1, 3 y 4 sirven a las dos puertas; las 2 y 5
-  esperan el piloto si Elías lo decide) y con la mejora 1 de `docs/evaluacion-de-nexus-2026-11.md`, que va antes de la
-  fase 1.
-- **Pruebas:** ninguna todavía; la fase 0 trae la de «una CSE sin acceso recibe no existe» en cada herramienta.
-- **Espera:** las 8 decisiones de la sección 5.
+  esperan el piloto si Elías lo decide) y con la mejora 1 de `docs/evaluacion-de-nexus-2026-11.md` (las cuatro lecturas
+  de reuniones sin guarda, que se cierran en otra sesión), que va antes de la fase 1.
+- **Espera:** las decisiones 3 a 7 de la sección 5, y la orden de pasar a la fase 1.

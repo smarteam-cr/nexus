@@ -334,6 +334,8 @@ conteste con lo que Nexus sabe.
 8. **El agente vive dentro de Nexus**, no como conector para el Claude de cada persona: sin cuentas
    pagas por persona ni uso personal, con el costo medido y un tope por persona, y viendo solo lo que
    esa persona puede ver.
+   ⚠ **Revertida el 2026-11-23** (DECISIONS, «Nexus como conector de Claude»): Nexus se ofrece como conector
+   en el Claude de cada persona, con el plan Team y un piloto de dos semanas antes de abrirlo al equipo.
 9. **Los artefactos a la medida desde el chat** (una página que arma el agente, como un artefacto de
    Claude) **no van en la v1**. Se pueden hacer después, con la API: el modelo escribe el contenido y
    Nexus lo guarda y lo muestra.

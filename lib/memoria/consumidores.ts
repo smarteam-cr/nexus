@@ -29,6 +29,7 @@ export type LectorDeMemoria =
   | "lo-que-sabe-la-ia"
   | "vigia"
   | "nexus-chat"
+  | "conector"
   | "escala"
   | "cronograma-chat"
   | "guia-de-la-exploracion";
@@ -240,6 +241,16 @@ export const CONSUMIDORES_DE_LA_MEMORIA: Readonly<Record<LectorDeMemoria, Consum
     archivos: ["lib/nexus-chat/lecturas-server.ts"],
     motivo:
       "El chat de Nexus (2026-10-17, ficha H): lo que Nexus ya sabe de la cuenta (en el contexto de cada turno y con la herramienta «cuenta.memoria») y de un proyecto («proyecto.memoria»), para contestar y proponer cambios.",
+  },
+  conector: {
+    pieza: null,
+    // Lo lee una persona del equipo desde su Claude (Nexus como conector, lib/conector-claude), sobre UNA cuenta que ve:
+    // interno, como el chat de Nexus. Nunca el cliente.
+    alcance: "interno",
+    excluirOrigenes: [],
+    archivos: ["lib/conector-claude/herramientas-server.ts"],
+    motivo:
+      "Nexus como conector de Claude (fase 0, 2026-11-23, docs/plan-conector-claude.md): lo que Nexus sabe de la cuenta («memoria_de_la_cuenta») y de un proyecto, para que el Claude de la persona converse con lo que ya se sabe.",
   },
   escala: {
     pieza: null,

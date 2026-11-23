@@ -53,6 +53,8 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "lib/mi-dia/cartera-cs-server.ts": { modo: "criterio", criterio: "navegable" },
   // El chat de Nexus (ficha H): los proyectos de la cuenta que se le nombran al modelo son los que se ven en la ficha.
   "lib/nexus-chat/lecturas-server.ts": { modo: "criterio", criterio: "navegable" },
+  // El conector de Claude (fase 0): los proyectos de la cuenta que ve el Claude de la persona son los de la ficha.
+  "lib/conector-claude/herramientas-server.ts": { modo: "criterio", criterio: "navegable" },
   "lib/portfolio/load.ts": { modo: "criterio", criterio: "cartera" },
   "lib/cs/watchdog.ts": { modo: "criterio", criterio: "cartera" },
   // La lectura de una reunión (T2): en la recuperación confirma que el proyecto principal ya vinculado es del dueño.

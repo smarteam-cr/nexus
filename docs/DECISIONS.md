@@ -16441,3 +16441,33 @@ todavía: cada etapa arranca cuando él lo dice.
     lo que vuelve a la memoria sumarán su origen cuando existan (lib/ai/tope-de-nexus.ts).
   - **El conteo en «Uso de Nexus»** (pestaña Procesos de IA) sale de las corridas que ya existían; «¿Era una pregunta?» y
     «Guardarlo como nota» se marcan en la corrida desde este día, así que antes cuentan cero.
+
+## Nexus como conector de Claude: se revierte «el agente vive dentro de Nexus», con un piloto de dos semanas (2026-11-23)
+
+**Contexto.** El 15 oct (`docs/mi-dia-plan.md`, decisión 8 y su pieza 13) Elías decidió que el agente viviera dentro de
+Nexus y no como conector para el Claude de cada persona: sin cuentas pagas por persona ni uso personal, con el costo
+medido y un tope por persona, y viendo solo lo que esa persona puede ver. Esa decisión no tenía sección propia acá. El
+23 nov, con el plan `docs/plan-conector-claude.md` y la evaluación `docs/evaluacion-de-nexus-2026-11.md` delante, la
+revirtió.
+
+- **Se revierte, con un piloto de dos semanas.** Nexus se ofrece como conector personalizado (un servidor MCP remoto)
+  en el Claude de cada persona. Antes de abrirlo a todo el equipo, dos semanas con tres personas (la fase 2 del plan).
+  *Por qué:* el rumbo del 21 nov pide que la conversación la ponga Claude y que Nexus sea lo que se sabe de cada cuenta;
+  construir la conversación en casa (las etapas 2 y 5 del plan maestro y tres chats propios) cuesta más y queda peor que
+  lo que Claude ya hace. De las tres razones del 15 oct, una cambia (cada persona necesita su cuenta de Claude), otra
+  cambia de forma (lo que conversa Claude lo cubre el plan de cada persona, no la API de Nexus: Nexus mide llamadas, no
+  dólares) y la tercera se mantiene igual (cada uno ve solo lo suyo).
+- **Plan Team de Claude.** *Por qué:* la cuenta es de Smarteam: el dueño agrega el conector una vez, fija qué
+  herramientas piden aprobación y el contenido no se usa para entrenar por defecto. Con planes personales, las
+  transcripciones de los clientes quedarían en cuentas de cada persona, fuera del control de Smarteam.
+- **Se mantiene del 15 oct:** el servidor verifica la cuenta en cada llamada y las reuniones salen solo por el chokepoint
+  de sesiones; desde Claude no se publica nada al cliente ni se toca cobranza; lo automático (leer reuniones, el vigía,
+  los documentos) sigue en Nexus con su medidor. Antes de la fase 1 se cierran las cuatro lecturas de reuniones que se
+  saltan el chokepoint (en curso el 23 nov, en otra sesión).
+- **Las etapas 2 y 5 del plan maestro de «Hablar con Nexus» esperan al piloto; se sigue con las 1, 3 y 4** (Elías, el
+  mismo día). *Por qué:* las 1, 3 y 4 sirven a las dos puertas (lo que se sabe de la empresa, el contrato del documento,
+  lo que vuelve de lo que ve el cliente); las 2 y 5 construyen la conversación dentro de cada pantalla, que es lo que
+  Claude ya hace. La etapa 1 deja sus lecturas en `lib/`, con la persona y la cuenta como parámetros, para que el
+  conector las reuse.
+- **Sigue abierto** (sección 5 del plan): quiénes prueban, por dónde se entra, si Claude lee transcripciones completas,
+  dónde se guarda lo que la persona le cuenta y cuánto pesa eso en la escalera.
