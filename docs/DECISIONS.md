@@ -7524,7 +7524,7 @@ mostraba la pantalla y se rehacía releyendo 12 reuniones.
     `loadPriorRelationshipContext`, con los handoffs previos); la implementación, sin los procesos (los lee enteros);
     integraciones, sin desviaciones ni resultados; la entrega, sin procesos, historia, resultados ni desviaciones (ya
     los lee, o traen semanas y fechas que en la entrega escribe Nexus); el resumen del proyecto, sin la historia ni lo
-    fuera de alcance (los lee aparte); la propuesta comercial, sin los procesos; el correo, solo la ficha.
+    fuera de alcance (los lee aparte); la propuesta comercial, sin los procesos; el correo, solo la ficha (tampoco lo que confirmó el equipo, 23 nov).
   - `memoriaDelDocumento` junta la memoria de la cuenta y la del proyecto para un documento de proyecto. El material de
     cada documento (`cargarMaterialDelDocumento`) devuelve `sesionesUsadas`, que van como `yaLeidas`: la misma reunión
     no se lee dos veces.
@@ -7830,6 +7830,14 @@ escribió entero sin el sondeo y quedó apagado: hasta que Elías lo corra y dec
   su reunión. En la memoria, los hechos van solo al alcance interno. La LECTURA de una reunión de la exploración de un
   proyecto no recibe la memoria interna (F0): su resumen es lo que el correo de seguimiento, que lee el cliente, usa
   como «lo que se leyó de la reunión».
+  *Enmienda (23 nov, etapa 1 del plan maestro de «Hablar con Nexus»):* los hechos de una **nota del equipo**
+  (`notaClave`) sí llegan a los documentos del cliente, al handoff y a los casos de uso, y solo por una puerta:
+  `paraElAlcance` (lib/exploraciones/lo-que-confirmo-el-equipo.ts), que deja los de tipo cuenta, acuerdo, resultado y
+  proceso de hoy sin nada de la compra (montos, presupuesto, quién firma o decide, cargos, competencia, confianza), sin
+  el texto de la nota y sin quién la escribió. El correo de seguimiento y el cuestionario no los reciben. Los hechos de
+  una REUNIÓN siguen solo en el alcance interno. *Por qué:* lo contó una persona del equipo con su clic (Elías lo pidió
+  en el plan maestro: «lo que cuentas no sale de la preventa»), y el corte lo hace el código. La guarda
+  lib/seguimiento/hechos-internos.test.ts vigila las dos cosas.
 - **El sondeo (etapa 5)** es `scripts/sondeo-de-hechos.ts`, sin deploy: unas 30 reuniones recientes (sin internas,
   aliadas ni Wherex; como mucho 3 por cliente), con los mismos módulos puros que va a usar la etapa 6 y las citas
   verificadas, comparado con lo que encuentran el Haiku de la ficha y la lectura de procesos, y con el costo con caché y
@@ -16441,3 +16449,36 @@ todavía: cada etapa arranca cuando él lo dice.
     lo que vuelve a la memoria sumarán su origen cuando existan (lib/ai/tope-de-nexus.ts).
   - **El conteo en «Uso de Nexus»** (pestaña Procesos de IA) sale de las corridas que ya existían; «¿Era una pregunta?» y
     «Guardarlo como nota» se marcan en la corrida desde este día, así que antes cuentan cero.
+- **Las etapas 2 y 5 esperan al piloto del conector de Claude (Elías, 23 nov).** El cajón de conversar en cada pantalla
+  (una sola puerta en la preventa; Nexus en la ficha y en los documentos del proyecto) queda en espera hasta que terminen
+  las dos semanas del piloto (`docs/plan-conector-claude.md`, §0.2 y fase 2). *Por qué:* con el conector, la conversación
+  la pone Claude, que lee y escribe en Nexus, y el cajón podría sobrar. Siguen las etapas 1, 3 y 4, que sirven con o sin
+  conector. Lo que se construye para la memoria de la empresa («Lo que confirmó el equipo») y el contrato de cada
+  documento queda en funciones de `lib/` que reciben la cuenta (y la persona, donde decide algo), nunca dentro de una
+  pantalla: el conector las usa como herramientas. La etapa 3 dependía del cajón: Elías aprobó el mismo 23 nov su versión sin cajón
+  (un panel «✨ Pedirle a Nexus» en la misma página de La escala: un pedido y una propuesta por pieza, «Aplicar»; el
+  contrato del documento en `lib/`, recibiendo la persona y la cuenta; en casos de uso sigue «Mejorar con IA», que lee lo
+  que confirmó el equipo).
+- **Etapa 1, construida el 23 nov (sin SQL): «Lo que confirmó el equipo» llega a la memoria y a casos de uso.**
+  - **Qué es:** las notas de «Lo que sabes del cliente» de TODAS las preventas de la empresa (abiertas o archivadas,
+    las 12 más nuevas), con quién y cuándo, y los hechos que Nexus sacó de cada una. Una sola lectura, por la cuenta y el
+    alcance, nunca por la sesión del navegador (`loQueConfirmoElEquipo`, lib/exploraciones/lo-que-confirmo-el-equipo-server.ts):
+    la usan la memoria, los casos de uso y, después, el conector. Quien la llama ya verificó que la persona ve la cuenta.
+  - **El corte para el cliente lo hace el código** (`paraElAlcance`): a un documento del cliente y al handoff llegan solo
+    los hechos de tipo cuenta, acuerdo, resultado y proceso de hoy, sin los que traen un monto o hablan de negociación
+    ni nada de la compra (presupuesto, quién firma o decide, cargos, competencia, confianza, cifras con «mil», «k» o
+    «millones», pagos mensuales: `traeAlgoDeLaCompra`, estricta a propósito), sin el texto de la nota y sin quién la
+    escribió. Personas, quejas y riesgos se quedan adentro. *Por qué por tipo de
+    hecho y no por el texto:* una nota es texto libre y puede traer el presupuesto o lo que se piensa de alguien; el
+    hecho ya pasó por la verificación de su cita y tiene tipo. Lo interno la recibe entera, rotulada.
+  - **En la memoria es la segunda parte** («Lo que confirmó el equipo de Smarteam»), después de la ficha, con la regla de
+    peso arriba: pesa más que una reunión y menos que lo que aceptó el cliente. Llega a todos los lectores menos al
+    cuestionario (el cliente lo abre sin que nadie lo revise) y al correo de seguimiento («solo la ficha»). El total de la
+    memoria de la cuenta sube de 11.200 a 12.600 caracteres para que no empuje afuera las partes del final, y una prueba
+    vigila que la suma de las partes quepa en el total. Enmienda la regla «los hechos son internos» (sección «Hechos,
+    enrutador y novedades»): ahí está escrita la excepción.
+  - **Casos de uso** (sugerir, personalizar y «Mejorar con IA») leen lo que confirmó el equipo, cortado para el cliente
+    (lo que proponen va a la propuesta), y lo que el cliente aceptó de La escala de esa preventa, sin la nota que el
+    equipo escribió al anotarlo. Lo que confirmó el equipo gana sobre una hipótesis o una reunión. Sus cifras valen para
+    el validador de cifras. La huella que avisa «cambió lo que se sabe» no cambia: una nota nueva no avisa todavía.
+  - El chat «Nexus» de la cuenta la ve sin tocar nada: lee la misma memoria, en el alcance interno.

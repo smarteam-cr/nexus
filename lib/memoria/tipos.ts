@@ -13,6 +13,7 @@ import type { FichaGuardada } from "@/lib/clients/ficha";
 import type { ViaDelCongelado } from "@/lib/handoff/congelado";
 import type { ResultadoMedible } from "@/lib/handoff/resultados-medibles";
 import type { EtiquetaDeSala } from "@/lib/sessions/etiqueta-de-sala";
+import type { NotaConfirmada } from "@/lib/exploraciones/lo-que-confirmo-el-equipo";
 
 /**
  * Para quién es la memoria.
@@ -26,6 +27,7 @@ export type AlcanceDeMemoria = "cliente" | "sin-lo-interno" | "interno";
 /** Las partes de la memoria, en el orden en que se arman. */
 export type ClaveDeParte =
   | "ficha"
+  | "equipo"
   | "procesos"
   | "historia"
   | "fueraDeAlcance"
@@ -73,6 +75,12 @@ export interface QueCargar {
   fueraDeAlcance: boolean;
   /** Lo aprendido en la preventa (con lo interno). */
   preventa: boolean;
+  /**
+   * «Lo que confirmó el equipo» (etapa 1 del plan maestro de «Hablar con Nexus», 23 nov): las notas de todas las
+   * preventas de la empresa y sus hechos. Todos los alcances; fuera del interno, cortado por el código a los hechos que
+   * describen a la empresa, sin el texto ni quién lo escribió (lib/exploraciones/lo-que-confirmo-el-equipo.ts).
+   */
+  equipo: boolean;
   /** Los hallazgos confirmados de la auditoría del portal. */
   auditoria: boolean;
   /** Los compromisos abiertos del proyecto (de Tareas, por lib/tareas/para-agentes.ts). */
@@ -193,6 +201,8 @@ export interface DatosDeLaCuenta {
   entrega: { proyecto: string; texto: string } | null;
   fueraDeAlcance: PedidoDeLaMemoria[];
   preventa: PreventaDeLaMemoria | null;
+  /** Lo que confirmó el equipo, YA cortado por el alcance al leerlo; el armador lo vuelve a cortar. */
+  equipo?: NotaConfirmada[];
   auditoria: AuditoriaDeLaMemoria | null;
   /** Los hechos de la CUENTA (sin proyecto). Solo el alcance interno los carga. */
   hechos?: HechoDeLaMemoria[];

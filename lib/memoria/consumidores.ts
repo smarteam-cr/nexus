@@ -190,7 +190,8 @@ export const CONSUMIDORES_DE_LA_MEMORIA: Readonly<Record<LectorDeMemoria, Consum
     alcance: "cliente",
     excluirOrigenes: [],
     // Solo la ficha recortada (DECISIONS «El correo de seguimiento…»): ni los procesos ni la historia de otros proyectos.
-    sinPartes: ["procesos", "historia"],
+    // Tampoco lo que confirmó el equipo (23 nov): sus hechos los escribe la IA, y el correo es «solo la ficha».
+    sinPartes: ["procesos", "historia", "equipo"],
     archivos: ["lib/exploraciones/correo-de-seguimiento-server.ts", "lib/seguimiento/reunion/correo-server.ts"],
     motivo: "El correo de seguimiento de una reunión (de una exploración o, desde la ficha G, de cualquier reunión con un cliente), para no repreguntar lo que ya se sabe.",
   },
@@ -200,7 +201,8 @@ export const CONSUMIDORES_DE_LA_MEMORIA: Readonly<Record<LectorDeMemoria, Consum
     alcance: "cliente",
     excluirOrigenes: ["Cuestionario"],
     // Solo la ficha confirmada: la estrategia del negocio. Ni los procesos ni la historia de otros proyectos.
-    sinPartes: ["procesos", "historia", "fueraDeAlcance", "auditoria", "preventa", "hechos"],
+    // Tampoco lo que confirmó el equipo: el cuestionario lo abre el cliente sin que nadie lo revise antes.
+    sinPartes: ["procesos", "historia", "fueraDeAlcance", "auditoria", "preventa", "hechos", "equipo"],
     archivos: ["lib/cuestionario/prellenar.ts"],
     motivo:
       "El prellenado del cuestionario de estrategia (2026-10-11): lo que ya se sabe de la estrategia de la cuenta, para no preguntárselo otra vez al cliente.",
@@ -292,6 +294,8 @@ export function queCargar(alcance: AlcanceDeMemoria): QueCargar {
     idsDeTrato: interno,
     fueraDeAlcance: interno,
     preventa: interno,
+    // Lo que confirmó el equipo llega a todos: el corte para el cliente lo hace el código (lo-que-confirmo-el-equipo.ts).
+    equipo: true,
     auditoria: interno,
     compromisos: interno,
     minutaCompleta: interno,

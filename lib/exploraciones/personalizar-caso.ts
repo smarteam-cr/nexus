@@ -23,6 +23,7 @@ import { actividadesPorDefecto, bibliotecaLigera } from "@/lib/casos-de-uso/arma
 import { casoDeLaPreventa, catalogoParaElAgente } from "@/lib/casos-de-uso/en-la-preventa";
 import { AGENTE_DE_LA_EXPLORACION, pendientesVigentes } from "./agente";
 import { exploracionParaLosCasos, loQueSeSabeParaElValor } from "./casos-de-uso";
+import { loConfirmadoParaLosCasos } from "./lo-que-confirmo-el-equipo-server";
 import type { CasoDeUsoElegido, EstadoDeExploracion, ItemPropuesto } from "./contenido";
 import { leerContenido, leerPropuesta } from "./esquemas";
 import { bloqueDeLaLectura } from "./notas-de-sesion";
@@ -48,8 +49,11 @@ export async function contextoDePersonalizar(o: {
 }): Promise<ContextoDePersonalizar> {
   const delCatalogo = casoDeLaPreventa(o.useCaseId);
   const actsDeLaFicha = delCatalogo ? actividadesDelCaso(delCatalogo.id) : null;
+  // Lo que confirmó el equipo y lo que aceptó el cliente (23 nov): pesa más que lo estimado. Lo leen personalizar y «Mejorar con IA».
+  const [reuniones, confirmado] = await Promise.all([minutasRecientes(o.fila, o.estado), loConfirmadoParaLosCasos(o.fila.id, o.fila.clientId)]);
   return {
     empresa: o.empresa,
+    confirmado,
     caso: {
       useCaseId: o.useCaseId,
       titulo: o.caso.titulo,
@@ -63,7 +67,7 @@ export async function contextoDePersonalizar(o: {
     biblioteca: bibliotecaLigera(bibliotecaDeActividades()),
     exploracion: o.exploracion,
     interno: loQueSeSabeParaElValor(o.estado),
-    reuniones: await minutasRecientes(o.fila, o.estado),
+    reuniones,
     instrucciones: bloqueDeLaLectura(o.estado.contenido.notas),
   };
 }

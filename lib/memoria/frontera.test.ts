@@ -58,6 +58,22 @@ const cuenta: DatosDeLaCuenta = {
   entrega: { proyecto: "Sales Hub", texto: "Se dejó funcionando el pipeline." },
   fueraDeAlcance: [{ pedido: S("fuera-de-alcance"), estado: "CONFIRMADO", proyecto: null, quienLoPidio: null, fecha: "2026-10-01T12:00:00.000Z" }],
   preventa: { fecha: "2026-08-01T12:00:00.000Z", archivada: false, texto: S("preventa-interna") },
+  // Lo que confirmó el equipo (23 nov): al cliente y al handoff, solo los hechos que describen a la empresa.
+  equipo: [
+    {
+      clave: "sabido:1",
+      texto: S("texto-de-la-nota"),
+      autor: S("autor-de-la-nota"),
+      en: "2026-11-20T15:00:00.000Z",
+      preventa: { id: "e1", archivada: false },
+      hechos: [
+        { tipo: "cuenta", tema: null, frase: "Crédito y cobro contacta a 4.800 clientes al mes" },
+        { tipo: "persona", tema: null, frase: S("quien-decide-de-la-nota") },
+        { tipo: "riesgo", tema: null, frase: S("riesgo-de-la-nota") },
+        { tipo: "acuerdo", tema: null, frase: `El presupuesto es de US$ 20.000 ${S("monto-de-la-nota")}` },
+      ],
+    },
+  ],
   auditoria: { nombre: "Auditoría", fecha: "2026-09-15T12:00:00.000Z", estado: S("auditoria-estado"), hallazgos: [{ seccion: "Workflows", titulo: S("hallazgo"), hallazgo: "x", decision: "Corregir" }] },
   // Los hechos de las reuniones (etapa 6): solo el alcance interno.
   hechos: [{ tipo: "cuenta", tema: null, frase: S("hecho-de-la-cuenta"), estado: "pendiente", reunion: { titulo: "Seguimiento", fecha: "2026-10-01" } }],
@@ -113,6 +129,7 @@ describe("⛔ la frontera de la memoria", () => {
     expect(t).toContain("- Ana — directora — sponsor");
     expect(t).toContain("Decisión: Usar Sales Hub");
     expect(t).toContain("Se atrasó la migración");
+    expect(t).toContain("- De la cuenta: Crédito y cobro contacta a 4.800 clientes al mes");
   });
 
   it("sin-lo-interno (el handoff): sin los campos internos, la postura, la preventa, lo fuera de alcance, la auditoría ni los compromisos", () => {
@@ -142,9 +159,15 @@ describe("⛔ la frontera de la memoria", () => {
       "asunto-del-correo",
       "texto-del-correo",
       "compromiso-de-la-cuenta",
+      "texto-de-la-nota",
+      "autor-de-la-nota",
+      "quien-decide-de-la-nota",
+      "riesgo-de-la-nota",
+      "monto-de-la-nota",
     ]) {
       expect(t, s).not.toContain(S(s));
     }
+    expect(t).toContain("Crédito y cobro contacta a 4.800 clientes al mes");
     // Lo propuesto con su fuente sí entra, salvo lo suyo y lo derivado de él.
     expect(t).toContain(S("propuesto-por-sesion"));
     expect(t).not.toContain(S("propuesto-por-handoff"));
@@ -154,7 +177,7 @@ describe("⛔ la frontera de la memoria", () => {
   it("interno: entra todo (la prueba de que los centinelas están donde deben)", () => {
     // (Los riesgos de la minuta van adentro del resumen de la reunión, que arma `resumenDeReunion` en el cargador.)
     const t = textoDe("interno");
-    for (const s of ["postura", "motivacion", "oportunidades", "preventa-interna", "fuera-de-alcance", "hallazgo", "compromiso", "notas-de-la-reunion", "puertas-adentro", "desviacion-no-visible", "party", "hecho-de-la-cuenta", "hecho-del-proyecto", "persona-de-hubspot", "ticket-abierto", "nota-del-equipo", "asunto-del-correo", "texto-del-correo", "compromiso-de-la-cuenta"]) {
+    for (const s of ["postura", "motivacion", "oportunidades", "preventa-interna", "fuera-de-alcance", "hallazgo", "compromiso", "notas-de-la-reunion", "puertas-adentro", "desviacion-no-visible", "party", "hecho-de-la-cuenta", "hecho-del-proyecto", "persona-de-hubspot", "ticket-abierto", "nota-del-equipo", "asunto-del-correo", "texto-del-correo", "compromiso-de-la-cuenta", "texto-de-la-nota", "autor-de-la-nota", "quien-decide-de-la-nota", "riesgo-de-la-nota", "monto-de-la-nota"]) {
       expect(t, s).toContain(S(s));
     }
     // Un hecho pendiente va rotulado como propuesto por la lectura y sin revisar; uno usado, tal cual.

@@ -36,6 +36,7 @@ import {
   type ContextoDeCasos,
 } from "./agente-pedido";
 import { idDelItem, type CasoDeUsoElegido, type DestinoDePropuesta, type EstadoDeExploracion, type ItemPropuesto } from "./contenido";
+import { ROTULO_PARA_LOS_CASOS } from "./lo-que-confirmo-el-equipo";
 
 export const NOMBRE_DE_LA_HERRAMIENTA_DE_PERSONALIZAR = "personalizar_caso";
 
@@ -50,6 +51,11 @@ export interface ContextoDePersonalizar {
   biblioteca: readonly ActividadLigera[];
   /** Lo que puede ver el cliente: dónde está cada equipo, lo que le falta, sus metas y retos. */
   exploracion: string;
+  /**
+   * Lo que confirmó el equipo de la empresa (cortado para el cliente) y lo que el cliente aceptó de su escala (etapa 1 del
+   * plan maestro de «Hablar con Nexus», 23 nov), o "".
+   */
+  confirmado?: string;
   /** Lo interno de la preventa: lo que dijo cada reunión leída, los hallazgos, «Lo que ya sabemos». */
   interno: string;
   /** Las minutas de sus reuniones más recientes (del chokepoint de sesiones). */
@@ -60,7 +66,7 @@ export interface ContextoDePersonalizar {
 
 /** Todo lo que leyó, para validar las cifras: un número que no está aquí no salió del cliente. */
 export function textoQueLeyo(ctx: ContextoDePersonalizar): string {
-  return [ctx.exploracion, ctx.interno, ctx.reuniones, ctx.caso.descripcion, ctx.caso.porQue, ...ctx.biblioteca.map((a) => a.nombre), ctx.ficha?.texto ?? ""].join("\n");
+  return [ctx.exploracion, ctx.confirmado ?? "", ctx.interno, ctx.reuniones, ctx.caso.descripcion, ctx.caso.porQue, ...ctx.biblioteca.map((a) => a.nombre), ctx.ficha?.texto ?? ""].join("\n");
 }
 
 export function pedidoDePersonalizar(ctx: ContextoDePersonalizar): Anthropic.Messages.MessageCreateParamsNonStreaming {
@@ -131,6 +137,7 @@ ${REGLAS_DE_LAS_ACTIVIDADES}
     fichaTexto +
     actuales +
     `=== LO QUE SE SABE (lo que puede ver el cliente) ===\n${ctx.exploracion || "(nada)"}\n\n` +
+    (ctx.confirmado ? `${ROTULO_PARA_LOS_CASOS}\n${ctx.confirmado}\n\n` : "") +
     `=== LO QUE SE SABE (interno) ===\n${ctx.interno || "(nada)"}\n\n` +
     `=== SUS REUNIONES MÁS RECIENTES (minutas) ===\n${ctx.reuniones || "(ninguna con minuta)"}\n\n` +
     `=== LA BIBLIOTECA DE ACTIVIDADES (las únicas que se pueden usar) ===\n${bibliotecaParaElAgente(ctx.biblioteca)}`;

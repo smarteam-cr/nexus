@@ -125,6 +125,14 @@ describe("la memoria de la cuenta", () => {
     expect(m.texto).toContain("(…recortado)");
     expect(m.partes.reduce((s, p) => s + p.caracteres, 0)).toBeLessThanOrEqual(TOPES_DE_LA_MEMORIA.cuenta);
   });
+
+  it("los topes de las partes caben en el total: una parte nueva no empuja afuera a las del final sin que se decida", () => {
+    const P = TOPES_DE_LA_MEMORIA.partes;
+    const deLaCuenta = P.ficha + P.equipo + P.procesos + P.historia + P.fueraDeAlcance + P.auditoria + P.preventa + P.hechos + P.personas + P.tickets + P.notasDelEquipo + P.comunicaciones + P.compromisosDeLaCuenta;
+    expect(deLaCuenta).toBeLessThanOrEqual(TOPES_DE_LA_MEMORIA.cuenta);
+    const delProyecto = P.minutas + P.compromisos + P.desviaciones + P.resultados + P.hechos;
+    expect(delProyecto).toBeLessThanOrEqual(TOPES_DE_LA_MEMORIA.proyecto);
+  });
 });
 
 describe("la memoria del proyecto", () => {
