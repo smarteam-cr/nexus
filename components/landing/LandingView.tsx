@@ -18,6 +18,7 @@
  * `.reveal` / `.hero-backdrop` dentro del contenedor.
  */
 import { useChatDeSeccion, SeccionEnPantallaProvider } from "@/components/asistente/chat-de-seccion";
+import { IconoDeSugerencia } from "@/components/ui/sistema";
 import { nombreParaElChat, schemaParaElChat } from "@/lib/canvas/capacidades-de-documento";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { isBlank } from "@/lib/landing/is-blank";
@@ -222,7 +223,10 @@ type DragHandleProps = Record<string, unknown> | null;
 /** Wrapper sortable de una sección (drag & drop). Hook incondicional adentro →
  *  solo se monta cuando el D&D está activo (modo edición con onReorder). */
 /**
- * Píldora «Cambiar con el asistente» del chrome de una sección.
+ * Píldora «✨ Mejorar con IA» del chrome de una sección (se llamaba «Cambiar»; Elías, 23 nov: el
+ * botón para pedirle un cambio a la IA se llama igual en toda la app). Abre el chat del documento con
+ * la sección puesta; pasar estos documentos al chat «Nexus» viene después (plan maestro de «Hablar
+ * con Nexus»).
  *
  * Reemplaza al cuadrito que reescribía al instante: ese pedía una instrucción y la escribía sin
  * vista previa, con otro motor y sin conversación. Ahora todo pedido de cambio pasa por la misma
@@ -235,15 +239,13 @@ function ChatDeSeccionBtn({ seccionKey, label }: { seccionKey: string; label: st
     <button
       type="button"
       className="stl-chat-seccion"
-      title={`Hablar con el asistente sobre «${label}»`}
-      aria-label={`Hablar con el asistente sobre la sección ${label}`}
+      title={`Mejorar «${label}» con IA`}
+      aria-label={`Mejorar con IA la sección ${label}`}
       onClick={() => abrirCon({ key: seccionKey, label })}
     >
-      {/* La burbuja del chat (2026-10-04): el botón se ve como los demás de Nexus, sin emoji. */}
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-        <path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12z" />
-      </svg>
-      Cambiar
+      {/* La chispa de «Mejorar con IA», la misma que en el resto de Nexus (23 nov; antes, la burbuja del chat). */}
+      <IconoDeSugerencia />
+      Mejorar con IA
     </button>
   );
 }

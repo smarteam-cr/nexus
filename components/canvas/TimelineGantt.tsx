@@ -1856,10 +1856,10 @@ export default function TimelineGantt({
                                   chat.abrirCon({ key: `fase:${idParaElChat(p)}`, label: p.name || "(sin nombre)", tipo: "fase" });
                                 }}
                                 className="flex items-center gap-1 text-[10px] font-semibold text-info-ink opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity hover:text-fg"
-                                title="Pídele al asistente un cambio en esta fase"
+                                title="Mejora esta fase con IA"
                               >
                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
-                                IA
+                                Mejorar con IA
                               </button>
                             )}
                             {onRegeneratePhase && (

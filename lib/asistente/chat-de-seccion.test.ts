@@ -219,12 +219,12 @@ describe("⭐ E4 P1 · el «IA» de una fase abre el chat del cronograma con esa
 
   it("⛔ revisión de E4 (#8) · los botones de cada fase se ven sin hover: con teclado y en pantallas táctiles", () => {
     /* `opacity-0 group-hover:opacity-100` solo: en Tailwind 4 el hover va dentro de `@media (hover: hover)`, así
-       que en una tableta el «IA» (la única forma de cambiar una nota que ya existe) no aparecía nunca, y con Tab
+       que en una tableta el «Mejorar con IA» de la fase (antes «IA»; la única forma de cambiar una nota que ya existe) no aparecía nunca, y con Tab
        se enfocaba un botón invisible. La edición que la pone en rojo: sacar `focus-visible:opacity-100` o
        `[@media(hover:none)]:opacity-100` de cualquiera de los tres. */
     const gantt = leer(GANTT);
     for (const titulo of [
-      'title="Pídele al asistente un cambio en esta fase"',
+      'title="Mejora esta fase con IA"',
       'title="Regenerar (rehacer) las tareas de esta fase con IA"',
       'title="Eliminar fase"',
     ]) {
