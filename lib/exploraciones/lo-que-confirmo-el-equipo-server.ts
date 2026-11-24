@@ -5,7 +5,10 @@
  * Recibe la CUENTA y el ALCANCE, nunca la sesión del navegador: quien llama ya verificó que la persona ve esa empresa
  * (la memoria la piden agentes que ya pasaron su guardia; los casos de uso, la ruta de la preventa; el conector de Claude
  * la usará como herramienta de lectura, con su propia verificación de la cuenta). Devuelve lo ya cortado por el alcance
- * (./lo-que-confirmo-el-equipo.ts › `paraElAlcance`): lo interno nunca sale de acá hacia un documento del cliente.
+ * (./lo-que-confirmo-el-equipo.ts › `paraElAlcance`): lo interno nunca sale de acá hacia un documento del cliente ni
+ * hacia el modelo que lo escribe. Desde el 24 nov, lo interno que la persona PIDE puede llegar a la página de La escala:
+ * lo escribe el modelo con las palabras del pedido y el código lo verifica contra el alcance interno
+ * (lib/pedirle-a-nexus/veracidad.ts), sin que el modelo lo lea de aquí.
  *
  * ⛔ Nunca mezcla empresas: las preventas se buscan por `clientId`, y los hechos piden la preventa Y la empresa (un hecho
  * que por error quedara con otra empresa no se lee; INV45 lo caza). Solo los hechos de una nota que sigue escrita.

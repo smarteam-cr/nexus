@@ -7,10 +7,12 @@
  * conversación. Cerrar el cajón no pierde nada: el pedido de cada lugar queda recordado mientras la página esté abierta
  * (lib/pedirle-a-nexus/recordado.ts).
  *
- * Arriba, el lugar (lo pone el botón: el Resumen, un área o una pieza; la pieza se puede quitar para pedir sobre toda la
- * página) y la caja para pedir. Debajo, la propuesta en el marco de siempre (`<AgentProposal>`): cada cambio con el antes y
- * el después, «Aplicar» y «Descartar» por pieza, y «Aplicar todo». Lo que escribió el equipo no se reemplaza sin preguntar:
- * «Aplicar todo» lo deja para que lo decidas una por una. Lo que la revisión del código descartó se ve, con el porqué.
+ * Arriba, el lugar (lo pone el botón: el Resumen o un área y, desde el 24 nov, la sección desde la que se pidió; la sección
+ * se puede quitar para pedir sobre toda la página) y la caja para pedir. Debajo, la propuesta en el marco de siempre
+ * (`<AgentProposal>`): cada cambio con el antes y el después, «Aplicar» y «Descartar» por pieza, y «Aplicar todo». Lo que
+ * escribió el equipo no se reemplaza sin preguntar, y lo interno que pediste llega con su aviso (`AVISO_DE_LO_INTERNO`):
+ * «Aplicar todo» deja los dos para que los decidas uno por uno, y «Aplicar» pregunta. Lo que la revisión del código
+ * descartó se ve, con el porqué.
  *
  * Aplicar escribe por el camino de la edición a mano (lib/exploraciones/escala-con-nexus-server.ts) y nunca publica: el
  * aviso dice que hay cambios que el cliente no ve, con «Deshacer». Si otra persona cambió una parte entretanto, no se aplica
@@ -20,17 +22,15 @@ import { useState, useSyncExternalStore } from "react";
 import { leerRecordado, recordar, SIN_PEDIDO, suscribirAlRecordado, type EstadoDelCambio, type PedidoRecordado } from "@/lib/pedirle-a-nexus/recordado";
 import { Alert, Button, ConfirmDialog, IconButton, Textarea } from "@/components/ui";
 import { AgentProposal } from "@/components/ai/AgentProposal";
-import { MAX_PEDIDO, NOMBRE_DEL_BOTON, type CambioParaAplicar, type CambioPropuesto, type Choque, type DeshacerDeNexus, type PropuestaDeNexus } from "@/lib/pedirle-a-nexus/contrato";
+import { AVISO_DE_LO_INTERNO, MAX_PEDIDO, NOMBRE_DEL_BOTON, type CambioParaAplicar, type CambioPropuesto, type Choque, type DeshacerDeNexus, type PropuestaDeNexus } from "@/lib/pedirle-a-nexus/contrato";
 import type { LugarEnLaEscala } from "@/lib/exploraciones/escala-con-nexus";
 
-/** La pieza desde la que se pidió (el botón al pasar por ella). */
-export interface FocoDelPedido {
-  clave: string;
-  nombre: string;
-}
-
-/** La clave del pedido recordado de un lugar de La escala (lib/pedirle-a-nexus/recordado.ts). */
-const claveDelPedido = (exploracionId: string, lugar: LugarEnLaEscala): string => `escala:${exploracionId}:${lugar.pagina === "resumen" ? "resumen" : `area:${lugar.areaId}`}`;
+/**
+ * La clave del pedido recordado de un lugar de La escala (lib/pedirle-a-nexus/recordado.ts). Cada sección tiene el suyo (24
+ * nov): lo pedido desde «Puntos clave» no aparece al abrir desde «Tu operación».
+ */
+export const claveDelPedido = (exploracionId: string, lugar: LugarEnLaEscala, seccion: string | null = null): string =>
+  `escala:${exploracionId}:${lugar.pagina === "resumen" ? "resumen" : `area:${lugar.areaId}`}${seccion ? `:${seccion}` : ""}`;
 
 /** El pedido recordado de un lugar (la misma referencia hasta que cambia: lo pide `useSyncExternalStore`). */
 function useRecordado(clave: string): PedidoRecordado {
@@ -55,6 +55,7 @@ function Cambio({ c, estado, aplicando, onAplicar, onDescartar }: { c: CambioPro
         <span className="text-[11px] text-fg-muted">{c.seccion}</span>
       </div>
       {c.aMano && estado === "pendiente" && <p className="mt-1 text-[11px] text-fg-secondary">La escribió tu equipo: te pregunto antes de reemplazarla.</p>}
+      {c.interno && <p className="mt-1 text-[11px] font-semibold text-warn-ink">{AVISO_DE_LO_INTERNO}</p>}
       {c.antes !== null && <p className="mt-1.5 whitespace-pre-line text-xs text-fg-muted line-through">{c.antes}</p>}
       {c.despues !== null && <p className="mt-1 whitespace-pre-line text-sm text-fg">{c.despues}</p>}
       <div className="mt-2 flex items-center gap-2">
@@ -89,7 +90,8 @@ export default function PedirleANexus({
   lugar: LugarEnLaEscala;
   /** «Resumen» o el nombre del área. */
   lugarNombre: string;
-  foco: FocoDelPedido | null;
+  /** La sección desde la que se pidió (lib/external/secciones-de-la-escala.ts); null: la página entera. */
+  foco: string | null;
   onQuitarFoco: () => void;
   onCerrar: () => void;
   /** El rótulo de `onCerrar`: dentro del cajón «Nexus», vuelve a la conversación. */
@@ -98,7 +100,7 @@ export default function PedirleANexus({
   alCambiar: () => void;
 }) {
   // El pedido de este lugar vive en el almacén del módulo (abajo): cerrar el cajón y volver a abrirlo lo trae como estaba.
-  const clave = claveDelPedido(exploracionId, lugar);
+  const clave = claveDelPedido(exploracionId, lugar, foco);
   const { pedido, pidiendo, error, propuesta, estados, aplicando, choques, hecho } = useRecordado(clave);
   /** El cambio de una pieza escrita por el equipo, esperando que la persona confirme. */
   const [aConfirmar, setAConfirmar] = useState<CambioPropuesto | null>(null);
@@ -110,7 +112,7 @@ export default function PedirleANexus({
     const r = await fetch(`/api/sales/exploraciones/${exploracionId}/escala/nexus`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lugar, pedido: texto, foco: foco?.clave ?? null }),
+      body: JSON.stringify({ lugar, pedido: texto, foco }),
     }).catch(() => null);
     const data = ((await r?.json().catch(() => ({}))) ?? {}) as { propuesta?: PropuestaDeNexus; error?: string };
     // Aunque el cajón se haya cerrado mientras Nexus pensaba: la respuesta queda para cuando se vuelva a abrir.
@@ -155,7 +157,8 @@ export default function PedirleANexus({
   };
 
   const pendientes = (propuesta?.cambios ?? []).filter((c) => (estados[c.clave] ?? "pendiente") === "pendiente");
-  const sinPreguntar = pendientes.filter((c) => !c.aMano);
+  // Lo escrito por el equipo y lo interno se deciden uno por uno, con su pregunta (24 nov: lo interno, como lo escrito a mano).
+  const sinPreguntar = pendientes.filter((c) => !c.aMano && !c.interno);
   const descartar = (c: CambioPropuesto) => recordar(clave, (e) => ({ estados: { ...e.estados, [c.clave]: "descartado" } }));
   const setPedido = (texto: string) => recordar(clave, { pedido: texto });
   const descartarTodo = () => recordar(clave, { propuesta: null, estados: {} });
@@ -169,7 +172,7 @@ export default function PedirleANexus({
             <span>Página de La escala › {lugarNombre}</span>
             {foco && (
               <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-muted px-2 py-0.5 text-fg-secondary">
-                › {foco.nombre}
+                › {foco}
                 <IconButton aria-label="Pedir sobre toda la página" icon={<span aria-hidden="true">×</span>} onClick={onQuitarFoco} />
               </span>
             )}
@@ -230,7 +233,7 @@ export default function PedirleANexus({
           subtitle={
             propuesta.cambios.length
               ? sinPreguntar.length < pendientes.length
-                ? "«Aplicar todo» deja para el final lo que escribió tu equipo: eso lo decides una por una."
+                ? "«Aplicar todo» deja para el final lo que escribió tu equipo y lo interno de la venta: eso lo decides uno por uno."
                 : "Revisa cada cambio: aplica uno por uno o todos juntos."
               : undefined
           }
@@ -250,7 +253,7 @@ export default function PedirleANexus({
                   c={c}
                   estado={estados[c.clave] ?? "pendiente"}
                   aplicando={aplicando}
-                  onAplicar={() => (c.aMano ? setAConfirmar(c) : void aplicar([c]))}
+                  onAplicar={() => (c.aMano || c.interno ? setAConfirmar(c) : void aplicar([c]))}
                   onDescartar={() => descartar(c)}
                 />
               ))}
@@ -279,9 +282,18 @@ export default function PedirleANexus({
           setAConfirmar(null);
           if (c) void aplicar([c]);
         }}
-        title="¿Reemplazar lo que escribió tu equipo?"
-        description={aConfirmar ? `«${aConfirmar.nombre}» la escribió una persona. Si aplicas, queda lo que propone Nexus (y lo de antes, en el historial).` : ""}
-        confirmLabel="Sí, reemplazarla"
+        title={aConfirmar?.interno ? "¿Llevar algo interno de la venta a la página?" : "¿Reemplazar lo que escribió tu equipo?"}
+        description={
+          aConfirmar
+            ? [
+                aConfirmar.interno ? `${AVISO_DE_LO_INTERNO} Aplicar no publica: queda en «${aConfirmar.nombre}» hasta que alguien publique.` : null,
+                aConfirmar.aMano ? `«${aConfirmar.nombre}» la escribió una persona. Si aplicas, queda lo que propone Nexus (y lo de antes, en el historial).` : null,
+              ]
+                .filter(Boolean)
+                .join(" ")
+            : ""
+        }
+        confirmLabel={aConfirmar?.interno ? "Sí, llevarlo a la página" : "Sí, reemplazarla"}
       />
     </section>
   );

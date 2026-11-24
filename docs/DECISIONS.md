@@ -16437,7 +16437,9 @@ todavía: cada etapa arranca cuando él lo dice.
   vueltas y 20 preguntas al día).
 - **Se mantiene:** nada se publica solo; el modelo nunca elige la empresa (el lugar lo fija y verifica el servidor);
   las reuniones solo por el chokepoint de sesiones; la escalera de peso decide qué manda y nada de más peso se pisa en
-  silencio; lo interno nunca llega a un documento que ve el cliente, y el corte lo hace el código.
+  silencio; lo interno nunca llega a un documento que ve el cliente, y el corte lo hace el código. (Enmendado el 24 nov:
+  entra si la persona lo pide con todas sus letras y Nexus lo tiene de la cuenta, marcado; ver «La prueba de Elías del
+  24 nov», abajo.)
 - **Estado del 22 nov:** los SQL del 21 nov (hechos de una nota, historial de versiones) corrieron y «Hablar con Nexus»
   y el historial están en producción (3deb62b0); las dos notas «resumelos» de Cemaco · Ecuador se borraron.
 - **Etapa 0, construida el 22 nov (sin SQL):**
@@ -16571,6 +16573,37 @@ todavía: cada etapa arranca cuando él lo dice.
     equipo y lo que aceptó el cliente (etapa 1). Aplicar sigue siendo el PATCH de siempre (`casoDeUso`), marcado
     `deNexus` con el pedido: la ruta deja lo de antes y «Cambiado con Nexus» en el historial del caso (pieza `caso:<id>`).
     El caso todavía no tiene popup de historial.
+- **La prueba de Elías del 24 nov sobre la página interna de La escala (sin SQL).** Enmienda lo de arriba en dos puntos.
+  - **«✨ Mejorar con IA» va por sección, no por texto**, como el botón de cada sección de los documentos del cliente. Se
+    fue el botón que salía al pasar por cada pieza; va uno en el encabezado de cada sección que tiene algo que Nexus pueda
+    cambiar (en el Resumen: arriba, el problema principal, los puntos clave, tu operación, uno por equipo en su fila y lo que
+    falta validar; en un área, de «Resultado general» a «Cómo está cada parte»). El de toda la página se queda. La sección
+    viaja por su NOMBRE, uno solo para la vista y para las piezas (`lib/external/secciones-de-la-escala.ts`): el servidor le
+    pasa al modelo SOLO las piezas de esa sección (`piezasDeLaSeccion`) y la revisión mira esas mismas; las cifras de toda
+    la página siguen valiendo. *Por qué el nombre y no una clave:* la pieza ya decía su sección para el modelo; con dos
+    fuentes, el botón podía pedir una sección que ninguna pieza dice. Lo pedido queda recordado por sección.
+  - **Lo interno entra si la persona lo pide** (Elías: «sí debería poner lo que el usuario de Nexus diga, siempre y cuando
+    lo tenga en su contexto»; hasta ese día no llegaba «aunque se pida»). Una palabra interna nueva (`TEMAS_INTERNOS`, acotada
+    a la venta: el presupuesto, nuestro precio o un descuento que les damos, quién decide o firma la compra, objeciones,
+    posturas o lo que alguien no quiere, la competencia) o una frase de una nota del equipo llega solo si: el pedido nombra
+    el tema y no pide quitar ni dejar de mencionar nada (con eso, lo interno se pide aparte); TODO lo nuevo de la oración
+    sale de las palabras del pedido (el modelo no lee las notas: una causa o una fecha que agrega es inventada); y Nexus lo
+    tiene de la cuenta (el tema, la mayoría de lo nuevo, cada número con su palabra, y la nota no dice lo contrario).
+    Llega marcado, con «Esto es interno de la venta y lo verá el cliente al publicar»; como lo escrito a mano, queda fuera
+    de «Aplicar todo» y «Aplicar» pregunta. Se compara palabra por palabra: que la pieza ya dijera «presupuesto» no habilita
+    otra palabra interna. La regla del modelo nombra los temas desde la misma lista (`NOMBRES_DE_LO_INTERNO`). *Por qué
+    acotada:* «precios», «firma», «prefiere» o «inversión» solos son el vocabulario de la escala («tu cliente prefiere
+    comprar por WhatsApp»); marcarlos frenaba ediciones normales. *Lo que no garantiza:* el respaldo y la contradicción se
+    miran por palabras, no por sentido; un tema fuera de la lista («el gerente duda») llega como un cambio normal y lo
+    frena solo la regla del modelo, como antes del 24 nov; y lo que Nexus «tiene de la cuenta» son las notas confirmadas y
+    sus hechos, no las transcripciones.
+  - **La pantalla, más limpia:** sin «Contexto adicional» (decía «sin agente propio» y no hacía nada); arriba, UNA línea
+    que dice si hay reuniones de después de la última vez que se ubicó la escala o de que se armó el Resumen, con el botón
+    de siempre, «Ubicar con las reuniones» (`lib/exploraciones/linea-de-la-escala.ts`). Reemplaza la fila «1 Ubicar · 2
+    Confirmar · 3 Armar», el objetivo de la primera venta, la frase de lo explorado y «Armado el … Cada texto se cambia con
+    un clic». Qué leyó la última vez sale de los rótulos que guarda la corrida («Reunión del …: título»): una de las que
+    leería hoy que no está ahí es nueva, aunque sea de antes (su transcripción llegó tarde). «De dónde sale» pasa a un
+    ícono (i) con las citas en un globo propio de la página (el de la app es texto plano de hasta 300 px).
 
 ## Las lecturas de reuniones que no miraban el cliente se cierran (2026-11-23)
 

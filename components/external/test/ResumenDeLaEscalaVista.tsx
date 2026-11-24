@@ -53,6 +53,7 @@ import {
   BAJADA_DEL_RESUMEN,
 } from "@/lib/external/pagina-del-resumen";
 import { CLAVES, huella, quitadaDeLaPagina, textoDeLaPagina, type TextosDeLaPagina } from "@/lib/external/textos-de-la-pagina";
+import { SECCIONES_DEL_RESUMEN as SECCION, seccionDelEquipo } from "@/lib/external/secciones-de-la-escala";
 import AnimacionesDelResultado from "./AnimacionesDelResultado";
 import type { EdicionDeUnTextoFijo } from "./ResultadoDelTestVista";
 import { ArribaDeLaEscala, PESTANA_DEL_RESUMEN, type PestanaDeLaEscala } from "./ArribaDeLaEscala";
@@ -81,6 +82,11 @@ export interface EdicionDelResumen {
   fijo?: (o: EdicionDeUnTextoFijo) => ReactNode;
   /** «Confirmar» una cifra que dijo Smarteam y la empresa no corrigió (18 nov). `clave`: la de la cifra. */
   confirmar?: (clave: string) => ReactNode;
+  /**
+   * «✨ Mejorar con IA» de una sección (24 nov), en su encabezado: abre el chat «Nexus» con la sección como chip. La sección
+   * va por su nombre de lib/external/secciones-de-la-escala.ts; sin nada que Nexus pueda cambiar ahí, no devuelve nada.
+   */
+  mejorar?: (seccion: string) => ReactNode;
 }
 
 /** La señal de cómo se sabe una cifra: un símbolo y su texto, nunca solo el color. «Por confirmar» va sin signo. */
@@ -204,6 +210,8 @@ export default function ResumenDeLaEscalaVista({
   /** Un párrafo con un texto fijo: adentro es un editor (un bloque), que no puede ir dentro de un <p>. */
   const P = edicion?.fijo ? "div" : "p";
   const deDonde = (citas: readonly CitaDelResumen[] | undefined, o?: { noSostiene?: boolean }) => (edicion?.deDonde && citas ? edicion.deDonde(citas, o) : null);
+  /** «✨ Mejorar con IA» en el encabezado de una sección (solo adentro). */
+  const mejorar = (seccion: string) => edicion?.mejorar?.(seccion) ?? null;
   /** «Ver diagnóstico de Servicio →»: su pestaña (un botón, como en los otros diseños). */
   const alDetalle = (areaId: string, contenido: ReactNode) =>
     edicion ? (
@@ -334,6 +342,7 @@ export default function ResumenDeLaEscalaVista({
           <h3>{x.claveDelNombre ? texto({ clave: x.claveDelNombre, valor: x.nombre, vacio: "+ Nombre del equipo", etiqueta: "Nombre del equipo", tope: TOPE_DE_UN_NOMBRE, quitar: "Quitar este equipo" }) : x.nombre}</h3>
           {x.nombre !== t.nombre && <span className="re-parte-de">Parte de {t.nombre}</span>}
           <Nivel letra={nivelDe(t)} nombre={t.nivelNombre} />
+          {mejorar(seccionDelEquipo(x.nombre))}
         </div>
         <div className="re-equipo-medio">
           {quienes && <div className="re-quienes">{pieza(quienes, `Quiénes son en ${x.nombre}`)}</div>}
@@ -400,6 +409,7 @@ export default function ResumenDeLaEscalaVista({
           <h3>{x.claveDelNombre ? texto({ clave: x.claveDelNombre, valor: x.nombre, vacio: "+ Nombre del equipo", etiqueta: "Nombre del equipo", tope: TOPE_DE_UN_NOMBRE, quitar: "Quitar este equipo" }) : x.nombre}</h3>
           {x.nombre !== t.nombre && <span className="re-parte-de">Parte de {t.nombre}</span>}
           <Nivel letra={nivelDe(t)} nombre={t.nivelNombre} />
+          {mejorar(seccionDelEquipo(x.nombre))}
         </div>
         <div className="re-equipo-medio">
           {costo && (
@@ -571,6 +581,7 @@ export default function ResumenDeLaEscalaVista({
           <div className="re-hero-texto">
             <p className="re-ceja rd-entra">
               {nombreDeLaEmpresa} <span>/ Diagnóstico</span>
+              {mejorar(SECCION.arriba)}
             </p>
             <Titular className="re-titular rd-entra">
               {/* Atado a sus números: al rehacer el Resumen cambian, y lo escrito para los de antes no queda pegado. */}
@@ -629,6 +640,7 @@ export default function ResumenDeLaEscalaVista({
           <section className="re-parte" data-revela="" aria-labelledby={conTesis ? "re-t-problema" : undefined}>
             <p className="re-ceja">
               {nProblema} <span>/ {conTesis ? "El problema principal" : "Tu negocio"}</span>
+              {mejorar(SECCION.problema)}
             </p>
             <div className={`re-problema${tamano ? "" : " re-problema-sin-cifra"}`}>
               <div className="re-hero-texto">
@@ -680,6 +692,7 @@ export default function ResumenDeLaEscalaVista({
           <section className="re-parte" data-revela="" aria-labelledby="re-t0">
             <p className="re-ceja">
               {nPuntos} <span>/ Puntos clave</span>
+              {mejorar(SECCION.puntos)}
             </p>
             <h2 className="re-titulo" id="re-t0">
               {fijo("titulo.puntos", "Lo más crítico hoy.", "Título de los puntos clave")}
@@ -711,6 +724,7 @@ export default function ResumenDeLaEscalaVista({
           <section className="re-parte" data-revela="" aria-labelledby="re-t2">
             <p className="re-ceja">
               {nRecorrido} <span>/ Tu operación</span>
+              {mejorar(SECCION.operacion)}
             </p>
             <h2 className="re-titulo" id="re-t2">
               {resumen.claveDelTituloDelRecorrido
@@ -811,6 +825,7 @@ export default function ResumenDeLaEscalaVista({
         {(pendientes.length > 0 || (edicion && resumen.pendienteNuevo)) && (
           <section className="re-cierre" data-revela="" aria-labelledby="re-t4">
             <h2 id="re-t4">{fijo("titulo.cierre", "Tu mirada completa el diagnóstico.", "Título del cierre")}</h2>
+            {mejorar(SECCION.falta)}
             <P className="re-p">{fijo("cierre.bajada", "Antes de avanzar, confirmemos contigo:", "La frase del cierre")}</P>
             <ul>
               {pendientes.map((p) => (

@@ -85,13 +85,13 @@ import SugerenciasDeAsociacion from "./SugerenciasDeAsociacion";
 
 /**
  * El «Contexto adicional» de cada pieza de la preventa (2026-10-09): Preparación (sus fuentes y sus
- * instrucciones), Casos de uso (no lee reuniones: lee el lienzo) y La escala (sin agente propio). Las
- * demás no lo llevan: Exploración tiene su página de inicio, y el Resumen y la Propuesta no leen nada.
+ * instrucciones) y Casos de uso (no lee reuniones: lee el lienzo). Las demás no lo llevan: Exploración
+ * tiene su página de inicio, el Resumen y la Propuesta no leen nada, y La escala dejó de llevarlo el 24 nov
+ * (decía «sin agente propio» y no hacía nada; lo que la pone al día está en su página).
  */
 const MODO_DEL_CONTEXTO: Partial<Record<PasoDelLienzoUI, ModoDelContexto>> = {
   preparacion: "preparacion",
   casos: "casos",
-  escala: "sinAgente",
 };
 import PasoPropuesta from "./PasoPropuesta";
 import Resumen, { lineasDe } from "./Resumen";

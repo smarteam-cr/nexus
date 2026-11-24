@@ -25,9 +25,11 @@
  *     lo que cuesta quedarse así, los casos, los riesgos, «Ver detalles», la bajada y lo que hicimos del Resumen, el pie.
  *     Se editan en su lugar (`TextoFijo`, operación `textoDeLaPagina`) y los casos, los riesgos y lo que arma la página
  *     se pueden quitar para el cliente (lib/external/textos-de-la-pagina.ts).
- *   · «✨ Mejorar con IA» (23 nov, etapa 3 del plan maestro de «Hablar con Nexus»): en el Resumen, en cada área y al pasar
- *     por cada pieza abre el cajón «Nexus» con el lugar como chip (HablarConNexus.tsx): un pedido, una propuesta por pieza,
- *     que se aplica por estas mismas operaciones. La página de cada área tiene su historial (HistorialDelArea.tsx).
+ *   · «✨ Mejorar con IA» (23 nov, etapa 3 del plan maestro de «Hablar con Nexus»): en el Resumen y en cada área (la página
+ *     entera) y, desde el 24 nov, en el encabezado de cada sección (antes era un botón por pieza, al pasar el cursor; Elías:
+ *     «por sección, no por texto», como los documentos del cliente) abre el cajón «Nexus» con el lugar y la sección como
+ *     chip (HablarConNexus.tsx): un pedido, una propuesta por pieza de esa sección, que se aplica por estas mismas
+ *     operaciones. La página de cada área tiene su historial (HistorialDelArea.tsx).
  * Nada de esto lo ve el cliente hasta «Publicar» (16 nov, PublicarLaEscala.tsx, al lado de «Acceso»): el enlace sirve la
  * foto publicada.
  * Arriba de la página, fuera de ella: la línea del área (si la ve el cliente, cuánto tiene, sumarla o sacarla) y el
@@ -46,9 +48,8 @@ import type { Letra } from "@/lib/escala/documento/tipos";
 import { MAX_CONTEXTO_DE_LA_ESCALA, MAX_TEXTO_DEL_RADAR } from "@/lib/exploraciones/contenido";
 import { textoVigenteDelRadar } from "@/lib/exploraciones/escala-para-el-cliente";
 import type { PaginaParaElCse } from "@/lib/exploraciones/escala-para-el-cliente-server";
-import { diaCorto } from "@/lib/exploraciones/fechas";
 import { MAX_TEXTO_DE_LA_PAGINA } from "@/lib/external/textos-de-la-pagina";
-import type { CitaDelResumen } from "@/lib/exploraciones/resumen-de-la-escala";
+import DeDondeSale from "./DeDondeSale";
 import { chequeoDelMapa, cuentaDelArea, fraseDeLaCuenta } from "@/lib/exploraciones/mapa";
 import { AL_LUGAR, DEL_LUGAR, useLienzo } from "./contexto";
 import ReunionesMalLeidas from "./ReunionesMalLeidas";
@@ -61,6 +62,7 @@ import { abrirNexusEnLaPreventa, EVENTO_LA_ESCALA_CAMBIO_CON_NEXUS } from "@/lib
 import { NOMBRE_DEL_BOTON } from "@/lib/pedirle-a-nexus/contrato";
 import HistorialDelArea from "./HistorialDelArea";
 import { conLoQueCuestaDelArea, piezasDelArea, piezasDelResumen, type LugarEnLaEscala, type PiezaDeLaEscala } from "@/lib/exploraciones/escala-con-nexus";
+import { esDeLaSeccion } from "@/lib/external/secciones-de-la-escala";
 
 /** Lo que responde la ruta de la descripción (la sesión que la hizo): de dónde sale la de cada área. */
 interface DescripcionesDeLaEscala {
@@ -221,31 +223,10 @@ function ContextoParaLaDescripcion({ areaId, nombre, onRehacer, rehaciendo }: { 
 }
 
 /**
- * De dónde sale un dato rojo o un hallazgo: lo dicho, quién y cuándo (y quién lo confirmó). Solo adentro. `noSostiene`:
- * la cifra se cambió a mano y la cita ya no la dice (la cita queda para corregirla con lo que dijo la empresa).
- */
-function DeDondeSale({ citas, noSostiene = false }: { citas: readonly CitaDelResumen[]; noSostiene?: boolean }) {
-  if (!citas.length) return <p className="rs-citas-k">Lo escribió tu equipo: no tiene cita.</p>;
-  return (
-    <div className="rs-citas">
-      <p className="rs-citas-k">{noSostiene ? "Solo lo ves tú · la cita que tenía (no dice esta cifra):" : "Solo lo ves tú · de dónde sale:"}</p>
-      <ul>
-        {citas.map((c) => (
-          <li key={`${c.reunion}-${c.turno}`}>
-            «{c.texto}» <span>{c.delEquipo ? `— lo dijo ${c.delEquipo.nombre} del equipo, ${diaCorto(c.delEquipo.en)}` : `— ${c.hablante}, ${diaCorto(c.fecha)}`}</span>
-            {c.confirmo && <span> · lo confirmó {c.confirmo.hablante}: «{c.confirmo.texto}»</span>}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-/**
  * Un texto fijo de la página, editable en su lugar (16 nov). Guardar el de siempre (o vaciarlo) lo devuelve al de
  * siempre; «Quitar para el cliente» deja la pieza fuera de la página (se ve tachada adentro, con «Volver a mostrarla»).
  */
-function TextoFijo({ o, guardar, pedir }: { o: EdicionDeUnTextoFijo; guardar: (clave: string, texto: string | null) => Promise<boolean>; pedir?: () => void }) {
+function TextoFijo({ o, guardar }: { o: EdicionDeUnTextoFijo; guardar: (clave: string, texto: string | null) => Promise<boolean> }) {
   if (o.quitar?.quitada)
     return (
       <span className="rd-quitada">
@@ -266,7 +247,6 @@ function TextoFijo({ o, guardar, pedir }: { o: EdicionDeUnTextoFijo; guardar: (c
       max={MAX_TEXTO_DE_LA_PAGINA}
       etiqueta={o.etiqueta}
       quitar={cambiado ? "Volver al texto de siempre" : null}
-      pedir={pedir}
       acciones={
         o.quitar
           ? () => (
@@ -360,8 +340,9 @@ export default function PaginaDeLaEscala() {
   };
 
   /* «✨ Mejorar con IA» (23 nov): las piezas de esta página, las mismas que lee el servidor (lib/exploraciones/escala-con-nexus.ts).
-     El botón al pasar por un texto sale solo en las piezas que Nexus puede cambiar. Abre el cajón «Nexus» con el lugar
-     puesto como chip (HablarConNexus.tsx): la propuesta por pieza se ve allá, y al aplicarla la página se vuelve a pedir. */
+     Desde el 24 nov hay uno en el encabezado de cada sección que tiene algo que Nexus pueda cambiar (`mejorar`), además del
+     de toda la página. Abre el cajón «Nexus» con el lugar y la sección como chip (HablarConNexus.tsx): la propuesta por
+     pieza se ve allá, y al aplicarla la página se vuelve a pedir. */
   const lugarDeAqui: LugarEnLaEscala = enElResumen ? { pagina: "resumen" } : { pagina: "area", areaId: r.areaId };
   const nombreDeAqui = enElResumen ? "Resumen" : r.areaNombre;
   const piezasDeAqui: PiezaDeLaEscala[] = enElResumen
@@ -374,11 +355,20 @@ export default function PaginaDeLaEscala() {
         conLoQueCuesta: conLoQueCuestaDelArea(pagina.resumen, r.areaId),
         fecha: pagina.fecha,
       });
-  const nombreDePieza = new Map(piezasDeAqui.map((p) => [p.clave, p.nombre]));
-  const pedirSobre = (clave: string) =>
-    puedeEditar && nombreDePieza.has(clave)
-      ? () => abrirNexusEnLaPreventa({ exploracionId: exp.id, escala: { lugar: lugarDeAqui, nombre: nombreDeAqui, foco: { clave, nombre: nombreDePieza.get(clave)! } } })
-      : undefined;
+  const seccionesDeAqui = [...new Set(piezasDeAqui.map((p) => p.seccion))];
+  const mejorar = puedeEditar
+    ? (seccion: string) =>
+        seccionesDeAqui.some((s) => esDeLaSeccion(s, seccion)) ? (
+          <button
+            type="button"
+            className="rd-mejorar"
+            aria-label={`Mejorar con IA la sección ${seccion}`}
+            onClick={() => abrirNexusEnLaPreventa({ exploracionId: exp.id, escala: { lugar: lugarDeAqui, nombre: nombreDeAqui, foco: seccion } })}
+          >
+            {NOMBRE_DEL_BOTON}
+          </button>
+        ) : null
+    : undefined;
   /** Lo que cambia la página por su propia ruta (el historial del área): el lienzo, la página y las descripciones al día. */
   const alCambiarLaPagina = () => {
     void recargar();
@@ -398,7 +388,7 @@ export default function PaginaDeLaEscala() {
     if (ok) otraVez();
     return ok;
   };
-  const fijo = puedeEditar ? (o: EdicionDeUnTextoFijo) => <TextoFijo o={o} guardar={guardarFijo} pedir={pedirSobre(`t/${o.clave}`)} /> : undefined;
+  const fijo = puedeEditar ? (o: EdicionDeUnTextoFijo) => <TextoFijo o={o} guardar={guardarFijo} /> : undefined;
 
   if (enElResumen) {
     const armar = async () => {
@@ -435,7 +425,6 @@ export default function PaginaDeLaEscala() {
             max={o.tope}
             etiqueta={o.etiqueta}
             quitar={o.quitar ?? null}
-            pedir={pedirSobre(`r/${o.clave}`)}
             onGuardar={async (texto) => {
               const ok = await cambiar([{ op: "resumenDeLaEscala", clave: o.clave, texto }]);
               if (ok) otraVez();
@@ -447,6 +436,7 @@ export default function PaginaDeLaEscala() {
         ),
       deDonde: (citas, d) => <DeDondeSale citas={citas} noSostiene={d?.noSostiene} />,
       fijo,
+      mejorar,
       // Una cifra que dijo Smarteam y la empresa no corrigió (18 nov): «Confirmar» la deja como dicha por la empresa.
       confirmar:
         puedeEditar && res.at
@@ -469,26 +459,24 @@ export default function PaginaDeLaEscala() {
     const cifras = res.tarjetas.flatMap((t) => t.subequipos.flatMap((x) => [...(x.costo ? [x.costo] : []), ...x.cifras]));
     const queNoSalen = cifras.filter((d) => d.noSale).length;
     const queSalen = cifras.length - queNoSalen;
+    /* Lo que hay que saber del Resumen, solo si hay algo (24 nov, Elías: «demasiada información»). Se fueron «Resumen · lo
+       primero que ve el cliente… Sale de los equipos que ve» y «Armado el … Cada texto se cambia con un clic»: cuándo se
+       armó y si hay reuniones nuevas lo dice la línea de arriba de La escala (PasoEscala › `LineaDeArriba`). */
+    const avisosDelResumen = [
+      !res.at && "Todavía no hay Resumen: Nexus lo arma con las transcripciones de las sesiones (tarda unos tres minutos). Sin él, el cliente ve solo cada equipo con su nivel.",
+      res.at && res.formato === 1 && "Está armado con el formato del 9 nov (datos rojos y hallazgos): «Rehacer con IA» lo pasa al resumen ejecutivo y conserva lo que escribiste.",
+      res.at && res.formato === 2 && !cifras.length && "Ninguna cifra pasó la verificación: las tarjetas dicen qué dato falta.",
+      queNoSalen > 0 &&
+        (queSalen
+          ? `${queNoSalen === 1 ? "Una cifra no sale" : `${queNoSalen} cifras no salen`} al cliente porque su cita no la sostiene: está marcada abajo.`
+          : "Ninguna cifra sale al cliente: sus citas no las sostienen. Están marcadas abajo."),
+    ].filter((x): x is string => !!x);
     return (
       <div data-recorrido="preventa.escala.areas" className="flex flex-col gap-2">
         {/* La franja interna: lo que solo ve el equipo va acá, FUERA del marco que imita la página del cliente. */}
         <div className="flex flex-col gap-2 text-xs text-fg-muted">
-          <p>
-            <span className="font-semibold text-fg">Resumen</span> · lo primero que ve el cliente al abrir el enlace. Sale de los equipos que ve:{" "}
-            {pagina.areas.filter((a) => pagina.alCliente.includes(a.id)).map((a) => a.nombre).join(" · ") || "ninguno todavía (elígelos en «Acceso»)"}.
-          </p>
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <p className="min-w-0 flex-1">
-              {res.at
-                ? `Armado el ${diaCorto(res.at)} con lo que se habló en las sesiones. Cada texto se cambia con un clic; lo que escribas se queda al rehacerlo.`
-                : "Todavía no hay Resumen: Nexus lo arma con las transcripciones de las sesiones (tarda unos tres minutos). Sin él, el cliente ve solo cada equipo con su nivel."}
-              {res.at && res.formato === 1 && " Está armado con el formato del 9 nov (datos rojos y hallazgos): «Rehacer con IA» lo pasa al resumen ejecutivo y conserva lo que escribiste."}
-              {res.at && res.formato === 2 && !cifras.length && " Ninguna cifra pasó la verificación: las tarjetas dicen qué dato falta."}
-              {queNoSalen > 0 &&
-                (queSalen
-                  ? ` ${queNoSalen === 1 ? "Una cifra no sale" : `${queNoSalen} cifras no salen`} al cliente porque su cita no la sostiene: está marcada abajo.`
-                  : " Ninguna cifra sale al cliente: sus citas no las sostienen. Están marcadas abajo.")}
-            </p>
+            <p className="min-w-0 flex-1">{avisosDelResumen.join(" ")}</p>
             {puedeEditar && (
               <div className="flex flex-wrap items-center gap-2">
                 {res.at && botonDePedirle}
@@ -602,7 +590,6 @@ export default function PaginaDeLaEscala() {
           max={TOPE_DE_LA_DESCRIPCION}
           etiqueta="Descripción de «Resultado general»"
           quitar={descripcion.origen === "mano" ? "Quitar lo escrito" : null}
-          pedir={pedirSobre(`desc/${r.areaId}`)}
           origen={
             <>
               {ORIGEN[descripcion.origen]}
@@ -630,7 +617,6 @@ export default function PaginaDeLaEscala() {
               max={MAX_TEXTO_DEL_RADAR}
               etiqueta={`Lo que dice la tarjeta de ${d.nombre}`}
               quitar={vigente ? "Volver al texto de la escala" : null}
-              pedir={pedirSobre(`radar/${id}`)}
               acciones={(poner) => (
                 <>
                   {deNexus && (
@@ -683,6 +669,7 @@ export default function PaginaDeLaEscala() {
       ? "Así lo ve el cliente. Arrastra una parte por su eje para cambiar su nivel; en su tarjeta, toca el texto para cambiarlo. Tócala en el radar para ver lo interno."
       : "Así lo ve el cliente. Toca una parte para ver lo interno.",
     fijo,
+    mejorar,
   };
 
   return (

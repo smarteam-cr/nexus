@@ -41,11 +41,11 @@ import {
   type QuienPide,
   type ResultadoDeAplicar,
 } from "@/lib/pedirle-a-nexus/contrato";
-import { revisarLaPropuesta, type PropuestoCrudo } from "@/lib/pedirle-a-nexus/veracidad";
+import { NOMBRES_DE_LO_INTERNO, revisarLaPropuesta, type PropuestoCrudo } from "@/lib/pedirle-a-nexus/veracidad";
 import { voseoDelResumen } from "./resumen-de-la-escala";
 import { inicioDelDiaCr } from "@/lib/ai/presupuesto";
 import type { EstadoDeExploracion } from "./contenido";
-import { conLoQueCuestaDelArea, guiaDeLaPieza, nombreDelLugar, operacionDelCambio, piezasDelArea, piezasDelResumen, type LugarEnLaEscala, type PiezaDeLaEscala } from "./escala-con-nexus";
+import { conLoQueCuestaDelArea, guiaDeLaPieza, nombreDelLugar, operacionDelCambio, piezasDelArea, piezasDeLaSeccion, piezasDelResumen, type LugarEnLaEscala, type PiezaDeLaEscala } from "./escala-con-nexus";
 import { paginaParaElCse, type PaginaParaElCse } from "./escala-para-el-cliente-server";
 import { bloqueDeLoQueConfirmoElEquipo, paraElAlcance } from "./lo-que-confirmo-el-equipo";
 import { loQueConfirmoElEquipo } from "./lo-que-confirmo-el-equipo-server";
@@ -121,7 +121,7 @@ Cada sección del documento es UNA PIEZA de la página, con su clave, dónde est
 - Para AGREGAR una pieza nueva, escribe en la pieza marcada «lugar para AGREGAR» de esa lista (una por lista).
 - Cambia SOLO lo que el pedido pide, lo mínimo que lo cumple. Si señala una pieza, empieza por ella.
 - NUNCA inventes cifras, nombres de sistemas ni fechas: usa solo lo que dice la página, lo que el equipo confirmó (abajo) y lo que diga el pedido. Si el pedido trae una cifra, úsala tal cual.
-- LO INTERNO NUNCA va en la página, aunque te lo pidan: el presupuesto, el precio, quién decide o firma, las objeciones, lo que piensa o no quiere una persona, la competencia. Si el pedido es eso, no cambies nada y explícalo en "__reasoning" en una frase.
+- LO INTERNO de la venta (${NOMBRES_DE_LO_INTERNO}) va en la página SOLO si el pedido lo pide con todas sus letras: entonces escríbelo con las palabras del pedido, sin agregar nada, y dilo en "__reasoning" (el cliente lo verá al publicar). Si el pedido no lo nombra, o pide que no esté, nunca lo escribas. Cualquier otra cosa de la venta que no sea del cliente (lo que se negocia, lo que opina una persona de la empresa), tampoco.
 - Las piezas «la escribió el equipo» las cambias solo si el pedido las nombra o es imposible cumplirlo sin ellas.
 - Respeta el largo de cada pieza. Frases cortas y concretas, sin superlativos ni signos de exclamación.
 - "__reasoning": una o dos frases para la persona del equipo (no para el cliente) de qué cambiaste y por qué.`;
@@ -133,8 +133,9 @@ Cada sección del documento es UNA PIEZA de la página, con su clave, dónde est
 const ESQUEMA_DE_LA_PIEZA = { type: "object", properties: { texto: { type: "string" }, quitar: { type: "string" } } } as const;
 
 /**
- * Un pedido, una propuesta. NO escribe en la página: la persona aplica. `foco`: la clave de la pieza desde la que se pidió
- * (el botón al pasar por una pieza); se verifica que sea de este lugar.
+ * Un pedido, una propuesta. NO escribe en la página: la persona aplica. `foco`: la SECCIÓN desde la que se pidió (24 nov: el
+ * botón del encabezado de cada sección, lib/external/secciones-de-la-escala.ts). Con foco, al modelo le llegan solo las
+ * piezas de esa sección: no puede cambiar otra cosa. Si la sección ya no tiene piezas en este lugar, 409.
  */
 export async function proponerEnLaEscala(quien: QuienPide, d: DocumentoDeLaEscala & { pedido: string; foco?: string | null }): Promise<{ ok: true; propuesta: PropuestaDeNexus } | Falla> {
   const pedido = d.pedido.replace(/\s+/g, " ").trim().slice(0, MAX_PEDIDO);
@@ -143,10 +144,12 @@ export async function proponerEnLaEscala(quien: QuienPide, d: DocumentoDeLaEscal
   if (tope.estado === "agotado") return { ok: false, status: 429, error: mensajeDelTope(tope) };
   const lectura = await leerLaEscalaParaNexus(quien, d);
   if (!lectura.ok) return lectura;
-  const foco = d.foco ? lectura.piezas.find((p) => p.clave === d.foco) : null;
-  if (d.foco && !foco) return { ok: false, status: 409, error: "Esa parte ya no está en la página: vuelve a cargarla." };
+  const foco = d.foco?.trim() || null;
+  const piezas = foco ? piezasDeLaSeccion(lectura.piezas, foco) : lectura.piezas;
+  if (foco && !piezas.length) return { ok: false, status: 409, error: "Esa sección ya no tiene nada que cambiar en la página: vuelve a cargarla." };
 
-  // Lo que confirmó el equipo: CORTADO PARA EL CLIENTE para el modelo; lo interno, solo para que el código lo reconozca.
+  // Lo que confirmó el equipo: CORTADO PARA EL CLIENTE para el modelo; lo interno, solo para el código: reconoce lo que no se
+  // pidió y verifica que lo interno que el pedido nombra esté en lo que Nexus tiene de la cuenta (24 nov).
   const notas = await loQueConfirmoElEquipo(d.clientId, "interno");
   const paraElCliente = paraElAlcance(notas, "cliente");
   const bloque = bloqueDeLoQueConfirmoElEquipo(notas, "cliente");
@@ -160,7 +163,7 @@ export async function proponerEnLaEscala(quien: QuienPide, d: DocumentoDeLaEscal
       status: "RUNNING",
       stepLabel: `Pedirle a Nexus · La escala › ${lectura.lugar}`,
       triggeredByEmail: quien.email,
-      filters: { documento: "escala", exploracionId: d.exploracionId, lugar: d.lugar, foco: d.foco ?? null, pedido } as Prisma.InputJsonValue,
+      filters: { documento: "escala", exploracionId: d.exploracionId, lugar: d.lugar, foco, pedido } as Prisma.InputJsonValue,
     },
     select: { id: true },
   });
@@ -175,11 +178,11 @@ export async function proponerEnLaEscala(quien: QuienPide, d: DocumentoDeLaEscal
   try {
     const r = await conContextoDeIA(ia, () =>
       runDocumentAssist({
-        docLabel: `página de La escala de ${lectura.empresa} (${lectura.lugar})`,
+        docLabel: `página de La escala de ${lectura.empresa} (${lectura.lugar}${foco ? ` › ${foco}` : ""})`,
         systemPrompt: REGLAS_DE_PEDIRLE,
-        // La página va UNA vez: cada pieza es una sección, con lo que acepta en su guía.
-        sections: lectura.piezas.map((p) => ({ key: p.clave, label: `${p.seccion} › ${p.nombre}`, brief: guiaDeLaPieza(p), schema: ESQUEMA_DE_LA_PIEZA, currentData: { texto: p.valor ?? "", quitar: "" } })),
-        instruction: foco ? `${pedido}\n\n(Lo pidió desde la pieza "${foco.clave}": ${foco.seccion} › ${foco.nombre}.)` : pedido,
+        // La página (o la sección pedida) va UNA vez: cada pieza es una sección del núcleo, con lo que acepta en su guía.
+        sections: piezas.map((p) => ({ key: p.clave, label: `${p.seccion} › ${p.nombre}`, brief: guiaDeLaPieza(p), schema: ESQUEMA_DE_LA_PIEZA, currentData: { texto: p.valor ?? "", quitar: "" } })),
+        instruction: foco ? `${pedido}\n\n(Lo pidió desde la sección «${foco}» de la página: solo están sus partes y solo esas se cambian.)` : pedido,
         context: bloque ? `Lo que el equipo confirmó de ${lectura.empresa} y SÍ puede ir al cliente:\n${bloque}` : undefined,
         brandVoice: true,
         maxWebSearches: 0,
@@ -194,7 +197,9 @@ export async function proponerEnLaEscala(quien: QuienPide, d: DocumentoDeLaEscal
       // Vacío solo cuenta como «quitar» si el modelo lo dijo: si no, es una respuesta mal armada y no se toca la pieza.
       return x.quitar === "si" ? [{ clave, despues: null }] : [];
     });
-    const revisado = revisarLaPropuesta({ piezas: lectura.piezas, propuesto, pedido, delCliente, interno, voseo: voseoDelResumen });
+    // La revisión mira SOLO las piezas que vio el modelo: una clave de otra sección no llega. Las cifras que ya están en la
+    // página sí valen aunque sean de otra sección (`pagina`): lo que el cliente ya ve no es inventado.
+    const revisado = revisarLaPropuesta({ piezas, pagina: lectura.piezas, propuesto, pedido, delCliente, interno, voseo: voseoDelResumen });
     // Lo que «Aplicar todo» puede aplicar de una vez: lo que pasa del tope se dice, no se esconde.
     const sobran = revisado.cambios.splice(MAX_CAMBIOS);
     for (const c of sobran) revisado.descartados.push({ clave: c.clave, nombre: c.nombre, texto: c.despues ?? "(quitarla)", motivo: `Son más de ${MAX_CAMBIOS} cambios de una vez: pide este aparte.` });

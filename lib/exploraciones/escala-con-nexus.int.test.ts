@@ -7,7 +7,8 @@
  *
  * Lo que solo una base prueba: que un cambio aplicado deja su versión («Cambiado con Nexus») y se deshace por el mismo
  * camino; que nunca publica (la foto del cliente y su fecha no cambian); que choca si otra persona editó lo mismo (y no
- * pisa); que agregar una pieza la agrega y deshacerlo la quita; que lo interno no llega aunque el modelo lo escriba; que la
+ * pisa); que agregar una pieza la agrega y deshacerlo la quita; que lo interno que Nexus no tiene de la cuenta no llega aunque el modelo lo escriba; que desde una sección al
+ * modelo le llegan solo sus piezas; que la
  * exploración de otra cuenta no existe; y que la página de un área tiene su propio historial, aparte del Resumen.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -196,11 +197,12 @@ describe("Pedirle a Nexus en La escala, en la base", () => {
     expect((await contenido(d.exploracionId)).c.textosDeLaPagina?.[bajada.clave.slice(2)]).toBeUndefined();
   });
 
-  it("no mete lo interno aunque se lo pidan: lo que el modelo escribió de eso no llega y no se escribe nada", async () => {
+  it("no mete lo interno que Nexus no tiene de la cuenta, aunque se lo pidan (24 nov: si lo tuviera, llegaría marcado): no llega y no se escribe nada", async () => {
     const d = await sembrar();
     const { tesis } = await laTesis(d);
     vi.mocked(runDocumentAssist).mockResolvedValue({
-      proposal: { [tesis.clave]: { texto: "El gerente no quiere invertir y el presupuesto no alcanza." } },
+      // Solo lo que el pedido nombra: así se prueba que lo frena la cuenta (sin notas), no el pedido.
+      proposal: { [tesis.clave]: { texto: "El gerente no quiere invertir." } },
       summary: [],
       reasoning: "Agregué lo que pediste.",
       warnings: [],
@@ -212,7 +214,7 @@ describe("Pedirle a Nexus en La escala, en la base", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.propuesta.cambios).toEqual([]);
-    expect(r.propuesta.descartados[0].motivo).toMatch(/interno/);
+    expect(r.propuesta.descartados[0].motivo).toMatch(/no tiene en lo que sabe de la cuenta/);
     // Proponer no escribe; y la corrida queda medida con su origen.
     expect((await contenido(d.exploracionId)).c).toEqual(antes.c);
     const run = await prisma.agentRun.findUniqueOrThrow({ where: { id: r.propuesta.corrida! }, select: { agentSlug: true, status: true, clientId: true } });
@@ -220,6 +222,21 @@ describe("Pedirle a Nexus en La escala, en la base", () => {
     const llamada = vi.mocked(runDocumentAssist).mock.calls[0][0];
     expect(llamada.maxWebSearches).toBe(0);
     expect(JSON.stringify(llamada)).not.toContain("gmeet_r1");
+  });
+
+  it("pedido desde una sección (24 nov): al modelo le llegan solo sus piezas; una sección sin piezas es un 409", async () => {
+    const d = await sembrar();
+    vi.mocked(runDocumentAssist).mockResolvedValue({ proposal: {}, summary: [], reasoning: "Nada que cambiar.", warnings: [], citations: [], usedWebSearch: false });
+    const r = await proponerEnLaEscala(QUIEN, { ...d, lugar: RESUMEN_LUGAR, pedido: "hazlo más claro", foco: "El problema principal" });
+    expect(r.ok).toBe(true);
+    const llamada = vi.mocked(runDocumentAssist).mock.calls[0][0];
+    expect(llamada.sections.length).toBeGreaterThan(0);
+    for (const s of llamada.sections) expect(s.label).toMatch(/^El problema principal › /);
+    expect(llamada.instruction).toContain("«El problema principal»");
+    // El Resumen de prueba no tiene puntos clave: desde ahí no hay nada que pedir (y no se llama a la IA).
+    const sinPiezas = await proponerEnLaEscala(QUIEN, { ...d, lugar: RESUMEN_LUGAR, pedido: "hazlo más claro", foco: "Una sección que no está" });
+    expect(sinPiezas).toMatchObject({ ok: false, status: 409 });
+    expect(vi.mocked(runDocumentAssist)).toHaveBeenCalledTimes(1);
   });
 
   it("«Deshacer» devuelve la bajada aunque la última versión del Resumen sea de antes del 23 nov (sin textos fijos)", async () => {

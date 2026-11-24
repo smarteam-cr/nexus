@@ -25,7 +25,10 @@ export interface PiezaDelDocumento {
   clave: string;
   /** Qué es, en palabras de la pantalla: «Título del punto clave», «El titular». */
   nombre: string;
-  /** La parte de la página donde está: «Puntos clave», «Equipos y hallazgos · Televentas». */
+  /**
+   * La parte de la página donde está: «Puntos clave», «Equipos y hallazgos · Televentas». Desde el 24 nov es también lo que
+   * pide el botón de su sección: con el pedido hecho desde ahí, al modelo le llegan solo las piezas de esa sección.
+   */
   seccion: string;
   /** Lo que ve el cliente. null: un lugar para AGREGAR una pieza nueva a una lista. */
   valor: string | null;
@@ -57,7 +60,15 @@ export interface CambioPropuesto {
   aMano: boolean;
   /** Es una pieza nueva en una lista. */
   agregar: boolean;
+  /**
+   * Trae algo interno de la venta (el presupuesto, quién decide, una nota del equipo) porque el pedido lo nombró y Nexus lo
+   * tiene de la cuenta (24 nov, ./veracidad.ts). La pantalla lo avisa con `AVISO_DE_LO_INTERNO`.
+   */
+  interno?: true;
 }
+
+/** El aviso de un cambio que trae algo interno (24 nov): lo ve el cliente cuando alguien publique. */
+export const AVISO_DE_LO_INTERNO = "Esto es interno de la venta y lo verá el cliente al publicar.";
 
 /** Lo que Nexus escribió y no pasó la revisión del código, con el porqué (se muestra: nada se esconde). */
 export interface CambioDescartado {
@@ -121,7 +132,8 @@ export interface QuienPide {
 
 /**
  * El nombre del botón, en UN solo lugar (23 nov: Elías decidió «✨ Mejorar con IA»; el código sigue diciendo «Pedirle a
- * Nexus», que es lo que hace). Lo usan el botón del Resumen, el de cada área, el de cada pieza y el título del panel.
+ * Nexus», que es lo que hace). Lo usan el botón del Resumen, el de cada área, el de cada sección (24 nov; antes, el de cada
+ * pieza) y el título del panel.
  */
 export const NOMBRE_DEL_BOTON = "✨ Mejorar con IA";
 
