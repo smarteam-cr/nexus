@@ -189,8 +189,9 @@ aplicados».
 - **Aplicar** es `npm run db:sql -- <archivos>`: sin `--apply` es el simulacro; con `--apply`
   (y `ALLOW_PROD_WRITE=1` en producción) corre cada archivo y lo anota en la misma transacción.
   Si falla, no queda nada del archivo ni de la fila. Varios archivos van en el orden en que se
-  escriben y se frena en el primero que falla. En PowerShell:
-  `$env:ALLOW_PROD_WRITE="1"; npm run db:sql -- scripts/sql/<archivo>.sql --apply; Remove-Item Env:ALLOW_PROD_WRITE`.
+  escriben y se frena en el primero que falla. En PowerShell va por `npx tsx`, no por `npm run`:
+  PowerShell se come el `--` y npm se queda con `--apply` sin dejar rastro: corre el simulacro, que lo avisa al final:
+  `$env:ALLOW_PROD_WRITE="1"; npx tsx scripts/aplicar-sql.ts scripts/sql/<archivo>.sql --apply; Remove-Item Env:ALLOW_PROD_WRITE`.
 - **`--sin-transaccion`**: sentencia por sentencia, para un `ALTER TYPE … ADD VALUE` cuyo valor se
   usa más abajo en el mismo archivo (la base responde «unsafe use of new value») o un
   «cannot run inside a transaction block». Si una sentencia falla, las anteriores ya quedaron: el
@@ -199,13 +200,17 @@ aplicados».
 - **Leer** es `npm run check:esquema`: dice los posteriores al baseline sin anotar (no corrieron,
   o corrieron por fuera del registro), los que cambiaron después de anotarse (se reaplican con
   `db:sql`; son idempotentes) y los anotados que el checkout no tiene (de otra rama o de la otra
-  PC). Cualquiera de los dos primeros sale con 1.
+  PC). Sale con 1 si a la base le falta algo que el código usa, con 3 si el esquema está completo
+  pero quedan `.sql` sin anotar o cambiados, y con 0 si no hay nada.
 - **Lo que corrió por fuera** (antes del registro, o con `prisma db execute`) se anota con
   `npm run db:sql:backfill`: el simulacro dice, de cada archivo sin anotar, si el esquema
   demuestra que corrió (todo lo que crea está en el catálogo, y algo de eso es solo suyo), si le
   falta algo (no se anota: aplicarlo con `db:sql`) o si no deja prueba (cambia datos o permisos).
-  `--apply` anota los demostrados; `--marcar a.sql,b.sql --apply` anota los que una persona sabe
-  que corrieron. Nunca pisa una fila que ya está.
+  `--apply` anota los demostrados; `--marcar a.sql,b.sql --apply` anota los «sin prueba» que una
+  persona sabe que corrieron, y se niega entero si le pasas uno al que le falta algo. Un demostrado
+  que además cambia datos sale con «· cambia datos»: el esquema prueba su DDL, no esa parte; antes
+  del `--apply`, alguien lee esa lista. Nunca pisa una fila que ya está. En PowerShell:
+  `npx tsx scripts/registro-de-sql.ts [--marcar …] [--apply]`.
 - **Bases locales**: el bootstrap (`npm run db:local -- bootstrap`) y el setup de `test:int`
   anotan lo que aplican. El TRUNCATE de las pruebas no toca `SqlAplicado`.
 - La primera vez en producción el orden es: el `.sql` del registro

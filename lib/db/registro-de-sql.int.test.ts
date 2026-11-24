@@ -27,7 +27,7 @@ const posteriores: ArchivoSql[] = readdirSync(join(RAIZ, "scripts", "sql"))
   .map((nombre) => ({ nombre, texto: readFileSync(join(RAIZ, "scripts", "sql", nombre), "utf8") }));
 
 async function limpiar(): Promise<void> {
-  await db.query(`DROP TABLE IF EXISTS "zz_registro_tabla", "zz_registro_roto", "zz_registro_con_enum"`);
+  await db.query(`DROP TABLE IF EXISTS "zz_registro_tabla", "zz_registro_roto", "zz_registro_con_enum", "zz_registro_propio"`);
   await db.query(`DROP TYPE IF EXISTS "zz_registro_enum"`);
   await db.query(`DELETE FROM "SqlAplicado" WHERE "archivo" LIKE '2099-%'`);
 }
@@ -97,6 +97,24 @@ describe("aplicarYAnotar", () => {
     expect(await fila(archivo.nombre)).toBeUndefined();
     // La conexión no quedó en una transacción abortada.
     expect((await db.query("SELECT 1 AS uno")).rows[0].uno).toBe(1);
+  });
+
+  it("un archivo con su propio BEGIN/COMMIT que falla: no queda la tabla ni la fila, y la conexión sigue sana", async () => {
+    const archivo = {
+      nombre: "2099-01-04-registro-propio.sql",
+      texto: ["BEGIN;", 'CREATE TABLE "zz_registro_propio" (id int);', 'SELECT * FROM "zz_registro_no_existe";', "COMMIT;"].join("\n"),
+    };
+    const error = await aplicarYAnotar(db, archivo, { desde: "prueba · int" }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ErrorAlAplicar);
+    expect((error as ErrorAlAplicar).modo).toBe("propia");
+    expect(await existe("zz_registro_propio")).toBe(false);
+    expect(await fila(archivo.nombre)).toBeUndefined();
+    expect((await db.query("SELECT 1 AS uno")).rows[0].uno).toBe(1);
+
+    const sano = { ...archivo, texto: ["BEGIN;", 'CREATE TABLE IF NOT EXISTS "zz_registro_propio" (id int);', "COMMIT;"].join("\n") };
+    expect((await aplicarYAnotar(db, sano, { desde: "prueba · int" })).modo).toBe("propia");
+    expect(await existe("zz_registro_propio")).toBe(true);
+    expect(await fila(archivo.nombre)).toMatchObject({ huella: huellaDeSql(sano.texto), como: "aplicado" });
   });
 
   it("un ADD VALUE que se usa en el mismo archivo: en transacción falla entero; con --sin-transaccion corre y se anota", async () => {

@@ -215,13 +215,15 @@ portada "Ejemplo: un SQL y su deploy"
 
 # ── Ejemplo: reemplázalo por los pasos reales ─────────────────────────────
 etapa "Qué le falta a la base"
-decir "Primero miramos qué SQL le falta a producción (solo lee)."
-correr "npm run check:esquema"
+decir "Primero miramos qué SQL le falta a producción (solo lee). Antes de aplicar, en rojo es lo esperado."
+correr "npm run check:esquema || true"
 pausa
 
 etapa "Aplicar el SQL, antes del deploy"
 decir "El SQL va ANTES del código que lo usa; si no, el deploy se revierte solo."
-correr_en_prod "npm run db:sql -- scripts/sql/AAAA-MM-DD-ejemplo.sql --apply"
+correr "npx tsx scripts/aplicar-sql.ts scripts/sql/AAAA-MM-DD-ejemplo.sql"
+pausa
+correr_en_prod "npx tsx scripts/aplicar-sql.ts scripts/sql/AAAA-MM-DD-ejemplo.sql --apply"
 correr "npm run check:esquema"
 pausa
 

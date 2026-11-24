@@ -20,8 +20,10 @@
 -- ⛔ ORDEN: ANTES del deploy (el modelo `SqlAplicado` está en schema.prisma: sin la tabla, /api/health responde 503).
 -- Es el primer archivo que se aplica con el camino nuevo, y se anota solo:
 --
---   PowerShell:  $env:ALLOW_PROD_WRITE="1"; npm run db:sql -- scripts/sql/2026-11-23-registro-de-sql.sql --apply; Remove-Item Env:ALLOW_PROD_WRITE
+--   PowerShell:  $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/aplicar-sql.ts scripts/sql/2026-11-23-registro-de-sql.sql --apply; Remove-Item Env:ALLOW_PROD_WRITE
+--   bash:        ALLOW_PROD_WRITE=1 npm run db:sql -- scripts/sql/2026-11-23-registro-de-sql.sql --apply
 --
+-- (En PowerShell, `npx tsx` y no `npm run … --`: PowerShell se come el `--` y npm se queda con `--apply`.)
 -- Después, el backfill de los que ya corrieron (docs/RUNBOOK.md › «Registro de los SQL aplicados»). NUNCA `prisma db push`.
 
 CREATE TABLE IF NOT EXISTS "SqlAplicado" (

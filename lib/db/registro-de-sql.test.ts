@@ -9,6 +9,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   SQL_DEL_REGISTRO,
+  banderasQueSeQuedoNpm,
+  cambiaDatos,
   clasificarConElCatalogo,
   clavesDelCatalogo,
   compararConElRegistro,
@@ -122,6 +124,7 @@ describe("eventosDelSql — lo que un .sql crea y borra", () => {
     ].join(NL);
     expect(claves(sql)).toEqual([
       'crea {"clase":"tabla","tabla":"T"}',
+      'crea {"clase":"columna","tabla":"T","columna":"id"}',
       'crea {"clase":"columna","tabla":"T","columna":"a"}',
       'crea {"clase":"columna","tabla":"T","columna":"b"}',
       'crea {"clase":"restriccion","tabla":"T","restriccion":"T_ck"}',
@@ -178,6 +181,25 @@ describe("eventosDelSql — lo que un .sql crea y borra", () => {
     ]);
   });
 
+  it("las columnas de un CREATE TABLE, no sus restricciones; con paréntesis y comas adentro", () => {
+    const sql = [
+      'CREATE TABLE IF NOT EXISTS "T" (',
+      '  "id" TEXT NOT NULL,',
+      '  "monto" NUMERIC(12, 2) DEFAULT 0,',
+      "  \"nota\" TEXT DEFAULT 'a, (b)',",
+      "  estado text CHECK (estado IN ('x', 'y')),",
+      '  CONSTRAINT "T_pkey" PRIMARY KEY ("id"),',
+      '  UNIQUE ("monto")',
+      ");",
+    ].join(NL);
+    expect(claves(sql).filter((c) => c.includes('"columna"'))).toEqual([
+      'crea {"clase":"columna","tabla":"T","columna":"id"}',
+      'crea {"clase":"columna","tabla":"T","columna":"monto"}',
+      'crea {"clase":"columna","tabla":"T","columna":"nota"}',
+      'crea {"clase":"columna","tabla":"T","columna":"estado"}',
+    ]);
+  });
+
   it("sin comillas, el nombre va en minúsculas (como lo guarda Postgres)", () => {
     expect(claves("CREATE INDEX idx_Algo ON Tabla (x);")).toEqual(['crea {"clase":"indice","indice":"idx_algo","tabla":"tabla"}']);
   });
@@ -192,7 +214,10 @@ describe("pruebasDeLosArchivos", () => {
       { nombre: "2026-09-01-a.sql", texto: 'CREATE TABLE "Vieja" (id int); CREATE TABLE "Queda" (id int);' },
       { nombre: "2026-10-01-b.sql", texto: 'DROP TABLE IF EXISTS "Vieja";' },
     ]);
-    expect(de(mapa, "2026-09-01-a.sql")).toEqual(['+! {"clase":"tabla","tabla":"Queda"}']);
+    expect(de(mapa, "2026-09-01-a.sql")).toEqual([
+      '+! {"clase":"tabla","tabla":"Queda"}',
+      '+! {"clase":"columna","tabla":"Queda","columna":"id"}',
+    ]);
     // Que no exista prueba que b corrió: la tabla la creó un archivo anterior.
     expect(de(mapa, "2026-10-01-b.sql")).toEqual(['-! {"clase":"tabla","tabla":"Vieja"}']);
   });
@@ -221,6 +246,40 @@ describe("pruebasDeLosArchivos", () => {
       [{ nombre: "0_init", texto: 'CREATE TABLE "Client" (id text); ALTER TABLE "Client" ENABLE ROW LEVEL SECURITY;' }],
     );
     expect(de(mapa, "2026-09-01-a.sql")).toEqual(['+ {"clase":"rls","tabla":"Client"}', '+ {"clase":"indice","indice":"i","tabla":"Client"}']);
+  });
+
+  it("una columna que ya venía en el CREATE TABLE de otro archivo no es prueba propia del ADD COLUMN", () => {
+    const mapa = pruebasDeLosArchivos([
+      { nombre: "2026-10-09-tareas.sql", texto: 'CREATE TABLE IF NOT EXISTS "Tarea" ("id" text, "contexto" text);' },
+      { nombre: "2026-10-10-contexto.sql", texto: 'ALTER TABLE "Tarea" ADD COLUMN IF NOT EXISTS "contexto" text;' },
+    ]);
+    expect(de(mapa, "2026-10-10-contexto.sql")).toEqual(['+ {"clase":"columna","tabla":"Tarea","columna":"contexto"}']);
+  });
+
+  it("el RLS y deny_all_non_superuser nunca son prueba propia: policies.sql los pone en un bucle", () => {
+    const fondo = [{ nombre: "policies.sql", texto: readFileSync(join(process.cwd(), "prisma", "policies.sql"), "utf8") }];
+    const mapa = pruebasDeLosArchivos(
+      [
+        {
+          nombre: "2026-12-01-solo-rls-y-datos.sql",
+          texto: [
+            'ALTER TABLE "Tarea" ENABLE ROW LEVEL SECURITY;',
+            'DROP POLICY IF EXISTS deny_all_non_superuser ON "Tarea";',
+            'CREATE POLICY deny_all_non_superuser ON "Tarea" AS RESTRICTIVE FOR ALL TO PUBLIC USING (false);',
+            "UPDATE \"Tarea\" SET \"origen\" = 'x' WHERE false;",
+          ].join(NL),
+        },
+      ],
+      fondo,
+    );
+    const pruebas = mapa.get("2026-12-01-solo-rls-y-datos.sql") ?? [];
+    expect(pruebas).toHaveLength(2);
+    expect(pruebas.every((p) => !p.propia)).toBe(true);
+    const catalogo = clavesDelCatalogo([
+      { clase: "r", objeto: "Tarea", miembro: null },
+      { clase: "p", objeto: "Tarea", miembro: "deny_all_non_superuser" },
+    ]);
+    expect(clasificarConElCatalogo(pruebas, catalogo).estado).toBe("sin-prueba");
   });
 
   it("que no exista algo que nunca existió no prueba nada", () => {
@@ -252,6 +311,26 @@ describe("clasificarConElCatalogo", () => {
   it("sin prueba: un UPDATE de datos, o todo compartido", () => {
     expect(clasificarConElCatalogo([], catalogo).estado).toBe("sin-prueba");
     expect(clasificarConElCatalogo([compartida("Client")], catalogo).estado).toBe("sin-prueba");
+  });
+});
+
+describe("cambiaDatos", () => {
+  it("INSERT, UPDATE … SET, DELETE y TRUNCATE; no un ON UPDATE CASCADE ni un disparador BEFORE UPDATE", () => {
+    expect(cambiaDatos("UPDATE \"ProjectCanvas\" SET \"name\" = 'x' WHERE false;")).toBe(true);
+    expect(cambiaDatos('INSERT INTO "A" (id) VALUES (1);')).toBe(true);
+    expect(cambiaDatos('DELETE FROM "A" WHERE false;')).toBe(true);
+    expect(cambiaDatos('ALTER TABLE "A" ADD CONSTRAINT "f" FOREIGN KEY ("b") REFERENCES "B"("id") ON DELETE CASCADE ON UPDATE CASCADE;')).toBe(false);
+    expect(cambiaDatos('CREATE TRIGGER "t" BEFORE UPDATE ON "A" FOR EACH ROW EXECUTE FUNCTION f();')).toBe(false);
+    expect(cambiaDatos("-- UPDATE \"A\" SET x = 1;" + NL + "SELECT 1;")).toBe(false);
+  });
+});
+
+describe("banderasQueSeQuedoNpm", () => {
+  it("lo que npm tiene en npm_config_* y no le llegó al script (PowerShell se come el «--»)", () => {
+    const env = { npm_config_apply: "true", npm_config_sin_transaccion: "true" };
+    expect(banderasQueSeQuedoNpm(["--apply", "--sin-transaccion"], ["node", "x.ts", "a.sql"], env)).toEqual(["--apply", "--sin-transaccion"]);
+    expect(banderasQueSeQuedoNpm(["--apply"], ["node", "x.ts", "a.sql", "--apply"], env)).toEqual([]);
+    expect(banderasQueSeQuedoNpm(["--apply"], ["node", "x.ts", "a.sql"], {})).toEqual([]);
   });
 });
 
@@ -356,6 +435,17 @@ describe("aplicarYAnotar — el orden de lo que se manda a la base", () => {
     const error = await aplicarYAnotar(mal.db, dos, { desde: "prueba", sinTransaccion: true }).catch((e: unknown) => e);
     expect((error as ErrorAlAplicar).sentencia).toBe(2);
     expect(mal.enviado).toEqual(["SELECT 1", "SELECT 2", "ROLLBACK"]);
+  });
+
+  it("con su propio BEGIN/COMMIT: el archivo tal cual y la anotación después; si falla, ROLLBACK y sin anotar", async () => {
+    const propio = { nombre: "2099-01-03-c.sql", texto: ["BEGIN;", 'CREATE TABLE "C" (id int);', "COMMIT;"].join(NL) };
+    const ok = baseFalsa(true);
+    expect((await aplicarYAnotar(ok.db, propio, { desde: "prueba" })).modo).toBe("propia");
+    expect(ok.enviado).toEqual([propio.texto, "ANOTAR"]);
+
+    const mal = baseFalsa(true, /CREATE TABLE "C"/);
+    await expect(aplicarYAnotar(mal.db, propio, { desde: "prueba" })).rejects.toBeInstanceOf(ErrorAlAplicar);
+    expect(mal.enviado).toEqual([propio.texto, "ROLLBACK"]);
   });
 
   it("sin el registro en la base no aplica nada, salvo el archivo que lo crea", async () => {

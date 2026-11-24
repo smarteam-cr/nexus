@@ -26,7 +26,9 @@
  * No escribe nada, nunca: la conexión nace de solo lectura (Postgres rechaza cualquier escritura)
  * y hace una consulta al catálogo y dos al registro. No usa `--apply` ni `ALLOW_PROD_WRITE`.
  *
- * Sale con 0 si no falta nada, 1 si falta algo (en el esquema o en el registro), 2 si no pudo comparar.
+ * Sale con 0 si no falta nada, 1 si a la base le falta algo que el código usa (el deploy se revertiría), 3 si el esquema
+ * está completo pero hay `.sql` sin anotar o cambiados, y 2 si no pudo comparar. El 3 aparte deja que un wizard mire
+ * antes de aplicar sin cortarse, y que después exija el 0.
  *
  * ⚠ Compara contra el cliente GENERADO. Si `prisma/schema.prisma` cambió (un `git pull`) y no se
  * corrió `npx prisma generate`, el cliente es de otro schema: el script lo detecta y no compara.
@@ -167,7 +169,7 @@ async function main(): Promise<number> {
     console.error("  Con esto sin correr, /api/health responde 503 y deploy.sh revierte solo a la imagen anterior.");
   }
   const pendientesDelRegistro = informarDelRegistro(registro);
-  return faltantes.length > 0 || pendientesDelRegistro > 0 ? 1 : 0;
+  return faltantes.length > 0 ? 1 : pendientesDelRegistro > 0 ? 3 : 0;
 }
 
 /** El registro de los SQL aplicados contra los `scripts/sql/` de este checkout. Devuelve cuántos quedan pendientes. */
@@ -175,8 +177,8 @@ function informarDelRegistro(filas: FilaDelRegistro[] | null): number {
   const lista = (lineas: string[]) => lineas.forEach((l) => console.error(`    - ${l}`));
   if (filas === null) {
     console.error("\n✗ La base no tiene el registro de los SQL aplicados (tabla SqlAplicado).");
-    console.error(`  Se crea con: npm run db:sql -- scripts/sql/${SQL_DEL_REGISTRO} --apply  (ALLOW_PROD_WRITE=1 en producción),`);
-    console.error("  y lo que ya corrió se anota con: npm run db:sql:backfill (simulacro), y después con --apply.");
+    console.error(`  Se crea con: npx tsx scripts/aplicar-sql.ts scripts/sql/${SQL_DEL_REGISTRO} --apply  (ALLOW_PROD_WRITE=1 en producción),`);
+    console.error("  y lo que ya corrió se anota con: npx tsx scripts/registro-de-sql.ts (simulacro), y después con --apply.");
     return 1;
   }
   const estado = compararConElRegistro(sqlDelRepo(), filas);
@@ -188,8 +190,8 @@ function informarDelRegistro(filas: FilaDelRegistro[] | null): number {
       `\n✗ Registro de SQL: ${estado.sinAnotar.length} de ${estado.posteriores} scripts/sql posteriores al baseline sin anotar en esta base. ¿Corrieron?`,
     );
     lista(estado.sinAnotar);
-    console.error("  Si no corrieron: npm run db:sql -- scripts/sql/<archivo> (simulacro), y después con --apply.");
-    console.error("  Si corrieron por fuera del registro: npm run db:sql:backfill (los anota si el esquema lo demuestra, o con --marcar).");
+    console.error("  Si no corrieron: npx tsx scripts/aplicar-sql.ts scripts/sql/<archivo> (simulacro), y después con --apply.");
+    console.error("  Si corrieron por fuera del registro: npx tsx scripts/registro-de-sql.ts (los anota si el esquema lo demuestra, o con --marcar).");
   }
   if (estado.cambiados.length > 0) {
     console.error(`\n⚠ Cambiaron después de anotarse (${estado.cambiados.length}): reaplícalos con npm run db:sql (son idempotentes).`);

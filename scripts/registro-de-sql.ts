@@ -5,6 +5,9 @@
  *   npm run db:sql:backfill                                     simulacro: qué anotaría y por qué (solo lee)
  *   ALLOW_PROD_WRITE=1 npm run db:sql:backfill -- --apply       anota los que el esquema demuestra
  *   ALLOW_PROD_WRITE=1 npm run db:sql:backfill -- --marcar 2026-08-21-a.sql,2026-10-30-b.sql --apply
+ *   PowerShell:  $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/registro-de-sql.ts --marcar a.sql,b.sql --apply; Remove-Item Env:ALLOW_PROD_WRITE
+ *   (en PowerShell, por `npx tsx`: se come el `--` y npm se queda con las banderas. Con `--marcar` el script lo nota y
+ *   frena; con `--apply` no puede —npm no lo deja en ningún lado—, así que corre el simulacro y lo avisa al final)
  *
  * Mira cada `.sql` posterior al baseline que la base no tiene anotado y lo compara con el catálogo de Postgres
  * (lib/db/registro-de-sql.ts › pruebasDeLosArchivos):
@@ -12,7 +15,9 @@
  *     `como = demostrado`.
  *   · LE FALTA ALGO — no se anota: lo más probable es que no corrió. Se aplica con `npm run db:sql`.
  *   · SIN PRUEBA — cambia datos o permisos, o todo lo suyo lo crea también otro archivo: el esquema no puede decir si
- *     corrió. Lo anota una persona que sabe que corrió, con `--marcar` (`como = marcado`).
+ *     corrió. Lo anota una persona que sabe que corrió, con `--marcar` (`como = marcado`). `--marcar` solo acepta estos:
+ *     con uno al que le falta algo se niega entero, porque el esquema dice que NO corrió.
+ * Un demostrado que además cambia datos sale con «· cambia datos»: el esquema prueba su DDL, no su parte de datos.
  * La huella que se anota es la del archivo de HOY: si cambió desde que corrió, eso ya no se puede saber.
  *
  * Nunca pisa una fila que ya está (ON CONFLICT DO NOTHING): por eso no respalda la tabla. El destino es el
@@ -26,6 +31,8 @@ import { createScriptPool } from "./lib/db";
 import { assertProdWriteAllowed, describirDestino } from "./lib/guard";
 import {
   SQL_DEL_REGISTRO,
+  banderasQueSeQuedoNpm,
+  cambiaDatos,
   clasificarConElCatalogo,
   esPosteriorAlBaseline,
   huellaDeSql,
@@ -68,6 +75,12 @@ async function main(): Promise<number> {
     leerSql(join(RAIZ, "prisma", "policies.sql"), "policies.sql"),
   ].filter((a): a is ArchivoSql => a !== null);
 
+  const perdidas = banderasQueSeQuedoNpm(["--apply", "--marcar"], process.argv, process.env);
+  if (perdidas.length > 0) {
+    console.error(`✗ npm se quedó con ${perdidas.join(" y ")} y no le llegó al script (pasa en PowerShell, que se come el «--»). No se hizo nada.`);
+    console.error("  Córrelo así: npx tsx scripts/registro-de-sql.ts [--marcar a.sql,b.sql] [--apply]");
+    return 2;
+  }
   const marcar = marcadosEnLaLinea();
   const nombres = new Set(posteriores.map((a) => a.nombre));
   const desconocidos = marcar.filter((m) => !nombres.has(m));
@@ -83,7 +96,7 @@ async function main(): Promise<number> {
   try {
     const hayRegistro = await existeElRegistro(cliente);
     if (!hayRegistro && APPLY) {
-      console.error(`✗ La base no tiene el registro (SqlAplicado). Primero: npm run db:sql -- scripts/sql/${SQL_DEL_REGISTRO} --apply`);
+      console.error(`✗ La base no tiene el registro (SqlAplicado). Primero: npx tsx scripts/aplicar-sql.ts scripts/sql/${SQL_DEL_REGISTRO} --apply`);
       return 1;
     }
     const anotados = new Set((hayRegistro ? await leerRegistro(cliente) : []).map((f) => f.archivo));
@@ -98,8 +111,17 @@ async function main(): Promise<number> {
     const demostrados = de("demostrado");
     const conFaltas = de("falta");
     const sinPrueba = de("sin-prueba");
-    const aMarcar = candidatos.filter((a) => marcar.includes(a.nombre) && veredictos.get(a.nombre)?.estado !== "demostrado");
+    const aMarcar = candidatos.filter((a) => marcar.includes(a.nombre) && veredictos.get(a.nombre)?.estado === "sin-prueba");
     const yaAnotadosEnMarcar = marcar.filter((m) => anotados.has(m));
+    // El esquema dice que estos NO corrieron: marcarlos los sacaría de check:esquema y lo que crean no se crearía nunca.
+    const marcadosConFaltas = conFaltas.filter((a) => marcar.includes(a.nombre)).map((a) => a.nombre);
+    if (marcadosConFaltas.length > 0) {
+      console.error(
+        `✗ --marcar: a ${marcadosConFaltas.join(", ")} le falta algo en la base, o sea que no corrió. No se anotó nada.\n` +
+          "  Aplícalo con npx tsx scripts/aplicar-sql.ts <archivo> (simulacro) y después con --apply: queda anotado solo.",
+      );
+      return 1;
+    }
 
     console.log(`\n${APPLY ? "BACKFILL" : "SIMULACRO del backfill"} en ${describirDestino(process.env.DATABASE_URL)}`);
     console.log(
@@ -111,13 +133,14 @@ async function main(): Promise<number> {
     console.log(`\n✓ El esquema demuestra que corrieron (${demostrados.length}) → se anotan como «demostrado»:`);
     for (const a of demostrados) {
       const v = veredictos.get(a.nombre) as Extract<VeredictoDelBackfill, { estado: "demostrado" }>;
-      console.log(`    ${a.nombre}  (${v.pruebas} prueba${v.pruebas === 1 ? "" : "s"})`);
+      const datos = cambiaDatos(a.texto) ? "   · cambia datos: el esquema prueba su DDL, no esa parte" : "";
+      console.log(`    ${a.nombre}  (${v.pruebas} prueba${v.pruebas === 1 ? "" : "s"})${datos}`);
     }
     console.log(`\n✗ Les falta algo en la base (${conFaltas.length}) → NO se anotan; si no corrieron: npm run db:sql`);
     for (const a of conFaltas) {
       const v = veredictos.get(a.nombre) as Extract<VeredictoDelBackfill, { estado: "falta" }>;
       const muestra = v.faltan.slice(0, 3).join(", ") + (v.faltan.length > 3 ? ` y ${v.faltan.length - 3} más` : "");
-      console.log(`    ${a.nombre}  — falta: ${muestra}${marcar.includes(a.nombre) ? "   ⚠ lo pediste en --marcar" : ""}`);
+      console.log(`    ${a.nombre}  — falta: ${muestra}`);
     }
     console.log(`\n· Sin prueba en el esquema (${sinPrueba.length}) → solo con --marcar, si sabes que corrieron:`);
     for (const a of sinPrueba) {
@@ -129,6 +152,10 @@ async function main(): Promise<number> {
 
     if (!APPLY) {
       console.log("\nNo se anotó nada. Para anotarlo: el mismo comando con --apply (y ALLOW_PROD_WRITE=1 si es producción).");
+      if (process.env.npm_lifecycle_event) {
+        console.log("(Si escribiste --apply y lo corriste con npm run desde PowerShell, npm se lo quedó: PowerShell se come el «--».");
+        console.log(" Para anotar en PowerShell: npx tsx scripts/registro-de-sql.ts [--marcar …] --apply.)");
+      }
       return 0;
     }
     const desde = desdeEstaMaquina(COMANDO);

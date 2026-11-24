@@ -3,7 +3,11 @@
  *
  *   npm run db:sql -- scripts/sql/2026-11-23-loquesea.sql                     simulacro: qué haría, sin tocar nada
  *   ALLOW_PROD_WRITE=1 npm run db:sql -- scripts/sql/2026-11-23-loquesea.sql --apply
- *   PowerShell:  $env:ALLOW_PROD_WRITE="1"; npm run db:sql -- scripts/sql/2026-11-23-loquesea.sql --apply; Remove-Item Env:ALLOW_PROD_WRITE
+ *   PowerShell:  $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/aplicar-sql.ts scripts/sql/2026-11-23-loquesea.sql --apply; Remove-Item Env:ALLOW_PROD_WRITE
+ *
+ * En PowerShell, por `npx tsx` y no por `npm run … --`: PowerShell se come el `--` y npm se queda con las banderas.
+ * `--sin-transaccion` lo deja en `npm_config_*` y el script frena; `--apply` npm no lo deja en ningún lado (npm 10.9),
+ * así que corre el simulacro, que lo avisa al final cuando lo lanzó npm.
  *
  * Reemplaza a `npx prisma db execute --file …` y al one-liner `npx tsx -e` de `ALTER TYPE … ADD VALUE`
  * (ARCHITECTURE Parte 0 · cap. D). Varios archivos van en el orden en que se escriben; se frena en el primero que falla.
@@ -30,7 +34,14 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { createScriptPool } from "./lib/db";
 import { assertProdWriteAllowed, describirDestino } from "./lib/guard";
-import { SQL_DEL_REGISTRO, huellaDeSql, pideSinTransaccion, planDeAplicacion, type FilaDelRegistro } from "../lib/db/registro-de-sql";
+import {
+  SQL_DEL_REGISTRO,
+  banderasQueSeQuedoNpm,
+  huellaDeSql,
+  pideSinTransaccion,
+  planDeAplicacion,
+  type FilaDelRegistro,
+} from "../lib/db/registro-de-sql";
 import { ErrorAlAplicar, aplicarYAnotar, desdeEstaMaquina, existeElRegistro, leerRegistro } from "../lib/db/registro-de-sql-base";
 
 const RAIZ = process.cwd();
@@ -64,6 +75,12 @@ function enElRegistro(fila: FilaDelRegistro | undefined, huella: string): string
 }
 
 async function main(): Promise<number> {
+  const perdidas = banderasQueSeQuedoNpm(["--apply", "--sin-transaccion"], process.argv, process.env);
+  if (perdidas.length > 0) {
+    console.error(`✗ npm se quedó con ${perdidas.join(" y ")} y no le llegó al script (pasa en PowerShell, que se come el «--»). No se hizo nada.`);
+    console.error(`  Córrelo así: npx tsx scripts/aplicar-sql.ts <archivos> ${perdidas.join(" ")}`);
+    return 2;
+  }
   const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
   if (args.length === 0) {
     console.error("Uso: npm run db:sql -- scripts/sql/<archivo>.sql [más archivos] [--sin-transaccion] [--apply]");
@@ -111,6 +128,10 @@ async function main(): Promise<number> {
     }
     if (!APPLY) {
       console.log(`\nNo se aplicó nada. Para aplicarlo, el mismo comando con --apply (y ALLOW_PROD_WRITE=1 si es producción).`);
+      if (process.env.npm_lifecycle_event) {
+        console.log("(Si escribiste --apply y lo corriste con npm run desde PowerShell, npm se lo quedó: PowerShell se come el «--».");
+        console.log(" Para aplicar en PowerShell: npx tsx scripts/aplicar-sql.ts <archivos> --apply.)");
+      }
       return 0;
     }
 

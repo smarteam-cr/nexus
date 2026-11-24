@@ -361,6 +361,61 @@ function todos(texto: string, patron: string): RegExpMatchArray[] {
   return [...texto.matchAll(new RegExp(patron, "gi"))];
 }
 
+/** Lo que abre un elemento de `CREATE TABLE (…)` sin ser una columna. */
+const ELEMENTO_QUE_NO_ES_COLUMNA = new Set(["constraint", "primary", "unique", "check", "foreign", "exclude", "like"]);
+const NOMBRE_AL_INICIO = new RegExp(`^(${ID})`);
+
+/**
+ * Las columnas de un `CREATE TABLE "X" (…)` que empieza en `desde` (justo después del nombre): lo de adentro de los
+ * paréntesis, partido en las comas de primer nivel. `[]` si no hay paréntesis (un `CREATE TABLE … AS SELECT`).
+ */
+function columnasDeLaDefinicion(t: string, desde: number): string[] {
+  let i = desde;
+  while (i < t.length && /\s/.test(t[i])) i += 1;
+  if (t[i] !== "(") return [];
+  const elementos: string[] = [];
+  let actual = "";
+  let profundidad = 0;
+  for (let j = i + 1; j < t.length; j += 1) {
+    const c = t[j];
+    if (c === "'" || c === '"') {
+      // Un literal o un nombre entre comillas entero (con `''` adentro son dos seguidos: da lo mismo).
+      const cierre = t.indexOf(c, j + 1);
+      const hasta = cierre === -1 ? t.length - 1 : cierre;
+      actual += t.slice(j, hasta + 1);
+      j = hasta;
+      continue;
+    }
+    if (c === "(") profundidad += 1;
+    if (c === ")") {
+      if (profundidad === 0) {
+        elementos.push(actual);
+        break;
+      }
+      profundidad -= 1;
+    }
+    if (c === "," && profundidad === 0) {
+      elementos.push(actual);
+      actual = "";
+      continue;
+    }
+    actual += c;
+  }
+  return elementos
+    .map((e) => NOMBRE_AL_INICIO.exec(e.trim())?.[1])
+    .filter((id): id is string => !!id && (id.startsWith('"') || !ELEMENTO_QUE_NO_ES_COLUMNA.has(id.toLowerCase())))
+    .map(nombre);
+}
+
+/** ¿El archivo cambia datos (INSERT, UPDATE … SET, DELETE, TRUNCATE)? Esa parte el esquema no la puede probar. */
+export function cambiaDatos(sql: string): boolean {
+  const NOMBRE = String.raw`(?:"(?:[^"]|"")+"|[A-Za-z_][A-Za-z0-9_$]*)`;
+  return new RegExp(
+    String.raw`\b(?:INSERT\s+INTO|UPDATE\s+(?:ONLY\s+)?${NOMBRE}(?:\s*\.\s*${NOMBRE})?(?:\s+(?:AS\s+)?${NOMBRE})?\s+SET\b|DELETE\s+FROM|TRUNCATE\b)`,
+    "i",
+  ).test(quitarComentarios(sql));
+}
+
 /** Lo que crea y lo que borra un `.sql`, en el orden del texto. Ignora los comentarios. */
 export function eventosDelSql(sql: string): Evento[] {
   const t = quitarComentarios(sql);
@@ -370,7 +425,11 @@ export function eventosDelSql(sql: string): Evento[] {
   const S = String.raw`\s+`;
 
   for (const m of todos(t, String.raw`\bCREATE${S}(?:UNLOGGED${S})?TABLE${S}(?:IF${S}NOT${S}EXISTS${S})?${QID}`)) {
-    crea(m.index!, { clase: "tabla", tabla: nombre(m[1]) });
+    const tabla = nombre(m[1]);
+    crea(m.index!, { clase: "tabla", tabla });
+    // Sus columnas también: si no, un `ADD COLUMN IF NOT EXISTS` posterior de una columna que ya venía en la tabla
+    // pasaría por prueba propia de ese otro archivo.
+    for (const columna of columnasDeLaDefinicion(t, m.index! + m[0].length)) crea(m.index!, { clase: "columna", tabla, columna });
   }
   for (const m of todos(t, String.raw`\bCREATE${S}(?:OR${S}REPLACE${S})?(?:MATERIALIZED${S})?VIEW${S}(?:IF${S}NOT${S}EXISTS${S})?${QID}`)) {
     crea(m.index!, { clase: "tabla", tabla: nombre(m[1]) });
@@ -479,6 +538,15 @@ function claveDeEvento(e: Evento): string {
   return claveDe(e.objeto);
 }
 
+/**
+ * `prisma/policies.sql` prende el RLS de TODAS las tablas y crea `deny_all_non_superuser` en una lista, las dos cosas en
+ * un bucle (`EXECUTE format(…)`) que esta lectura no ve, y se corre cuando sea (`npm run db:policies`). Que estén no
+ * prueba que las puso un archivo: cuentan como prueba (tienen que estar), nunca como prueba propia.
+ */
+function puedeSerPropia(o: ObjetoDelEsquema): boolean {
+  return o.clase !== "rls" && !(o.clase === "politica" && o.politica === "deny_all_non_superuser");
+}
+
 interface Momento {
   archivo: number;
   pos: number;
@@ -492,7 +560,8 @@ const despues = (a: Momento, b: Momento) => a.archivo > b.archivo || (a.archivo 
  *     `DROP POLICY IF EXISTS x; CREATE POLICY x` de siempre deja la prueba en pie.
  *   · Lo que BORRA (una tabla, un enum) es prueba si nadie lo vuelve a crear después: el catálogo no debe tenerlo.
  *   · `propia`: ningún otro archivo —ni los de `fondo`: el baseline `0_init` y `policies.sql`, que pudieron haberlo
- *     hecho por su cuenta— hace lo mismo. Un archivo cuyas pruebas son todas compartidas no prueba que corrió él.
+ *     hecho por su cuenta— hace lo mismo. Un archivo cuyas pruebas son todas compartidas no prueba que corrió él. El
+ *     RLS y `deny_all_non_superuser` nunca son propias (`puedeSerPropia`).
  *
  * Devuelve un mapa nombre → pruebas, sin repetidas.
  */
@@ -533,7 +602,8 @@ export function pruebasDeLosArchivos(archivos: ReadonlyArray<ArchivoSql>, fondo:
         const anulada = clavesQueLaAnulan(e.objeto).some((k) => (quitas.get(k) ?? []).some((q) => despues(q, aca)));
         if (anulada) continue;
         // Lo creado y borrado más arriba en el mismo archivo ya se descartó; acá queda en pie.
-        pruebas.set(`+${clave}`, { objeto: e.objeto, debeExistir: true, propia: (autores.get(`crea:${clave}`)?.size ?? 0) === 1 });
+        const unico = (autores.get(`crea:${clave}`)?.size ?? 0) === 1;
+        pruebas.set(`+${clave}`, { objeto: e.objeto, debeExistir: true, propia: unico && puedeSerPropia(e.objeto) });
       } else if (e.objeto.clase === "tabla" || e.objeto.clase === "enum") {
         const recreada = (creas.get(clave) ?? []).some((c) => despues(c, aca));
         if (recreada) continue;
@@ -624,6 +694,26 @@ export function clasificarConElCatalogo(pruebas: ReadonlyArray<Prueba>, catalogo
     return { estado: "sin-prueba", motivo: "todo lo que crea lo crea también otro archivo (o el baseline)" };
   }
   return { estado: "demostrado", pruebas: pruebas.length };
+}
+
+// ── La línea de comandos ───────────────────────────────────────────────────────────────────
+
+/**
+ * Las banderas que npm se quedó. En PowerShell, `npm run db:sql -- x.sql --apply` pierde el `--` (PowerShell lo consume
+ * al llamar a `npm.ps1`) y npm toma las banderas como configuración propia: el script nunca las ve. Las que npm no
+ * conoce (`--sin-transaccion`, `--marcar`) las deja en `npm_config_<nombre>`; esto devuelve las que npm tiene y el script
+ * no recibió, para frenar en vez de simular. ⚠ `--apply` npm no lo deja en ningún lado (probado con npm 10.9.2): esa no
+ * se puede ver, y el simulacro lo avisa al final cuando lo lanzó npm.
+ */
+export function banderasQueSeQuedoNpm(
+  banderas: readonly string[],
+  argv: readonly string[],
+  env: Readonly<Record<string, string | undefined>>,
+): string[] {
+  return banderas.filter((b) => {
+    const clave = `npm_config_${b.replace(/^--/, "").replace(/-/g, "_")}`;
+    return env[clave] !== undefined && !argv.some((a) => a === b || a.startsWith(`${b}=`));
+  });
 }
 
 // ── El registro contra el checkout ─────────────────────────────────────────────────────────

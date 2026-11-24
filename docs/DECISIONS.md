@@ -16655,11 +16655,22 @@ El flujo vive en ARCHITECTURE Parte 0 · cap. D y en RUNBOOK › «Registro de l
   `2026-09-05-liberacion-unica.sql` (una liberación abierta por cobro). Las reglas de la prueba: todo lo que el archivo
   crea está en el catálogo y lo que borra no está; lo que un archivo posterior borra no cuenta; al menos una prueba es
   solo de ese archivo (ni otro archivo, ni el baseline, ni `policies.sql` hacen lo mismo); que algo no exista prueba que
-  corrió solo si antes existía. Lo que no deja rastro en el esquema (un UPDATE de datos) lo anota una persona con
-  `--marcar`, y queda dicho (`como = marcado`).
-- **`check:esquema` sale con 1 si hay `.sql` sin anotar o cambiados.** *Por qué:* la comparación con el cliente Prisma
-  solo ve tablas, columnas y enums que el código usa; un `.sql` de índices, políticas o datos que no corrió pasaba en
-  verde (así quedaron los dos de arriba).
+  corrió solo si antes existía; el RLS y la política `deny_all_non_superuser` nunca son prueba propia, porque
+  `policies.sql` los pone en un bucle que no se lee; las columnas de un `CREATE TABLE` cuentan como creadas ahí. Lo que
+  no deja rastro en el esquema (un UPDATE de datos) lo anota una persona con `--marcar`, y queda dicho
+  (`como = marcado`). `--marcar` se niega con un archivo al que le falta algo: el esquema dice que no corrió, y marcarlo
+  lo sacaría de `check:esquema` para siempre. «Demostrado» prueba el DDL de un archivo, no su parte de datos: el
+  simulacro marca los que cambian datos para que alguien los lea antes del `--apply`.
+- **`check:esquema` sale con 3 si hay `.sql` sin anotar o cambiados, y con 1 si falta algo que el código usa.**
+  *Por qué:* la comparación con el cliente Prisma solo ve tablas, columnas y enums que el código usa; un `.sql` de
+  índices, políticas o datos que no corrió pasaba en verde (así quedaron los dos de arriba). Un código aparte porque
+  antes de aplicar el `.sql` nuevo de un deploy el registro siempre está pendiente: el wizard mira sin cortarse y,
+  después de aplicar, exige el 0.
+- **En PowerShell se aplica con `npx tsx scripts/aplicar-sql.ts`, no con `npm run db:sql --`.** *Por qué:* PowerShell
+  se come el `--` al llamar a `npm.ps1` y npm se queda con `--apply`: el script corría un simulacro y decía «No se
+  aplicó nada» en una línea fácil de pasar por alto. npm 10.9 no deja rastro de un `--apply` que se quedó (sí de
+  `--sin-transaccion` y `--marcar`, que los scripts detectan para frenar): por eso la regla va en los documentos y en las
+  cabeceras, y el simulacro lanzado por npm lo avisa al final.
 - **`db:sql` no respalda.** *Por qué:* los `.sql` son DDL aditivo e idempotente; el respaldo del guard (B-06) es de
   datos por tabla. Un `.sql` que cambia datos se mira en el simulacro antes del `--apply`.
 - **Queda para después:** que el deploy no arranque si a la base le falta un `.sql` del registro (la otra mitad de la

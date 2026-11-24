@@ -179,7 +179,8 @@ No copia Cobranza/Timeline/Canvas — la generación crea los suyos.
      la columna `embedding` y el CHECK, que Prisma no modela.
   3. Aplicar y anotar: `npm run db:sql -- scripts/sql/...` es el simulacro (cómo correría y qué
      dice el registro); el mismo comando con `--apply` y `ALLOW_PROD_WRITE=1` lo aplica y lo anota
-     en `SqlAplicado` en la MISMA transacción (`scripts/aplicar-sql.ts`, con el guard). Un
+     en `SqlAplicado` en la MISMA transacción (`scripts/aplicar-sql.ts`, con el guard; en PowerShell,
+     `npx tsx scripts/aplicar-sql.ts … --apply`, porque se come el `--` de `npm run`). Un
      `ALTER TYPE ... ADD VALUE` cuyo valor se usa en el mismo archivo va con `--sin-transaccion`
      (sentencia por sentencia; `CONCURRENTLY` lo pide solo): reemplaza al one-liner `npx tsx -e`.
      `prisma db execute` ya no se usa para `scripts/sql/`: aplica sin anotar.
