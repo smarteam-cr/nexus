@@ -9,8 +9,15 @@ import { describe, expect, it } from "vitest";
 import { parseObject } from "@/lib/ai/section-schema";
 import { leerResumenGuardado } from "./esquemas";
 import {
+  calculadaConSusCitas,
+  cambiaDeMagnitud,
   citasDeSusNumeros,
+  citasVerificadas,
   escribirElResumen,
+  genteSinLoDeMas,
+  leerLasPiezas,
+  rotuloSinLaCola,
+  sinLoQueNoDicen,
   leerElResumen,
   leerLoResuelto,
   lineaDelMapa,
@@ -154,7 +161,11 @@ describe("Quién es quién: los nombres de la gente de la empresa, y nada más (
   });
 
   it("⛔ nunca un dolor pegado a una persona, y siempre de qué equipo es", () => {
-    expect(linea("Soporte: Emiley, que no registra los tickets").l).toBeNull();
+    // Desde la segunda vuelta del 24 nov se quita lo que sobra y queda la persona: el dolor nunca llega.
+    expect(linea("Soporte: Emiley, que no registra los tickets").l?.texto).toBe("Soporte: Emiley");
+    // Si no queda nadie, o el dolor está en el equipo, la línea se cae.
+    expect(linea("Soporte: no registran los tickets").l).toBeNull();
+    expect(linea("Soporte que olvida los tickets: Emiley").l).toBeNull();
     expect(linea("Emiley lleva soporte").l).toBeNull();
     // Lo de antes de los dos puntos es quién lidera o un equipo (Centauro: «También mencionado: Eduardo…»).
     expect(linea("También mencionado: Emiley").l).toBeNull();
@@ -459,8 +470,10 @@ describe("lo que encontró la segunda vuelta de la revisión del 24 nov", () => 
   it("⛔ quién es quién: nada más que quién está (ni «saturada», ni nombres antes de los dos puntos, ni un equipo de más de 40 letras)", () => {
     const cita = [C("R1", 10, "Yo soy Emiley, llevo onboarding y soporte con el equipo de casa matriz")];
     const linea = (texto: string) => lineaDelMapa({ texto, citas: cita }, CTX, REGLAS, []);
-    for (const mala of ["Soporte: Emiley, que está saturada", "Soporte: Emiley, sobrecargada", "Soporte: Emiley (solo ella atiende todo)", "Lidera Eduardo Mora: Ventas", "Ventas Laura: asesores", "Implementación y comunicación con clientes de la casa: Emiley"])
-      expect(linea(mala), mala).toBeNull();
+    // Lo que califica a la persona se quita (segunda vuelta del 24 nov: «Lo justo es quitar la palabra que sobra, no la línea»).
+    for (const conDeMas of ["Soporte: Emiley, que está saturada", "Soporte: Emiley, sobrecargada", "Soporte: Emiley (solo ella atiende todo)"])
+      expect(linea(conDeMas)?.texto, conDeMas).toBe("Soporte: Emiley");
+    for (const mala of ["Lidera Eduardo Mora: Ventas", "Ventas Laura: asesores", "Implementación y comunicación con clientes de la casa: Emiley"]) expect(linea(mala), mala).toBeNull();
     for (const buena of ["Soporte y onboarding: Emiley y otras personas más", "Lidera: Fernando, gerente general", "Customer Success: Luis Humberto Rodríguez Acevedo"]) expect(linea(buena)?.texto, buena).toBe(buena);
   });
 
@@ -472,5 +485,184 @@ describe("lo que encontró la segunda vuelta de la revisión del 24 nov", () => 
     expect(esDeSmarteamPorElNombre("Mariana Mora", equipo)).toBe(false);
     expect(esDeSmarteamPorElNombre("Luis Pazos", equipo)).toBe(false);
     expect(esDeSmarteamPorElNombre("Catalina Calvo", equipo)).toBe(false);
+  });
+});
+
+describe("⛔ antes de descartar, se repara (24 nov, segunda vuelta: la corrida real de Centauro)", () => {
+  // Luis habla entrecortado: tres intervenciones suyas con un «Mejoro.» y un «Okay.» de Marco en el medio.
+  const RETENCION: ReunionParaElResumen = {
+    id: "gmeet_retencion",
+    clave: "R3",
+    fecha: "2026-11-09T20:00:00.000Z",
+    equipo: "Servicio",
+    areaId: "3",
+    delCliente: ["Luis Humberto Rodríguez Acevedo", "Emiley Calvo Jiménez"],
+    deSmarteam: ["Marco Salas"],
+    turnos: [
+      { n: 75, hablante: "Luis Humberto Rodríguez Acevedo", texto: "Sí, ahí Fernando fue Fernando nuestro gerente general y lo disculpo porque no pudo estar hoy." },
+      { n: 113, hablante: "Marco Salas", texto: "Y esta jefatura le reporta directamente a dirección hoy día." },
+      { n: 266, hablante: "Marco Salas", texto: "unos 25 al mes. Okay. ¿Tienen algún ticket promedio actual?" },
+      { n: 268, hablante: "Luis Humberto Rodríguez Acevedo", texto: "85 más o menos ese promedio." },
+      { n: 300, hablante: "Luis Humberto Rodríguez Acevedo", texto: "se nos van unos 14 clientes al mes, más o menos, eso lo vemos en la extranet." },
+      { n: 419, hablante: "Luis Humberto Rodríguez Acevedo", texto: "desde marzo estamos mejorando la retención. Entonces sí creo que ahorita estamos eh 70 30." },
+      { n: 420, hablante: "Marco Salas", texto: "Mejoro." },
+      { n: 421, hablante: "Luis Humberto Rodríguez Acevedo", texto: "Sí, sí, sí, estamos mejor," },
+      { n: 422, hablante: "Marco Salas", texto: "Okay." },
+      { n: 423, hablante: "Luis Humberto Rodríguez Acevedo", texto: "pero pero creo que estamos como un 70 30, o sea, un 70 reactivo y 30 proactivo," },
+    ],
+  };
+  const CON: ContextoDelResumen = { ...CTX, reuniones: [SOPORTE, EXTRANET, RETENCION] };
+  const soporte = (cifras: unknown[]) => [{ nombre: "Soporte", area: "3", organizacion: [], bien: [], frena: [], retos: [], cifras, falta: null }];
+
+  it("una cita de corrido que la transcripción partió en tres intervenciones de la misma persona", () => {
+    const de = citasVerificadas([C("R3", 423, "ahorita estamos eh 70 30. Sí, sí, sí, estamos mejor, pero pero creo que estamos como un 70")], CON.reuniones);
+    // Cada pedazo, tal como está en la transcripción (sin la coma del final de una intervención).
+    expect(de.map((c) => c.texto).join(" ").replace(/,/g, "")).toBe("ahorita estamos eh 70 30. Sí sí sí estamos mejor pero pero creo que estamos como un 70");
+    expect(de.length).toBeGreaterThanOrEqual(2);
+    // Un pedazo que nadie dijo no se cuela: la cita entera no pasa.
+    expect(citasVerificadas([C("R3", 423, "ahorita estamos eh 70 30. y vamos a llegar al 50 50 este mismo año")], CON.reuniones)).toEqual([]);
+  });
+
+  it("se quita la frase o el paréntesis con lo que la cita no dice, nunca un pedazo de frase", () => {
+    const sobra = (x: string) => /14/.test(x);
+    expect(sinLoQueNoDicen("Con 25 cierres y 14 bajas, el crecimiento es mínimo. Customer Success revisa la salud de cada cliente uno a uno.", sobra)).toBe(
+      "Customer Success revisa la salud de cada cliente uno a uno.",
+    );
+    expect(sinLoQueNoDicen("Soporte recibe casos por WhatsApp y correo (unos 14 al día) sin centralizarlos.", sobra)).toBe("Soporte recibe casos por WhatsApp y correo sin centralizarlos.");
+    expect(sinLoQueNoDicen("Se van 14 clientes al mes y nadie lo ve.", sobra)).toBeNull();
+    expect(sinLoQueNoDicen("Se van 14 al mes. Es mucho.", sobra)).toBeNull();
+  });
+
+  it("el rótulo de una cifra pierde la cola que trae el número de otro dicho, solo si entra por una palabra que la une", () => {
+    expect(rotuloSinLaCola("churn mensual sobre base de 500", (x) => /500/.test(x))).toBe("churn mensual");
+    expect(rotuloSinLaCola("reuniones por semana (meta: 50)", (x) => /50/.test(x))).toBe("reuniones por semana");
+    expect(rotuloSinLaCola("Se van 14 clientes frente a 25", (x) => /14|25/.test(x))).toBeNull();
+  });
+
+  it("⛔ «~1.800 tickets al mes»: el número se cita de lo que dijo la empresa y la nota con números de más sale", () => {
+    const e = leerElResumen(
+      responde({
+        areas: soporte([
+          {
+            cifra: "~1.800",
+            texto: "tickets al mes (correo y WhatsApp)",
+            estado: "declarado",
+            nota: "De esos, unos 1.300 entran por correo.",
+            dimension: null,
+            citas: [C("R1", 40, "los tickets nos llegan por WhatsApp y por correo y no quedan en ningún lado centralizados")],
+          },
+        ]),
+      }),
+      CON,
+      REGLAS,
+    );
+    const [c] = e.operativas[0].cifras;
+    expect(c).toMatchObject({ cifra: "~1.800", texto: "tickets al mes (correo y WhatsApp)" });
+    expect(c.citas.map((x) => x.turno)).toEqual([42, 40]);
+    expect(c.nota ?? "").not.toContain("1.300");
+    expect(e.descartados.join(" ")).toMatch(/la nota trae números/);
+  });
+
+  it("⛔ el churn: «2,8 %» queda con su rótulo, sin la base que dijo otro", () => {
+    const e = leerElResumen(
+      responde({ areas: soporte([{ cifra: "2,8 %", texto: "churn mensual sobre base de 500", estado: "declarado", nota: null, dimension: null, citas: [C("R1", 60, "el churn lo tenemos en un 2,8% mensual más o menos")] }]) }),
+      CON,
+      REGLAS,
+    );
+    expect(e.operativas[0].cifras.map((c) => [c.cifra, c.texto])).toEqual([["2,8 %", "churn mensual"]]);
+  });
+
+  it("⛔ una cuenta con una moneda que nadie dijo queda sin moneda; con otra moneda dicha, no entra", () => {
+    const cuenta = (pregunta?: string) => {
+      const r = pregunta ? { ...RETENCION, turnos: RETENCION.turnos.map((t) => (t.n === 266 ? { ...t, texto: pregunta } : t)) } : RETENCION;
+      return calculadaConSusCitas(
+        {
+          estado: "calculado",
+          texto: "al mes en clientes que se van",
+          cuenta: [
+            { valor: "14", rotulo: "clientes que se van al mes", cita: C("R3", 300, "se nos van unos 14 clientes al mes, más o menos") },
+            { valor: "US$ 85", rotulo: "de cuota al mes", cita: C("R3", 268, "85 más o menos ese promedio.") },
+          ],
+        },
+        { reuniones: [r] },
+        REGLAS,
+      );
+    };
+    const sin = cuenta();
+    expect(sin).toMatchObject({ ok: true, cifra: { cifra: "1.190", estado: "calculado" } });
+    if (sin.ok) expect(sin.cifra.cuenta?.factores.map((f) => f.valor)).toEqual(["14", "85"]);
+    expect(cuenta("¿Tienen algún ticket promedio actual en dólares?")).toMatchObject({ ok: true, cifra: { cifra: "US$ 1.190" } });
+    expect(cuenta("¿Tienen algún ticket promedio actual en colones?")).toMatchObject({ ok: false, motivo: expect.stringMatching(/moneda/) });
+  });
+
+  it("⛔ el texto de una cuenta habla de sus números: «25 cierres × 85» no es «al mes en clientes que se van»", () => {
+    const cuenta = (texto: string, rotulo: string) =>
+      calculadaConSusCitas(
+        {
+          estado: "calculado",
+          texto,
+          cuenta: [
+            { valor: "14", rotulo, cita: C("R3", 300, "se nos van unos 14 clientes al mes, más o menos") },
+            { valor: "85", rotulo: "ticket promedio", cita: C("R3", 268, "85 más o menos ese promedio.") },
+          ],
+        },
+        { reuniones: [RETENCION] },
+        REGLAS,
+      );
+    expect(cuenta("al mes en clientes que se van", "clientes que se van al mes")).toMatchObject({ ok: true });
+    expect(cuenta("al mes en clientes que se van", "cierres al mes")).toMatchObject({ ok: false, motivo: expect.stringMatching(/no habla de ningún número/) });
+  });
+
+  it("⛔ el título de un punto clave se corrige junto con su texto; uno largo sin corregir no vuelve", () => {
+    const cita = citaVerificada(C("R1", 60, "el churn lo tenemos en un 2,8% mensual más o menos"), CON.reuniones)!;
+    const caido = { lugar: "puntos", indice: 0, texto: "El churn consume la mitad de lo que cierra Ventas.", citas: [cita], problema: "números que no están en su cita (mitad)", titulo: "El churn se come la mitad", areaId: "3" };
+    const r = leerLasPiezas(responde({ piezas: [{ i: 0, titulo: "Churn mensual del 2,8 %", texto: "El churn mensual ronda el 2,8 % y eso preocupa a Customer Success." }] }), [caido], CON, REGLAS);
+    expect(r.piezas.map((p) => [p.titulo, p.texto])).toEqual([["Churn mensual del 2,8 %", "El churn mensual ronda el 2,8 % y eso preocupa a Customer Success."]]);
+    // Sin título nuevo, el de antes se vuelve a medir con el texto: con su «mitad», no pasa.
+    expect(leerLasPiezas(responde({ piezas: [{ i: 0, texto: "El churn mensual ronda el 2,8 %." }] }), [caido], CON, REGLAS).piezas).toEqual([]);
+    const largo = { ...caido, titulo: "Un título de punto clave tan largo que pasa de los ochenta caracteres permitidos aquí" };
+    const sinCorregir = leerLasPiezas(responde({ piezas: [{ i: 0, texto: "El churn mensual ronda el 2,8 %." }] }), [largo], CON, REGLAS);
+    expect(sinCorregir.piezas).toEqual([]);
+    expect(sinCorregir.descartados.join(" ")).toMatch(/título/);
+  });
+
+  it("⛔ una cifra corregida que cambia de magnitud no es la misma («~1.400–1.500» → «~15» por una transcripción cortada)", () => {
+    expect(cambiaDeMagnitud("~1.400–1.500", "~15")).toBe(true);
+    expect(cambiaDeMagnitud("1.800", "1.008")).toBe(false);
+    expect(cambiaDeMagnitud("2,8 %", "28")).toBe(false);
+  });
+
+  it("⛔ «Quién es quién»: se quita la palabra que sobra y se busca la presentación de quien lidera", () => {
+    const linea = (texto: string, citas: unknown[]) => lineaDelMapa({ texto, citas }, CON, REGLAS, []);
+    const deLuis = [C("R1", 60, "el churn lo tenemos en un 2,8% mensual más o menos")];
+    expect(linea("Customer Success: Luis Humberto Rodríguez Acevedo, único en el área", deLuis)?.texto).toBe("Customer Success: Luis Humberto Rodríguez Acevedo");
+    // La cita era de Marco: se busca dónde la empresa dice quién es Fernando.
+    const lidera = linea("Lidera: Fernando Segura, gerente general y quien toma las decisiones", [C("R3", 113, "esta jefatura le reporta directamente a dirección hoy día")]);
+    expect(lidera?.texto).toBe("Lidera: Fernando Segura, gerente general");
+    expect(lidera?.citas.map((c) => [c.turno, c.hablante])).toEqual([[75, "Luis Humberto Rodríguez Acevedo"]]);
+    // Sin nada de la empresa que lo diga, no hay cita y la línea no pasa.
+    expect(linea("Lidera: Catalina, directora de marketing", [C("R3", 113, "esta jefatura le reporta directamente a dirección hoy día")])).toBeNull();
+    expect(genteSinLoDeMas("Luis Humberto Rodríguez Acevedo, único en el área", (w) => w === "unico")).toBe("Luis Humberto Rodríguez Acevedo");
+    expect(genteSinLoDeMas("Emiley (supervisora que atiende todo)", (w) => w === "que")).toBe("Emiley (supervisora)");
+  });
+
+  it("⛔ un punto pierde la frase del número que nadie dijo y se queda con la que sí, con la cita del número", () => {
+    const e = leerElResumen(
+      responde({
+        areas: soporte([]),
+        puntos: [
+          {
+            titulo: "~1.800 tickets al mes sin centralizar",
+            texto: "Los tickets llegan por WhatsApp y por correo y no quedan centralizados. Se pierden unos 2.500 al año.",
+            area: "3",
+            citas: [C("R1", 40, "los tickets nos llegan por WhatsApp y por correo y no quedan en ningún lado centralizados")],
+          },
+        ],
+      }),
+      CON,
+      REGLAS,
+    );
+    expect(e.puntos.map((p) => [p.titulo, p.texto])).toEqual([["~1.800 tickets al mes sin centralizar", "Los tickets llegan por WhatsApp y por correo y no quedan centralizados."]]);
+    expect(e.puntos[0].citas.map((c) => c.turno)).toEqual([40, 42]);
   });
 });

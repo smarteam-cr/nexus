@@ -16993,7 +16993,9 @@ que ve el cliente tiene que ser confiable y no perder nada de lo que dijo.
   Marco), también antes de los dos puntos («Lidera Eduardo Mora: Ventas» no pasa); la forma «<equipo o quién lidera>:
   <gente>», con el equipo en las primeras 40 letras («También mencionado: Eduardo» no pasa); ningún dolor en toda la
   línea («Soporte que olvida los tickets: Emiley» tampoco); y con la gente, solo nombres, roles y cantidades («y 3 personas
-  más», «jefatura y 5 asesores»): «que está saturada», «sobrecargada» o «(solo ella atiende todo)» la hacen caer. Una empresa sin dominios de correo registrados (2 de 49 el 24
+  más», «jefatura y 5 asesores»): «que está saturada», «sobrecargada», «(solo ella atiende todo)» o «único en el área» se quitan y queda la persona
+  (segunda vuelta del 24 nov, `genteSinLoDeMas`: «Lo justo es quitar la palabra que sobra, no la línea entera»); si no
+  queda nadie, la línea se cae. Una empresa sin dominios de correo registrados (2 de 49 el 24
   nov) no tiene gente de la empresa: no se sabe quién es de afuera (Centauro, 10 nov: «Michael, de HubSpot»), y no sale
   ningún nombre. Alguien de Smarteam escrito de otra forma no es de la empresa, y eso se decide en UN lugar (`deOtraEn` en
   el servidor, con `esDeSmarteamPorElNombre`): una sala de Meet con su nombre entero («Presentación de Marco Salas», quien
@@ -17003,7 +17005,7 @@ que ve el cliente tiene que ser confiable y no perder nada de lo que dijo.
   «Luis Pablo Rojas» del equipo, también de los que ya no están) deja de contar como de la empresa. *No se revisa* lo que se escribe a mano o con «✨ Mejorar con IA»
   (lo aplica quien lo lee). *Medido con
   Centauro:* salieron Marketing, Soporte y onboarding, Customer Success y Ventas; «Lidera: Fernando Segura» se cayó las dos
-  veces porque su cita no estaba en la reunión (se agrega a mano, como cualquier pieza).
+  veces porque su cita no estaba en la reunión; desde la segunda vuelta se busca su presentación (ver abajo).
 - **Lo que no eligió Elías** del business case de Marco (las tres cifras del negocio arriba y los casos con resultado
   verificable) no se hizo.
 - **Después del deploy, lo publicado no cambia solo** (Elías: «Que esperen a publicar»). La foto publicada guarda los
@@ -17016,6 +17018,53 @@ que ve el cliente tiene que ser confiable y no perder nada de lo que dijo.
   portada de antes hasta que se publique por otro cambio (rehacer el Resumen, corregir un texto), aunque arriba diga
   «Publicado: el cliente ve esta versión». El historial de versiones pinta las versiones viejas con la forma de hoy si la
   traen. Sin SQL.
+- **Segunda vuelta (24 nov, tarde): se repara antes de descartar.** La corrida real de Centauro después del deploy
+  (`Rehacer con IA`, 228 mil tokens, 27 descartadas) perdió lo que las mediciones decían que quedaba: el «~1.800» de
+  Soporte, el punto clave del churn, «Quién es quién» de Ventas, Customer Success y quien lidera, un punto de Customer
+  Success «sin una cita» y la cuenta con «US$ 85». El modelo escribe distinto cada vez, y cada cosa caía por un detalle.
+  La regla (Elías por la coordinadora): «Al fallar la verificación, se repara (se busca el número en lo que dijo la
+  empresa sobre lo mismo, o se quita la palabra de más) antes de descartar».
+  - *Los números de una pieza:* el número que la empresa dijo en otra intervención se suma como cita aunque otro número
+    de la pieza no aparezca (antes era todo o nada: un «500» sin cita hundía el «2,8 %» que sí la tenía). Lo que sigue sin
+    cita se quita con su frase o su paréntesis enteros (`sinLoQueNoDicen`), nunca un pedazo de frase, y solo si queda una
+    frase de seis palabras o más; lo mismo una herramienta, una lectura nuestra o una conclusión. Si no alcanza, se pide
+    corregida con las citas que se encontraron.
+  - *Una cifra:* su número en otra intervención de la empresa sobre lo mismo va como su primera cita («de esos 1800», 6
+    nov); la nota con números que ninguna cita dice sale (va la del código); el rótulo pierde la cola que entra por una
+    palabra que la une («churn mensual sobre base de 500» → «churn mensual», `rotuloSinLaCola`; en «Se van 14 clientes»
+    el número es la frase y no se corta). La nota y el rótulo se recortan solo si con eso la cifra pasa entera; si no, va
+    a corregir como vino, con las citas nuevas.
+  - *Un punto clave:* el arreglo con IA corrige también su título (antes solo el texto, y la «mitad» del churn estaba en el
+    título); un título largo se pide acortado. «La mitad» sigue contando como número: «el churn consume la mitad de lo que
+    Ventas cierra» era una cuenta del agente (14 de 25), no algo que dijo la empresa.
+  - *Una cita de corrido* que la transcripción partió en hasta tres intervenciones (Luis: «ahorita estamos eh 70 30.» ·
+    «Sí, sí, sí, estamos mejor,» · «pero pero creo que estamos como un 70 30»): vale si todo el texto queda en pedazos de
+    cuatro palabras o más, cada uno de la empresa (o confirmado) y a no más de cuatro intervenciones del anterior
+    (`enPedazosSeguidos`). Cada pedazo queda como su cita.
+  - *«Quién es quién»:* sin una cita que esté en la reunión, se busca dónde la empresa nombra a esa persona junto a un
+    rol o un equipo de la línea, o donde esa persona habla de sí con uno de ellos (`citaDeQuienEs`: Luis, 10 nov,
+    «Fernando nuestro gerente general»); y lo que sobra con la gente se quita (ver arriba).
+  - *Una cuenta:* si nadie dijo la moneda de un número (ni su cita, ni la pregunta de antes, ni lo que la empresa siguió
+    diciendo), se quita y la cuenta queda sin moneda; si se dijo OTRA, no entra (como antes). Una cuenta sin confirmar no
+    sale al cliente: quien presenta la confirma (y ahí le pone la moneda, si la sabe). Y el texto de la cuenta tiene que
+    hablar de alguno de sus números (`palabrasQueDicenDeQue`): «25 cierres × 85 ticket promedio» no es «al mes en clientes
+    que se van» (lo escribió así el agente en un simulacro; antes lo tumbaba la moneda).
+  - *Lo que el arreglo con IA no puede hacer:* una cifra corregida que cambia diez veces o más de magnitud no es la misma
+    (`cambiaDeMagnitud`): en la corrida real, «~1.400–1.500 contactos» volvió como «~15» porque la transcripción dice
+    «anda entre 15 lits», y salía al cliente.
+  - *Un arreglo de paso:* `citasVerificadas` devolvía hasta cuatro citas y lo guardado acepta tres (esquemas.ts): una
+    pieza con cuatro desaparecía sin aviso al volver a abrir el Resumen. Ahora devuelve hasta tres.
+  - *Lo que esto no garantiza:* que el rol o el equipo de cada persona en «Quién es quién» sea el correcto (el código mira
+    que el nombre sea de la empresa y que haya una cita, no qué dice la cita de esa persona: en los simulacros salieron
+    «Ventas: Emiley Calvo Jiménez (jefatura)», de «hay una jefatura de ventas… como decía Emy», y «Dirección: Eduardo,
+    CEO», cuando dijeron «el dueño»; antes, «Laura» en Ventas, y Fernando contó el 23 nov que Laura no existe); que la frase que queda después de quitar otra se
+    entienda sola; que una cuenta sin moneda se lea bien antes de que quien presenta la confirme. *Medido con Centauro:*
+    dos simulacros sin guardar (24 nov, tarde), 0,82 y 0,85 USD, 13 y 16 descartadas (la corrida real: 27). El
+    «~1.800» quedó en los dos, con la cita de Emiley del 6 nov; el punto clave del churn, en los dos (en uno, con el título
+    corregido de la «mitad»; en el otro, con los 500 clientes de Emiley del 9 nov); «Quién es quién» con quien lidera,
+    Ventas y Customer Success, en los dos; el punto de Customer Success «uno a uno», en uno (en el otro, lo ya resuelto lo
+    quitó junto con la extranet, y queda en el resumen de arriba); la cuenta con el 85 sin moneda, en uno (en el otro, el
+    agente rotuló «25 cierres × 85» como «clientes que se van» y no entra).
 
 ## Registro de los SQL aplicados (2026-11-23)
 
