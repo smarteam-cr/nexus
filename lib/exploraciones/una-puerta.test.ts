@@ -5,6 +5,8 @@
  *   · El cajón de «Hablar con Nexus» no tiene botón propio en el riel: va con los demás cajones del lienzo.
  *   · «✨ Mejorar con IA» de La escala abre ese cajón (sin el panel al lado de la página: no quedan los dos).
  *   · En la preventa, el chat de la cuenta no ofrece las notas de la cuenta (van a HubSpot: decisión de Elías del 22 nov).
+ *   · Una sola conversación (24 nov): ya no está el enlace «Tareas, siguiente paso o la guía», y «Mejorar con IA» de la guía
+ *     abre la MISMA conversación del cajón en la preventa (en un proyecto, donde no hay cajón, el chat de la cuenta).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -48,5 +50,17 @@ describe("una sola puerta «Nexus» en la preventa", () => {
     expect(leer("lib/nexus-chat/turno-server.ts")).toContain("herramientasDelChat({ sinNotasDeLaCuenta: foco?.sinNotasDeLaCuenta })");
     // La operación existe con ese nombre (si se renombra, el filtro dejaría de filtrar).
     expect(leer("lib/operaciones/notas-server.ts")).toContain('nombre: "nota.crear"');
+  });
+
+  it("una sola conversación: sin el enlace a otro chat, y la guía de la preventa abre el mismo cajón", () => {
+    const cajon = leer("components/exploraciones/HablarConNexus.tsx");
+    expect(cajon).not.toContain("Tareas, siguiente paso o la guía</");
+    expect(cajon).not.toContain("abrirElChatDeNexus(");
+    expect(cajon).toContain("setGuia(p.guia ?? null)");
+    const guia = leer("components/exploraciones/AntesDeLaSesion.tsx");
+    expect(guia).toContain('if (lugar === "preventa") abrirNexusEnLaPreventa({ exploracionId: exp.id, guia: { etiqueta, sugerencias } });');
+    expect(guia).toContain("else abrirElChatDeNexus(");
+    // Con la guía como chip, lo que se escribe es un pedido sobre ella.
+    expect(leer("components/chat-de-nexus/PanelDeNexus.tsx")).toContain('lugar === "guia" && modo === "normal" ? { pedir: true } : {}');
   });
 });

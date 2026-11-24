@@ -825,3 +825,25 @@ describe("«Guardarlo como nota» debajo de una lista, si la IA falla al leerlo"
     expect(await aplicarEnLaPreventa(s.id, CONVERSACION, v.turno.lista.id, [], SA, quien)).toMatchObject({ ok: true, resultado: { aplicadas: 1 } });
   });
 });
+
+describe("«Mejorar con IA» de la guía abre la misma conversación (24 nov)", () => {
+  it("con la guía como lugar, lo que se escribe va a la mano de la cuenta, aunque sea una pregunta", async () => {
+    const SA = "sa@smarteam.test";
+    const s = await sembrar();
+    const persona = await prisma.teamMember.create({ data: { name: "Sofía Admin", email: SA, roleEnum: "SUPER_ADMIN" } });
+    tareaQuePropone = null;
+    const v = await vueltaEnLaPreventa(s.id, CONVERSACION, [{ de: "persona", texto: "¿Qué otras preguntas agregarías?" }], SA, CON_ACCESO, {
+      quienPideLaCuenta: async () => ({ persona, veMontos: false }),
+      pedir: true,
+      lugar: "guia",
+    });
+    if (!v.ok) throw new Error(v.error);
+    expect(v.turno.tipo).toBe("lista");
+    expect(pedidosALaCuenta).toHaveLength(1);
+    // Ni el que clasifica ni el que responde con citas: la pregunta es sobre la guía.
+    expect(pedidos).toHaveLength(0);
+    // Y queda en la misma conversación de la preventa.
+    const c = await conversacionEnLaPreventa(s.id, SA, CON_ACCESO);
+    expect(c?.mensajes.map((m) => m.es)).toEqual(["pedido", "lista"]);
+  });
+});

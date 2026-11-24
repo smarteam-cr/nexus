@@ -67,7 +67,7 @@ import type { ConversacionGuardada } from "@/lib/chat-de-nexus/guardada";
 import { useLienzo } from "./contexto";
 import { CORRIENDO_LA_ESCALA, useRehacerLaEscala } from "./rehacer-la-escala";
 import PedirleANexus from "./PedirleANexus";
-import { avisarQueNexusCambioLaEscala, EVENTO_ABRIR_NEXUS, type LugarDeLaEscalaEnElCajon, type PedidoDeAbrirNexus } from "@/lib/exploraciones/abrir-nexus";
+import { avisarQueNexusCambioLaEscala, EVENTO_ABRIR_NEXUS, type GuiaEnElCajon, type LugarDeLaEscalaEnElCajon, type PedidoDeAbrirNexus } from "@/lib/exploraciones/abrir-nexus";
 
 /** Lo que responde …/nexus/guardado (los tipos del servidor, sin importarlo). */
 interface Guardado {
@@ -464,6 +464,8 @@ export default function HablarConNexus() {
   const alternarAncho = () => setAncho((a) => (a === "amplio" ? "normal" : "amplio"));
   /** El lugar de La escala desde el que se pidió «✨ Mejorar con IA» (el chip); null: la conversación. */
   const [escala, setEscala] = useState<LugarDeLaEscalaEnElCajon | null>(null);
+  /** La guía desde la que se pidió «Mejorar con IA» (24 nov): el chip de la conversación; null, la conversación de siempre. */
+  const [guia, setGuia] = useState<GuiaEnElCajon | null>(null);
   const [listo, setListo] = useState<Listo | null>(null);
   const [guardado, setGuardado] = useState<Guardado | null>(null);
   const [errorAlGuardar, setErrorAlGuardar] = useState<string | null>(null);
@@ -537,7 +539,9 @@ export default function HablarConNexus() {
         // Con el chat ya abierto, el cursor va igual a la caja (otra sección de La escala).
         setPedidoDeFoco((n) => n + 1);
       } else if (activo) {
+        // La conversación: desde la guía, con su chip y sus sugerencias; desde el botón «Nexus», sin chip.
         setEscala(null);
+        setGuia(p.guia ?? null);
         setAbierto(true);
         setPedidoDeFoco((n) => n + 1);
       }
@@ -690,6 +694,10 @@ export default function HablarConNexus() {
           // Una sola conversación (24 nov): con el permiso del chat de la cuenta, tareas, siguiente paso y la guía se piden
           // en este mismo hilo; al aplicar, el lienzo vuelve a leer la guía y la página lo demás.
           pedidosDeLaCuenta={conAsistente}
+          // «Mejorar con IA» de la guía (24 nov): la misma conversación, con la guía como chip; la ✕ vuelve a conversar.
+          {...(guia && conAsistente
+            ? { lugar: "guia" as const, chip: { texto: `Sobre ${guia.etiqueta}`, alQuitar: () => setGuia(null) }, sugerencias: guia.sugerencias }
+            : {})}
           alAplicar={() => {
             void recargar();
             router.refresh();

@@ -5,7 +5,9 @@
  * El botón «Nexus» de arriba y «✨ Mejorar con IA» de La escala no conocen el cajón (components/exploraciones/
  * HablarConNexus.tsx): lo abren con `abrirNexusEnLaPreventa`, y el cajón lo escucha. Con `escala`, el cajón abre con el
  * lugar puesto como chip (el Resumen o un área, y la sección desde la que se pidió): lo que se escribe es un pedido de
- * cambio a la página, y la propuesta por pieza se ve adentro. Sin chip, es la conversación de siempre.
+ * cambio a la página, y la propuesta por pieza se ve adentro. Con `guia` (24 nov, una sola conversación: «Mejorar con IA»
+ * de la guía), abre la MISMA conversación con la guía como chip y sus sugerencias: lo que se escribe es un pedido sobre la
+ * guía, que prepara el chat de la cuenta con la guía a la vista. Sin chip, es la conversación de siempre.
  */
 import type { LugarEnLaEscala } from "./escala-con-nexus";
 
@@ -23,6 +25,14 @@ export interface LugarDeLaEscalaEnElCajon {
   foco: string | null;
 }
 
+/** La guía de la próxima sesión, como chip de la conversación (24 nov). */
+export interface GuiaEnElCajon {
+  /** «la guía de la sesión 2». */
+  etiqueta: string;
+  /** Pedidos listos para mandar, en botones sobre la caja (los arma la guía real, sin IA). Un clic llena la caja. */
+  sugerencias: string[];
+}
+
 export interface PedidoDeAbrirNexus {
   /**
    * La exploración cuyo cajón se abre. En la ficha del cliente pueden quedar cargadas dos (la de la cuenta y la de un
@@ -30,6 +40,7 @@ export interface PedidoDeAbrirNexus {
    */
   exploracionId: string;
   escala?: LugarDeLaEscalaEnElCajon;
+  guia?: GuiaEnElCajon;
 }
 
 export function abrirNexusEnLaPreventa(p: PedidoDeAbrirNexus): void {

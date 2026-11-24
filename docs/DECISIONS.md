@@ -16929,8 +16929,8 @@ había conversado allá.
   (`{"tipo":"pedido"}`); después de una lista de Nexus, lo que sigue («para Ana», «¿y la de Juan?») también lo decide él.
   Cada error tiene su salida: «Guardarlo como nota» va también debajo de lo que contestó la mano de la cuenta, si no se
   aplicó nada y no lleva lo pendiente de otra lista (soltarla se lo llevaría); esa lista queda «soltada» recién cuando lo
-  contado se leyó (si la IA falla, sigue viva con su «Aplicar»). El servidor acepta `pedir` («Hazlo») y `lugar: "guia"`; ningún botón los
-  manda todavía.
+  contado se leyó (si la IA falla, sigue viva con su «Aplicar»). El servidor acepta `pedir` y `lugar: "guia"`: los
+  manda el chip de la guía (abajo).
 - **La misma memoria:** la mano de contar ve «la persona pidió algo de la cuenta» y «Nexus, sobre la cuenta» en la
   conversación; la mano de la cuenta recibe los mensajes de la conversación como su historia (`ventanaParaLaCuenta`), con
   lo que propuso («[La lista que propuse: …]»), lo que se aplicó y lo que la persona no quiso. Lo pedido no va a la nota y
@@ -16974,9 +16974,17 @@ había conversado allá.
   | La lista de tareas, siguiente paso o guía, en el otro chat | En el mismo hilo, debajo de lo que pidió la persona, con su «Aplicar» |
   | Lo pendiente de ese chat, compartido con la ficha | Lo pendiente de ESTA conversación |
   | Las conversaciones de la cuenta tenidas desde la preventa | Quedan en el chat de la ficha (Elías: «Quedan en la ficha»); no pasan al hilo nuevo |
-  | «Mejorar con IA» de la guía abría el chat de la cuenta con la guía y sus sugerencias | Igual (todavía): llevarlo al mismo cajón es un paso aparte |
-- **Lo que no cambia:** en la ficha, el chat de la cuenta sigue con su hilo y sus rutas, y en la preventa sigue montado sin
-  botón para la guía (y con su botón para quien no puede cambiar la preventa). Al leer reuniones, el chat de la cuenta deja
+  | «Mejorar con IA» de la guía abría el chat de la cuenta (otro hilo) con la guía y sus sugerencias | Abre la MISMA conversación del cajón, con el chip «Sobre la guía de la sesión N» y las mismas sugerencias en botones sobre la caja. Con el chip, todo lo que se escribe es un pedido sobre la guía (como el chip de La escala); la ✕ vuelve a la conversación de siempre. En la exploración de un proyecto, donde no hay ese cajón, sigue abriendo el chat de la cuenta |
+- **La guía, en la misma conversación** (la coordinadora, 24 nov, con la decisión de Elías: «Todo debe abrir el mismo
+  chat con la misma interfaz»): «Mejorar con IA» de la guía de la próxima sesión abre el cajón de la preventa
+  (`abrirNexusEnLaPreventa` con `guia`, lib/exploraciones/abrir-nexus.ts) con la guía como chip y sus sugerencias (las
+  mismas de antes, sin IA). Con el chip, el cajón manda `pedir` y `lugar: "guia"`: la mano de la cuenta tiene la guía a la
+  vista (sus preguntas con su clave) y lo que propone vuelve como una lista con «Aplicar». *Por qué todo es pedido con el
+  chip:* «¿Qué otras preguntas agregarías?» es una pregunta y el código la habría mandado al que responde con citas, que
+  no conoce la guía; es lo mismo que hace el chip de La escala.
+- **Lo que no cambia:** en la ficha, el chat de la cuenta sigue con su hilo y sus rutas. En la preventa sigue montado sin
+  botón para quien puede cambiar la preventa (y con su botón para quien no), y lo usa la guía de la exploración de un
+  proyecto. Al leer reuniones, el chat de la cuenta deja
   afuera la cancelada sin texto y dice el día en Costa Rica, como el conector de Claude; el filtro va junto al del cliente
   en un `AND`, para que no lo pueda pisar (guarda en lib/sessions/canceladas.test.ts).
 - **Lo que no queda garantizado:** que el modelo lea bien los pedidos dudosos (no se midió con conversaciones reales:

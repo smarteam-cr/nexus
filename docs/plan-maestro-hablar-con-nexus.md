@@ -416,8 +416,8 @@ Es el cimiento y lo que más vale: hoy lo que cuentas no sale de la preventa.
 > **Un solo motor, 24 nov (servidor):** lo que se cuenta, lo que se pregunta y lo que se pide de la cuenta (tareas, el
 > siguiente paso, la guía) viven en la misma conversación, con la misma memoria (DECISIONS, «Una sola conversación en el
 > chat «Nexus» de la preventa»), y la lista con su «Aplicar» se ve en el cajón. El enlace «Tareas, siguiente paso o la
-> guía» se quitó (Elías, 24 nov: «Quitarlo»); son 12 vueltas por conversación. Falta llevar «Mejorar con IA» de la guía al
-> mismo cajón.
+> guía» se quitó (Elías, 24 nov: «Quitarlo»); son 12 vueltas por conversación, y «Mejorar con IA» de la guía abre el mismo
+> cajón con la guía como chip.
 
 > ~~**En espera desde el 23 nov** hasta que termine el piloto de dos semanas del conector de Claude.~~ Ya no espera: el
 > 23 nov Elías pidió que «✨ Mejorar con IA» abra el chat «Nexus» (pregunta 104 del roadmap), y la etapa siguió sin el

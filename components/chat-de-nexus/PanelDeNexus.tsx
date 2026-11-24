@@ -26,7 +26,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert } from "@/components/ui";
 import { BotonEnlace } from "@/components/ui/sistema";
-import CajonDeNexus, { Burbuja, CajaDeNexus, ChatVacio, Pensando, PropuestaEnElHilo } from "@/components/asistente/CajonDeNexus";
+import CajonDeNexus, { Burbuja, CajaDeNexus, ChatVacio, ChipDeNexus, Pensando, PropuestaEnElHilo } from "@/components/asistente/CajonDeNexus";
 import { devolverALaCaja } from "@/lib/asistente/caja";
 import { notaDeLaConversacion, paraContarComoNota, paraPreguntar, paraSeguirDespuesDeGuardar, TOPES, type ResultadoDelTurno } from "@/lib/chat-de-nexus/conversacion";
 import type { MensajeGuardado } from "@/lib/chat-de-nexus/guardada";
@@ -210,8 +210,15 @@ export interface PanelDeNexusProps {
    * de un pedido. Sin esto, un pedido se lee como antes (contar o preguntar).
    */
   pedidosDeLaCuenta?: boolean;
-  /** Desde dónde se abrió: «guia», la guía de la próxima sesión (la parte de Nexus que trabaja la cuenta la tiene a la vista). */
+  /**
+   * Desde dónde se abrió: «guia», la guía de la próxima sesión (la parte de Nexus que trabaja la cuenta la tiene a la vista).
+   * Con la guía, lo que se escribe es un pedido sobre ella (`pedir`), como con el chip de La escala.
+   */
   lugar?: "guia";
+  /** Lo que se mejora, como chip sobre la caja, con su ✕ para volver a la conversación de siempre. */
+  chip?: { texto: string; alQuitar: () => void };
+  /** Pedidos listos para mandar, en botones sobre la caja (con la caja vacía). Un clic llena la caja; no la manda. */
+  sugerencias?: readonly string[];
   /** Se aplicó una lista de la cuenta: el lugar vuelve a leer lo que cambió (la guía, las tareas). */
   alAplicar?: () => void;
 }
@@ -239,6 +246,8 @@ export default function PanelDeNexus({
   apagado = null,
   pedidosDeLaCuenta = false,
   lugar,
+  chip,
+  sugerencias,
   alAplicar,
 }: PanelDeNexusProps) {
   const { id: conversacion, mensajes } = c;
@@ -284,7 +293,8 @@ export default function PanelDeNexus({
         body: JSON.stringify({
           conversacion,
           mensajes: paraMandar,
-          ...(pedidosDeLaCuenta ? { listas: true, ...(lugar ? { lugar } : {}), ...(soltar ? { soltar } : {}) } : {}),
+          // Con la guía como lugar, lo que se escribe es un pedido sobre ella (salvo «Guardarlo como nota» o «Respóndela»).
+          ...(pedidosDeLaCuenta ? { listas: true, ...(lugar ? { lugar } : {}), ...(soltar ? { soltar } : {}), ...(lugar === "guia" && modo === "normal" ? { pedir: true } : {}) } : {}),
           ...(modo === "contar" ? { contar: true } : modo === "preguntar" ? { preguntar: true } : {}),
         }),
       });
@@ -416,19 +426,43 @@ export default function PanelDeNexus({
       // El estado de cada lista también: aplicar no suma un mensaje, pero el hilo baja a lo que dejó.
       alFinal={`${mensajes.length}·${pensando}·${terminado}·${error ?? ""}·${mensajes.map((m) => m.lista?.estado ?? "").join("")}`}
       pie={
+        <>
+        {chip ? (
+          <ChipDeNexus onQuitar={chip.alQuitar} quitarLabel="Volver a la conversación de siempre">
+            {chip.texto}
+          </ChipDeNexus>
+        ) : null}
+        {sugerencias?.length && !texto.trim() && !ocupado ? (
+          <div className="mb-2 flex flex-wrap gap-1.5" aria-label="Pedidos para empezar">
+            {sugerencias.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => {
+                  setTexto(s);
+                  cajaRef.current?.focus();
+                }}
+                className="rounded-full border border-info-line bg-info-surface px-2.5 py-1 text-left text-xs text-brand hover:bg-surface-hover"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <CajaDeNexus
           cajaRef={cajaRef}
           texto={texto}
           setTexto={setTexto}
           onEnviar={() => void enviar()}
           enviarApagado={pensando || !texto.trim()}
-          placeholder={mensajes.length ? "Tu respuesta, u otra pregunta…" : "Cuéntale o pregúntale algo del cliente…"}
-          ariaLabel={mensajes.length ? "Tu mensaje" : "Lo que le cuentas o le preguntas a Nexus"}
+          placeholder={lugar === "guia" ? "Pídele un cambio a la guía…" : mensajes.length ? "Tu respuesta, u otra pregunta…" : "Cuéntale o pregúntale algo del cliente…"}
+          ariaLabel={lugar === "guia" ? "Lo que le pides a Nexus sobre la guía" : mensajes.length ? "Tu mensaje" : "Lo que le cuentas o le preguntas a Nexus"}
           apagada={cajaApagada}
           maxLength={TOPES.largoDelMensaje}
           conDictado
           onErrorDeDictado={setError}
         />
+        </>
       }
     >
       {aviso}
