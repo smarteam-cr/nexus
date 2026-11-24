@@ -430,6 +430,10 @@ Es el cimiento y lo que más vale: hoy lo que cuentas no sale de la preventa.
 
 ### Etapa 3 · Mejorar La escala y los casos de uso desde Nexus (≈ 2 sesiones)
 
+> **Construida el 23 nov en su versión sin cajón, sin SQL y sin desplegar** (DECISIONS, «Hablar con Nexus, el plan
+> maestro», etapa 3). Falta tu prueba con Cemaco · Ecuador: cambiar el titular y agregar una pieza. El historial de un
+> caso de uso guarda sus versiones pero todavía no tiene popup.
+
 Tu ejemplo: «cambia el título», «agrega esta parte, que es crítica».
 
 - **Qué se construye:**

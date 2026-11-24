@@ -10,7 +10,7 @@
  *   · el nombre de cómo nació, también para las filas de antes del 21 nov, que no tienen `tipo` y se deducen de `origen`.
  */
 
-export const TIPOS_DE_VERSION = ["ia", "edicion", "publicado", "restaurado", "presentado", "congelado", "guardada"] as const;
+export const TIPOS_DE_VERSION = ["ia", "edicion", "publicado", "restaurado", "presentado", "congelado", "guardada", "nexus"] as const;
 export type TipoDeVersion = (typeof TIPOS_DE_VERSION)[number];
 
 /** Cómo nació, en palabras de la pantalla. */
@@ -22,6 +22,8 @@ export const ETIQUETA_DEL_TIPO: Record<TipoDeVersion, string> = {
   presentado: "Presentado al cliente",
   congelado: "Congelado",
   guardada: "Guardada",
+  // «✨ Pedirle a Nexus» (etapa 3 del plan maestro de «Hablar con Nexus», 23 nov): una persona aplicó lo que propuso Nexus.
+  nexus: "Cambiado con Nexus",
 };
 
 export function esTipoDeVersion(v: unknown): v is TipoDeVersion {

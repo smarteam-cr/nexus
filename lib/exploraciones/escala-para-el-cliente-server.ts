@@ -104,7 +104,7 @@ export { paginaDeLaFoto } from "./escala-publicada";
 /** El cálculo de la página, uno solo para las dos puertas. null: no hay exploración, empresa o proyecto que cuadre. */
 async function armarLaPagina(
   exploracionId: string,
-  o: { publica: boolean; areas?: Areas; resumen?: ResumenGuardado | null },
+  o: { publica: boolean; areas?: Areas; resumen?: ResumenGuardado | null; textosDelResumen?: Readonly<Record<string, string>> },
 ): Promise<{
   pagina: EscalaParaElCliente;
   lienzo: EscalaDelLienzo | null;
@@ -129,7 +129,10 @@ async function armarLaPagina(
     detalles: {},
     dimensionDelRiesgo: {},
     resumen: resumenParaLaPagina(null, [], {}, {}, { conCitas: false }),
-    textos: estado.contenido.textosDeLaPagina ?? {},
+    // Una versión del historial guarda los textos fijos del Resumen (23 nov): la vista previa los usa en lugar de los de hoy.
+    textos: o.textosDelResumen
+      ? { ...Object.fromEntries(Object.entries(estado.contenido.textosDeLaPagina ?? {}).filter(([k]) => !k.startsWith("resumen."))), ...o.textosDelResumen }
+      : (estado.contenido.textosDeLaPagina ?? {}),
   };
   const general = await escalaParaExplorar();
   if (general.estado !== "ok") return { pagina: vacio, lienzo: null, estado };
@@ -173,11 +176,15 @@ export async function escalaParaElCliente(exploracionId: string): Promise<Escala
  * La misma página para la pantalla interna: todas las áreas de la escala, y cuáles ve el cliente. Sin guardia propia.
  * `resumen`: otro Resumen en lugar del de hoy (la vista previa de una versión del historial, 21 nov).
  */
-export async function paginaParaElCse(exploracionId: string, o: { resumen?: ResumenGuardado | null } = {}): Promise<PaginaParaElCse | null> {
+export async function paginaParaElCse(
+  exploracionId: string,
+  o: { resumen?: ResumenGuardado | null; textosDelResumen?: Readonly<Record<string, string>> } = {},
+): Promise<PaginaParaElCse | null> {
   const r = await armarLaPagina(exploracionId, {
     publica: false,
     areas: (lienzo) => lienzo.areas.map((a) => a.id),
     ...(o.resumen !== undefined ? { resumen: o.resumen } : {}),
+    ...(o.textosDelResumen ? { textosDelResumen: o.textosDelResumen } : {}),
   });
   if (!r) return null;
   return {

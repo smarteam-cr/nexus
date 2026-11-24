@@ -14,6 +14,7 @@
  * Cada pieza lleva su `clave` de edición (la operación `resumenDeLaEscala`): la vista no sabe de formatos, solo pinta.
  */
 import { LETRAS, type Letra } from "@/lib/escala/documento/tipos";
+import { CLAVES, huella, textoDeLaPagina, type TextosDeLaPagina } from "./textos-de-la-pagina";
 
 /** De dónde sale una pieza: la reunión (su id), su fecha, el turno y lo dicho, con la letra de la transcripción. */
 export interface CitaDelResumen {
@@ -547,4 +548,37 @@ export function nivelProvisional(r: { nivel: Letra | null; dimensiones: readonly
     determinan = medidas.filter((d) => i(d.nivel!) === minimo);
   }
   return determinan.every((d) => porExplorar.includes(d.id)) ? determinan.map((d) => d.nombre) : null;
+}
+
+/** La bajada de la portada, debajo del titular (un texto fijo: se cambia por empresa, atado a este texto). */
+export const BAJADA_DEL_RESUMEN = "Así entendimos tu negocio, cómo trabajan tus equipos y qué los frena hoy.";
+
+/**
+ * La clave de un texto fijo del Resumen ATADO a su texto de siempre (`resumen.<nombre>.<huella>`): lo escrito para un
+ * número o una frase deja de valer cuando el Resumen se rehace y cambia (la vista: `fijo(…, atado)`).
+ */
+export const claveAtadaDelResumen = (nombre: string, original: string): string => CLAVES.delResumen(`${nombre}.${huella(original)}`);
+
+/**
+ * El titular de la portada (el H1, 21 nov) como lo ve el cliente, con su clave de edición (23 nov: lo comparten la vista y
+ * «Pedirle a Nexus», que lo cambia por el mismo texto fijo). Va atado a los números del SISTEMA, no a los escritos:
+ * corregir una cifra no lo suelta; rehacer el Resumen con otras sesiones, sí. `valor`: lo cambiado para esta empresa o,
+ * si nadie lo cambió, el titular con los números que se ven abajo. null: sin sesiones (la portada dice lo de siempre).
+ */
+export function titularDelResumen(
+  h: { sesiones: number; minutos: number; personas: number } | null | undefined,
+  textos: TextosDeLaPagina | null | undefined,
+): { clave: string; original: string; valor: string } | null {
+  if (!h) return null;
+  const delSistema = tituloDeLoQueHicimos(h);
+  if (!delSistema) return null;
+  const escrito = (nombre: string, original: string) => textoDeLaPagina(textos, claveAtadaDelResumen(nombre, original), original);
+  const conLosDeAbajo =
+    tituloDeLoQueHicimos(h, {
+      sesiones: escrito("hicimos.sesiones", String(h.sesiones)),
+      tiempo: h.minutos > 0 ? escrito("hicimos.tiempo", enHoras(h.minutos)) : undefined,
+      personas: h.personas > 0 ? escrito("hicimos.personas", String(h.personas)) : undefined,
+    }) ?? delSistema;
+  const clave = claveAtadaDelResumen("titular.hicimos", delSistema);
+  return { clave, original: conLosDeAbajo, valor: textoDeLaPagina(textos, clave, conLosDeAbajo) };
 }

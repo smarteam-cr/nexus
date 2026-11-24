@@ -265,7 +265,16 @@ export async function aplicarCambios(
   operaciones: readonly Operacion[],
   general: Escala,
   /** `db`: el cliente de un script (scripts/migrar-reuniones-de-los-documentos.ts, pool de 2). Sin él, el de la app. */
-  o: { eventosDeConfianza?: boolean; quienPide?: string | null; db?: Pick<typeof prisma, "$transaction"> } = {},
+  o: {
+    eventosDeConfianza?: boolean;
+    quienPide?: string | null;
+    db?: Pick<typeof prisma, "$transaction">;
+    /**
+     * «Pedirle a Nexus» (23 nov): la fila tiene que seguir como estaba cuando se leyó la página (su `updatedAt`). Si
+     * cualquier cosa la cambió entretanto, conflicto: la pieza que se iba a cambiar pudo cambiar, y no se pisa.
+     */
+    sinCambiosDesde?: Date;
+  } = {},
 ): Promise<ResultadoDeCambios> {
   const r = await (o.db ?? prisma).$transaction(async (tx) => {
     await bloquearFila(tx, id);
@@ -273,6 +282,7 @@ export async function aplicarCambios(
     if (!fila) return { estado: "no-existe" } as const;
     // Archivada es de solo lectura: la pantalla ya no deja editar, y la API tampoco.
     if (fila.archivadaEn) return { estado: "invalido", error: "La preventa está archivada: ya no se puede cambiar." } as const;
+    if (o.sinCambiosDesde && fila.updatedAt.getTime() !== o.sinCambiosDesde.getTime()) return { estado: "conflicto", fila } as const;
 
     const antes = estadoDesdeFila(fila);
     // Los ids se validan contra la escala con la edición que la exploración tiene AHORA. Los ids de

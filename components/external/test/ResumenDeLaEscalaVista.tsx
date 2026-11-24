@@ -49,6 +49,8 @@ import {
   etiquetaDeLaCifra,
   sinCosto,
   tituloDeLoQueHicimos,
+  titularDelResumen,
+  BAJADA_DEL_RESUMEN,
 } from "@/lib/external/pagina-del-resumen";
 import { CLAVES, huella, quitadaDeLaPagina, textoDeLaPagina, type TextosDeLaPagina } from "@/lib/external/textos-de-la-pagina";
 import AnimacionesDelResultado from "./AnimacionesDelResultado";
@@ -539,18 +541,9 @@ export default function ResumenDeLaEscalaVista({
   const Tesis = edicion ? "div" : "h2";
   const conTesis = tesis.piezas.length > 0;
   // El H1 es lo que hicimos (21 nov, Elías), con los mismos números que las cifras de abajo, también si una persona los
-  // cambió. Sin sesiones (o sin Resumen), el de siempre.
-  const escrito = (nombre: string, original: string) => textoDeLaPagina(textos, claveDe(nombre, original, true), original);
-  const tituloHicimos = h
-    ? tituloDeLoQueHicimos(h, {
-        sesiones: escrito("hicimos.sesiones", String(h.sesiones)),
-        tiempo: h.minutos > 0 ? escrito("hicimos.tiempo", enHoras(h.minutos)) : undefined,
-        personas: h.personas > 0 ? escrito("hicimos.personas", String(h.personas)) : undefined,
-      })
-    : null;
-  // El titular escrito a mano se ata a los números del sistema, no a los escritos: corregir una cifra no lo suelta;
-  // rehacer el Resumen con otras sesiones, sí.
-  const tituloDelSistema = h ? tituloDeLoQueHicimos(h) : null;
+  // cambió (lib/external/pagina-del-resumen.ts: la misma pieza que cambia «Pedirle a Nexus», 23 nov). Atado a los números
+  // del sistema: rehacer el Resumen lo suelta. Sin sesiones (o sin Resumen), el de siempre.
+  const titular = titularDelResumen(h, textos);
   // «El problema principal» (21 nov): la tesis, que hasta hoy era el H1, con las etiquetas del negocio y su tamaño. Un
   // Resumen de antes sin tesis trae aquí lo que vende, bajo «Tu negocio» (adentro y afuera, el mismo nombre).
   const conProblema = conTesis || vende.length > 0 || etiquetas.piezas.length > 0 || !!tamano || (!!edicion && (!!tesis.nueva || !!etiquetas.nueva));
@@ -581,10 +574,10 @@ export default function ResumenDeLaEscalaVista({
             </p>
             <Titular className="re-titular rd-entra">
               {/* Atado a sus números: al rehacer el Resumen cambian, y lo escrito para los de antes no queda pegado. */}
-              {tituloHicimos && tituloDelSistema ? fijo("titular.hicimos", tituloDelSistema, "El titular: lo que hicimos", false, true, tituloHicimos) : "Así entendimos tu negocio."}
+              {titular && h ? fijo("titular.hicimos", tituloDeLoQueHicimos(h) ?? titular.original, "El titular: lo que hicimos", false, true, titular.original) : "Así entendimos tu negocio."}
             </Titular>
             <P className="re-bajada rd-entra">
-              {fijo("bajada", "Así entendimos tu negocio, cómo trabajan tus equipos y qué los frena hoy.", "La bajada, debajo del titular", false, true)}
+              {fijo("bajada", BAJADA_DEL_RESUMEN, "La bajada, debajo del titular", false, true)}
             </P>
           </div>
           {h && (

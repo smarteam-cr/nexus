@@ -38,7 +38,18 @@
 import type { ReactNode } from "react";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { conclusionDelSubequipo, etiquetaDeLaCifra, sinCosto, type TarjetaDeLaPagina } from "@/lib/external/pagina-del-resumen";
-import { CLAVES, quitadaDeLaPagina, textoDeLaPagina, type TextosDeLaPagina } from "@/lib/external/textos-de-la-pagina";
+import {
+  cejaDeLoQueCuesta,
+  CLAVES,
+  enMedioDeLaOracion,
+  pieDelArea,
+  quitadaDeLaPagina,
+  textoDeLaPagina,
+  textoDeLaPrioridad,
+  tituloDeEmpezar,
+  TITULOS_DEL_AREA,
+  type TextosDeLaPagina,
+} from "@/lib/external/textos-de-la-pagina";
 import type { DetalleDeLaDimension } from "@/lib/tests-diagnostico/detalle-de-la-dimension";
 import { etiquetaDeIndustria, OTRA_INDUSTRIA } from "@/lib/tests-diagnostico/direccion-publica";
 import { ENLACE_DE_OTRA_EMPRESA, enlaceDeOtraArea, puntajeDeLaDimension } from "@/lib/tests-diagnostico/pagina-del-resultado";
@@ -94,7 +105,6 @@ function Tarjeta({ titulo, className = "", children }: { titulo?: string; classN
 }
 
 /** El nombre de una parte en medio de una oración: en minúscula, salvo las siglas («Mejora Continua de TI» → «mejora continua de TI»). */
-const enMedioDeLaOracion = (nombre: string) => nombre.replace(/\p{L}+/gu, (w) => (w.length > 1 && w === w.toUpperCase() ? w : w.toLowerCase()));
 
 function PorDondeEmpezar({ rec }: { rec: NonNullable<ResultadoDelTest["recomendacion"]> }) {
   return (
@@ -155,12 +165,6 @@ function Casos({ casos }: { casos: ResultadoDelTest["casos"] }) {
   );
 }
 
-/** Qué priorizar para el nivel siguiente: «Ver detalles» de la barra y, en el PDF, el renglón debajo de ella. */
-function textoDeLaPrioridad(d: DetalleDeLaDimension): { titulo: string; texto: string } {
-  return d.siguiente
-    ? { titulo: `Qué priorizar para llegar a ${d.siguiente.nombre}`, texto: d.siguiente.prioridad }
-    : { titulo: "Qué priorizar", texto: "Ya está en el nivel más alto de la escala: lo que sigue es sostenerlo y volver a medir." };
-}
 
 /** «Ver detalles» de una barra: qué hacer (no cómo está: eso lo dice la tarjeta del radar). */
 function VerDetalles({ d, esEstimado, texto, editable = false }: { d: DetalleDeLaDimension; esEstimado: boolean; texto?: (original: string) => ReactNode; editable?: boolean }) {
@@ -565,7 +569,7 @@ function AreaDeLaEscala({
         <section className="ed-parte ed-envoltura ed-escalera" aria-labelledby="ed-t-escalera">
           <p className="ed-ceja">La escala de rendimiento</p>
           <h2 className="ed-titulo" id="ed-t-escalera">
-            {fijo(CLAVES.delArea(area, "titulo.escalera"), "Dónde está hoy en la escala.", "Título de la escalera")}
+            {fijo(CLAVES.delArea(area, "titulo.escalera"), TITULOS_DEL_AREA["titulo.escalera"].texto, TITULOS_DEL_AREA["titulo.escalera"].nombre)}
           </h2>
           <EscaleraDeNiveles area={r.areaNombre} niveles={r.niveles} marcados={nivelesMarcados(r.areaNombre, r.capas, r.nivel)} idSvg={`esc-${area}`} />
         </section>
@@ -578,7 +582,7 @@ function AreaDeLaEscala({
                 Las {r.total} partes de {r.areaNombre}
               </p>
               <h2 className="ed-titulo" id="ed-t-radar">
-                {fijo(CLAVES.delArea(area, "titulo.radar"), "Dónde está hoy cada parte.", "Título del radar")}
+                {fijo(CLAVES.delArea(area, "titulo.radar"), TITULOS_DEL_AREA["titulo.radar"].texto, TITULOS_DEL_AREA["titulo.radar"].nombre)}
               </h2>
             </div>
             {/* El interruptor de RadarDeUnaEmpresa (`rde-check`), aquí arriba: su CSS muestra los puntajes sin JS. */}
@@ -630,7 +634,7 @@ function AreaDeLaEscala({
         {conclusiones.length > 0 && (
           <section className="ed-parte ed-envoltura ed-cuesta" aria-labelledby="ed-t-cuesta" data-revela="">
             <p className="ed-ceja" id="ed-t-cuesta">
-              {fijo(CLAVES.delArea(area, "ceja.cuesta"), `Lo que más le cuesta a ${r.areaNombre}`, "Ceja de lo que más le cuesta")}
+              {fijo(CLAVES.delArea(area, "ceja.cuesta"), cejaDeLoQueCuesta(r.areaNombre), "Ceja de lo que más le cuesta")}
             </p>
             <div className="ed-cuesta-lista">
               {conclusiones.map(({ id, nombre, falta, c }) => (
@@ -683,8 +687,8 @@ function AreaDeLaEscala({
                 {rec.tipo === "trabajar" ? (
                   <h2 className="ed-titulo" id="ed-t-empezar">
                     {fijo(
-                      CLAVES.calculado(area, "empezar.titulo", `Llevar ${enMedioDeLaOracion(rec.dimensionNombre)} a ${rec.objetivoNombre}.`),
-                      `Llevar ${enMedioDeLaOracion(rec.dimensionNombre)} a ${rec.objetivoNombre}.`,
+                      CLAVES.calculado(area, "empezar.titulo", tituloDeEmpezar(rec.dimensionNombre, rec.objetivoNombre)),
+                      tituloDeEmpezar(rec.dimensionNombre, rec.objetivoNombre),
                       "Título de «Por dónde empezar»",
                     )}
                   </h2>
@@ -710,7 +714,7 @@ function AreaDeLaEscala({
           <section className="ed-parte ed-envoltura" aria-labelledby="ed-t-casos" data-revela="">
             <p className="ed-ceja">Lo que lo mueve</p>
             <h2 className="ed-titulo" id="ed-t-casos">
-              {fijo(CLAVES.delArea(area, "titulo.casos"), "Lo que haríamos contigo.", "Título de lo que haríamos")}
+              {fijo(CLAVES.delArea(area, "titulo.casos"), TITULOS_DEL_AREA["titulo.casos"].texto, TITULOS_DEL_AREA["titulo.casos"].nombre)}
             </h2>
             <ol className="ed-casos">
               {casos.map((c, i) => (
@@ -733,7 +737,7 @@ function AreaDeLaEscala({
           <section className="ed-parte ed-envoltura" aria-labelledby="ed-t-riesgos" data-revela="">
             <p className="ed-ceja">Lo que suele poner en riesgo a un área en este nivel</p>
             <h2 className="ed-titulo" id="ed-t-riesgos">
-              {fijo(CLAVES.delArea(area, "titulo.riesgos"), "Lo que puede estar pasando sin que se note.", "Título de los riesgos")}
+              {fijo(CLAVES.delArea(area, "titulo.riesgos"), TITULOS_DEL_AREA["titulo.riesgos"].texto, TITULOS_DEL_AREA["titulo.riesgos"].nombre)}
             </h2>
             <ul className="ed-riesgos">
               {riesgos.map((x) => {
@@ -754,7 +758,7 @@ function AreaDeLaEscala({
           <section className="ed-parte ed-envoltura" aria-labelledby="ed-t-partes" data-revela="">
             <p className="ed-ceja">Cómo está cada parte</p>
             <h2 className="ed-titulo" id="ed-t-partes">
-              {fijo(CLAVES.delArea(area, "titulo.partes"), "Parte por parte, sobre 100.", "Título de cada parte")}
+              {fijo(CLAVES.delArea(area, "titulo.partes"), TITULOS_DEL_AREA["titulo.partes"].texto, TITULOS_DEL_AREA["titulo.partes"].nombre)}
             </h2>
             <div className="ed-partes">
               {(["base", "produccion"] as const).map((clave) => {
@@ -832,7 +836,7 @@ function AreaDeLaEscala({
           </span>
           <span>
             {(() => {
-              const original = fecha ? `Medido el ${fechaLarga(fecha)}, con lo que conversamos contigo.` : "Medido con lo que conversamos contigo.";
+              const original = pieDelArea(fecha);
               return fijo(CLAVES.calculado(area, "pie", original), original, "El pie de la página");
             })()}
           </span>

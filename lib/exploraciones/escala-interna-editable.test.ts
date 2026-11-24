@@ -291,8 +291,13 @@ describe("⛔ la página pública no edita, y la interna no se lee sin guardia",
       .flatMap((d) => archivosDe(d))
       .filter((f) => f !== "lib/exploraciones/escala-para-el-cliente-server.ts")
       .filter((f) => /\bpaginaParaElCse\s*\(/.test(fs.readFileSync(path.join(RAIZ, f), "utf8")));
-    // La vista previa de una versión del Resumen (21 nov) la arma con otra versión: la llama por `paginaDeLaVersion`.
-    expect(usan).toEqual(["app/api/sales/exploraciones/[id]/pagina-de-la-escala/route.ts", "lib/exploraciones/versiones-del-resumen-server.ts"]);
+    // La vista previa de una versión del Resumen (21 nov) la arma con otra versión: la llama por `paginaDeLaVersion`. Y
+    // «✨ Pedirle a Nexus» (23 nov) lee la página en piezas: su contrato, que solo llama su ruta (abajo, con la guardia).
+    expect(usan).toEqual([
+      "app/api/sales/exploraciones/[id]/pagina-de-la-escala/route.ts",
+      "lib/exploraciones/escala-con-nexus-server.ts",
+      "lib/exploraciones/versiones-del-resumen-server.ts",
+    ]);
     const conGuardia = (archivo: string, llamada: string) => {
       const ruta = fs.readFileSync(path.join(RAIZ, archivo), "utf8");
       const guardia = ruta.search(/await guardDeLaExploracion\(id, "read"\);\s*if \(guard instanceof NextResponse\) return guard;/);
@@ -307,5 +312,15 @@ describe("⛔ la página pública no edita, y la interna no se lee sin guardia",
       .filter((f) => /\bpaginaDeLaVersion\s*\(/.test(fs.readFileSync(path.join(RAIZ, f), "utf8")));
     expect(usanLaVersion).toEqual(["app/api/sales/exploraciones/[id]/escala/resumen/versiones/[versionId]/route.ts"]);
     conGuardia(usanLaVersion[0], "await paginaDeLaVersion(");
+    // El contrato de «Pedirle a Nexus» lo llama solo su ruta, después de la guardia de la exploración para escribir.
+    const usanElContrato = ["app", "lib", "components"]
+      .flatMap((d) => archivosDe(d))
+      .filter((f) => !f.startsWith("lib/exploraciones/escala-con-nexus"))
+      .filter((f) => /\b(leerLaEscalaParaNexus|proponerEnLaEscala|aplicarEnLaEscala|deshacerEnLaEscala)\s*\(/.test(fs.readFileSync(path.join(RAIZ, f), "utf8")));
+    expect(usanElContrato).toEqual(["app/api/sales/exploraciones/[id]/escala/nexus/route.ts"]);
+    const ruta = fs.readFileSync(path.join(RAIZ, usanElContrato[0]), "utf8");
+    const guardia = ruta.search(/await guardDeLaExploracion\(id, "write"\);\s*if \(guard instanceof NextResponse\) return guard;/);
+    expect(guardia).toBeGreaterThan(-1);
+    for (const llamada of ["await proponerEnLaEscala(", "await aplicarEnLaEscala(", "await deshacerEnLaEscala("]) expect(guardia).toBeLessThan(ruta.indexOf(llamada));
   });
 });
