@@ -16624,5 +16624,13 @@ revirtió.
   lo que vuelve de lo que ve el cliente); las 2 y 5 construyen la conversación dentro de cada pantalla, que es lo que
   Claude ya hace. La etapa 1 deja sus lecturas en `lib/`, con la persona y la cuenta como parámetros, para que el
   conector las reuse.
-- **Sigue abierto** (sección 5 del plan): quiénes prueban, por dónde se entra, si Claude lee transcripciones completas,
-  dónde se guarda lo que la persona le cuenta y cuánto pesa eso en la escalera.
+- **Las respuestas de Elías del mismo día** (sección 5 del plan). El piloto lo hace él solo («Yo»). Claude lee las
+  transcripciones completas solo para quien ya las ve en Nexus, por partes y con registro. Lo que la persona le
+  cuenta a Claude se guarda en Nexus, en el mismo lugar de la empresa que usa Nexus. Lo que dice la persona pesa como
+  «confirmado por el equipo»; lo que Claude saque de una reunión, como «dicho en una reunión» solo con la cita
+  verificada. Sigue abierto por dónde se entra (el login de la primera conexión): su respuesta, «sería por texto»,
+  contestaba otra cosa y se le vuelve a preguntar.
+- **La etapa 2 deja de esperar al piloto** (Elías, 23 nov, más tarde). *Por qué:* duplicaba dos chats en la preventa.
+  Queda un solo chat «Nexus» y el botón «Hablar con Nexus» se quita. El botón para pedirle un cambio a la IA se llama
+  «✨ Mejorar con IA» en toda la app y abre siempre ese chat con la parte puesta. En los documentos del proyecto ya
+  cambió el nombre; que abran el chat «Nexus» y no el del documento viene después.

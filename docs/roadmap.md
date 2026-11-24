@@ -2781,7 +2781,8 @@
     94,
     95,
     96,
-    97
+    97,
+    104
    ]
   },
   {
@@ -3172,12 +3173,13 @@ Sin esto, algo sigue mal o no se puede validar:
 95. ✓ **Hablar con Nexus · la etapa 3 sin cajón.** **Tu respuesta (23 nov):** sí: un pedido y una propuesta por pieza, en la misma página.
 96. ✓ **Lo interno · los hechos de una nota del equipo en lo que ve el cliente.** **Tu respuesta (23 nov):** «Sí, con ese filtro»: solo los hechos de la empresa, nada de la compra.
 97. ✓ **Propuesta comercial · el acceso al cliente.** **Tu respuesta (23 nov):** dejarlo anotado; se cierra antes de darle el permiso de Ventas a una CSE.
-98. **Conector · quiénes prueban primero.** Recomiendo: tú, una CSE y alguien de Ventas.
-99. **Conector · por dónde se entra.** Una puerta propia de Nexus, el servidor de Supabase (en beta) o un proveedor externo. Recomiendo la puerta propia, con el mismo login de Google.
-100. **Conector · las transcripciones completas.** ¿Claude puede leerlas? Recomiendo: sí, para quien ya las ve en Nexus, por partes y con registro.
-101. **Conector · dónde guarda Claude lo que le cuentas.** Recomiendo adelantar solo el lugar de la empresa (una tabla chica), para que Nexus y Claude guarden en el mismo sitio.
-102. **Conector · cuánto pesa lo guardado desde Claude.** Recomiendo: lo que dijo la persona cuenta como «confirmado por el equipo»; lo que Claude sacó de una reunión, como «dicho en una reunión» solo con la cita verificada.
-103. **Nexus por dentro · dos mejoras de la evaluación.** Partir el archivo de decisiones por módulo (pesa 1,6 MB) y llevar registro de los cambios de base aplicados en producción.
+98. ✓ **Conector · quiénes prueban primero.** Recomiendo: tú, una CSE y alguien de Ventas. **Tu respuesta (23 nov):** «Yo»: el piloto lo haces tú solo.
+99. **Conector · por dónde se entra.** Una puerta propia de Nexus, el servidor de Supabase (en beta) o un proveedor externo. Recomiendo la puerta propia, con el mismo login de Google. *(23 nov: respondiste que el conector es para usar Nexus desde Claude, por texto; la pregunta es otra: con qué login Claude demuestra que eres tú la primera vez que lo conectas. Va de nuevo con esa aclaración.)*
+100. ✓ **Conector · las transcripciones completas.** ¿Claude puede leerlas? Recomiendo: sí, para quien ya las ve en Nexus, por partes y con registro. **Tu respuesta (23 nov):** «Como recomiendas».
+101. ✓ **Conector · dónde guarda Claude lo que le cuentas.** Recomiendo adelantar solo el lugar de la empresa (una tabla chica), para que Nexus y Claude guarden en el mismo sitio. **Tu respuesta (23 nov):** «En Nexus».
+102. ✓ **Conector · cuánto pesa lo guardado desde Claude.** Recomiendo: lo que dijo la persona cuenta como «confirmado por el equipo»; lo que Claude sacó de una reunión, como «dicho en una reunión» solo con la cita verificada. **Tu respuesta (23 nov):** «Ok».
+103. ✓ **Nexus por dentro · dos mejoras de la evaluación.** Partir el archivo de decisiones por módulo (pesa 1,6 MB) y llevar registro de los cambios de base aplicados en producción. **Tu respuesta (23 nov):** «Ok». El registro arrancó el mismo día en su propia sesión; partir el archivo de decisiones va después de juntar la etapa 2, porque todas las sesiones lo editan.
+104. ✓ **Hablar con Nexus · una sola puerta y el nombre del botón.** Cambia las 94 (etapa 2) y 95 (etapa 3 sin cajón). **Tu respuesta (23 nov):** «el botón debería llamarse mejorar con IA y debería abrir siempre el chat de Nexus referenciando la parte donde quiere mejorarse y que todo se haga por el chat de Nexus […] Y quitaría lo del botón de hablar con Nexus»; y «sí, cambia el nombre a Mejorar con IA» en los documentos. La etapa 2 deja de esperar al conector.
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
