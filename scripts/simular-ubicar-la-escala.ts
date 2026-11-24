@@ -8,7 +8,8 @@
  *     tiempo y el costo. No lo guarda: ese gasto NO aparece en «Gasto de la IA».
  *   - Con --proyecto <id>: el proyecto de contexto (su handoff, cuestionarios, cronograma y memoria), como el selector.
  *   - Con --sesiones <id,id>: suma esas reuniones de Meet como sesiones, solo en memoria (el camino de la etapa 0: «sumar
- *     reuniones de entrega como sesiones»). `--equipo <clave>` les pone el equipo.
+ *     reuniones de entrega como sesiones»). `--equipo <clave>` les pone el equipo; `--de-trabajo` las marca como reuniones
+ *     de trabajo (lo que ya sabemos), como «Reuniones de trabajo sugeridas».
  *   - Con --como-prospecto: como si la ficha fuera un prospecto (lo de antes del 24 nov: solo las sesiones, sin la base).
  *   - Con --reuniones: las reuniones de la empresa con texto, por el chokepoint, con cuánto habló el cliente en cada una.
  *
@@ -68,6 +69,7 @@ async function main() {
         hecha: true,
         reunion: { id: s.id, origen: "meet" as const },
         ...(equipo ? { equipo: equipo as never } : {}),
+        ...(process.argv.includes("--de-trabajo") ? { deLoQueYaSabemos: true } : {}),
       })),
     ];
     console.log(`  + ${deLaEmpresa.length} sesiones sumadas solo en memoria`);
