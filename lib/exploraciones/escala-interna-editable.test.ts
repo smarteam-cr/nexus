@@ -286,11 +286,20 @@ describe("⛔ la página pública no edita, y la interna no se lee sin guardia",
     expect(fuente).toMatch(/export async function escalaParaElCliente[\s\S]*?armarLaPagina\(exploracionId, \{ publica: true \}\)/);
   });
 
-  it("`paginaParaElCse` (todas las áreas) solo la llama su ruta, y la ruta pasa la guardia de la exploración antes", () => {
-    const usan = ["app", "lib", "components"]
-      .flatMap((d) => archivosDe(d))
-      .filter((f) => f !== "lib/exploraciones/escala-para-el-cliente-server.ts")
-      .filter((f) => /\bpaginaParaElCse\s*\(/.test(fs.readFileSync(path.join(RAIZ, f), "utf8")));
+  /*
+   * El código de app, lib y components, leído UNA vez (23 nov: tres recorridos del repo con su lectura pasaban de los 5 s
+   * del tope de vitest, aun corrido solo). Cada búsqueda de abajo filtra esta lista.
+   */
+  let delRepo: { archivo: string; texto: string }[] | null = null;
+  const elRepo = () =>
+    (delRepo ??= ["app", "lib", "components"].flatMap((d) => archivosDe(d)).map((archivo) => ({ archivo, texto: fs.readFileSync(path.join(RAIZ, archivo), "utf8") })));
+  const quienesLlaman = (llamada: RegExp, salvo: (f: string) => boolean) =>
+    elRepo()
+      .filter(({ archivo, texto }) => !salvo(archivo) && llamada.test(texto))
+      .map(({ archivo }) => archivo);
+
+  it("`paginaParaElCse` (todas las áreas) solo la llama su ruta, y la ruta pasa la guardia de la exploración antes", { timeout: 30_000 }, () => {
+    const usan = quienesLlaman(/\bpaginaParaElCse\s*\(/, (f) => f === "lib/exploraciones/escala-para-el-cliente-server.ts");
     // La vista previa de una versión del Resumen (21 nov) la arma con otra versión: la llama por `paginaDeLaVersion`. Y
     // «✨ Pedirle a Nexus» (23 nov) lee la página en piezas: su contrato, que solo llama su ruta (abajo, con la guardia).
     expect(usan).toEqual([
@@ -306,17 +315,11 @@ describe("⛔ la página pública no edita, y la interna no se lee sin guardia",
     };
     conGuardia(usan[0], "await paginaParaElCse(");
     // Y `paginaDeLaVersion` solo la llama su ruta, después de la misma guardia.
-    const usanLaVersion = ["app", "lib", "components"]
-      .flatMap((d) => archivosDe(d))
-      .filter((f) => f !== "lib/exploraciones/versiones-del-resumen-server.ts")
-      .filter((f) => /\bpaginaDeLaVersion\s*\(/.test(fs.readFileSync(path.join(RAIZ, f), "utf8")));
+    const usanLaVersion = quienesLlaman(/\bpaginaDeLaVersion\s*\(/, (f) => f === "lib/exploraciones/versiones-del-resumen-server.ts");
     expect(usanLaVersion).toEqual(["app/api/sales/exploraciones/[id]/escala/resumen/versiones/[versionId]/route.ts"]);
     conGuardia(usanLaVersion[0], "await paginaDeLaVersion(");
     // El contrato de «Pedirle a Nexus» lo llama solo su ruta, después de la guardia de la exploración para escribir.
-    const usanElContrato = ["app", "lib", "components"]
-      .flatMap((d) => archivosDe(d))
-      .filter((f) => !f.startsWith("lib/exploraciones/escala-con-nexus"))
-      .filter((f) => /\b(leerLaEscalaParaNexus|proponerEnLaEscala|aplicarEnLaEscala|deshacerEnLaEscala)\s*\(/.test(fs.readFileSync(path.join(RAIZ, f), "utf8")));
+    const usanElContrato = quienesLlaman(/\b(leerLaEscalaParaNexus|proponerEnLaEscala|aplicarEnLaEscala|deshacerEnLaEscala)\s*\(/, (f) => f.startsWith("lib/exploraciones/escala-con-nexus"));
     expect(usanElContrato).toEqual(["app/api/sales/exploraciones/[id]/escala/nexus/route.ts"]);
     const ruta = fs.readFileSync(path.join(RAIZ, usanElContrato[0]), "utf8");
     const guardia = ruta.search(/await guardDeLaExploracion\(id, "write"\);\s*if \(guard instanceof NextResponse\) return guard;/);

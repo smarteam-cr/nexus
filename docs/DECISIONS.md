@@ -16517,6 +16517,8 @@ todavía: cada etapa arranca cuando él lo dice.
     pieza). Con el chip, lo que se escribe es un pedido de cambio a la página y la propuesta por pieza, con «Aplicar» y
     «Aplicar todo», se ve dentro del cajón; quitar el chip vuelve a la conversación. **El panel al lado de la página se
     retiró:** no quedan los dos. En la escala de la cuenta, donde no hay conversación, el cajón abre solo con el chip.
+    Cerrar el cajón no pierde el pedido: lo pedido, la propuesta, lo aplicado, lo descartado y el «Deshacer» quedan
+    recordados por lugar mientras la página esté abierta (lib/pedirle-a-nexus/recordado.ts; no van a la base).
   - «Agregar algo que sabes» (Preparación) no se tocó en esta tanda.
 - **Etapa 3, construida el 23 nov (sin SQL), en su versión sin cajón: «✨ Pedirle a Nexus» en la página de La escala.**
   (Desde la etapa 2 del mismo día, el panel se retiró: «✨ Mejorar con IA» abre el cajón «Nexus» con el lugar como chip.)
