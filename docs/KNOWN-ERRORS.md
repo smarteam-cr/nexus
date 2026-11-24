@@ -47,6 +47,11 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
   rotación entre PROD y local (comparten la cuenta del sistema). *Guarda:* el transporte de
   `lib/hubspot/client.ts` (U6) renueva una vez, con un solo refresh; no escribas otro reintento
   (`transporte-unico.test.ts`). Por día: `scripts/fallas-de-hubspot.ts`.
+- **Un `.sql` de índices, políticas o datos nunca corrió en producción y nada avisó.** *Causa:* no había registro de lo
+  aplicado y `check:esquema` solo compara tablas, columnas y enums que el código usa. Encontrado el 2026-11-23 con el
+  primer backfill: `2026-09-04-indices-agentrun-contextcard.sql` y `2026-09-05-liberacion-unica.sql`. *Guarda:* aplicar
+  solo con `npm run db:sql` (anota en `SqlAplicado`) y `check:esquema`, que lista lo no anotado. Lo aplicado por fuera:
+  `npm run db:sql:backfill`.
 - **"Unknown field" / P2022 tras cambiar el schema.** *Causa:* el dev server tiene el Prisma client
   viejo (no entra por HMR) o la columna no se aplicó a PROD a mano. *Guarda:* tras aplicar el `.sql`
   correr `npx prisma generate` y reiniciar el dev server (flujo completo: ARCHITECTURE Parte 0 ·

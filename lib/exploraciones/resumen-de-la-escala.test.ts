@@ -323,7 +323,7 @@ describe("1 · ninguna afirmación sin su cita", () => {
     expect(texto).toContain("[236] Emiley Calvo Jiménez: Digamos que 25 25 la mitad.");
     expect(texto).toContain("no es evidencia");
     const reglas = String(p.system);
-    for (const regla of [/palabra por palabra/, /no significa que no lo tengan/, /Una meta/, /UNA CIFRA ES UN SOLO DATO/, /riesgo típico de la escala/, /No asumas herramientas/, /Nunca escribas «provisional»/, /pasa de un equipo a otro, es otro paso/, /«tesis» \(1\)/, /«etiquetas» \(3\)/, /«continuo»: true/, /«retos» \(de 1 a 4 según el PESO/, /no cuadran entre sí/, /LA VERACIDAD ES LO MÁS IMPORTANTE/])
+    for (const regla of [/palabra por palabra/, /no significa que no lo tengan/, /Una meta/, /UNA CIFRA ES UN SOLO DATO/, /riesgo típico de la escala/, /No asumas herramientas/, /Nunca escribas «provisional»/, /pasa de un equipo a otro, es otro paso/, /«tesis» \(1\)/, /«etiquetas» \(3\)/, /«continuo»: true/, /«retos» \(de 2 a 4 según el PESO/, /no cuadran entre sí/, /LA VERACIDAD ES LO MÁS IMPORTANTE/])
       expect(reglas).toMatch(regla);
     expect(p.model).toBe("claude-sonnet-4-6");
     expect(guiaDelEquipo({ retos: [{ texto: "CRM lead-driven" }], metas: [{ que: "Bajar el churn", actual: "2,8 %" }], hubspotActual: "Usan un CRM sin nombre" })).toBe(
@@ -511,7 +511,8 @@ describe("2 · el cliente nunca ve las citas", () => {
     // Marketing no tuvo sesiones: su pestaña y su tarjeta dicen «Por explorar», y no se abre.
     expect(html).toContain("Por explorar");
     expect(html).not.toContain('href="/external/escala/t?area=2"');
-    expect(html).toContain("Conversar con tu equipo de Marketing");
+    // «Conversar con tu equipo de…» ya no sale (24 nov, texto genérico): su pestaña ya dice «Por explorar».
+    expect(html).not.toContain("Conversar con tu equipo de Marketing");
     // Sin etiquetas técnicas en «Qué falta validar».
     for (const etiqueta of ["Área sin explorar", "Hipótesis por validar", "Lo preguntamos, falta el dato"]) expect(html).not.toContain(etiqueta);
     for (const prohibido of ["Marco Salas", "Solo lo ves tú", "Lo que hoy se te escapa", "rs-rojo-icono"]) expect(html).not.toContain(prohibido);
@@ -591,8 +592,9 @@ describe("3 · el armado", () => {
       ["14 de 25", "estimado"],
     ]);
     expect(p.sinExplorar).toEqual(["2"]);
-    // Tres líneas como mucho: el equipo sin explorar, lo que falta confirmar de Ventas y un pendiente escrito.
-    expect(p.pendientes.map((x) => x.tipo)).toEqual(["no-explorada", "hipotesis", "sin-dato"]);
+    // Tres líneas como mucho: lo que falta confirmar de Ventas y un pendiente escrito. El equipo sin explorar ya no suma
+    // una línea (24 nov): su tarjeta dice «Por explorar».
+    expect(p.pendientes.map((x) => x.tipo)).toEqual(["hipotesis", "sin-dato"]);
     expect(p.formato).toBe(2);
   });
 
@@ -1015,10 +1017,12 @@ describe("10 · lo que mostró el simulacro de Centauro (10 nov)", () => {
     g.operativas = [...g.operativas!, { id: "o3", nombre: "Marketing", areaId: "2", organizacion: [{ id: "g1", texto: "No se hizo el diagnóstico.", citas: [CITA_LUIS] }], bien: [], frena: [], retos: [], cifras: [], falta: null }];
     const p = resumenParaLaPagina(g, [VENTAS, SERVICIO, MARKETING], CHEQUEO, ENTORNO, { conCitas: false, porExplorar: POR_EXPLORAR });
     expect(p.tarjetas.find((t) => t.nombre === "Marketing")).toMatchObject({ porExplorar: true, subequipos: [], nivel: null });
-    expect(p.pendientes[0]).toMatchObject({ tipo: "no-explorada", areaNombre: "Marketing" });
+    // Sin «Conversar con tu equipo de Marketing» (24 nov): la tarjeta ya dice «Por explorar».
+    expect(p.pendientes.some((x) => x.tipo === "no-explorada")).toBe(false);
     // Lo que escribió el agente de Marketing en «Qué falta validar» no se repite (salía dos veces).
     const dos = { ...g, pendientes: [{ id: "p3", tipo: "sin-dato" as const, texto: "No hubo reunión con el equipo de Marketing.", areaId: null, citas: [] }] };
-    expect(resumenParaLaPagina(dos, [VENTAS, SERVICIO, MARKETING], CHEQUEO, ENTORNO, { conCitas: false }).pendientes.filter((x) => /Marketing/.test(x.texto))).toHaveLength(1);
+    // Desde el 24 nov tampoco sale la de Nexus («Conversar con tu equipo de…»): ninguna línea nombra a Marketing.
+    expect(resumenParaLaPagina(dos, [VENTAS, SERVICIO, MARKETING], CHEQUEO, ENTORNO, { conCitas: false }).pendientes.filter((x) => /Marketing/.test(x.texto))).toHaveLength(0);
   });
 
   it("si NINGUNA sesión tiene equipo no hay equipos «Por explorar»: todos salen con lo suyo (Tecnosagot, 13 nov)", () => {
@@ -1232,7 +1236,8 @@ describe("16 · la segunda vuelta: lo que vio Elías en lo guardado de Centauro 
       { id: "p3", tipo: "sin-dato", texto: "Lo escribió Marco.", areaId: null, citas: [], mano: true },
     ];
     const p = resumenParaLaPagina(g, [VENTAS, SERVICIO, MARKETING], CHEQUEO, ENTORNO, { conCitas: false, porExplorar: POR_EXPLORAR });
-    expect(p.pendientes.map((x) => x.id)).toEqual(["x2", "h1", "p1", "p3"]);
+    // Sin la línea del equipo sin explorar (24 nov), entra el segundo pendiente del agente.
+    expect(p.pendientes.map((x) => x.id)).toEqual(["h1", "p1", "p2", "p3"]);
   });
 
   it("la pestaña de un equipo sin sesiones solo se ve deshabilitada (sin «Por explorar») y afuera no es un enlace", () => {
@@ -1379,7 +1384,8 @@ describe("19 · lo que encontró la revisión del 11 nov", () => {
     const afuera = resumenParaLaPagina(g, [VENTAS, SERVICIO, MARKETING], CHEQUEO, ENTORNO, { conCitas: false, porExplorar: POR_EXPLORAR });
     const adentro = resumenParaLaPagina(g, [VENTAS, SERVICIO, MARKETING], CHEQUEO, ENTORNO, { conCitas: true, porExplorar: POR_EXPLORAR });
     expect(afuera.pendientes).toHaveLength(3);
-    expect(adentro.pendientes).toHaveLength(5);
+    // Lo que falta confirmar de Ventas y los tres del agente (sin «Conversar con tu equipo de…» desde el 24 nov).
+    expect(adentro.pendientes).toHaveLength(4);
   });
 
   it("descartar un «por qué» por decir «provisional» no avisa que los niveles cambiaron", () => {

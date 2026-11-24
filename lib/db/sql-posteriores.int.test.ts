@@ -20,6 +20,8 @@ writeFileSync(join(raiz, "scripts", "sql", "2099-01-02-sano.sql"), `CREATE TABLE
 
 afterAll(async () => {
   await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS "zz_prueba_rollback"`);
+  // Lo que corrió quedó anotado en el registro de nexus_test (SqlAplicado): son archivos de mentira.
+  await prisma.$executeRawUnsafe(`DELETE FROM "SqlAplicado" WHERE "archivo" LIKE '2099-%'`);
   rmSync(raiz, { recursive: true, force: true });
 });
 

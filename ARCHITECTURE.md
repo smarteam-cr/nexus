@@ -173,26 +173,37 @@ No copia Cobranza/Timeline/Canvas — la generación crea los suyos.
   tabla `RoleProfile` una vez). No existe una "DB de dev": es la misma base.
 - **Flujo de un cambio de schema**, paso a paso:
   1. Escribir `scripts/sql/AAAA-MM-DD-nombre.sql` — **SOLO ADITIVO**, inocuo durante la ventana
-     en que PROD corre el código viejo (columnas nullable / defaults).
+     en que PROD corre el código viejo (columnas nullable / defaults), y que pueda correr dos veces.
   2. `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`
      como **detector de drift ajeno** (2 PCs sobre la misma base). Ruido esperado del diff:
      la columna `embedding` y el CHECK, que Prisma no modela.
-  3. Aplicar: `ALLOW_PROD_WRITE=1 npx prisma db execute --file scripts/sql/...` (el guard de
-     `prisma.config.ts` lo exige — en Prisma 7 `db execute` no acepta URL por flag). Excepción
-     `ALTER TYPE ... ADD VALUE`: one-liner `npx tsx -e` llamando `assertProdWriteAllowed()` a
-     mano (ver el header de `scripts/lib/guard.ts`).
+  3. Aplicar y anotar: `npm run db:sql -- scripts/sql/...` es el simulacro (cómo correría y qué
+     dice el registro); el mismo comando con `--apply` y `ALLOW_PROD_WRITE=1` lo aplica y lo anota
+     en `SqlAplicado` en la MISMA transacción (`scripts/aplicar-sql.ts`, con el guard; en PowerShell,
+     `npx tsx scripts/aplicar-sql.ts … --apply`, porque se come el `--` de `npm run`). Un
+     `ALTER TYPE ... ADD VALUE` cuyo valor se usa en el mismo archivo va con `--sin-transaccion`
+     (sentencia por sentencia; `CONCURRENTLY` lo pide solo): reemplaza al one-liner `npx tsx -e`.
+     `prisma db execute` ya no se usa para `scripts/sql/`: aplica sin anotar.
   4. `npx prisma generate` + reiniciar el dev server.
   5. Deploy (cap. E) — **el SQL siempre ANTES del código que lo necesita**. `npm run
      check:esquema` (`scripts/check-esquema.ts`, solo lectura, un par de segundos) dice si a la
-     base le falta algo de este código y qué `.sql` lo crea; si igual se escapa, `/api/health`
-     responde 503 y `deploy.sh` revierte solo (RUNBOOK › Esquema atrasado).
+     base le falta algo de este código y qué `.sql` lo crea, y qué `.sql` no están en su registro;
+     si igual se escapa, `/api/health` responde 503 y `deploy.sh` revierte solo (RUNBOOK › Esquema
+     atrasado).
   6. `npm run check:invariants` — INV4/INV7 prueban que el DDL aterrizó; INV12 vigila el guard.
 - **Baseline**: `prisma/migrations/0_init/` representa el schema COMPLETO (re-baseline del
   2026-08-01; las 5 migraciones de marzo 2026 están en `prisma/migrations-archive/`).
   `0_init/after.sql` (extensión vector + columna embedding + CHECK) y `prisma/policies.sql`
   (RLS + policies, `ALLOW_PROD_WRITE=1 npm run db:policies`) cubren lo que Prisma no
-  representa. ⚠ No hay tabla de control de qué `.sql` ya corrió — el registro es mirar la base:
-  `npm run check:esquema` (lo que le falta, con el archivo que lo crea) o INV4/INV7.
+  representa.
+- **El registro de los SQL aplicados** (`SqlAplicado`, desde el 2026-11-23): cada base
+  (producción, `nexus_local`, `nexus_test`) guarda qué `scripts/sql/` corrieron en ELLA, con la
+  huella del texto (sha256 con LF), cuándo y desde qué máquina y comando. Lo escriben `npm run
+  db:sql`, el bootstrap local y el setup de `test:int`; `npm run check:esquema` lista los
+  posteriores al baseline sin anotar y los que cambiaron después de anotarse. Lo que corrió por
+  fuera del registro se anota con `npm run db:sql:backfill`: solo si el esquema de la base lo
+  demuestra, o con `--marcar` cuando lo dice una persona. El porqué: DECISIONS › «Registro de los
+  SQL aplicados».
 - El schema tiene **cero `@map`/`@@map`** (verificado 2026-08-01): el bug de enums mapeados de
   Prisma 7 no nos aplica, y `migrate diff` es fiel nombre-a-nombre.
 
@@ -219,8 +230,8 @@ está VIVO: `npm run test:int` corre los `*.int.test.ts` contra la base LOCAL `n
 (`test/setup.integration.ts` carga `.env.test` con override, ABORTA si el host es Supabase,
 y TRUNCA todas las tablas antes de cada caso — por eso `fileParallelism: false`). Prerequisito:
 `npm run db:local -- up`. Antes de cada corrida, `test/global-setup.integration.ts` le aplica a
-`nexus_test` los `scripts/sql/` posteriores al baseline (la misma regla que el bootstrap, en
-`scripts/lib/sql-posteriores.ts`): un `.sql` nuevo ya no deja los tests en rojo por una base atrasada,
+`nexus_test` los `scripts/sql/` posteriores al baseline y los anota en su registro (la misma regla
+que el bootstrap, en `scripts/lib/sql-posteriores.ts`; el TRUNCATE no toca `SqlAplicado`): un `.sql` nuevo ya no deja los tests en rojo por una base atrasada,
 y por eso todo `.sql` tiene que poder correr dos veces. Los primeros cubren el chokepoint de sesiones (invariante #1) y
 `visibleRoleWhere` con filas reales. Integration NO corre en CI todavía (falta el service
 container — pendiente declarado en ci.yml).

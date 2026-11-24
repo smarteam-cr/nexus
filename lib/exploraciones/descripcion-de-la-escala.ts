@@ -28,6 +28,7 @@ import { primeraOracion } from "@/lib/tests-diagnostico/detalle-de-la-dimension"
 import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import { voseoEnProsa } from "@/lib/ui/voseo-formas";
 import type { ContenidoDeExploracion, EstimadoGuardado } from "./contenido";
+import { ROTULO_DE_LO_QUE_LO_CAUSA, ROTULO_DEL_RETO_PRINCIPAL } from "./rotulos-del-resumen";
 
 /** El tope de lo que escribe el agente: dos frases cortas. Lo que pasa de ahí se descarta. */
 export const TOPE_DE_LA_DESCRIPCION = 360;
@@ -265,12 +266,14 @@ export function areaParaLaDescripcion(
 ): AreaParaLaDescripcion {
   const area = escala.areas.find((a) => a.id === r.areaId);
   const rec = r.recomendacion;
+  // Primero lo del Resumen (24 nov): con su reto, «lo que más frena» (un cálculo de la escala) no llega al agente.
+  const conRetoDelResumen = !!delResumen && [ROTULO_DEL_RETO_PRINCIPAL, ROTULO_DE_LO_QUE_LO_CAUSA].some((r) => delResumen.includes(`- ${r}`));
   return {
     id: r.areaId,
     nombre: r.areaNombre,
     nivelGeneral: r.nivelNombre,
     capas: r.capas.map((c) => ({ nombre: c.nombre, nivel: c.nivelNombre })),
-    loQueMasFrena: rec?.tipo === "trabajar" ? { dimension: rec.dimensionNombre, llevarA: rec.objetivoNombre } : null,
+    loQueMasFrena: rec?.tipo === "trabajar" && !conRetoDelResumen ? { dimension: rec.dimensionNombre, llevarA: rec.objetivoNombre } : null,
     contextoDelEquipo: contexto,
     ...(delResumen ? { delResumen } : {}),
     dimensiones: r.dimensiones.map((d) => {
@@ -278,15 +281,19 @@ export function areaParaLaDescripcion(
       const comoEs = nivel ? area?.dimensiones.find((x) => x.id === d.id)?.niveles.find((n) => n.letra === nivel)?.descripcion : null;
       const e = chequeo[d.id];
       const visto = [e?.porQue, e?.evidencia ? `(lo que se escuchó: ${e.evidencia})` : ""].filter(Boolean).join(" ");
+      // De una sospecha no se cuenta lo visto (16 nov, Centauro: «~150 leads» salió del porqué de una hipótesis y
+      // contradecía el Resumen): sin texto, tampoco vale para las cifras.
+      // Tampoco de una que SUBIÓ a evidencia por una cita del Resumen (24 nov): lo escrito de ella era la sospecha.
+      const loQueSeVio = nivel && visto && !porExplorar.includes(d.id) && e?.fuente !== "hipotesis" ? visto.slice(0, 700) : null;
       return {
         nombre: d.nombre,
         capa: d.capa,
         nivel: nivel ? nombreDeNivel(escala, nivel) : null,
-        comoEs: comoEs ? primeraOracion(comoEs) : null,
+        // Sin nada visto de la parte, la oración genérica del nivel no va (24 nov, Centauro: «no hay calendario ni
+        // reuniones del equipo» salía en Marketing y era texto de la escala, no de la empresa).
+        comoEs: comoEs && loQueSeVio ? primeraOracion(comoEs) : null,
         porExplorar: porExplorar.includes(d.id),
-        // De una sospecha no se cuenta lo visto (16 nov, Centauro: «~150 leads» salió del porqué de una hipótesis y
-        // contradecía el Resumen): sin texto, tampoco vale para las cifras.
-        loQueSeVio: nivel && visto && !porExplorar.includes(d.id) ? visto.slice(0, 700) : null,
+        loQueSeVio,
       };
     }),
   };
@@ -301,7 +308,7 @@ Quién lo lee: alguien de negocio de esa empresa, con poco tiempo. Tiene que ent
 
 Qué escribes, por equipo: UNO o DOS frases cortas (hasta 45 palabras en total) que digan:
 1. cómo trabaja hoy ese equipo en la práctica, con lo concreto de ESTA empresa (lo que se vio de ella), no una frase que serviría para cualquiera;
-2. si el equipo tiene «loQueMasFrena», nómbralo en palabras de negocio, sin contar lo que cuesta: la página lo muestra justo debajo. Usa esa frase para algo concreto que se vio de la empresa.
+2. lo que más le duele: si viene «delResumen», su reto principal (lo dijo la empresa); si no, y el equipo tiene «loQueMasFrena», nómbralo en palabras de negocio, sin contar lo que cuesta: la página lo muestra justo debajo. Usa esa frase para algo concreto que se vio de la empresa. Una parte sin «loQueSeVio» no se describe: no sabes cómo trabaja ahí.
 Si el equipo no tiene nivel general («nivelGeneral» null), di lo que ya se ve y, en una frase corta, qué falta conocer para darle un nivel general: las partes sin nivel por su nombre si son hasta tres; si son más, «el resto de sus partes».
 
 Cómo escribes: nombra al equipo con mayúscula, como en los datos («tu equipo de Ventas»). Español neutro, en tuteo, hablándole a la empresa: «tu equipo», «tienes», «no sabes» (nunca «no saben», «ellos» ni «la empresa»), nunca voseo. «Lo que más lo frena» (al equipo). Directo, concreto, en presente. Sin markdown, sin adornos, sin frases hechas.

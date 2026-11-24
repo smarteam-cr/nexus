@@ -34,9 +34,9 @@ a claims en DB (mismo patrón `CronJobState`/`claimDateKey` que ya usan los jobs
 La misma Supabase Postgres la usan las dos máquinas de desarrollo Y producción.
 **El guard del CLI lo hace cumplir desde el 2026-09-04 (B-01):** `prisma db push`,
 `migrate reset` y `migrate dev` contra un host Supabase abortan SIEMPRE, sin variable que
-los destrabe — es un candado, no un semáforo. `db execute` (SQL aditivo) sigue exigiendo
-`ALLOW_PROD_WRITE=1` POR COMANDO; si la variable queda FIJA en el `.env`, todo script de
-escritura aborta hasta sacarla.
+los destrabe — es un candado, no un semáforo. El SQL aditivo (`npm run db:sql`, y `db execute`
+para lo que no es de `scripts/sql/`) sigue exigiendo `ALLOW_PROD_WRITE=1` POR COMANDO; si la
+variable queda FIJA en el `.env`, todo script de escritura aborta hasta sacarla.
 **`prisma db push` está PROHIBIDO en cualquier forma** (ver "Lo que deploy.sh NO
 hace" más abajo — ya se llevó `RoleProfile` una vez; hasta el 2026-08-01 esta
 sección regulaba cómo usarlo "bien" y contradecía la prohibición del mismo
@@ -48,7 +48,8 @@ archivo). Reglas duras vigentes:
 2. **`git pull` SIEMPRE antes de aplicar DDL** (así el schema local incluye lo de
    la otra PC) y `prisma migrate diff --from-config-datasource --to-schema
    prisma/schema.prisma --script` como detector de drift ajeno ANTES de aplicar.
-3. Avisar a la otra PC tras aplicar un `.sql` + pushear el schema.
+3. Aplicar con `npm run db:sql`, que lo anota en el registro de la base (`SqlAplicado`): así
+   la otra PC lo ve en `npm run check:esquema` sin preguntar. Pushear el schema igual.
 4. Para flags/overrides nuevos, preferir un campo Json YA existente antes que
    una columna nueva sin coordinar (ej.: los briefs viven en
    `ProjectCanvas.sections`).
@@ -139,9 +140,10 @@ dos pasos manuales distintos que se olvidan por separado.
   `scripts/sql/AAAA-MM-DD-*.sql` y se corren **contra la base compartida, ANTES de deployar
   el código que los necesita** — si el código llega primero, la app queda pidiendo una
   columna que no existe. `db push` está prohibido: la base tiene objetos que el schema no
-  declara y los dropea (ya se llevó `RoleProfile` una vez). Qué falta correr lo dice
-  `npm run check:esquema` desde la PC, en un par de segundos y en solo lectura; si igual se
-  escapa, el deploy se revierte solo (ver «Esquema atrasado»).
+  declara y los dropea (ya se llevó `RoleProfile` una vez). Se aplican con `npm run db:sql`,
+  que los anota en el registro de la base (ver «Registro de los SQL aplicados»). Qué falta
+  correr lo dice `npm run check:esquema` desde la PC, en un par de segundos y en solo lectura;
+  si igual se escapa, el deploy se revierte solo (ver «Esquema atrasado»).
 - **Seeds de agentes (`scripts/seed-*.ts`) se corren DESDE UNA PC DE DESARROLLO, no desde
   el VPS.** El checkout del servidor **no tiene `node_modules`** —la app vive en Docker—,
   así que ahí `npx tsx scripts/seed-*.ts` falla con `Cannot find module 'pg'`. Como la base
@@ -162,7 +164,13 @@ Checklist corto para un deploy que trae los tres (el guard anti-prod exige
 npm run check:esquema                                          # 0) desde dev: ¿qué SQL falta? (solo lectura)
 ```
 ```bash
-ALLOW_PROD_WRITE=1 npx prisma db execute --file scripts/sql/AAAA-MM-DD-loquesea.sql  # 1) desde dev, ANTES
+npm run db:sql -- scripts/sql/AAAA-MM-DD-loquesea.sql          # 1a) simulacro: cómo correría y qué dice el registro
+```
+```bash
+ALLOW_PROD_WRITE=1 npm run db:sql -- scripts/sql/AAAA-MM-DD-loquesea.sql --apply  # 1b) desde dev, ANTES
+```
+```powershell
+$env:ALLOW_PROD_WRITE="1"; npx tsx scripts/aplicar-sql.ts scripts/sql/AAAA-MM-DD-loquesea.sql --apply; Remove-Item Env:ALLOW_PROD_WRITE  # 1b) en PowerShell
 ```
 ```bash
 cd /opt/smartflow/Nexus && bash scripts/deploy.sh              # 2) en el VPS
@@ -172,8 +180,45 @@ ALLOW_PROD_WRITE=1 npx tsx scripts/seed-EL-AGENTE.ts           # 3) desde dev, d
 ```
 
 (El `psql "$DATABASE_URL" -f` que estaba acá se retiró a propósito: era el único camino de
-escritura que ningún guard podía interceptar. `db execute` pasa por `prisma.config.ts`, que
-es donde vive el guard del CLI.)
+escritura que ningún guard podía interceptar. `db:sql` llama al guard antes de escribir.)
+
+### Registro de los SQL aplicados (2026-11-23)
+
+Cada base guarda qué `scripts/sql/` corrieron en ella: la tabla `SqlAplicado`, una fila por
+archivo con su huella (sha256 del texto con LF), cuándo, desde qué máquina y comando, y
+`como` (`aplicado`, `demostrado` o `marcado`). El porqué: DECISIONS › «Registro de los SQL
+aplicados».
+
+- **Aplicar** es `npm run db:sql -- <archivos>`: sin `--apply` es el simulacro; con `--apply`
+  (y `ALLOW_PROD_WRITE=1` en producción) corre cada archivo y lo anota en la misma transacción.
+  Si falla, no queda nada del archivo ni de la fila. Varios archivos van en el orden en que se
+  escriben y se frena en el primero que falla. En PowerShell va por `npx tsx`, no por `npm run`:
+  PowerShell se come el `--` y npm se queda con `--apply` sin dejar rastro: corre el simulacro, que lo avisa al final:
+  `$env:ALLOW_PROD_WRITE="1"; npx tsx scripts/aplicar-sql.ts scripts/sql/<archivo>.sql --apply; Remove-Item Env:ALLOW_PROD_WRITE`.
+- **`--sin-transaccion`**: sentencia por sentencia, para un `ALTER TYPE … ADD VALUE` cuyo valor se
+  usa más abajo en el mismo archivo (la base responde «unsafe use of new value») o un
+  «cannot run inside a transaction block». Si una sentencia falla, las anteriores ya quedaron: el
+  archivo, idempotente, se vuelve a correr entero. Un archivo con su propio `BEGIN`/`COMMIT`
+  corre tal cual y se anota después.
+- **Leer** es `npm run check:esquema`: dice los posteriores al baseline sin anotar (no corrieron,
+  o corrieron por fuera del registro), los que cambiaron después de anotarse (se reaplican con
+  `db:sql`; son idempotentes) y los anotados que el checkout no tiene (de otra rama o de la otra
+  PC). Sale con 1 si a la base le falta algo que el código usa, con 3 si el esquema está completo
+  pero quedan `.sql` sin anotar o cambiados, y con 0 si no hay nada.
+- **Lo que corrió por fuera** (antes del registro, o con `prisma db execute`) se anota con
+  `npm run db:sql:backfill`: el simulacro dice, de cada archivo sin anotar, si el esquema
+  demuestra que corrió (todo lo que crea está en el catálogo, y algo de eso es solo suyo), si le
+  falta algo (no se anota: aplicarlo con `db:sql`) o si no deja prueba (cambia datos o permisos).
+  `--apply` anota los demostrados; `--marcar a.sql,b.sql --apply` anota los «sin prueba» que una
+  persona sabe que corrieron, y se niega entero si le pasas uno al que le falta algo. Un demostrado
+  que además cambia datos sale con «· cambia datos»: el esquema prueba su DDL, no esa parte; antes
+  del `--apply`, alguien lee esa lista. Nunca pisa una fila que ya está. En PowerShell, con la
+  lista entre comillas: `npx tsx scripts/registro-de-sql.ts --marcar "a.sql,b.sql" --apply`.
+- **Bases locales**: el bootstrap (`npm run db:local -- bootstrap`) y el setup de `test:int`
+  anotan lo que aplican. El TRUNCATE de las pruebas no toca `SqlAplicado`.
+- La primera vez en producción el orden es: el `.sql` del registro
+  (`2026-11-23-registro-de-sql.sql`) con `db:sql`, que se anota a sí mismo; después el backfill.
+  Sin la tabla, `db:sql` solo deja aplicar ese archivo.
 
 ### Esquema atrasado: el deploy se revierte solo (2026-09-30)
 

@@ -14989,6 +14989,8 @@ Sistema 2, «Nexus · interfaz interna», se descartó): cambian el contenido, e
   4. «Qué falta validar» va muy sencillo: tres líneas como mucho, sin etiquetas técnicas. Va primero lo que calcula
      Nexus (un equipo sin sesiones, lo que falta confirmar de una parte) y después lo del agente. Lo del agente que nombra
      a un equipo sin explorar no se repite. Lo escrito a mano va siempre.
+     *Enmienda (24 nov): «Conversar con tu equipo de…» ya no sale (su pestaña ya dice «Por explorar»), y «Confirmar cómo
+     trabaja hoy tu equipo en…» no sale si una pieza del Resumen con su cita habla de esa parte.*
   5. «¿Entendimos bien?» sale entero: el agente ya no lo escribe y la página no lo muestra.
   6. «Volver a ubicar con las reuniones» (en la escala) y «Rehacer con IA» (en el Resumen) siguen separados. Adentro, el
      Resumen avisa «La escala cambió desde este resumen» cuando la firma de los niveles al armarlo (`firmas`) ya no es la
@@ -15001,6 +15003,10 @@ Sistema 2, «Nexus · interfaz interna», se descartó): cambian el contenido, e
     sigue necesitando una cita de la empresa o una confirmación suya. Ver «El Resumen de la escala por peso».
     *Corrige (21 nov):* o una cita de una nota del equipo, que pesa más que la reunión y adentro se rotula «lo dijo
     <persona>» (ver la enmienda en «El Resumen de la escala por peso»).
+  - *Corrige (24 nov, Elías: «el costo se calcula con las cifras que dio el cliente»):* calcular ya no está prohibido si
+    lo hace el CÓDIGO. Una cifra «calculado» trae su cuenta: cada número con su cita verificada de la empresa, y el código
+    multiplica. El modelo no escribe el resultado. Un número de la cuenta sin cita tumba la cuenta entera. Lo demás sigue
+    igual: el modelo no resta, no suma ni saca porcentajes en una cifra «declarado».
   - **Una cifra es un solo dato** (`numerosDeOtroDicho`): los números del texto tienen que salir de las citas que traen
     los números de la cifra grande. El 2,8 % y «25 contra 14» van aparte, cada uno con su estado. «25 de 50», con el 25
     de un turno y el 50 de otro, vale: es un dato frente a su meta.
@@ -15847,7 +15853,12 @@ Elías: «Debe mejorarse cuanto antes».
   segunda, su escala o su consecuencia, con palabras de la empresa. Siguen las dos frases cortas y sus citas.
   *Enmienda (21 nov, Elías): la tesis ya no es el H1 de la portada; va en «01 El problema principal», debajo de lo que
   hicimos. Ver «La portada del Resumen abre con lo que hicimos».*
+  *Enmienda (24 nov, Marco con Centauro): antes de elegir por peso se busca el dolor que aparece en dos o más equipos, o
+  en el paso de uno a otro; si existe, ese es el problema principal, con citas de reuniones distintas. El tema que más
+  pesó gana solo si ningún dolor cruza equipos. Ver «El Resumen con mejor criterio».*
 - **El molde por peso:** los retos van de 1 a 4 por subequipo y las cifras de 0 a 2, según cuánto se habló de cada uno.
+  *Enmienda (24 nov): con un piso. Cada equipo con reunión propia lleva un reto principal y dos retos aunque pese poco, y
+  las reuniones se eligen con un cupo por equipo (todo se inclinaba hacia Ventas).*
 - **«5 puntos clave»** (Marco: «que abajo se explique más»): los cinco más críticos de toda la empresa, en orden de peso,
   cada uno con un título corto, una o dos frases y su cita, debajo del titular. Se editan, se quitan y se agregan en su
   lugar como el resto (`punto:<id>`); «Rehacer con IA» no pisa lo de una persona. Un Resumen de antes no los trae y se
@@ -15995,6 +16006,11 @@ vender por resultados. Cambia el Resumen, la página de cada área y el resultad
 - **Las cifras, con la regla de siempre:** la del cliente vale; la que dijo Smarteam y nadie corrigió entra por confirmar;
   la corregida, la corregida (18 nov). El prompt pide que la primera cifra sea lo que cuesta, con su moneda, y sigue
   prohibiendo inventar o calcular dinero.
+  *Enmienda (24 nov, Elías): el costo se CALCULA con las cifras que dio el cliente (estado «calculado»): la página
+  muestra la cuenta («Con tus cifras: 10 clientes × US$ 85 = US$ 850 al mes») y quien presenta la confirma con un clic
+  antes de publicar; sin ese clic, afuera no sale. Inventar sigue prohibido. «falta» deja de ser obligatorio: si la
+  empresa dijo que no tiene un dato, eso es un hallazgo (un reto), nunca «por validar». Ver «El Resumen con mejor
+  criterio».*
 - **Los títulos con información real:** el titular (la tesis) lleva el dinero si la empresa lo dijo; si no, el dolor que
   más repitieron quienes dirigen o deciden, nunca cómo operan. Quiénes deciden salen de la casilla «Quién decide» (quien
   aprueba y quien decide, `quienesDecidenDe`): interna, solo orienta al agente, y sus nombres van a los que no salen. Los
@@ -16006,6 +16022,9 @@ vender por resultados. Cambia el Resumen, la página de cada área y el resultad
   monto (`faltaDeLaPerdida`), y no pisa lo que falta que escribió el Resumen. Quien presenta la puede quitar o cambiarle el
   rótulo (un texto fijo atado a la huella de su cuenta). Al agente le llega para orientarse, sin escribir su número (lo
   pone la página). Lo confirmó la coordinación el 20 nov: la regla de la preventa es de la propuesta, no de esta página.
+  *Enmienda (24 nov): la pérdida va a la primera fila del equipo de SU meta (`Meta.equipo`): la de clientes que se van es
+  de Servicio. Sin equipo en la meta, Ventas, como antes. La cuenta suma una forma: clientes que se pierden al mes ×
+  ticket.*
 - **La página de cada área lleva «Lo que más le cuesta a <área>»** debajo del radar y antes de «Por dónde empezar»: lo
   mismo que su fila del Resumen (que lee las transcripciones por el chokepoint de sesiones), sin editarse ahí: se corrige
   en el Resumen. *Lo que leía antes cada texto:* la descripción, las minutas (no las transcripciones); «Por dónde empezar»,
@@ -16700,3 +16719,106 @@ revirtió.
   Queda un solo chat «Nexus» y el botón «Hablar con Nexus» se quita. El botón para pedirle un cambio a la IA se llama
   «✨ Mejorar con IA» en toda la app y abre siempre ese chat con la parte puesta. En los documentos del proyecto ya
   cambió el nombre; que abran el chat «Nexus» y no el del documento viene después.
+
+## El Resumen con mejor criterio: el problema que cruza equipos, cada equipo con su peso y la cuenta con tus cifras (2026-11-24)
+
+Marco revisó el Resumen publicado de Centauro y encontró problemas de criterio que vienen de la generación, no del
+cliente. El titular decía «El equipo comercial no registra sus actividades»: el problema real era que Marketing, Ventas y
+Servicio no están conectados y se pierden oportunidades (Marketing lo dijo el 11 nov y la preventa anotó una «visión 360»
+como plan). Marketing quedaba solo en medición, todo se inclinaba hacia Ventas, había «por validar» de cosas que el cliente
+ya dijo, entraba lo que la empresa ya resolvió y texto genérico de la escala.
+
+- **El problema principal cruza equipos.** Antes de elegir por peso, el agente busca el dolor que aparece en dos o más
+  equipos o en el paso de uno a otro. Si existe, es la tesis y el primer punto clave, con citas de reuniones distintas.
+  Los equipos se nombran como en la escala: «comercial» no sale (`textoValido` lo pide corregido; es de forma).
+- **Cada equipo con su peso:** las reuniones se eligen con un cupo de dos por equipo (`reunionesParaUbicar`); cada equipo
+  con reunión propia lleva un reto principal y dos retos, y si el agente no los escribió se piden leyendo solo sus
+  reuniones (`pedidoDelPisoDelEquipo`: una llamada chica por equipo bajo el piso, con hasta dos de sus reuniones; en el
+  peor caso unos US$ 0,30 más por armado, medido en el gasto de la IA); lo que un equipo dice de otro es un reto del
+  TRASPASO (`traspaso` en el reto): se guarda UNA vez, en el equipo que lo contó, y la página lo muestra también en la
+  primera fila del otro con la misma clave (corregirlo o quitarlo en cualquiera de las dos pestañas cambia el único que
+  hay; la revisión del 24 nov encontró que una copia guardada quedaba vieja). El cupo no le guarda lugar a un equipo que
+  el cliente no ve. La pérdida validada va al equipo de su meta; si ese equipo no tiene fila, a Ventas, como antes.
+- **La cuenta con tus cifras (estado «calculado»).** El agente da los factores, cada uno con su cita; el código verifica
+  cada número en su cita (también su moneda, la del número o la de su rótulo: «85 colones» no es «US$ 85») y multiplica
+  (`cuentaConTusCifras`). Cada factor
+  es UN número: un rango («120 a 150») o una proporción no entran. El mismo período en dos factores vale («10 clientes al
+  mes × US$ 85 de cuota mensual»); dos distintos, no («anual» × «al mes»). El «=» dice el resultado exacto, con sus
+  centavos. Adentro sale con «Confirmar» («Es una cuenta con sus cifras») y, sin confirmar, no va de titular de la fila
+  (afuera no sale y la fila tiene que ser la misma); tampoco cuenta como evidencia de su parte. La pérdida de la
+  preventa suma la forma «clientes que se van», pero solo si ninguna de las de siempre alcanza: una cuenta que ya existía
+  no cambia de meta.
+  *Por qué el código y no el modelo:* el modelo restaba y redondeaba distinto en cada corrida (Centauro, 10 nov: «11» por
+  25 − 14), y Elías quiere el costo con las cifras del cliente sin abrir la puerta a cifras inventadas.
+- **Lo que el cliente ya dijo no va «por validar»:** «falta» no es obligatorio; «no tenemos trazabilidad» es un reto, no
+  un pendiente «sin-dato»; «Confirmar cómo trabaja hoy…» no sale si una pieza con su cita habla de esa parte.
+- **Fuera lo que estorba:** el prompt excluye lo que la empresa ya resolvió o acordó manejar y lo que no cambia el plan
+  (Centauro: la extranet sin API se resuelve exportando a Excel). Sin casillas nuevas.
+- **Fuera el texto genérico:** la descripción del área no recibe la oración del nivel de una parte sin nada visto, y usa
+  el reto del Resumen antes que «lo que más frena»; en la escala de una empresa, una parte sin nada visto ni escrito no
+  lleva detalle (ni tarjeta del radar ni «Ver detalles»); «Conversar con tu equipo de…» se va. Una hipótesis de la que el
+  Resumen dice algo con una cita DE LA EMPRESA (lo que solo dijo Smarteam no alcanza) SUBE A EVIDENCIA en toda la página: sin la marca «por explorar», con sus riesgos y su
+  detalle, y sin «Confirmar cómo trabaja hoy…»; lo que se escribió de ella como hipótesis no llega a la descripción. El
+  test público no cambia.
+- **El recorrido con sus traspasos:** cada paso puede traer el traspaso al siguiente (de qué equipo a cuál, qué pasa y su
+  cifra con cita). Se dibuja DEBAJO de la lista de pasos de siempre, que no cambia ni se esconde, en un SVG estático
+  (`RecorridoDelCliente`): una fila por traspaso (equipo → equipo, con el volumen en la flecha) y el volumen de punta a
+  punta («180 leads al mes → 25 cierres al mes»). Usa los nombres que ve el cliente (lo que corrigió quien presenta) y no
+  dibuja un traspaso cuyo equipo ya no es el del paso siguiente. Adentro, el traspaso se corrige o se quita en su paso
+  (`etapa:<id>:traspaso`).
+- **Puerta abierta a «Servicio con dos equipos, cada uno con su nivel»:** el piso y el traspaso son por equipo de la
+  escala (`areaId`), no por subequipo; cuando un área tenga dos niveles, cada subequipo se suma sin cambiar estas reglas.
+- **Lo que no queda garantizado:** que el agente vea el dolor que cruza equipos si nadie lo dijo con esas palabras (se le
+  pide; se mide al rehacer Centauro); que «comercial» no aparezca dicho de otra forma («el área de ventas y negocios»);
+  que la cuenta tenga sentido de negocio (el código verifica cada número, no que multiplicarlos sea la pregunta correcta:
+  por eso se confirma con un clic). Al publicar después del deploy, las escalas dirán «Hay cambios que el cliente no ve»
+  si cambian sus riesgos o sus detalles. Sin SQL.
+
+## Registro de los SQL aplicados (2026-11-23)
+
+Pedido de Elías (decisión 103 del roadmap), tomado de `docs/evaluacion-de-nexus-2026-11.md` › 3.4: los `.sql` de
+`scripts/sql/` los corren dos PCs y varias sesiones contra la misma producción, y no había dónde mirar cuáles corrieron.
+El flujo vive en ARCHITECTURE Parte 0 · cap. D y en RUNBOOK › «Registro de los SQL aplicados»; acá, el porqué.
+
+- **Una tabla en cada base (`SqlAplicado`), no un archivo en el repo.** *Por qué:* la pregunta es «¿qué corrió en ESTA
+  base?», y hay tres (producción, `nexus_local`, `nexus_test`) que van a ritmos distintos. Un archivo versionado diría lo
+  mismo para las tres.
+- **Una fila por archivo, que se pisa al reaplicar; no un historial.** *Por qué:* el bootstrap y el setup de `test:int`
+  reaplican todos los `.sql` en cada corrida: un historial crecería cientos de filas por corrida sin decir nada nuevo. La
+  fila guarda la última aplicación: huella, hora, máquina y comando.
+- **La huella es sha256 del texto con LF y sin BOM.** *Por qué:* con `core.autocrlf` el mismo archivo llega con CRLF a
+  Windows y con LF al resto; sin normalizar, la misma versión daría dos huellas y todo saldría «cambiado».
+- **Se aplica con `npm run db:sql` (`pg` directo), no envolviendo `prisma db execute`.** *Por qué:* con una sola conexión
+  el `.sql` y su fila van en la MISMA transacción, y no puede quedar un cambio aplicado sin anotar; y el modo
+  `--sin-transaccion` (sentencia por sentencia) reemplaza al one-liner `npx tsx -e` del `ALTER TYPE … ADD VALUE`, que
+  aplicaba sin guard en el archivo y sin anotar. El guard es el mismo (`assertProdWriteAllowed`). `prisma db execute`
+  queda para lo que no es de `scripts/sql/`.
+- **El modelo `SqlAplicado` está en `schema.prisma`, aunque la app no lo lea.** *Por qué:* el schema es la fuente única
+  (§2); fuera de él, `migrate diff` lo mostraría como drift en cada corrida, y `/api/health` no avisaría si falta. El
+  costo: su `.sql` va antes del deploy, como cualquier otro.
+- **El backfill anota solo lo que el esquema demuestra.** *Por qué:* anotar todo de una vez escondía justo lo que el
+  registro existe para mostrar. El primer simulacro contra producción (23 nov) encontró dos `.sql` que nunca corrieron
+  ahí: los cinco índices de `2026-09-04-indices-agentrun-contextcard.sql` y el índice único de
+  `2026-09-05-liberacion-unica.sql` (una liberación abierta por cobro). Las reglas de la prueba: todo lo que el archivo
+  crea está en el catálogo y lo que borra no está; lo que un archivo posterior borra no cuenta; al menos una prueba es
+  solo de ese archivo (ni otro archivo, ni el baseline, ni `policies.sql` hacen lo mismo); que algo no exista prueba que
+  corrió solo si antes existía; el RLS y la política `deny_all_non_superuser` nunca son prueba propia, porque
+  `policies.sql` los pone en un bucle que no se lee; las columnas de un `CREATE TABLE` cuentan como creadas ahí. Lo que
+  no deja rastro en el esquema (un UPDATE de datos) lo anota una persona con `--marcar`, y queda dicho
+  (`como = marcado`). `--marcar` se niega con un archivo al que le falta algo: el esquema dice que no corrió, y marcarlo
+  lo sacaría de `check:esquema` para siempre. «Demostrado» prueba el DDL de un archivo, no su parte de datos: el
+  simulacro marca los que cambian datos para que alguien los lea antes del `--apply`.
+- **`check:esquema` sale con 3 si hay `.sql` sin anotar o cambiados, y con 1 si falta algo que el código usa.**
+  *Por qué:* la comparación con el cliente Prisma solo ve tablas, columnas y enums que el código usa; un `.sql` de
+  índices, políticas o datos que no corrió pasaba en verde (así quedaron los dos de arriba). Un código aparte porque
+  antes de aplicar el `.sql` nuevo de un deploy el registro siempre está pendiente. El wizard, antes de aplicar, solo
+  frena con el 2 (no pudo comparar: seguir sería aplicar a ciegas) y, después de aplicar, exige el 0.
+- **En PowerShell se aplica con `npx tsx scripts/aplicar-sql.ts`, no con `npm run db:sql --`.** *Por qué:* PowerShell
+  se come el `--` al llamar a `npm.ps1` y npm se queda con `--apply`: el script corría un simulacro y decía «No se
+  aplicó nada» en una línea fácil de pasar por alto. npm 10.9 no deja rastro de un `--apply` que se quedó (sí de
+  `--sin-transaccion` y `--marcar`, que los scripts detectan para frenar): por eso la regla va en los documentos y en las
+  cabeceras, y el simulacro lanzado por npm lo avisa al final.
+- **`db:sql` no respalda.** *Por qué:* los `.sql` son DDL aditivo e idempotente; el respaldo del guard (B-06) es de
+  datos por tabla. Un `.sql` que cambia datos se mira en el simulacro antes del `--apply`.
+- **Queda para después:** que el deploy no arranque si a la base le falta un `.sql` del registro (la otra mitad de la
+  oportunidad 4 de la evaluación). Hoy el registro informa y `/api/health` sigue siendo la red.

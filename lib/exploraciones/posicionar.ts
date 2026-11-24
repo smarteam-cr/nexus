@@ -394,15 +394,30 @@ export function sirveParaUbicar(r: { origen: string; texto?: string; corta?: unk
  * Qué reuniones lee «Ubicar con las reuniones» en la preventa (2026-11-08): las de Meet de una sesión (`deSesiones`, las
  * claves `meet:<id>` que liga la pantalla), con texto que leer (ni sin texto, ni cortadas, ni de puertas adentro), la más
  * nueva primero, hasta `cuantas`. Los ids pasan después por el chokepoint (fuentes.ts › `transcripcionesDeLaExploracion`).
+ * `porEquipo` (24 nov, el Resumen de la escala): antes de llenar con las más nuevas, cada equipo se lleva hasta ese número
+ * de las suyas, de a una por vuelta (las más nuevas de cada uno primero). En Centauro se leían las más recientes sin cupo
+ * y todo se inclinaba hacia Ventas. `equipoDe`: el equipo de cada reunión, o null (sin equipo no reserva lugar).
  */
 export function reunionesParaUbicar(
   todas: readonly { id: string; origen: string; fecha: string; texto?: string; corta?: unknown; puertasAdentro?: true }[],
   deSesiones: ReadonlySet<string>,
   cuantas: number,
+  cupo: { porEquipo: number; equipoDe: (id: string) => string | null; sinLugar?: ReadonlySet<string> } | null = null,
 ): string[] {
-  return todas
+  // `sinLugar`: los equipos que el cliente no ve. Sus reuniones no se eligen (se leían y se descartaban después: 6 de 8).
+  const elegibles = todas
     .filter((r) => sirveParaUbicar(r) && deSesiones.has(`meet:${r.id}`))
-    .sort((a, b) => Date.parse(b.fecha) - Date.parse(a.fecha))
-    .slice(0, cuantas)
-    .map((r) => r.id);
+    .filter((r) => !cupo?.sinLugar?.size || !cupo.sinLugar.has(cupo.equipoDe(r.id) ?? ""))
+    .sort((a, b) => Date.parse(b.fecha) - Date.parse(a.fecha));
+  if (!cupo || cupo.porEquipo <= 0) return elegibles.slice(0, cuantas).map((r) => r.id);
+  const deCadaEquipo = new Map<string, string[]>();
+  for (const r of elegibles) {
+    const e = cupo.equipoDe(r.id);
+    if (e) deCadaEquipo.set(e, [...(deCadaEquipo.get(e) ?? []), r.id]);
+  }
+  const elegidas = new Set<string>();
+  for (let vuelta = 0; vuelta < cupo.porEquipo; vuelta++)
+    for (const ids of deCadaEquipo.values()) if (elegidas.size < cuantas && ids[vuelta]) elegidas.add(ids[vuelta]);
+  for (const r of elegibles) if (elegidas.size < cuantas) elegidas.add(r.id);
+  return elegibles.filter((r) => elegidas.has(r.id)).map((r) => r.id);
 }

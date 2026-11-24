@@ -55,6 +55,7 @@ import {
 import { CLAVES, huella, quitadaDeLaPagina, textoDeLaPagina, type TextosDeLaPagina } from "@/lib/external/textos-de-la-pagina";
 import { SECCIONES_DEL_RESUMEN as SECCION, seccionDelEquipo } from "@/lib/external/secciones-de-la-escala";
 import AnimacionesDelResultado from "./AnimacionesDelResultado";
+import RecorridoDelCliente from "./RecorridoDelCliente";
 import type { EdicionDeUnTextoFijo } from "./ResultadoDelTestVista";
 import { ArribaDeLaEscala, PESTANA_DEL_RESUMEN, type PestanaDeLaEscala } from "./ArribaDeLaEscala";
 import "./diagnostico.css";
@@ -90,7 +91,7 @@ export interface EdicionDelResumen {
 }
 
 /** La señal de cómo se sabe una cifra: un símbolo y su texto, nunca solo el color. «Por confirmar» va sin signo. */
-const SIMBOLO_DEL_ESTADO: Record<EstadoDeLaCifra, string | null> = { declarado: "✓", estimado: "≈", pendiente: null };
+const SIMBOLO_DEL_ESTADO: Record<EstadoDeLaCifra, string | null> = { declarado: "✓", estimado: "≈", pendiente: null, calculado: "=" };
 function Estado({ estado, nota, etiqueta }: { estado: EstadoDeLaCifra; nota?: ReactNode; etiqueta?: string }) {
   return (
     <span className={`re-estado re-estado-${estado}`}>
@@ -309,7 +310,7 @@ export default function ResumenDeLaEscalaVista({
       />
       {c.porConfirmar && edicion?.confirmar && (
         <p className="re-aviso-interno">
-          La dijo Smarteam y la empresa no la corrigió. {edicion.confirmar(c.clave)}
+          {c.cuenta ? "Es una cuenta con sus cifras: confírmala para que la vea el cliente." : "La dijo Smarteam y la empresa no la corrigió."} {edicion.confirmar(c.clave)}
         </p>
       )}
       {c.noSale && <p className="re-aviso-interno">{c.noSale}</p>}
@@ -440,7 +441,7 @@ export default function ResumenDeLaEscalaVista({
               {costo.dePerdida && edicion && <p className="re-aviso-interno">La validó la empresa en la preventa: la cuenta sale de sus cifras de Negocio y Embudo.</p>}
               {costo.porConfirmar && edicion?.confirmar && (
                 <p className="re-aviso-interno">
-                  La dijo Smarteam y la empresa no la corrigió. {edicion.confirmar(costo.clave)}
+                  {costo.cuenta ? "Es una cuenta con sus cifras: confírmala para que la vea el cliente." : "La dijo Smarteam y la empresa no la corrigió."} {edicion.confirmar(costo.clave)}
                 </p>
               )}
               {costo.noSale && <p className="re-aviso-interno">{costo.noSale}</p>}
@@ -749,6 +750,8 @@ export default function ResumenDeLaEscalaVista({
                         <h3>{texto({ clave: `${e.clave}:nombre`, valor: e.nombre, vacio: "+ El paso", etiqueta: "Nombre del paso", tope: TOPE_DE_UN_NOMBRE })}</h3>
                         {e.quien && <span className="re-quien">{fijo(`paso.${e.id}.quien`, e.quien, `Quién hace ${e.nombre}`, false, true)}</span>}
                         {(e.texto || edicion) && <span className="re-detalle">{texto({ clave: `${e.clave}:texto`, valor: e.texto || null, vacio: "+ Un detalle", etiqueta: `El detalle de ${e.nombre}`, tope: TOPE_A_MANO, quitar: "Quitar este paso" })}</span>}
+                        {/* El traspaso al paso siguiente (24 nov): adentro se corrige o se quita aquí; afuera va en el dibujo de abajo. */}
+                        {edicion && e.traspaso && <span className="re-detalle">{texto({ clave: `${e.clave}:traspaso`, valor: e.traspaso.texto, vacio: "+ Qué pasa al pasar al siguiente", etiqueta: `Qué pasa al pasar de ${e.nombre} al siguiente`, tope: TOPE_A_MANO, quitar: "Quitar el traspaso" })}</span>}
                         {deDonde(e.citas)}
                       </li>
                     );
@@ -783,6 +786,9 @@ export default function ResumenDeLaEscalaVista({
                   })}
                 </div>
               )}
+              {/* Los traspasos entre equipos (24 nov), con su volumen; con los nombres que ve el cliente. Después de los que
+              acompañan: entre la línea y su corchete lo descolgaba. */}
+              <RecorridoDelCliente pasos={pasos} quienes={Object.fromEntries(pasos.map((e) => [e.id, e.quien ? textoDeLaPagina(textos, claveDe(`paso.${e.id}.quien`, e.quien, true), e.quien) : null]))} />
               {conTraba.length > 0 && (
                 <div className="re-trabas">
                   <h3>{fijo("titulo.trabas", "Dónde se traba hoy", "Título de dónde se traba")}</h3>

@@ -111,7 +111,8 @@ describe("el peso de cada reunión llega al agente", () => {
 
   it("las reglas piden el problema principal en el titular, el espacio por peso y los 5 puntos clave", () => {
     const sistema = String(pedidoDelResumen(CTX).system);
-    for (const regla of [/PROBLEMA PRINCIPAL/, /NUNCA dos hechos neutros/, /EL PESO DE CADA TEMA/, /«retos» \(de 1 a 4 según el PESO/, /«cifras» \(de 0 a 2 según el PESO/, /PUNTOS CLAVE \(7 candidatos/, /SOLO si la empresa la dijo/, /USA TODO/])
+    // 24 nov: la regla 0 busca primero el dolor que cruza equipos, y los retos tienen un piso de 2.
+    for (const regla of [/PROBLEMA PRINCIPAL/, /NUNCA dos hechos neutros/, /EL PROBLEMA PRINCIPAL Y EL PESO/, /«retos» \(de 2 a 4 según el PESO/, /«cifras» \(de 0 a 2 según el PESO/, /PUNTOS CLAVE \(7 candidatos/, /SOLO si la empresa la dijo/, /USA TODO/])
       expect(sistema).toMatch(regla);
     expect(sistema).not.toMatch(/exactamente 2, el más respaldado/);
   });

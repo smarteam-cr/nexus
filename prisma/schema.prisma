@@ -9518,3 +9518,23 @@ enum EstadoDePartidaDeTrivia {
   POSICIONES
   FINALIZADA
 }
+
+// ─── El registro de los scripts/sql/ aplicados (decisión 103 del roadmap, 2026-11-23) ───────────────────
+// SQL: scripts/sql/2026-11-23-registro-de-sql.sql. Decisión: docs/DECISIONS.md › «Registro de los SQL aplicados».
+
+/// Qué archivos de `scripts/sql/` ya corrieron en ESTA base (producción, nexus_local o nexus_test): una fila por archivo.
+/// La escriben `npm run db:sql` (aplica y anota en la misma transacción), el bootstrap local, el setup de las pruebas
+/// de integración y el backfill (`npm run db:sql:backfill`); la lee `npm run check:esquema`. Nada de la app la toca.
+/// Por SQL crudo (`pg`), no por este cliente: lib/db/registro-de-sql-base.ts.
+model SqlAplicado {
+  /// El nombre del archivo, sin carpeta: `2026-11-23-registro-de-sql.sql`.
+  archivo    String   @id
+  /// sha256 del texto con los fines de línea en LF y sin BOM (lib/db/registro-de-sql.ts › huellaDeSql).
+  huella     String
+  /// La última vez que se aplicó (UTC). En una fila `demostrado` o `marcado`, cuándo se anotó.
+  aplicadoEn DateTime @default(now())
+  /// La máquina y el comando: «PC · npm run db:sql», «PC · db:local bootstrap», «PC · test:int».
+  desde      String
+  /// aplicado · demostrado (el esquema prueba que corrió) · marcado (lo dijo una persona). TEXTO con CHECK, no enum.
+  como       String
+}
