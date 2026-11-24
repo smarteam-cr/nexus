@@ -182,6 +182,20 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     motivo:
       "Una versión del Resumen de La escala (21 nov): la vista previa (`paginaDeLaVersion`, la página interna armada con esa versión) y «Usar esta versión», que cambia el Resumen y nunca lo publicado. Pantalla interna, con la guardia de la exploración (leer para ver, escribir para usar).",
   },
+  "app/api/sales/exploraciones/[id]/escala/nexus/route.ts": {
+    destino: "ventas",
+    motivo:
+      "«✨ Pedirle a Nexus» en la página de La escala (23 nov, lib/exploraciones/escala-con-nexus-server.ts): un pedido, una propuesta por pieza, y aplicar por las operaciones de la edición a mano. Pantalla interna, con la guardia de la exploración para escribir; la cuenta sale de la fila. Nunca publica.",
+  },
+  "app/api/sales/exploraciones/[id]/escala/areas/[areaId]/versiones/route.ts": {
+    destino: "ventas",
+    motivo: "El historial de versiones de la página de un área de La escala (23 nov, lib/exploraciones/versiones-del-area-server.ts). Pantalla interna, con la guardia de la exploración para leer.",
+  },
+  "app/api/sales/exploraciones/[id]/escala/areas/[areaId]/versiones/[versionId]/route.ts": {
+    destino: "ventas",
+    motivo:
+      "Una versión de la página de un área (23 nov): lo escrito en ella, para la vista previa, y «Usar esta versión», que nunca toca lo publicado. Pantalla interna, con la guardia de la exploración (leer para ver, escribir para usar).",
+  },
   "app/api/sales/exploraciones/[id]/pagina-de-la-escala/route.ts": {
     destino: "ventas",
     motivo: "La escala interna editable (8 nov): la página del cliente, por el mismo cálculo (`paginaParaElCse`), para editarla. Pantalla interna, con la guardia de la exploración.",

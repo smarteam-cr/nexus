@@ -531,7 +531,8 @@ function MejorarConIA({ id, caso }: { id: string; caso: CasoDeUsoElegido }) {
     setAplicando(true);
     try {
       const nuevo = aplicarMejora(caso, propuesta.p, elegidas, armado.porId);
-      const ok = await cambiar([{ op: "casoDeUso", useCaseId: id, valor: nuevo }]);
+      // Por el camino de siempre; el servidor deja «Cambiado con Nexus» en el historial del caso, con el pedido (23 nov).
+      const ok = await cambiar([{ op: "casoDeUso", useCaseId: id, valor: nuevo }], { deNexus: { instruccion: propuesta.instruccion } });
       if (!ok) return;
       pushUndo({ scope: `exploracion:${exp.id}`, label: `Aplicaste la mejora a «${caso.titulo}»`, undo: () => void cambiar([{ op: "casoDeUso", useCaseId: id, valor: caso }]) });
       toast.success(`Las actividades de «${caso.titulo}» quedaron con la mejora.`);

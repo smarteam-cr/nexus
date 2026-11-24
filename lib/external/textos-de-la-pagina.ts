@@ -64,3 +64,40 @@ export const CLAVES = {
   /** Algo del Resumen que no guarda el agente: por su lugar. */
   delResumen: (nombre: string) => `resumen.${nombre}`,
 } as const;
+
+/**
+ * Los títulos fijos de la página de un área (`CLAVES.delArea(area, nombre)`), con su texto de siempre. Uno solo para la
+ * vista (components/external/test/ResultadoDelTestVista.tsx) y para «Pedirle a Nexus» (23 nov), que los cambia por la
+ * misma operación.
+ */
+export const TITULOS_DEL_AREA = {
+  "titulo.escalera": { texto: "Dónde está hoy en la escala.", nombre: "Título de la escalera" },
+  "titulo.radar": { texto: "Dónde está hoy cada parte.", nombre: "Título del radar" },
+  "titulo.casos": { texto: "Lo que haríamos contigo.", nombre: "Título de lo que haríamos" },
+  "titulo.riesgos": { texto: "Lo que puede estar pasando sin que se note.", nombre: "Título de los riesgos" },
+  "titulo.partes": { texto: "Parte por parte, sobre 100.", nombre: "Título de cada parte" },
+} as const;
+export type TituloDelArea = keyof typeof TITULOS_DEL_AREA;
+
+/** Un nombre de dimensión en medio de una oración: «Registro de Ventas» → «registro de ventas» (las siglas se quedan). */
+export const enMedioDeLaOracion = (nombre: string): string => nombre.replace(/\p{L}+/gu, (w) => (w.length > 1 && w === w.toUpperCase() ? w : w.toLowerCase()));
+
+/** El título de «Por dónde empezar» cuando hay que trabajar una parte: el de siempre, que se cambia por empresa. */
+export const tituloDeEmpezar = (dimensionNombre: string, objetivoNombre: string): string => `Llevar ${enMedioDeLaOracion(dimensionNombre)} a ${objetivoNombre}.`;
+
+/** La ceja de «Lo que más le cuesta» de un área. */
+export const cejaDeLoQueCuesta = (areaNombre: string): string => `Lo que más le cuesta a ${areaNombre}`;
+
+/** Qué priorizar para el nivel siguiente: «Ver detalles» de la barra y, en el PDF, el renglón debajo de ella. */
+export function textoDeLaPrioridad(d: { siguiente: { nombre: string; prioridad: string } | null }): { titulo: string; texto: string } {
+  return d.siguiente
+    ? { titulo: `Qué priorizar para llegar a ${d.siguiente.nombre}`, texto: d.siguiente.prioridad }
+    : { titulo: "Qué priorizar", texto: "Ya está en el nivel más alto de la escala: lo que sigue es sostenerlo y volver a medir." };
+}
+
+const fechaLargaDelPie = (iso: string) =>
+  new Intl.DateTimeFormat("es-CR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Costa_Rica" }).format(new Date(iso));
+
+/** El pie de la página de un área, con la fecha en que se midió. */
+export const pieDelArea = (fecha: string | null): string => (fecha ? `Medido el ${fechaLargaDelPie(fecha)}, con lo que conversamos contigo.` : "Medido con lo que conversamos contigo.");
+

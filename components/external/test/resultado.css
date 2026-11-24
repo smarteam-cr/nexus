@@ -424,6 +424,11 @@
 .dr .rd-editable-vacio { color: var(--v3-marca); font-size: 14px; font-weight: 600; }
 .dr .rd-editable-lapiz { position: absolute; top: 4px; right: 6px; font-size: 11px; font-weight: 600; color: var(--v3-marca); opacity: 0; transition: opacity .15s; }
 .dr .rd-editable-texto:hover .rd-editable-lapiz, .dr .rd-editable-texto:focus-visible .rd-editable-lapiz { opacity: 1; }
+/* «✨ Pedirle a Nexus» al pasar por una pieza (23 nov): un botón hermano del texto, a la izquierda de «Editar». */
+.dr .rd-editable-caja { position: relative; }
+.dr .rd-editable-pedir { position: absolute; top: 0; right: 52px; z-index: 2; border: 0; background: #fff; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 600; color: var(--v3-marca); box-shadow: 0 0 0 1px var(--v3-borde-fuerte); opacity: 0; transition: opacity .15s; cursor: pointer; }
+.dr .rd-editable-caja:hover .rd-editable-pedir, .dr .rd-editable-pedir:focus-visible { opacity: 1; }
+@media (hover: none) { .dr .rd-editable-pedir { opacity: 1; position: static; margin-bottom: 4px; } }
 .dr .rd-editable-origen { display: block; margin-top: 4px; font-size: 11.5px; line-height: 16px; color: var(--v3-apagado); }
 .dr .rd-editor { display: grid; gap: 8px; }
 /* El cuadro ocupa el lugar exacto del texto (9 nov): el mismo corrimiento que `.rd-editable-texto` (margen -4/-8 px, relleno

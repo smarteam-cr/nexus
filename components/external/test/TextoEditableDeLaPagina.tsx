@@ -15,8 +15,12 @@
  * El cuadro ocupa EXACTAMENTE el lugar del texto (9 nov, Elías: «al hacer clic, el cuadro cambia de tamaño y la información
  * queda cortada»): la misma letra, el mismo margen y el alto de lo escrito, que crece y se achica mientras se escribe
  * (`ajustarAlto`). Antes tenía un alto fijo y lo largo se cortaba con una barra.
+ *
+ * Con `pedir` (23 nov), al pasar el cursor sale también «✨ Pedirle a Nexus» junto a «Editar»: abre el panel de la página
+ * con esta pieza como lugar (components/exploraciones/PedirleANexus.tsx). Es un botón hermano, no dentro del texto.
  */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { NOMBRE_DEL_BOTON } from "@/lib/pedirle-a-nexus/contrato";
 
 /** El alto del cuadro: el de lo escrito (sin barra), y nunca menos que el texto que reemplazó. */
 export function ajustarAlto(el: HTMLTextAreaElement, minimo = 0): void {
@@ -33,6 +37,7 @@ export default function TextoEditableDeLaPagina({
   origen = null,
   acciones,
   quitar = null,
+  pedir,
   onGuardar,
 }: {
   valor: string | null;
@@ -47,6 +52,8 @@ export default function TextoEditableDeLaPagina({
   acciones?: (poner: (texto: string) => void) => ReactNode;
   /** Con un rótulo, un botón que guarda null (quitarlo, o volver al texto de la escala). */
   quitar?: string | null;
+  /** «✨ Pedirle a Nexus» sobre esta pieza (solo si es una pieza que Nexus puede cambiar). */
+  pedir?: () => void;
   /** Devuelve si se guardó: si no, el cuadro queda abierto con lo escrito. */
   onGuardar: (texto: string | null) => Promise<boolean>;
 }) {
@@ -132,7 +139,12 @@ export default function TextoEditableDeLaPagina({
     );
 
   return (
-    <div ref={caja}>
+    <div ref={caja} className={pedir ? "rd-editable-caja" : undefined}>
+      {pedir && (
+        <button type="button" className="rd-editable-pedir" aria-label={`${NOMBRE_DEL_BOTON.replace("✨ ", "")}: ${etiqueta}`} onClick={pedir}>
+          {NOMBRE_DEL_BOTON}
+        </button>
+      )}
       <div
         role="button"
         tabIndex={0}

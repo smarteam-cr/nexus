@@ -63,6 +63,11 @@ export interface DocumentAssistInput {
   maxTokens?: number;
   /** Tope de búsquedas web (5 si no viene). `0` la apaga: ni la herramienta ni su instrucción van en la llamada. */
   maxWebSearches?: number;
+  /**
+   * Una propuesta sin cambios es una respuesta válida si el modelo explica por qué en `__reasoning` («✨ Pedirle a Nexus»,
+   * 23 nov: lo interno no se mete aunque se pida, y Nexus lo dice). Sin esto, sin cambios es un error.
+   */
+  permitirVacia?: boolean;
 }
 
 export interface DocumentAssistResult {
@@ -216,7 +221,7 @@ export async function runDocumentAssist(input: DocumentAssistInput): Promise<Doc
     summary.push(def.label);
   }
 
-  if (Object.keys(proposal).length === 0) {
+  if (Object.keys(proposal).length === 0 && !(input.permitirVacia && reasoning)) {
     throw new Error(
       Object.keys(raw).length === 0
         ? "la IA no devolvió una propuesta válida — prueba de nuevo o reformula la instrucción"

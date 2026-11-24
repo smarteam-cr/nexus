@@ -25,6 +25,9 @@
  *     lo que cuesta quedarse así, los casos, los riesgos, «Ver detalles», la bajada y lo que hicimos del Resumen, el pie.
  *     Se editan en su lugar (`TextoFijo`, operación `textoDeLaPagina`) y los casos, los riesgos y lo que arma la página
  *     se pueden quitar para el cliente (lib/external/textos-de-la-pagina.ts).
+ *   · «✨ Pedirle a Nexus» (23 nov, etapa 3 del plan maestro de «Hablar con Nexus», sin cajón): en el Resumen, en cada área y
+ *     al pasar por cada pieza abre un panel AL LADO de la página (PedirleANexus.tsx): un pedido, una propuesta por pieza, que
+ *     se aplica por estas mismas operaciones. La página de cada área tiene su historial (HistorialDelArea.tsx).
  * Nada de esto lo ve el cliente hasta «Publicar» (16 nov, PublicarLaEscala.tsx, al lado de «Acceso»): el enlace sirve la
  * foto publicada.
  * Arriba de la página, fuera de ella: la línea del área (si la ve el cliente, cuánto tiene, sumarla o sacarla) y el
@@ -32,7 +35,7 @@
  * Todo se guarda en la exploración; la página se vuelve a pedir cuando cambia su versión. Lo que propone el agente y nadie
  * usó NO se dibuja: el cliente no lo ve. Para eso están la franja de sugerencias y la vista «Comparar áreas».
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Alert, Button, ConfirmDialog, Drawer, Field, Skeleton, Textarea, useToast } from "@/components/ui";
 import ArrastreDelRadar from "@/components/escala/ArrastreDelRadar";
 import { PESTANA_DEL_RESUMEN } from "@/components/external/test/ArribaDeLaEscala";
@@ -54,6 +57,10 @@ import { BotonDelHistorial } from "@/components/versiones/HistorialDeVersiones";
 import { avisarQueLaEscalaCambio } from "./escala-al-dia";
 import { useSeRehaceLaEscala } from "./rehacer-la-escala";
 import { DetalleDeDimension, useMarcarNivel } from "./DetalleDeLaDimension";
+import PedirleANexus, { type FocoDelPedido } from "./PedirleANexus";
+import { NOMBRE_DEL_BOTON } from "@/lib/pedirle-a-nexus/contrato";
+import HistorialDelArea from "./HistorialDelArea";
+import { conLoQueCuestaDelArea, piezasDelArea, piezasDelResumen, type LugarEnLaEscala, type PiezaDeLaEscala } from "@/lib/exploraciones/escala-con-nexus";
 
 /** Lo que responde la ruta de la descripción (la sesión que la hizo): de dónde sale la de cada área. */
 interface DescripcionesDeLaEscala {
@@ -238,7 +245,7 @@ function DeDondeSale({ citas, noSostiene = false }: { citas: readonly CitaDelRes
  * Un texto fijo de la página, editable en su lugar (16 nov). Guardar el de siempre (o vaciarlo) lo devuelve al de
  * siempre; «Quitar para el cliente» deja la pieza fuera de la página (se ve tachada adentro, con «Volver a mostrarla»).
  */
-function TextoFijo({ o, guardar }: { o: EdicionDeUnTextoFijo; guardar: (clave: string, texto: string | null) => Promise<boolean> }) {
+function TextoFijo({ o, guardar, pedir }: { o: EdicionDeUnTextoFijo; guardar: (clave: string, texto: string | null) => Promise<boolean>; pedir?: () => void }) {
   if (o.quitar?.quitada)
     return (
       <span className="rd-quitada">
@@ -259,6 +266,7 @@ function TextoFijo({ o, guardar }: { o: EdicionDeUnTextoFijo; guardar: (clave: s
       max={MAX_TEXTO_DE_LA_PAGINA}
       etiqueta={o.etiqueta}
       quitar={cambiado ? "Volver al texto de siempre" : null}
+      pedir={pedir}
       acciones={
         o.quitar
           ? () => (
@@ -297,6 +305,10 @@ export default function PaginaDeLaEscala() {
   const [armando, setArmando] = useState(false);
   /** El historial de versiones del Resumen (21 nov, reemplaza a «Volver a la versión anterior»). */
   const [historialAbierto, setHistorialAbierto] = useState(false);
+  /** «✨ Pedirle a Nexus» (23 nov): el panel abierto al lado de la página, con su lugar y la pieza desde la que se pidió. */
+  const [pedirle, setPedirle] = useState<{ lugar: LugarEnLaEscala; foco: FocoDelPedido | null } | null>(null);
+  /** El historial de la página del área elegida (23 nov). */
+  const [historialDelArea, setHistorialDelArea] = useState(false);
   // La cuenta regresiva del agente de impacto de esta pestaña: mientras rehace, no se usa otra versión (el servidor también frena).
   const seRehace = useSeRehaceLaEscala(exp.id);
   /** Lo que el agente escribió y no pasó la verificación la última vez que se armó (para revisarlo). */
@@ -338,7 +350,59 @@ export default function PaginaDeLaEscala() {
   const elegir = (id: string) => {
     setElegida(id);
     setAbierta(null);
+    // El panel de Nexus es de una página: al cambiar de pestaña se cierra (lo propuesto era de la otra).
+    setPedirle(null);
   };
+
+  /* «✨ Pedirle a Nexus» (23 nov): las piezas de esta página, las mismas que lee el servidor (lib/exploraciones/escala-con-nexus.ts).
+     El botón al pasar por un texto sale solo en las piezas que Nexus puede cambiar. */
+  const lugarDeAqui: LugarEnLaEscala = enElResumen ? { pagina: "resumen" } : { pagina: "area", areaId: r.areaId };
+  const piezasDeAqui: PiezaDeLaEscala[] = enElResumen
+    ? piezasDelResumen(pagina.resumen, pagina.textos)
+    : piezasDelArea(r, {
+        textos: pagina.textos,
+        textosDelRadar: exp.estado.contenido.textosDelRadar,
+        descripcion: descripciones.data?.areas.find((a) => a.areaId === r.areaId)?.descripcion ?? null,
+        detalle: (id) => pagina.detalles[id] ?? null,
+        conLoQueCuesta: conLoQueCuestaDelArea(pagina.resumen, r.areaId),
+        fecha: pagina.fecha,
+      });
+  const nombreDePieza = new Map(piezasDeAqui.map((p) => [p.clave, p.nombre]));
+  const pedirSobre = (clave: string) =>
+    puedeEditar && nombreDePieza.has(clave) ? () => setPedirle({ lugar: lugarDeAqui, foco: { clave, nombre: nombreDePieza.get(clave)! } }) : undefined;
+  const abrirPedirle = () => setPedirle({ lugar: lugarDeAqui, foco: null });
+  /** Lo aplicado se guarda por su propia ruta: el lienzo, la página y las descripciones se ponen al día. */
+  const alCambiarConNexus = () => {
+    void recargar();
+    otraVez();
+    descripciones.otraVez();
+  };
+  /** La página con el panel al lado (en pantallas angostas, arriba de la página). */
+  const conPanel = (contenido: ReactNode) =>
+    pedirle ? (
+      <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="order-2 min-w-0 lg:order-1">{contenido}</div>
+        <div className="order-1 lg:sticky lg:top-4 lg:order-2">
+          <PedirleANexus
+            key={pedirle.lugar.pagina === "resumen" ? "resumen" : pedirle.lugar.areaId}
+            exploracionId={exp.id}
+            lugar={pedirle.lugar}
+            lugarNombre={enElResumen ? "Resumen" : r.areaNombre}
+            foco={pedirle.foco}
+            onQuitarFoco={() => setPedirle({ ...pedirle, foco: null })}
+            onCerrar={() => setPedirle(null)}
+            alCambiar={alCambiarConNexus}
+          />
+        </div>
+      </div>
+    ) : (
+      contenido
+    );
+  const botonDePedirle = puedeEditar ? (
+    <Button size="sm" variant="secondary" onClick={abrirPedirle}>
+      {NOMBRE_DEL_BOTON}
+    </Button>
+  ) : null;
 
   /** Guarda un texto fijo de la página (16 nov) y trae la página al día. */
   const guardarFijo = async (clave: string, texto: string | null) => {
@@ -346,7 +410,7 @@ export default function PaginaDeLaEscala() {
     if (ok) otraVez();
     return ok;
   };
-  const fijo = puedeEditar ? (o: EdicionDeUnTextoFijo) => <TextoFijo o={o} guardar={guardarFijo} /> : undefined;
+  const fijo = puedeEditar ? (o: EdicionDeUnTextoFijo) => <TextoFijo o={o} guardar={guardarFijo} pedir={pedirSobre(`t/${o.clave}`)} /> : undefined;
 
   if (enElResumen) {
     const armar = async () => {
@@ -383,6 +447,7 @@ export default function PaginaDeLaEscala() {
             max={o.tope}
             etiqueta={o.etiqueta}
             quitar={o.quitar ?? null}
+            pedir={pedirSobre(`r/${o.clave}`)}
             onGuardar={async (texto) => {
               const ok = await cambiar([{ op: "resumenDeLaEscala", clave: o.clave, texto }]);
               if (ok) otraVez();
@@ -438,6 +503,7 @@ export default function PaginaDeLaEscala() {
             </p>
             {puedeEditar && (
               <div className="flex flex-wrap items-center gap-2">
+                {res.at && botonDePedirle}
                 {res.at && <BotonDelHistorial onClick={() => setHistorialAbierto(true)} />}
                 <Button size="sm" variant={res.at ? "secondary" : "primary"} loading={armando} onClick={() => void armar()}>
                   {armando ? "Nexus está leyendo las reuniones…" : res.at ? "Rehacer con IA" : "Armar el Resumen con IA"}
@@ -489,18 +555,20 @@ export default function PaginaDeLaEscala() {
           frenado={armando || seRehace ? "Nexus está rehaciendo el Resumen: espera a que termine para usar otra versión." : guardando ? "Se está guardando un texto: espera un momento." : null}
           alCambiar={alCambiarDeVersion}
         />
-        <div className="overflow-hidden rounded-xl border border-line">
-          <ResumenDeLaEscalaVista
-            resumen={res}
-            empresa={pagina.empresa}
-            dominio={pagina.dominio}
-            logo={pagina.logo}
-            fecha={pagina.fecha}
-            pestanas={[{ id: PESTANA_DEL_RESUMEN, nombre: "Resumen", href: "#" }, ...pestanasDeLasAreas]}
-            edicion={edicionDelResumen}
-            textos={pagina.textos}
-          />
-        </div>
+        {conPanel(
+          <div className="overflow-hidden rounded-xl border border-line">
+            <ResumenDeLaEscalaVista
+              resumen={res}
+              empresa={pagina.empresa}
+              dominio={pagina.dominio}
+              logo={pagina.logo}
+              fecha={pagina.fecha}
+              pestanas={[{ id: PESTANA_DEL_RESUMEN, nombre: "Resumen", href: "#" }, ...pestanasDeLasAreas]}
+              edicion={edicionDelResumen}
+              textos={pagina.textos}
+            />
+          </div>,
+        )}
       </div>
     );
   }
@@ -548,6 +616,7 @@ export default function PaginaDeLaEscala() {
           max={TOPE_DE_LA_DESCRIPCION}
           etiqueta="Descripción de «Resultado general»"
           quitar={descripcion.origen === "mano" ? "Quitar lo escrito" : null}
+          pedir={pedirSobre(`desc/${r.areaId}`)}
           origen={
             <>
               {ORIGEN[descripcion.origen]}
@@ -575,6 +644,7 @@ export default function PaginaDeLaEscala() {
               max={MAX_TEXTO_DEL_RADAR}
               etiqueta={`Lo que dice la tarjeta de ${d.nombre}`}
               quitar={vigente ? "Volver al texto de la escala" : null}
+              pedir={pedirSobre(`radar/${id}`)}
               acciones={(poner) => (
                 <>
                   {deNexus && (
@@ -632,6 +702,22 @@ export default function PaginaDeLaEscala() {
   return (
     <div data-recorrido="preventa.escala.areas" className="flex flex-col gap-2">
       <LineaDelArea areaId={r.areaId} alCliente={pagina.alCliente.includes(r.areaId)} />
+      {puedeEditar && (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <BotonDelHistorial onClick={() => setHistorialDelArea(true)} />
+          {botonDePedirle}
+        </div>
+      )}
+      <HistorialDelArea
+        open={historialDelArea}
+        onClose={() => setHistorialDelArea(false)}
+        exploracionId={exp.id}
+        areaId={r.areaId}
+        areaNombre={r.areaNombre}
+        empresa={pagina.empresa}
+        puedeEditar={puedeEditar}
+        alCambiar={alCambiarConNexus}
+      />
       {descripciones.data && <ContextoParaLaDescripcion areaId={r.areaId} nombre={r.areaNombre} onRehacer={rehacer} rehaciendo={rehaciendo} />}
       {error && (
         <Alert variant="warning" title="No se pudo traer la página al día">
@@ -641,7 +727,8 @@ export default function PaginaDeLaEscala() {
           </button>
         </Alert>
       )}
-      <div className="overflow-hidden rounded-xl border border-line">
+      {conPanel(
+        <div className="overflow-hidden rounded-xl border border-line">
         <ResultadoDelTestVista
           r={r}
           empresa={pagina.empresa}
@@ -661,7 +748,8 @@ export default function PaginaDeLaEscala() {
           }}
           edicion={edicion}
         />
-      </div>
+        </div>,
+      )}
       {abierta && <PanelDeLaDimension key={abierta} id={abierta} onCerrar={() => setAbierta(null)} />}
       <ConfirmDialog
         open={pisarLaEscrita}

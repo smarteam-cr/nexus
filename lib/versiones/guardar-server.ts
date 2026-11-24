@@ -18,8 +18,20 @@ import { tipoDeLoQueHabia, type TipoDeVersion } from "./historial";
 /** Cuántas versiones se guardan por documento: las más viejas se van. */
 export const VERSIONES_POR_DOCUMENTO = 30;
 
-/** De quién es la versión: exactamente uno (CHECK VersionDeDocumento_un_solo_dueno). El cronograma no guarda aquí. */
-export type DuenoDeVersion = { canvasId: string } | { exploracionId: string };
+/**
+ * De quién es la versión: exactamente uno (CHECK VersionDeDocumento_un_solo_dueno). El cronograma no guarda aquí.
+ * Una exploración tiene varios documentos (23 nov, «Pedirle a Nexus»): el Resumen de La escala (`pieza` null, como desde
+ * el 21 nov) y la página de cada área (`pieza` = `area:<id>`, ver lib/exploraciones/versiones-del-area-server.ts). Cada
+ * uno es su propio historial: su última versión, su tope de 30. En un canvas, `pieza` es el slug y no separa historiales.
+ */
+export type DuenoDeVersion = { canvasId: string } | { exploracionId: string; pieza?: string | null };
+
+/** Dónde se buscan las versiones de un dueño, y qué se escribe en la fila nueva. */
+function delDueno(dueno: DuenoDeVersion): { where: Prisma.VersionDeDocumentoWhereInput; data: { canvasId: string } | { exploracionId: string; pieza: string | null } } {
+  if ("canvasId" in dueno) return { where: { canvasId: dueno.canvasId }, data: { canvasId: dueno.canvasId } };
+  const pieza = dueno.pieza ?? null;
+  return { where: { exploracionId: dueno.exploracionId, pieza }, data: { exploracionId: dueno.exploracionId, pieza } };
+}
 
 export interface VersionNueva {
   /** Cómo nació. «antes»: lo que había antes de reemplazarlo; el tipo lo decide `tipoDeLoQueHabia`. */
@@ -37,6 +49,11 @@ export interface VersionNueva {
   protegida?: boolean;
   /** Solo para pasar una versión de antes con su fecha (la anterior del Resumen). */
   createdAt?: Date;
+  /**
+   * Guardarla aunque sea igual a la última: la última es de un formato que no guardaba todo (el Resumen antes del 23 nov,
+   * sin sus textos fijos) y volver a ella no devolvería lo que importa.
+   */
+  forzar?: boolean;
 }
 
 export type VersionGuardada = { guardada: boolean; id?: string; motivo?: string };
@@ -45,13 +62,13 @@ export type VersionGuardada = { guardada: boolean; id?: string; motivo?: string 
 export async function guardarVersion(dueno: DuenoDeVersion, v: VersionNueva): Promise<VersionGuardada> {
   try {
     if (!modeloDisponible(prisma.versionDeDocumento)) return { guardada: false, motivo: "falta la tabla" };
-    const where = dueno as Prisma.VersionDeDocumentoWhereInput;
+    const { where, data: deQuien } = delDueno(dueno);
     const ultima = await prisma.versionDeDocumento.findFirst({
       where,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: { id: true, huella: true },
     });
-    if (ultima?.huella === v.huella) {
+    if (ultima?.huella === v.huella && !v.forzar) {
       if (!v.publicada && !v.protegida) return { guardada: false, id: ultima.id, motivo: "igual a la última" };
       /* Presentar o congelar lo mismo que ya estaba: esa versión pasa a ser la presentada o la congelada (como antes del
          21 nov, que le reescribía el origen). Publicar solo la marca: conserva cómo nació. */
@@ -69,8 +86,8 @@ export async function guardarVersion(dueno: DuenoDeVersion, v: VersionNueva): Pr
     const tipo = v.tipo === "antes" ? tipoDeLoQueHabia(ultima?.huella, v.huella) : v.tipo;
     const creada = await prisma.versionDeDocumento.create({
       data: {
-        ...dueno,
-        pieza: v.pieza ?? null,
+        // En un canvas la pieza es su slug (la da quien guarda); en una exploración, el documento (la da el dueño).
+        ...("canvasId" in deQuien ? { ...deQuien, pieza: v.pieza ?? null } : deQuien),
         origen: v.nota,
         tipo,
         creadaPor: v.creadaPor,
@@ -102,7 +119,7 @@ export async function guardarVersion(dueno: DuenoDeVersion, v: VersionNueva): Pr
 export async function filasDelHistorial(dueno: DuenoDeVersion) {
   if (!modeloDisponible(prisma.versionDeDocumento)) return [];
   const filas = await prisma.versionDeDocumento.findMany({
-    where: dueno as Prisma.VersionDeDocumentoWhereInput,
+    where: delDueno(dueno).where,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     select: { id: true, tipo: true, origen: true, creadaPor: true, createdAt: true, huella: true, publicada: true },
   });

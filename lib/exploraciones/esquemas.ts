@@ -809,6 +809,11 @@ export const CambiosSchema = z.object({
   /** La versión que vio el navegador: si otro cambió lo confirmado entretanto, 409. */
   version: z.number().int().min(0),
   operaciones: z.array(OperacionSchema).min(1).max(50),
+  /**
+   * El cambio viene de una propuesta de Nexus que la persona aplicó (23 nov, «Mejorar con IA» de las actividades de un
+   * caso): la ruta, después de guardar por el camino de siempre, deja «Cambiado con Nexus» en el historial con el pedido.
+   */
+  deNexus: z.object({ instruccion: z.string().trim().min(1).max(2000) }).optional(),
 });
 
 /* Lo que valida zod tiene que poder pasarse como `Operacion`: si el esquema y el tipo se separan,

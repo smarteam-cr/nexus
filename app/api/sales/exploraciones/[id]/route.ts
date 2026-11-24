@@ -33,6 +33,7 @@ import { proponerALaFichaSinIA, proponerFichaDesdeLoAveriguado } from "@/lib/cli
 import { loNuevoParaLaFicha, ORIGEN_DE_LA_PREVENTA, propuestaParaLaFicha } from "@/lib/exploraciones/a-la-ficha";
 import { errorDelResponsable } from "@/lib/exploraciones/responsable";
 import { avisar } from "@/lib/para-ti/avisos-server";
+import { guardarLaMejoraDeLosCasos } from "@/lib/exploraciones/versiones-del-caso-server";
 import { olvidarMedicion } from "@/lib/para-ti/medir-server";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -86,6 +87,16 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
         { status: 409 },
       );
     case "ok": {
+      // Lo aplicado venía de «Mejorar con IA» de un caso (23 nov): su historial guarda lo de antes y «Cambiado con Nexus».
+      if (cuerpo.data.deNexus)
+        await guardarLaMejoraDeLosCasos({
+          exploracionId: id,
+          operaciones: cuerpo.data.operaciones as Operacion[],
+          antes: r.antes,
+          despues: estadoDesdeFila(r.fila),
+          instruccion: cuerpo.data.deNexus.instruccion,
+          email: guard.email,
+        });
       // Ficha B (2026-10-17): un nivel confirmado deja la versión del día de la escala de la empresa (nunca frena).
       if (r.confirmado) anotarVersionDelCambio(id, guard.email);
       /* Lo que se confirma va como sugerencia a Información del cliente: ahí lo leen los agentes, y al confirmarla se

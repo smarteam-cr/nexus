@@ -34,6 +34,11 @@ export interface OpcionesDeCambio {
   alFallar?: (motivo: string) => void;
   /** Sin el aviso de error: el que llama lo dice a su manera, con `alFallar`. */
   sinAvisoDeError?: boolean;
+  /**
+   * El cambio aplica lo que propuso Nexus (23 nov, «Mejorar con IA» de las actividades de un caso): va por el mismo PATCH y
+   * el servidor deja «Cambiado con Nexus» en el historial, con el pedido.
+   */
+  deNexus?: { instruccion: string };
 }
 
 export interface Lienzo {

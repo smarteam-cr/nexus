@@ -64,7 +64,7 @@ export function fechaDeLaVersion(v: Pick<VersionDelHistorial, "en">): string {
 
 function Icono({ tipo }: { tipo: VersionDelHistorial["tipo"] }) {
   const comun = { width: 14, height: 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
-  if (tipo === "ia")
+  if (tipo === "ia" || tipo === "nexus")
     return (
       <svg {...comun} strokeWidth={1.8}>
         <path d="M10 3l1.6 4.4L16 9l-4.4 1.6L10 15l-1.6-4.4L4 9l4.4-1.6z" />
@@ -114,6 +114,7 @@ const COLOR_DEL_TIPO: Record<VersionDelHistorial["tipo"], string> = {
   restaurado: "text-fg-secondary",
   congelado: "text-fg-secondary",
   guardada: "text-fg-muted",
+  nexus: "text-brand",
 };
 
 export function MarcaActual() {

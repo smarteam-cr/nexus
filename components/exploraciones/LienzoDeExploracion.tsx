@@ -323,7 +323,7 @@ export default function LienzoDeExploracion({
           const r = await fetch(`/api/sales/exploraciones/${base.id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ version, operaciones: ops }),
+            body: JSON.stringify({ version, operaciones: ops, ...(opciones.deNexus ? { deNexus: opciones.deNexus } : {}) }),
           });
           return { res: r, data: (await r.json().catch(() => ({}))) as { exploracion?: ExploracionParaLaPantalla; error?: string } };
         };

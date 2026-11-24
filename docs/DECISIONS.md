@@ -16383,6 +16383,14 @@ propuesta comercial y cronograma).
   comparan por su forma (arranque, fases con semanas y sesiones, tareas por semana), sin el avance. *Por qué sin «Usar
   esta versión»:* volver a otro cronograma tiene que pasar por la propuesta de la barra del Gantt para no pisar el avance
   ni lo editado a mano, y armar esa propuesta desde una foto es un paso propio. Queda pendiente.
+- **«Cambiado con Nexus» y la página de cada área (23 nov, etapa 3 del plan maestro de «Hablar con Nexus»).** Un tipo
+  nuevo (`nexus`): una persona aplicó lo que propuso «✨ Pedirle a Nexus»; se guarda con lo de antes y el pedido en la
+  nota. La foto del Resumen lleva desde ese día sus textos fijos (el titular, la bajada, los títulos: `resumen.*`), así un
+  cambio al titular deja versión y vuelve con «Usar esta versión»; sin textos cambiados la huella es la de siempre, y una
+  versión de antes, que no los trae, no los toca al usarse. Una exploración tiene varios documentos en la tabla, separados
+  por `pieza`: el Resumen (sin pieza), la página de cada área (`area:<id>`: la descripción, la tarjeta de cada parte y sus
+  textos; con su propio popup y «Usar esta versión», que sube la versión de la exploración) y cada caso de uso
+  (`caso:<id>`). Cada uno tiene su última versión y su tope de 30. Al publicar se guarda también la página de cada área.
 - **Lo que no queda garantizado:** la vista previa de un canvas muestra el texto de cada sección, no la página tal como la
   ve el cliente; un «Editado» dice la hora en que se guardó (cuando algo lo iba a reemplazar), no la hora de la última
   tecla, y no sabe quién escribió; un documento publicado ANTES de esto no muestra «Lo que ve el cliente» hasta que se
@@ -16486,6 +16494,57 @@ todavía: cada etapa arranca cuando él lo dice.
   - El chat «Nexus» de la cuenta la ve sin tocar nada: lee la misma memoria, en el alcance interno.
   - **Elías confirmó la enmienda el 23 nov** («Sí, con ese filtro»): los hechos de una nota del equipo llegan a lo
     que ve el cliente solo por `paraElAlcance`. Queda revisar con él, con notas reales de Cemaco · Ecuador, qué hechos pasan.
+
+- **Etapa 3, construida el 23 nov (sin SQL), en su versión sin cajón: «✨ Pedirle a Nexus» en la página de La escala.**
+  - **Dónde:** el botón «✨ Mejorar con IA» (el nombre que eligió Elías el 23 nov; en el código vive en una sola constante,
+    `NOMBRE_DEL_BOTON`) en el Resumen armado (junto a «Rehacer con IA»), en la página de cada área (junto a su «Historial»)
+    y al pasar el cursor por cada pieza que Nexus puede cambiar. Abre un panel AL LADO de la página (arriba, en pantallas
+    angostas), no un cajón: un pedido, una propuesta por pieza con el antes y el después, en `<AgentProposal>`, con
+    «Aplicar», «Descartar» y «Aplicar todo». No es una conversación. El lugar (el Resumen, un área, una pieza) lo pone el
+    botón y lo verifica el servidor (components/exploraciones/PedirleANexus.tsx).
+  - **El contrato del documento** (punto 4.4 del plan; lib/pedirle-a-nexus/contrato.ts y su registro, registro.test.ts):
+    tres funciones que reciben la persona y la cuenta, nunca la sesión del navegador (lib/exploraciones/escala-con-nexus-server.ts):
+    `leerLaEscalaParaNexus` (la página como la ve el cliente, en piezas con nombre: lib/exploraciones/escala-con-nexus.ts),
+    `proponerEnLaEscala` y `aplicarEnLaEscala`. Las usa la ruta `…/escala/nexus` y las usará `proponer_cambio` del conector.
+    La exploración tiene que ser de esa cuenta (o «no existe») y el área, de la página. *Por qué piezas con la clave de la
+    edición a mano y no secciones nuevas:* así aplicar escribe con las MISMAS operaciones (`resumenDeLaEscala`,
+    `textoDeLaPagina`, `textoDelRadar`, `descripcionDeLaEscala`, por `aplicarCambios`), sin un segundo camino.
+  - **Proponer** reusa el núcleo de «Mejorar con IA» (`runDocumentAssist`, lib/ai/assist.ts: cada pieza es una sección), sin
+    búsqueda web y con la voz de marca; lee la página y «Lo que confirmó el equipo» CORTADO PARA EL CLIENTE. Una propuesta
+    sin cambios es válida si Nexus dice por qué (`permitirVacia`). Su corrida es `pedirle-a-nexus` y su gasto, origen
+    `pedirle:escala`, dentro del tope de US$ 100 de Nexus conversando. No escribe nada.
+  - **La revisión del código** (lib/pedirle-a-nexus/veracidad.ts) decide qué llega; lo que no pasa se ve, con su porqué:
+    una cifra que no está en la página, en el pedido ni en lo confirmado para el cliente no llega (si es cierta, va en el
+    pedido); lo interno (presupuesto, quién decide, objeciones, posturas, competencia, lo que alguien no quiere) que la
+    pieza no decía no llega aunque se pida, ni una frase copiada de una nota interna; una pieza que no se quita no se vacía.
+    Las citas se cuidan solas: el editor de siempre suelta la cita de una pieza cuyo número ya no dice.
+  - **Lo escrito a mano no se pisa sin preguntar:** el cambio llega marcado, «Aplicar» pregunta y «Aplicar todo» lo deja
+    para decidirlo una por una.
+  - **Aplicar choca si otra persona editó lo mismo:** cada cambio trae lo que se vio antes; si la pieza dice otra cosa, no
+    se aplica nada (409 con lo que dice ahora). Y la fila tiene que seguir como estaba al leerla (`sinCambiosDesde` de
+    `aplicarCambios`). Es todo o nada.
+  - **Nunca publica:** queda «Hay cambios que el cliente no ve» hasta que una persona usa «Publicar».
+  - **Deshacer vuelve a la versión de antes** del historial (la que guardó aplicar), con «Usar esta versión»: exacto, con sus
+    citas y con quién escribió cada pieza, y choca si alguien cambió el documento después de Nexus. *Por qué no cambios
+    inversos:* el primer arreglo los usaba y la revisión del 23 nov encontró que deshacer un paso agregado fallaba siempre,
+    que lo quitado volvía sin su cita y que lo escrito por la IA quedaba como escrito por el equipo. Sin Resumen armado no hay
+    nada que mejorar con Nexus (no habría versión a la que volver): primero se arma.
+  - **La página de cada área entra entera:** la descripción, la tarjeta de cada parte, los títulos, «Por dónde empezar» (su
+    título, por qué y lo que cuesta quedarse así), los casos (título, qué logra y qué parte sube), los riesgos, «Qué
+    priorizar» de cada parte, la ceja de lo que más le cuesta y el pie. Lo que no: quitar un caso entero (su botón usa otra
+    clave que su título; se quita a mano) y «Lo que más le cuesta» (sale del Resumen y se cambia allá). Una cifra que el
+    cliente no ve no presta sus números a otra pieza, y «qué significa» de una cifra no se quita (en la edición a mano,
+    quitarlo borra la cifra entera). Tope por persona: 20 pedidos al día; tuteo: un texto con voseo no llega.
+  - **La segunda vuelta de la revisión (23 nov):** la versión de antes de Nexus se guarda aunque sea igual a la última si
+    esa es de antes de este día (no guardaba los textos fijos: «Deshacer» no habría devuelto la bajada); quitar una pieza
+    pide `quitar: "si"` explícito (una respuesta mal armada se lee como texto vacío y no puede borrar); más de 40 cambios
+    se dicen como descartados; el tope por persona se cuenta después de anotar la corrida (varios pedidos a la vez no lo
+    pasan); un caso quitado para el cliente no se le pide a Nexus; la página va una sola vez al modelo; «Deshacer» devuelve
+    solo lo del último «Aplicar».
+  - **Casos de uso:** su «Mejorar con IA» de las actividades conserva el nombre y el lugar, y ya leía lo que confirmó el
+    equipo y lo que aceptó el cliente (etapa 1). Aplicar sigue siendo el PATCH de siempre (`casoDeUso`), marcado
+    `deNexus` con el pedido: la ruta deja lo de antes y «Cambiado con Nexus» en el historial del caso (pieza `caso:<id>`).
+    El caso todavía no tiene popup de historial.
 
 ## Las lecturas de reuniones que no miraban el cliente se cierran (2026-11-23)
 
