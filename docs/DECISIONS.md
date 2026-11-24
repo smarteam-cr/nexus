@@ -14674,7 +14674,7 @@ error»); para un prospecto, esa regla sigue igual.
     403 con el motivo; la sugerencia de reuniones de trabajo, igual.
   - **El proyecto de contexto se elige** con «Con el contexto de»: como en la ficha, todos los proyectos de la empresa menos
     el contenedor y los de prueba, los activos primero y sugerido el activo más nuevo (`proyectosParaElContexto`); uno
-    cerrado entra, marcado «(cerrado)»: el handoff de la implementación que cerró es lo que sirve para la renovación. Solo uno
+    terminado o en pausa entra, con su estado entre paréntesis: el handoff de la implementación que cerró es lo que sirve para la renovación. Solo uno
     de esta empresa: el agente lo vuelve a comprobar (`proyectoDeContextoDeLaEmpresa`, invariante #1). La lista vive en el
     lienzo aparte de la exploración (llega al abrir y al recargar, como «Para el demo»). Medido con AE: sin el proyecto no
     lee el handoff, que es lo que más aporta.
@@ -14699,10 +14699,12 @@ error»); para un prospecto, esa regla sigue igual.
     empresa con transcripción, por cuánto habló el cliente (quien-hablo.ts, la misma medida que marca «mal leída» bajo el
     28 %), primero la mejor de cada equipo y a igual parte la más nueva. Las de menos del 28 % van al final, marcadas. Se
     suman con un clic o en bloque, sin leerlas de paso: el lector de una sesión la tomaría como de diagnóstico; «Ubicar» las
-    lee enteras. Una reunión se marca una sola vez aunque salga en las dos listas. Las de la lista de siempre entran como
+    lee enteras. Por eso una reunión de trabajo tampoco queda «sin leer» ni la lee el agente como sesión (`lanzarCorrida`
+    responde 409 al botón, a la cola y a la lectura automática). Una reunión entra con UNA clase: marcarla en una lista la
+    desmarca en la otra. Las de la lista de siempre entran como
     sesión de diagnóstico. Lo medido se recuerda 10 minutos por empresa. El análisis automático de reuniones de venta no
-    toma una reunión de trabajo (`reunionesDeLasSesionesDeLaPreventa`). La marca vale solo en la preventa de un cliente: en
-    otro lado se ignora al leer.
+    toma una reunión de trabajo (`reunionesDeLasSesionesDeLaPreventa`, con la misma regla de las pestañas: también la unida
+    por su evento o por fecha). La marca vale solo en la preventa de un cliente: en otro lado se ignora al leer.
     *Por qué por cuánto habló el cliente:* en AE las capacitaciones de ventas dan 11 a 14 % (el Resumen las leería mal) y
     las revisiones de avance, 40 a 59 %.
   - **«Lo que hicimos» (D4):** el texto dice «Nos dedicaste … en 4 reuniones de trabajo juntos y 2 sesiones de
@@ -14729,8 +14731,11 @@ error»); para un prospecto, esa regla sigue igual.
 - **Simulacro:** `scripts/simular-ubicar-la-escala.ts` (solo lectura): qué lee «Ubicar», con `--llamar` qué propondría, con
   `--sesiones` reuniones sumadas en memoria (`--de-trabajo` las marca), con `--como-prospecto` lo de antes y con
   `--reuniones` cuánto habló el cliente en cada reunión de la empresa. **El borrador en producción:**
-  `scripts/escala-con-lo-que-sabemos.ts` (simulacro por defecto; `--apply` con ALLOW_PROD_WRITE=1 y respaldo): sugiere,
-  suma reuniones de trabajo y ubica. Usar lo propuesto, elegir los equipos y publicar los decide una persona.
+  `scripts/escala-con-lo-que-sabemos.ts` (simulacro por defecto; `--apply` con ALLOW_PROD_WRITE=1, respaldo y `--por`):
+  sugiere con la misma cuenta que la pantalla (`reunionesDeTrabajoSugeridas`), suma reuniones de trabajo (las que ya son
+  sesión se saltan, como las cuenta la pantalla) y ubica, esperando a que la corrida termine (vive en el mismo proceso).
+  Contra producción no escribe si /api/health no corre ya este cambio. Usar lo propuesto, elegir los equipos y publicar los
+  decide una persona.
 - **Vuelta atrás:** el código de antes del 24 nov descarta en silencio la marca de reunión de trabajo al guardar (su
   esquema no la conoce). Si se vuelve atrás un deploy, revisar las marcas de las preventas de clientes antes de publicar.
 

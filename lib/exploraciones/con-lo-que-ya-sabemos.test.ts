@@ -284,7 +284,7 @@ describe("lo que cazó la revisión del 24 nov", () => {
     expect(agente).toMatch(/if \(modo === "posicionar"\) \{[\s\S]{0,400}partirDeLoQueYaSabemos\(lectura\.fila\.client\.kind\)[\s\S]{0,200}guardAccessToClient\(lectura\.fila\.clientId\)/);
     const sugeridas = leer("app", "api", "sales", "exploraciones", "[id]", "reuniones-de-trabajo", "route.ts");
     expect(sugeridas.indexOf("guardAccessToClient(fila.clientId)")).toBeGreaterThan(-1);
-    expect(sugeridas.indexOf("guardAccessToClient(fila.clientId)")).toBeLessThan(sugeridas.indexOf("reunionesDeLaEmpresaParaElegir("));
+    expect(sugeridas.indexOf("guardAccessToClient(fila.clientId)")).toBeLessThan(sugeridas.indexOf("reunionesDeTrabajoSugeridas("));
   });
 
   it("⛔ la marca de reunión de trabajo se pone solo en la preventa de un cliente y en una que ya pasó, y solo ahí se lee", () => {

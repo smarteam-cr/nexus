@@ -112,8 +112,11 @@ export async function proyectosParaElContexto(clientId: string): Promise<{ id: s
   });
   return filas
     .sort((a, b) => Number(b.status === "active") - Number(a.status === "active"))
-    .map((p) => ({ id: p.id, nombre: p.status === "active" ? p.name : `${p.name} (cerrado)` }));
+    .map((p) => ({ id: p.id, nombre: `${p.name}${ESTADO_DEL_PROYECTO[p.status] ? ` (${ESTADO_DEL_PROYECTO[p.status]})` : p.status === "active" ? "" : ` (${p.status})`}` }));
 }
+
+/** Cómo se nombra el estado de un proyecto que no está activo en «Con el contexto de» (revisión del 24 nov: no todo es «cerrado»). */
+const ESTADO_DEL_PROYECTO: Record<string, string> = { paused: "en pausa", completed: "terminado", inactive: "terminado" };
 
 export interface LoQueLeePosicionar {
   fuentes: Fuente[];

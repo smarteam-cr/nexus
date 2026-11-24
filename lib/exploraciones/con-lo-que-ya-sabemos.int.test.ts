@@ -192,3 +192,71 @@ describe("«Fuera de la exploración» y el análisis de venta — DB real", { t
     expect([...tomadas]).toEqual(["ae-limpieza"]);
   });
 });
+
+describe("la marca y las sugeridas, fuera de la preventa de un cliente — DB real", { timeout: 30_000 }, () => {
+  it("en un prospecto o un aliado la marca de reunión de trabajo se ignora al leer", async () => {
+    for (const kind of ["PROSPECTO", "ALIADO"] as const) {
+      const s = await sembrar(kind === "PROSPECTO" ? "PROSPECTO" : "CLIENTE");
+      if (kind === "ALIADO") await prisma.client.update({ where: { id: s.aeId }, data: { kind: "ALIADO" } });
+      const r = await leer(s.exploracionId, { sesiones: [{ id: "s-uno", reunion: "ae-reportes", deLoQueYaSabemos: true }] });
+      expect(r.conLoQueYaSabemos, kind).toBe(false);
+      expect(r.ctx.loQueYaSabemos, kind).toBeUndefined();
+      expect(r.ctx.reuniones?.some((x) => x.deTrabajo), kind).toBe(false);
+      await prisma.$executeRawUnsafe('TRUNCATE "ExploracionDeVenta", "FirefliesSession", "ProjectTimeline", "Project", "Client", "SessionCategory" CASCADE');
+    }
+  });
+
+  it("lo medido de las sugeridas se recuerda 10 minutos por empresa y una reunión sin medir se vuelve a medir", async () => {
+    const s = await sembrar("CLIENTE");
+    const { reunionesDeTrabajoSugeridas, olvidarLoMedido, MEMORIA_DE_LO_MEDIDO_MS } = await import("./reuniones-de-trabajo-server");
+    olvidarLoMedido();
+    const pedidas: string[][] = [];
+    const medir = async (ids: readonly string[]) => {
+      pedidas.push([...ids]);
+      return new Map(ids.map((id) => [id, { fuente: "transcripcion" as const, total: 100, smarteam: { palabras: 40, porcentaje: 40 }, cliente: { palabras: 60, porcentaje: 60 }, personas: [] }]));
+    };
+    const t0 = Date.now();
+    const primera = await reunionesDeTrabajoSugeridas(s.aeId, { ahora: t0, medir });
+    expect(primera.map((x) => x.sessionId)).toEqual(["ae-reportes"]);
+    await reunionesDeTrabajoSugeridas(s.aeId, { ahora: t0 + 60_000, medir });
+    expect(pedidas).toEqual([["ae-reportes"]]);
+    await reunionesDeTrabajoSugeridas(s.aeId, { ahora: t0 + MEMORIA_DE_LO_MEDIDO_MS + 1, medir });
+    expect(pedidas).toHaveLength(2);
+    olvidarLoMedido();
+  });
+});
+
+describe("una reunión de trabajo no se lee como sesión — DB real", { timeout: 30_000 }, () => {
+  it("no queda «sin leer» y el agente no la lee como sesión (ni con el botón ni en la cola)", async () => {
+    const s = await sembrar("CLIENTE");
+    const { aplicarCambios } = await import("./servidor");
+    const lectura = await leerExploracion(s.exploracionId);
+    if (lectura.estado !== "ok") throw new Error("sin exploración");
+    const r = await aplicarCambios(
+      s.exploracionId,
+      lectura.fila.version,
+      [{ op: "agregarSesion", sesion: { id: "s-trabajo", fecha: "2026-11-01", reunion: { id: "ae-reportes", origen: "meet" }, deLoQueYaSabemos: true } }],
+      general,
+    );
+    expect(r.estado).toBe("ok");
+    const { reunionesSinLeer } = await import("./fuentes");
+    const { lanzarCorrida } = await import("./agente");
+    const { leerLoLeido } = await import("./lo-leido");
+    const despues = await leerExploracion(s.exploracionId);
+    if (despues.estado !== "ok") throw new Error("sin exploración");
+    const estado = estadoDesdeFila(despues.fila);
+    const sinLeer = await reunionesSinLeer({
+      exploracionId: s.exploracionId,
+      clientId: s.aeId,
+      creadaEn: despues.fila.createdAt,
+      propuesta: estado.propuesta,
+      leido: leerLoLeido(despues.fila.test),
+      sesiones: estado.contenido.sesiones,
+      fuera: estado.contenido.fuera,
+      elegidas: estado.contenido.reunionesElegidas,
+    });
+    expect(sinLeer.map((x) => x.id)).not.toContain("ae-reportes");
+    const leer1 = await lanzarCorrida(s.exploracionId, "leer", { triggeredByEmail: "cse@smarteamcr.com", sesionId: "ae-reportes" });
+    expect(leer1).toMatchObject({ ok: false, status: 409 });
+  });
+});

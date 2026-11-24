@@ -874,9 +874,7 @@ export async function reunionesDeLasSesionesDeLaPreventa(clientId: string, candi
   const deTrabajo = new Set<string>();
   for (const f of filas) {
     const c = leerContenido(f.contenido);
-    if (!f.projectId && partirDeLoQueYaSabemos(f.client.kind))
-      for (const s of c.sesiones) if (s.deLoQueYaSabemos && s.reunion?.origen === "meet") deTrabajo.add(s.reunion.id);
-    const { deSesiones } = await armarReuniones(
+    const { deSesiones, todas, automaticas } = await armarReuniones(
       {
         exploracionId: f.id,
         clientId: f.clientId,
@@ -892,6 +890,9 @@ export async function reunionesDeLasSesionesDeLaPreventa(clientId: string, candi
       ahora,
     );
     for (const k of deSesiones) if (k.startsWith("meet:")) deMeet.add(k.slice(5));
+    // La misma regla que «Ubicar», el Resumen y la línea: las pestañas (también las unidas por su evento o por fecha).
+    if (!f.projectId && partirDeLoQueYaSabemos(f.client.kind))
+      for (const k of clavesDeTrabajo(pestanasDeSesiones(c.sesiones, todas, hoyEnCostaRica(ahora), { automaticas, fuera: new Set(c.fuera) }))) if (k.startsWith("meet:")) deTrabajo.add(k.slice(5));
   }
   for (const id of deTrabajo) deMeet.delete(id);
   const ids = new Set(candidatas.filter((id) => deMeet.has(id)));
@@ -917,7 +918,10 @@ export async function reunionesSinLeer(
   ahora = new Date(),
 ): Promise<ReunionSinLeer[]> {
   const armadas = await armarReuniones(opts, 10, ahora);
-  const deLaSesion = (r: { origen: string; id: string }) => armadas.deSesiones.has(claveDeReunion(r));
+  /* Una reunión de trabajo (24 nov, la preventa de un cliente) no queda «sin leer»: no se lee como sesión (la lee «Ubicar
+     con lo que ya sabemos»), y contarla empujaba a leerla como de diagnóstico. */
+  const deTrabajo = !opts.projectId && armadas.corte.esCliente ? clavesDeTrabajo(pestanasDeSesiones(opts.sesiones ?? [], armadas.todas, hoyEnCostaRica(ahora), { automaticas: armadas.automaticas, fuera: new Set(opts.fuera ?? []) })) : new Set<string>();
+  const deLaSesion = (r: { origen: string; id: string }) => armadas.deSesiones.has(claveDeReunion(r)) && !deTrabajo.has(claveDeReunion(r));
   const deMeetSinLeer: ReunionSinLeer[] = armadas.todas
     .filter((r) => r.origen === "meet" && deLaSesion(r) && !r.leida && r.texto !== "nada" && !r.corta)
     .map((r) => ({ id: r.id, titulo: r.titulo, fecha: r.fecha, origen: "meet" }));

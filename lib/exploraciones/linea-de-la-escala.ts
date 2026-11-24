@@ -184,9 +184,17 @@ export function lineaDeLaEscala(o: {
     const antes = despuesDelResumen > 0 ? `se armó antes de ${despuesDelResumen === 1 ? "la última reunión" : `las últimas ${despuesDelResumen} reuniones`}` : "";
     const largas = cortadas > 0 ? `leyó cortada${cortadas === 1 ? " 1 reunión larga" : `s ${cortadas} reuniones largas`}` : "";
     const clase = marcas > 0 ? `cuenta ${marcas === 1 ? "1 reunión" : `${marcas} reuniones`} con otra clase (de trabajo o de diagnóstico)` : "";
+    /* Una clase cambiada también cambia cómo pesa la reunión al ubicar (revisión del 24 nov): la escala ya no está «al día»,
+       y el botón de volver a ubicar va primero. */
+    if (marcas > 0)
+      return {
+        estado: "resumenAtrasado",
+        texto: `El Resumen ${[antes, largas, clase].filter(Boolean).join(" y ")}: vuelve a ubicar la escala y rehaz el Resumen con IA.`,
+        boton: { ...volver, fuerte: true },
+      };
     return {
       estado: "resumenAtrasado",
-      texto: `La escala está al día, pero el Resumen ${[antes, largas, clase].filter(Boolean).join(" y ")}: rehazlo con IA en el Resumen${cortadas > 0 ? ` para que ${cortadas === 1 ? "la lea entera" : "las lea enteras"}` : ""}.`,
+      texto: `La escala está al día, pero el Resumen ${[antes, largas].filter(Boolean).join(" y ")}: rehazlo con IA en el Resumen${cortadas > 0 ? ` para que ${cortadas === 1 ? "la lea entera" : "las lea enteras"}` : ""}.`,
       boton: volver,
     };
   }

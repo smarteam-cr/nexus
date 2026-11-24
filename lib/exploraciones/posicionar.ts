@@ -394,6 +394,22 @@ export function partirDeLoQueYaSabemos(kind: string | null | undefined): boolean
 }
 
 /**
+ * Las reuniones de Meet de las sesiones marcadas como reunión de trabajo (24 nov), por su id: la elegida y la fila
+ * `gmeet_<evento>` de su evento. Sin la lista de reuniones (lo que liga la pantalla por fecha); para eso, `clavesDeTrabajo`
+ * (guia.ts). La usa el agente para no leer una reunión de trabajo como sesión. Quien llama mira antes que sea la preventa
+ * de un cliente.
+ */
+export function reunionesDeTrabajoDeLaPreventa(sesiones: readonly { deLoQueYaSabemos?: boolean; reunion?: { id: string; origen: string }; evento?: { id: string } }[]): Set<string> {
+  const ids = new Set<string>();
+  for (const s of sesiones) {
+    if (!s.deLoQueYaSabemos) continue;
+    if (s.reunion?.origen === "meet") ids.add(s.reunion.id);
+    if (s.evento?.id) ids.add(`gmeet_${s.evento.id}`);
+  }
+  return ids;
+}
+
+/**
  * Si una reunión tiene algo que «Ubicar con las reuniones» lea: de Meet, con texto, ni cortada ni de puertas adentro. La
  * misma regla la usa la línea de arriba de La escala (./linea-de-la-escala.ts) para contar las reuniones nuevas.
  */

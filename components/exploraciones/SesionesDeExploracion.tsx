@@ -42,6 +42,7 @@ import DespuesDeLaSesion from "./DespuesDeLaSesion";
 import DuranteLaSesion from "./DuranteLaSesion";
 import { EquipoDeLaSesion } from "./EquipoDeLaSesion";
 import { ReunionDeTrabajo } from "./ReunionDeTrabajo";
+import { partirDeLoQueYaSabemos } from "@/lib/exploraciones/posicionar";
 import Segmentos from "./Segmentos";
 import { useLienzo, type MomentoDeLaSesion } from "./contexto";
 import { diaLargo } from "./piezas-de-la-sesion";
@@ -224,7 +225,12 @@ function EncabezadoDeLaSesion({
   const enCola = new Set(corriendo ? (corrida?.cola ?? []) : []);
   const leyendoEsta = leyendo && !!r && corrida?.sesionId === r.id;
   const esperaEsta = !!r && enCola.has(r.id);
-  const sePuedeLeer = (p: { reunion: typeof r }) => !!p.reunion && p.reunion.origen === "meet" && !p.reunion.leida && !p.reunion.corta && p.reunion.texto !== "nada";
+  /* Una reunión de trabajo (24 nov, la preventa de un cliente) no se lee como sesión: la lee «Ubicar con lo que ya sabemos».
+     Ni el botón ni «Leer las N sin leer» la ofrecen (el servidor tampoco la lee). */
+  const conLoQueYaSabemos = !exp.projectId && partirDeLoQueYaSabemos(exp.empresa.kind);
+  const deTrabajo = (p: { sesion: PestanaDeSesion["sesion"] }) => conLoQueYaSabemos && !!p.sesion?.deLoQueYaSabemos;
+  const sePuedeLeer = (p: { reunion: typeof r; sesion: PestanaDeSesion["sesion"] }) =>
+    !!p.reunion && p.reunion.origen === "meet" && !p.reunion.leida && !p.reunion.corta && p.reunion.texto !== "nada" && !deTrabajo(p);
   const sinLeer = todas.filter(sePuedeLeer).map((p) => p.reunion!.id);
   const porPedir = sinLeer.filter((id) => !enCola.has(id) && !(corriendo && corrida?.sesionId === id));
 
@@ -409,7 +415,7 @@ function EncabezadoDeLaSesion({
             Sacar de la exploración
           </Button>
         )}
-        {momento === "despues" && r && !r.leida && !r.corta && r.texto !== "nada" && puedeEditar && (
+        {momento === "despues" && r && !r.leida && !r.corta && r.texto !== "nada" && !deTrabajo(pestana) && puedeEditar && (
           <>
             {porPedir.length > 1 && (
               <Button

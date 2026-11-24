@@ -153,7 +153,7 @@ import { fuentesDelProyecto, loVendidoDelProyecto } from "./fuentes-del-proyecto
 import { acuerdosDeLasReuniones } from "./historia-de-las-sesiones-server";
 import { memoriaDelProyecto } from "@/lib/memoria";
 import { proyectoDeContextoDeLaEmpresa } from "./escala-de-la-cuenta";
-import { partirDeLoQueYaSabemos } from "./posicionar";
+import { partirDeLoQueYaSabemos, reunionesDeTrabajoDeLaPreventa } from "./posicionar";
 import { fuentesParaPosicionar, type LoQueLeePosicionar } from "./posicionar-fuentes";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { loConfirmadoParaLosCasos } from "./lo-que-confirmo-el-equipo-server";
@@ -296,6 +296,15 @@ export async function lanzarCorrida(exploracionId: string, modo: ModoDelAgente, 
   const delProyecto = !!lectura.fila.projectId;
   // La exploración de un proyecto no se prepara ni propone casos de uso: lee las sesiones y arma la guía.
   if (delProyecto && !ETIQUETA_DEL_PROYECTO[modo]) return { ok: false, status: 409, error: "En la exploración de un proyecto el agente solo lee las sesiones y arma la guía." };
+  /* Una reunión de trabajo (24 nov, la preventa de un cliente) no se lee como sesión: el lector la tomaría como de
+     diagnóstico y propondría niveles con lo que Smarteam explicó. La lee «Ubicar con lo que ya sabemos», entera. Vale para
+     el botón, la cola y la lectura automática cuando llega su transcripción: todos pasan por acá. */
+  if (modo === "leer" && !delProyecto && partirDeLoQueYaSabemos(lectura.fila.client.kind)) {
+    const deTrabajo = reunionesDeTrabajoDeLaPreventa(estadoDesdeFila(lectura.fila).contenido.sesiones);
+    if (opts.sesionId && deTrabajo.has(opts.sesionId))
+      return { ok: false, status: 409, error: "Es una reunión de trabajo: no se lee como sesión. «Ubicar con lo que ya sabemos» la lee entera." };
+    if (opts.cola?.length) opts = { ...opts, cola: opts.cola.filter((x) => !deTrabajo.has(x.id)) };
+  }
   const clientId = lectura.fila.clientId;
 
   /* Una corrida a la vez, y la revisión con el alta en la MISMA transacción, con la fila bloqueada:

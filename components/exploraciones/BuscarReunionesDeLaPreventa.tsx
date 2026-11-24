@@ -299,25 +299,31 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
   );
   const yaEsLa = (n: number) => <span className="text-xs text-fg-muted">Ya es la sesión {n}</span>;
 
-  const alternar = (id: string, m: Marcada) =>
+  /** `excluye`: la misma reunión marcada en la otra lista (24 nov): marcarla aquí la desmarca allá, y entra con UNA clase. */
+  const alternar = (id: string, m: Marcada, excluye?: string) =>
     setMarcadas((antes) => {
       const nuevas = new Map(antes);
       if (nuevas.has(id)) nuevas.delete(id);
-      else nuevas.set(id, m);
+      else {
+        nuevas.set(id, m);
+        if (excluye) nuevas.delete(excluye);
+      }
       return nuevas;
     });
   /** La casilla de una reunión pasada que se puede agregar (va donde las agendadas llevan su ícono). */
-  const casilla = (id: string, m: Marcada, titulo: string) =>
+  const casilla = (id: string, m: Marcada, titulo: string, excluye?: string) =>
     enBloque ? (
       <input
         type="checkbox"
         className="h-4 w-4 flex-none accent-[var(--color-brand)]"
         checked={marcadas.has(id)}
         disabled={ocupado !== null}
-        onChange={() => alternar(id, m)}
+        onChange={() => alternar(id, m, excluye)}
         aria-label={`Marcar «${titulo || "Sin título"}» para agregarla`}
       />
     ) : undefined;
+  /** La clave de una reunión marcada como reunión de trabajo (la de la lista de siempre es su id: entra de diagnóstico). */
+  const deTrabajoClave = (sessionId: string) => `trabajo:${sessionId}`;
 
   /**
    * Agrega las marcadas, de la más vieja a la más nueva (así quedan numeradas en orden), una por una: cada alta se aplica
@@ -446,9 +452,9 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
                   return (
                     <Fila
                       key={`trabajo-${s.sessionId}`}
-                      /* La misma clave que en «De la empresa»: una reunión se marca una sola vez. Sin lectura: el lector de una
-                         sesión la tomaría como de diagnóstico (revisión del 24 nov). */
-                      icono={n === null ? casilla(s.sessionId, { cuerpo, fecha: s.fecha, leer: null }, s.titulo) : undefined}
+                      /* Una reunión entra con UNA clase: marcarla aquí la desmarca en «De la empresa» (y al revés). Sin
+                         lectura: el lector de una sesión la tomaría como de diagnóstico (revisión del 24 nov). */
+                      icono={n === null ? casilla(deTrabajoClave(s.sessionId), { cuerpo, fecha: s.fecha, leer: null }, s.titulo, s.sessionId) : undefined}
                       titulo={s.titulo}
                       fecha={diaConAnio(s.fecha)}
                       pildora={<Pildora tono={s.pocoDelCliente ? "atencion" : "bien"}>habló el cliente {s.delCliente} %</Pildora>}
@@ -484,7 +490,11 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
                 return (
                   <Fila
                     key={s.sessionId}
-                    icono={n === null ? casilla(s.sessionId, { cuerpo: { tipo: "pasada", sessionId: s.sessionId }, fecha: s.date, leer: s.texto === "nada" ? null : s.sessionId }, s.title) : undefined}
+                    icono={
+                      n === null
+                        ? casilla(s.sessionId, { cuerpo: { tipo: "pasada", sessionId: s.sessionId }, fecha: s.date, leer: s.texto === "nada" ? null : s.sessionId }, s.title, deTrabajoClave(s.sessionId))
+                        : undefined
+                    }
                     titulo={s.title}
                     fecha={diaConAnio(s.date)}
                     pildora={
