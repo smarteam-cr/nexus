@@ -5,7 +5,7 @@
  *   npm run db:sql:backfill                                     simulacro: qué anotaría y por qué (solo lee)
  *   ALLOW_PROD_WRITE=1 npm run db:sql:backfill -- --apply       anota los que el esquema demuestra
  *   ALLOW_PROD_WRITE=1 npm run db:sql:backfill -- --marcar 2026-08-21-a.sql,2026-10-30-b.sql --apply
- *   PowerShell:  $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/registro-de-sql.ts --marcar a.sql,b.sql --apply; Remove-Item Env:ALLOW_PROD_WRITE
+ *   PowerShell:  $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/registro-de-sql.ts --marcar "a.sql,b.sql" --apply; Remove-Item Env:ALLOW_PROD_WRITE
  *   (en PowerShell, por `npx tsx`: se come el `--` y npm se queda con las banderas. Con `--marcar` el script lo nota y
  *   frena; con `--apply` no puede —npm no lo deja en ningún lado—, así que corre el simulacro y lo avisa al final)
  *
@@ -34,7 +34,9 @@ import {
   banderasQueSeQuedoNpm,
   cambiaDatos,
   clasificarConElCatalogo,
+  decidirMarcados,
   esPosteriorAlBaseline,
+  partirListaDeArchivos,
   huellaDeSql,
   pruebasDeLosArchivos,
   type ArchivoSql,
@@ -46,16 +48,17 @@ const RAIZ = process.cwd();
 const APPLY = process.argv.includes("--apply");
 const COMANDO = "npm run db:sql:backfill";
 
-/** `--marcar a.sql,b.sql` (o `--marcar=a.sql,b.sql`): nombres, con o sin `.sql`. */
+/**
+ * `--marcar a.sql,b.sql` o `--marcar=a.sql,b.sql`: lo que sigue a la bandera hasta la próxima bandera. PowerShell
+ * puede entregar la lista como «a.sql b.sql» o en varios argumentos: `partirListaDeArchivos` parte por comas y espacios.
+ */
 function marcadosEnLaLinea(): string[] {
-  const i = process.argv.findIndex((a) => a === "--marcar" || a.startsWith("--marcar="));
+  const argv = process.argv;
+  const i = argv.findIndex((a) => a === "--marcar" || a.startsWith("--marcar="));
   if (i === -1) return [];
-  const valor = process.argv[i].includes("=") ? process.argv[i].split("=").slice(1).join("=") : (process.argv[i + 1] ?? "");
-  return valor
-    .split(",")
-    .map((s) => s.trim().replace(/^scripts[\\/]sql[\\/]/, ""))
-    .filter(Boolean)
-    .map((s) => (s.endsWith(".sql") ? s : `${s}.sql`));
+  const partes = argv[i].includes("=") ? [argv[i].split("=").slice(1).join("=")] : [];
+  for (let j = i + 1; j < argv.length && !argv[j].startsWith("--"); j += 1) partes.push(argv[j]);
+  return partirListaDeArchivos(partes.join(","));
 }
 
 function leerSql(ruta: string, nombre: string): ArchivoSql | null {
@@ -86,6 +89,7 @@ async function main(): Promise<number> {
   const desconocidos = marcar.filter((m) => !nombres.has(m));
   if (desconocidos.length > 0) {
     console.error(`✗ --marcar: no son scripts/sql posteriores al baseline: ${desconocidos.join(", ")}. No se anotó nada.`);
+    console.error('  En PowerShell, la lista entre comillas: --marcar "a.sql,b.sql".');
     return 2;
   }
 
@@ -111,17 +115,19 @@ async function main(): Promise<number> {
     const demostrados = de("demostrado");
     const conFaltas = de("falta");
     const sinPrueba = de("sin-prueba");
-    const aMarcar = candidatos.filter((a) => marcar.includes(a.nombre) && veredictos.get(a.nombre)?.estado === "sin-prueba");
-    const yaAnotadosEnMarcar = marcar.filter((m) => anotados.has(m));
-    // El esquema dice que estos NO corrieron: marcarlos los sacaría de check:esquema y lo que crean no se crearía nunca.
-    const marcadosConFaltas = conFaltas.filter((a) => marcar.includes(a.nombre)).map((a) => a.nombre);
-    if (marcadosConFaltas.length > 0) {
+    const decision = decidirMarcados(marcar, nombres, anotados, veredictos);
+    if (decision.estado !== "ok") {
+      // El esquema dice que estos NO corrieron: marcarlos los sacaría de check:esquema y lo suyo no se crearía nunca.
       console.error(
-        `✗ --marcar: a ${marcadosConFaltas.join(", ")} le falta algo en la base, o sea que no corrió. No se anotó nada.\n` +
-          "  Aplícalo con npx tsx scripts/aplicar-sql.ts <archivo> (simulacro) y después con --apply: queda anotado solo.",
+        decision.estado === "con-faltas"
+          ? `✗ --marcar: a ${decision.archivos.join(", ")} le falta algo en la base, o sea que no corrió. No se anotó nada.\n` +
+              "  Aplícalo con npx tsx scripts/aplicar-sql.ts <archivo> (simulacro) y después con --apply: queda anotado solo."
+          : `✗ --marcar: no son scripts/sql posteriores al baseline: ${decision.archivos.join(", ")}. No se anotó nada.`,
       );
       return 1;
     }
+    const aMarcar = candidatos.filter((a) => decision.aMarcar.includes(a.nombre));
+    const yaAnotadosEnMarcar = decision.yaAnotados;
 
     console.log(`\n${APPLY ? "BACKFILL" : "SIMULACRO del backfill"} en ${describirDestino(process.env.DATABASE_URL)}`);
     console.log(
@@ -152,7 +158,7 @@ async function main(): Promise<number> {
 
     if (!APPLY) {
       console.log("\nNo se anotó nada. Para anotarlo: el mismo comando con --apply (y ALLOW_PROD_WRITE=1 si es producción).");
-      if (process.env.npm_lifecycle_event) {
+      if (process.env.npm_lifecycle_event === "db:sql:backfill") {
         console.log("(Si escribiste --apply y lo corriste con npm run desde PowerShell, npm se lo quedó: PowerShell se come el «--».");
         console.log(" Para anotar en PowerShell: npx tsx scripts/registro-de-sql.ts [--marcar …] --apply.)");
       }

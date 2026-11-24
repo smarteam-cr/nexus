@@ -169,6 +169,9 @@ npm run db:sql -- scripts/sql/AAAA-MM-DD-loquesea.sql          # 1a) simulacro: 
 ```bash
 ALLOW_PROD_WRITE=1 npm run db:sql -- scripts/sql/AAAA-MM-DD-loquesea.sql --apply  # 1b) desde dev, ANTES
 ```
+```powershell
+$env:ALLOW_PROD_WRITE="1"; npx tsx scripts/aplicar-sql.ts scripts/sql/AAAA-MM-DD-loquesea.sql --apply; Remove-Item Env:ALLOW_PROD_WRITE  # 1b) en PowerShell
+```
 ```bash
 cd /opt/smartflow/Nexus && bash scripts/deploy.sh              # 2) en el VPS
 ```
@@ -209,8 +212,8 @@ aplicados».
   `--apply` anota los demostrados; `--marcar a.sql,b.sql --apply` anota los «sin prueba» que una
   persona sabe que corrieron, y se niega entero si le pasas uno al que le falta algo. Un demostrado
   que además cambia datos sale con «· cambia datos»: el esquema prueba su DDL, no esa parte; antes
-  del `--apply`, alguien lee esa lista. Nunca pisa una fila que ya está. En PowerShell:
-  `npx tsx scripts/registro-de-sql.ts [--marcar …] [--apply]`.
+  del `--apply`, alguien lee esa lista. Nunca pisa una fila que ya está. En PowerShell, con la
+  lista entre comillas: `npx tsx scripts/registro-de-sql.ts --marcar "a.sql,b.sql" --apply`.
 - **Bases locales**: el bootstrap (`npm run db:local -- bootstrap`) y el setup de `test:int`
   anotan lo que aplican. El TRUNCATE de las pruebas no toca `SqlAplicado`.
 - La primera vez en producción el orden es: el `.sql` del registro

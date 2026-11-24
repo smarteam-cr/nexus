@@ -114,6 +114,10 @@ async function main(): Promise<number> {
       const plan = planDeAplicacion(a.texto, SIN_TRANSACCION);
       console.log(`· ${a.nombre}  (huella ${huella.slice(0, 12)})`);
       console.log(`    cómo: ${plan.modo === "sentencias" ? `${plan.sentencias.length} sentencias, una por una` : plan.motivo}`);
+      if (plan.sinCerrar) {
+        console.error(`\n✗ ${a.nombre} abre una transacción (BEGIN) y no la cierra (COMMIT): no se aplica. Arregla el archivo.`);
+        return 1;
+      }
       if (hayRegistro || creaElRegistro) console.log(`    registro: ${enElRegistro(registro.get(a.nombre), huella)}`);
       else if (a.nombre === SQL_DEL_REGISTRO) {
         console.log("    registro: este archivo lo crea, y se anota a sí mismo");
@@ -128,7 +132,7 @@ async function main(): Promise<number> {
     }
     if (!APPLY) {
       console.log(`\nNo se aplicó nada. Para aplicarlo, el mismo comando con --apply (y ALLOW_PROD_WRITE=1 si es producción).`);
-      if (process.env.npm_lifecycle_event) {
+      if (process.env.npm_lifecycle_event === "db:sql") {
         console.log("(Si escribiste --apply y lo corriste con npm run desde PowerShell, npm se lo quedó: PowerShell se come el «--».");
         console.log(" Para aplicar en PowerShell: npx tsx scripts/aplicar-sql.ts <archivos> --apply.)");
       }

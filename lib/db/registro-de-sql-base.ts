@@ -116,7 +116,14 @@ export async function aplicarYAnotar(
   archivo: { nombre: string; texto: string },
   opciones: { desde: string; sinTransaccion?: boolean },
 ): Promise<{ modo: ModoDeAplicacion }> {
-  const { modo, sentencias } = planDeAplicacion(archivo.texto, opciones.sinTransaccion);
+  const { modo, sentencias, sinCerrar } = planDeAplicacion(archivo.texto, opciones.sinTransaccion);
+  if (sinCerrar) {
+    throw new ErrorAlAplicar(
+      archivo.nombre,
+      modo,
+      "abre una transacción (BEGIN) y no la cierra (COMMIT): lo que hiciera se desharía al cerrar la conexión. Arregla el archivo. No se aplicó nada.",
+    );
+  }
   if (archivo.nombre !== SQL_DEL_REGISTRO && !(await existeElRegistro(db))) {
     throw new ErrorAlAplicar(
       archivo.nombre,

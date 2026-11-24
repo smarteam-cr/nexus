@@ -27,8 +27,8 @@
  * y hace una consulta al catálogo y dos al registro. No usa `--apply` ni `ALLOW_PROD_WRITE`.
  *
  * Sale con 0 si no falta nada, 1 si a la base le falta algo que el código usa (el deploy se revertiría), 3 si el esquema
- * está completo pero hay `.sql` sin anotar o cambiados, y 2 si no pudo comparar. El 3 aparte deja que un wizard mire
- * antes de aplicar sin cortarse, y que después exija el 0.
+ * está completo pero hay `.sql` sin anotar o cambiados, y 2 si no pudo comparar. Antes de aplicar, el rojo (1 o 3) es
+ * lo esperado: el wizard solo frena con el 2 (`… || [ $? -ne 2 ]`), y después de aplicar exige el 0.
  *
  * ⚠ Compara contra el cliente GENERADO. Si `prisma/schema.prisma` cambió (un `git pull`) y no se
  * corrió `npx prisma generate`, el cliente es de otro schema: el script lo detecta y no compara.

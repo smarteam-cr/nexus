@@ -216,9 +216,33 @@ const FUERA_DE_TRANSACCION = /\bCONCURRENTLY\b|^\s*(?:VACUUM|CREATE\s+DATABASE|A
 export function planDeAplicacion(
   texto: string,
   sinTransaccion = false,
-): { modo: ModoDeAplicacion; sentencias: string[]; motivo: string } {
+): { modo: ModoDeAplicacion; sentencias: string[]; motivo: string; sinCerrar: boolean } {
   const sentencias = partirEnSentencias(texto);
   const limpias = sentencias.map((s) => quitarComentarios(s).trim());
+  const sinCerrar = transaccionSinCerrar(limpias);
+  const plan = planSinRevisar(sentencias, limpias, sinTransaccion);
+  return { ...plan, sinCerrar };
+}
+
+/**
+ * ¿El archivo abre una transacción (`BEGIN`, `START TRANSACTION`) y no la cierra? Corrido así, lo que hace y su
+ * anotación quedarían dentro de una transacción abierta que se deshace al cerrar la conexión, con el script diciendo
+ * «aplicado». `aplicarYAnotar` no lo corre: el archivo está roto.
+ */
+function transaccionSinCerrar(limpias: readonly string[]): boolean {
+  let abierta = false;
+  for (const s of limpias) {
+    if (/^(?:BEGIN|START\s+TRANSACTION)\b/i.test(s)) abierta = true;
+    else if (/^(?:COMMIT|END|ROLLBACK|ABORT)\b/i.test(s)) abierta = false;
+  }
+  return abierta;
+}
+
+function planSinRevisar(
+  sentencias: string[],
+  limpias: readonly string[],
+  sinTransaccion: boolean,
+): { modo: ModoDeAplicacion; sentencias: string[]; motivo: string } {
   if (sinTransaccion) return { modo: "sentencias", sentencias, motivo: "pediste --sin-transaccion" };
   const fuera = limpias.find((s) => FUERA_DE_TRANSACCION.test(s));
   if (fuera) {
@@ -376,30 +400,32 @@ function columnasDeLaDefinicion(t: string, desde: number): string[] {
   const elementos: string[] = [];
   let actual = "";
   let profundidad = 0;
-  for (let j = i + 1; j < t.length; j += 1) {
-    const c = t[j];
-    if (c === "'" || c === '"') {
-      // Un literal o un nombre entre comillas entero (con `''` adentro son dos seguidos: da lo mismo).
-      const cierre = t.indexOf(c, j + 1);
-      const hasta = cierre === -1 ? t.length - 1 : cierre;
-      actual += t.slice(j, hasta + 1);
-      j = hasta;
+  let cerrado = false;
+  // Por trozos: un literal (`'a, (b)'`, `E'it\'s, x'`), un nombre entre comillas o un `$$…$$` va entero, sin mirar
+  // sus comas ni sus paréntesis.
+  for (const trozo of trozos(t.slice(i + 1))) {
+    if (cerrado) break;
+    if (trozo.tipo !== "codigo") {
+      actual += trozo.texto;
       continue;
     }
-    if (c === "(") profundidad += 1;
-    if (c === ")") {
-      if (profundidad === 0) {
-        elementos.push(actual);
-        break;
+    for (const c of trozo.texto) {
+      if (c === "(") profundidad += 1;
+      if (c === ")") {
+        if (profundidad === 0) {
+          elementos.push(actual);
+          cerrado = true;
+          break;
+        }
+        profundidad -= 1;
       }
-      profundidad -= 1;
+      if (c === "," && profundidad === 0) {
+        elementos.push(actual);
+        actual = "";
+        continue;
+      }
+      actual += c;
     }
-    if (c === "," && profundidad === 0) {
-      elementos.push(actual);
-      actual = "";
-      continue;
-    }
-    actual += c;
   }
   return elementos
     .map((e) => NOMBRE_AL_INICIO.exec(e.trim())?.[1])
@@ -450,7 +476,12 @@ export function eventosDelSql(sql: string): Evento[] {
     for (const a of todos(cuerpo, String.raw`\bADD${S}CONSTRAINT${S}(${ID})`)) {
       crea(base + a.index!, { clase: "restriccion", tabla, restriccion: nombre(a[1]) });
     }
-    for (const a of todos(cuerpo, String.raw`\bDROP${S}COLUMN${S}(?:IF${S}EXISTS${S})?(${ID})`)) {
+    // `DROP [COLUMN] [IF EXISTS] c`: la palabra COLUMN es opcional. Lo que sigue a un DROP y no es una columna
+    // (CONSTRAINT, y el NOT NULL / DEFAULT / EXPRESSION / IDENTITY de un ALTER COLUMN) no cuenta.
+    for (const a of todos(
+      cuerpo,
+      String.raw`\bDROP${S}(?:COLUMN${S})?(?!(?:CONSTRAINT|NOT|DEFAULT|EXPRESSION|IDENTITY)\b)(?:IF${S}EXISTS${S})?(${ID})`,
+    )) {
       quita(base + a.index!, { clase: "columna", tabla, columna: nombre(a[1]) });
     }
     for (const a of todos(cuerpo, String.raw`\bDROP${S}CONSTRAINT${S}(?:IF${S}EXISTS${S})?(${ID})`)) {
@@ -714,6 +745,49 @@ export function banderasQueSeQuedoNpm(
     const clave = `npm_config_${b.replace(/^--/, "").replace(/-/g, "_")}`;
     return env[clave] !== undefined && !argv.some((a) => a === b || a.startsWith(`${b}=`));
   });
+}
+
+/**
+ * La lista de `--marcar`, de lo que haya llegado: separada por comas o por espacios (PowerShell convierte
+ * `a.sql,b.sql` sin comillas en «a.sql b.sql»), con o sin `scripts/sql/` y con o sin `.sql`.
+ */
+export function partirListaDeArchivos(valor: string): string[] {
+  return valor
+    .split(/[,\s]+/)
+    .map((s) => s.trim().replace(/^scripts[\\/]sql[\\/]/, ""))
+    .filter(Boolean)
+    .map((s) => (s.endsWith(".sql") ? s : `${s}.sql`));
+}
+
+export type DecisionDeMarcados =
+  | { estado: "ok"; aMarcar: string[]; yaAnotados: string[]; demostrados: string[] }
+  /** Nada se anota: alguno no es un posterior al baseline, o el esquema dice que no corrió. */
+  | { estado: "desconocidos"; archivos: string[] }
+  | { estado: "con-faltas"; archivos: string[] };
+
+/**
+ * Qué hace `--marcar` con su lista. Se anotan como `marcado` solo los «sin prueba» (el esquema no puede decir si
+ * corrieron). Uno al que le falta algo se niega ENTERO: el esquema dice que no corrió, y marcarlo lo sacaría de
+ * `check:esquema` para siempre sin que lo suyo se cree nunca. Un demostrado ya se anota como `demostrado`, y uno ya
+ * anotado no se toca.
+ */
+export function decidirMarcados(
+  marcar: readonly string[],
+  posteriores: ReadonlySet<string>,
+  anotados: ReadonlySet<string>,
+  veredictos: ReadonlyMap<string, VeredictoDelBackfill>,
+): DecisionDeMarcados {
+  const desconocidos = marcar.filter((m) => !posteriores.has(m));
+  if (desconocidos.length > 0) return { estado: "desconocidos", archivos: desconocidos };
+  const pendientes = marcar.filter((m) => !anotados.has(m));
+  const conFaltas = pendientes.filter((m) => veredictos.get(m)?.estado === "falta");
+  if (conFaltas.length > 0) return { estado: "con-faltas", archivos: conFaltas };
+  return {
+    estado: "ok",
+    aMarcar: pendientes.filter((m) => veredictos.get(m)?.estado === "sin-prueba"),
+    yaAnotados: marcar.filter((m) => anotados.has(m)),
+    demostrados: pendientes.filter((m) => veredictos.get(m)?.estado === "demostrado"),
+  };
 }
 
 // ── El registro contra el checkout ─────────────────────────────────────────────────────────

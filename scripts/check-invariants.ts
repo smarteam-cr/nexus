@@ -252,7 +252,7 @@ async function main(): Promise<number> {
     violations++;
     console.error(`✗ INV7 VIOLADO: el schema declara ${colsFaltantes.length} columna(s) que la DB NO tiene — CUALQUIER lectura de ese modelo revienta:`);
     for (const c of colsFaltantes.slice(0, 15)) console.error(`    - ${c}`);
-    console.error("  Aplicá el SQL pendiente de scripts/sql/ (`npx prisma db execute --file <archivo>`) y `npx prisma generate`. NUNCA `db push`.");
+    console.error("  Aplicá el SQL pendiente de scripts/sql/ (`npx tsx scripts/aplicar-sql.ts <archivo> --apply`, que lo anota en el registro) y `npx prisma generate`. NUNCA `db push`.");
   } else {
     console.log(`✓ INV7: las columnas de los ${esperadas.size} modelos del schema existen todas en la DB.`);
   }

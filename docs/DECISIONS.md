@@ -16698,8 +16698,8 @@ El flujo vive en ARCHITECTURE Parte 0 · cap. D y en RUNBOOK › «Registro de l
 - **`check:esquema` sale con 3 si hay `.sql` sin anotar o cambiados, y con 1 si falta algo que el código usa.**
   *Por qué:* la comparación con el cliente Prisma solo ve tablas, columnas y enums que el código usa; un `.sql` de
   índices, políticas o datos que no corrió pasaba en verde (así quedaron los dos de arriba). Un código aparte porque
-  antes de aplicar el `.sql` nuevo de un deploy el registro siempre está pendiente: el wizard mira sin cortarse y,
-  después de aplicar, exige el 0.
+  antes de aplicar el `.sql` nuevo de un deploy el registro siempre está pendiente. El wizard, antes de aplicar, solo
+  frena con el 2 (no pudo comparar: seguir sería aplicar a ciegas) y, después de aplicar, exige el 0.
 - **En PowerShell se aplica con `npx tsx scripts/aplicar-sql.ts`, no con `npm run db:sql --`.** *Por qué:* PowerShell
   se come el `--` al llamar a `npm.ps1` y npm se queda con `--apply`: el script corría un simulacro y decía «No se
   aplicó nada» en una línea fácil de pasar por alto. npm 10.9 no deja rastro de un `--apply` que se quedó (sí de

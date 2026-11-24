@@ -12,6 +12,9 @@ import {
   banderasQueSeQuedoNpm,
   cambiaDatos,
   clasificarConElCatalogo,
+  decidirMarcados,
+  partirListaDeArchivos,
+  type VeredictoDelBackfill,
   clavesDelCatalogo,
   compararConElRegistro,
   esPosteriorAlBaseline,
@@ -200,6 +203,33 @@ describe("eventosDelSql — lo que un .sql crea y borra", () => {
     ]);
   });
 
+  it("las comas y los paréntesis de un literal, un nombre entre comillas, un E'…' o un $$…$$ no parten columnas", () => {
+    const sql = [
+      'CREATE TABLE "T" (',
+      "  \"a\" text DEFAULT ')',",
+      "  \"b\" text DEFAULT 'x, y int',",
+      '  "c,d" int,',
+      "  \"e\" text DEFAULT E'it\\'s, z int',",
+      '  "f" text DEFAULT $$g, h int$$,',
+      '  "i" int',
+      ");",
+    ].join(NL);
+    expect(claves(sql).filter((c) => c.includes('"columna"')).map((c) => JSON.parse(c.slice(5)).columna)).toEqual([
+      "a",
+      "b",
+      "c,d",
+      "e",
+      "f",
+      "i",
+    ]);
+  });
+
+  it("DROP sin la palabra COLUMN borra la columna; DROP NOT NULL y DROP DEFAULT de un ALTER COLUMN no", () => {
+    expect(claves('ALTER TABLE "T" DROP "b";')).toEqual(['quita {"clase":"columna","tabla":"T","columna":"b"}']);
+    expect(claves('ALTER TABLE "T" DROP IF EXISTS "b" CASCADE;')).toEqual(['quita {"clase":"columna","tabla":"T","columna":"b"}']);
+    expect(claves('ALTER TABLE "T" ALTER COLUMN "c" DROP NOT NULL, ALTER COLUMN "d" DROP DEFAULT;')).toEqual([]);
+  });
+
   it("sin comillas, el nombre va en minúsculas (como lo guarda Postgres)", () => {
     expect(claves("CREATE INDEX idx_Algo ON Tabla (x);")).toEqual(['crea {"clase":"indice","indice":"idx_algo","tabla":"tabla"}']);
   });
@@ -334,6 +364,45 @@ describe("banderasQueSeQuedoNpm", () => {
   });
 });
 
+describe("--marcar: partirListaDeArchivos y decidirMarcados", () => {
+  it("parte por comas y por espacios (PowerShell entrega «a.sql b.sql»), con o sin carpeta y extensión", () => {
+    expect(partirListaDeArchivos("a.sql b.sql")).toEqual(["a.sql", "b.sql"]);
+    expect(partirListaDeArchivos("scripts/sql/a.sql,b , c.sql")).toEqual(["a.sql", "b.sql", "c.sql"]);
+    expect(partirListaDeArchivos("")).toEqual([]);
+  });
+
+  const veredictos = new Map<string, VeredictoDelBackfill>([
+    ["2026-09-05-falta.sql", { estado: "falta", faltan: ["índice i"] }],
+    ["2026-10-27-sin-prueba.sql", { estado: "sin-prueba", motivo: "datos" }],
+    ["2026-10-28-demostrado.sql", { estado: "demostrado", pruebas: 3 }],
+  ]);
+  const posteriores = new Set([...veredictos.keys(), "2026-10-01-ya.sql"]);
+  const anotados = new Set(["2026-10-01-ya.sql"]);
+
+  it("se niega ENTERO si en la lista hay uno al que le falta algo, aunque los otros sirvan", () => {
+    expect(decidirMarcados(["2026-10-27-sin-prueba.sql", "2026-09-05-falta.sql", "2026-10-28-demostrado.sql"], posteriores, anotados, veredictos)).toEqual({
+      estado: "con-faltas",
+      archivos: ["2026-09-05-falta.sql"],
+    });
+  });
+
+  it("marca solo los «sin prueba»; un demostrado va como demostrado y uno ya anotado no se toca", () => {
+    expect(decidirMarcados(["2026-10-27-sin-prueba.sql", "2026-10-28-demostrado.sql", "2026-10-01-ya.sql"], posteriores, anotados, veredictos)).toEqual({
+      estado: "ok",
+      aMarcar: ["2026-10-27-sin-prueba.sql"],
+      yaAnotados: ["2026-10-01-ya.sql"],
+      demostrados: ["2026-10-28-demostrado.sql"],
+    });
+  });
+
+  it("un nombre que no es un posterior al baseline frena todo", () => {
+    expect(decidirMarcados(["2026-10-27-sin-prueba.sql", "otro.sql"], posteriores, anotados, veredictos)).toEqual({
+      estado: "desconocidos",
+      archivos: ["otro.sql"],
+    });
+  });
+});
+
 describe("compararConElRegistro", () => {
   const fila = (archivo: string, texto: string): FilaDelRegistro => ({
     archivo,
@@ -446,6 +515,15 @@ describe("aplicarYAnotar — el orden de lo que se manda a la base", () => {
     const mal = baseFalsa(true, /CREATE TABLE "C"/);
     await expect(aplicarYAnotar(mal.db, propio, { desde: "prueba" })).rejects.toBeInstanceOf(ErrorAlAplicar);
     expect(mal.enviado).toEqual([propio.texto, "ROLLBACK"]);
+  });
+
+  it("un archivo con BEGIN y sin COMMIT no se manda: lo suyo y su fila se desharían al cerrar la conexión", async () => {
+    const abierto = { nombre: "2099-01-04-d.sql", texto: ["BEGIN;", 'CREATE TABLE "D" (id int);'].join(NL) };
+    expect(planDeAplicacion(abierto.texto).sinCerrar).toBe(true);
+    expect(planDeAplicacion(abierto.texto + NL + "COMMIT;").sinCerrar).toBe(false);
+    const { db, enviado } = baseFalsa(true);
+    await expect(aplicarYAnotar(db, abierto, { desde: "prueba" })).rejects.toThrow(/no la cierra/);
+    expect(enviado).toEqual([]);
   });
 
   it("sin el registro en la base no aplica nada, salvo el archivo que lo crea", async () => {
