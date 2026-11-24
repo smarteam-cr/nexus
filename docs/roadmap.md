@@ -12,8 +12,8 @@
  "corte": "2026-11-24",
  "produccion": "6cf3e1ee",
  "arriba": [
-  "En producción desde el 24 nov: un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y las reuniones leídas enteras, y La escala de un cliente con lo que ya sabemos.",
-  "En curso: nada corriendo; la preventa de TEC · AE quedó ubicada con lo que ya sabemos y el Resumen de Centauro rehecho, los dos sin publicar.",
+  "En producción desde el 24 nov: un solo chat «Nexus» con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento», La escala de un cliente con lo que ya sabemos, y los CSE ven las propuestas.",
+  "En curso: el arreglo de las franjas de «Sesiones y horarios» del kickoff que reportó Juan Carlos, y que el Resumen de La escala no pierda cifras.",
   "Te espera: probar el chat y La escala nueva, revisar con Marco el borrador de Centauro, usar lo propuesto en TEC · AE, y la pregunta 99 del conector."
  ],
  "iniciativas": [
@@ -399,7 +399,8 @@
     62,
     63,
     64,
-    65
+    65,
+    117
    ],
    "ramas": [
     {
@@ -2015,9 +2016,29 @@
    "commits": [
     "0a2ca860"
    ]
+  },
+  {
+   "fecha": "2026-11-24",
+   "iniciativa": "cs",
+   "titulo": "Los CSE ven las propuestas",
+   "que": "Customer Success entra al área de Ventas: ve las propuestas de todas las empresas, el pipeline, SICOP y los montos. Editar sigue siendo de Ventas. Lo pidió Juan Carlos para ver lo vendido de cada proyecto.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 12,
+   "preguntas": [
+    117
+   ]
   }
  ],
  "sigue": [
+  {
+   "iniciativa": "cs",
+   "titulo": "Las franjas del kickoff se escriben y se ven bien",
+   "que": "En «Sesiones y horarios», una franja nueva se ve vacía y deja el cursor adentro, lo escrito no se pierde y una franja vacía no se puede asignar. Lo reportó Juan Carlos.",
+   "paraQuien": "Customer Success",
+   "estado": "otra-sesion",
+   "tema": 11
+  },
   {
    "iniciativa": "escala",
    "titulo": "Revisar con Marco el Resumen nuevo de Centauro",
@@ -2072,14 +2093,6 @@
    "preguntas": [
     96
    ]
-  },
-  {
-   "iniciativa": "nexus",
-   "titulo": "La preventa de un cliente pide acceso a la empresa",
-   "que": "Sumar una sesión, buscar «De la empresa» y armar el Resumen hoy piden solo el permiso de la preventa. En la preventa de un cliente, pedir también acceso a esa empresa.",
-   "paraQuien": "Las sesiones de trabajo",
-   "estado": "por-hacer",
-   "tema": 3
   },
   {
    "iniciativa": "reuniones",
@@ -2744,7 +2757,9 @@
     }
    ],
    "sigue": "Subir las trivias de ejemplo y jugar una con el equipo. Medir otra vez el uso ahora que lo nuevo está en producción.",
-   "decisiones": []
+   "decisiones": [
+    117
+   ]
   },
   {
    "n": 15,
@@ -3392,6 +3407,7 @@ Sin esto, algo sigue mal o no se puede validar:
 114. ✓ **Una sola conversación · vueltas, enlace e historial.** **Tu respuesta (24 nov):** 12 vueltas; se quita el enlace «Tareas, siguiente paso o la guía»; lo conversado antes queda en la ficha.
 115. ✓ **La escala · las páginas ya publicadas y el botón nuevo.** **Tu respuesta (24 nov):** «Que esperen a publicar»; el «✨ Mejorar con IA» de «Equipos y hallazgos» se queda.
 116. ✓ **La escala de un cliente con lo que ya sabemos (TEC · AE).** Plan con D1 a D4 (lo recomendado). **Tu respuesta (24 nov):** «ejecútalo de forma autónoma hasta el final para poder ver esto en producción… mandémoslo a producción».
+117. ✓ **Preventas y propuestas compartidas entre Customer Success y Ventas.** Juan Carlos pidió ver las propuestas de sus clientes; los CSE ya trabajaban las preventas desde el 6 oct, pero no veían Propuestas. ¿Se les enciende «Ventas / Propuestas › Acceder al área» (también ven Pipeline, SICOP y los montos) o solo las propuestas? **Tu respuesta (24 nov):** «Encender el área». Editar sigue siendo de Ventas. Con esto se descarta que la preventa de un cliente pida además acceso a la empresa.
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
