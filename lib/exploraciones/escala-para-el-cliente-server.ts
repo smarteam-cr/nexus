@@ -23,7 +23,7 @@ import { aplicarEdicion } from "@/lib/escala/documento/edicion";
 import { detallesDelResultado, dimensionDeCadaRiesgo, type DetalleDeLaDimension } from "@/lib/tests-diagnostico/detalle-de-la-dimension";
 import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
-import { areasDeLaPagina, logoQueSeSirve, partesDeLaPagina, resultadosDeLaEscala } from "./escala-para-el-cliente";
+import { areasDeLaPagina, logoQueSeSirve, partesConAlgoVisto, partesDeLaPagina, resultadosDeLaEscala } from "./escala-para-el-cliente";
 import { perdidaDeLaEscala } from "./perdida-de-la-escala";
 import { resumenParaLaPagina, type ResumenDeLaPagina, type ResumenGuardado } from "./resumen-de-la-escala";
 import type { EstadoDeExploracion } from "./contenido";
@@ -155,7 +155,8 @@ async function armarLaPagina(
       resultados,
       porExplorar: Object.fromEntries(deLasAreas.map((x) => [x.resultado.areaId, x.porExplorar])),
       partesEnJuego: partesDeLaPagina(lienzo, estado),
-      detalles: Object.assign({}, ...resultados.map((r) => detallesDelResultado(escala, r))),
+      // Sin la oración genérica de la escala en las partes sin nada visto (24 nov).
+      detalles: Object.assign({}, ...resultados.map((r) => detallesDelResultado(escala, r, { conAlgoVisto: partesConAlgoVisto(estado) }))),
       dimensionDelRiesgo: Object.assign({}, ...resultados.map((r) => dimensionDeCadaRiesgo(escala, r))),
       resumen: resumenParaLaPagina(estado.contenido.resumenDeLaEscala, resultados.filter((r) => alCliente.has(r.areaId)), estado.contenido.chequeo, entorno, {
         conCitas: !o.publica,

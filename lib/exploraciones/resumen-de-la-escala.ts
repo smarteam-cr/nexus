@@ -72,6 +72,9 @@ import {
 } from "@/lib/external/pagina-del-resumen";
 import type { LaPerdidaEnLaEscala, PerdidaDeLaEscala } from "./perdida-de-la-escala";
 import { bloqueDeLasNotas, esNotaDelEquipo } from "./notas-del-equipo";
+import { cuentaConTusCifras, MAX_FACTORES, monedaDelFactor } from "./cuenta-con-tus-cifras";
+import { ROTULO_DE_LO_QUE_LO_CAUSA, ROTULO_DEL_RETO_PRINCIPAL } from "./rotulos-del-resumen";
+import { monedaDe } from "./perdida";
 export { enHoras, MAX_ETIQUETAS, TOPE_A_MANO, TOPE_DE_LA_CIFRA, TOPE_DE_UN_NOMBRE, TOPE_DEL_TITULO_DEL_PUNTO, TOPE_DEL_TITULO_DEL_RECORRIDO };
 export type { AreaDelResumenDeLaPagina, CitaDelResumen, DatoRojoDeLaPagina, EstadoDeLaCifra, LoQueHicimos, PreguntaDelResumen, ResumenDeLaPagina, ReunionMalLeida, TipoDelNegocio };
 
@@ -117,6 +120,19 @@ export interface PiezaDelResumen {
 /** Un reto de un área operativa: qué pasa, dónde y qué consecuencia tiene, con la parte de la escala que explica. */
 export interface RetoDelResumen extends PiezaDelResumen {
   dimensionId: string | null;
+  /**
+   * Un reto del TRASPASO (24 nov): lo que un equipo dijo de otro («me suben y me bajan los leads, depende de ventas»). Es el
+   * otro equipo de la escala. Se guarda UNA vez, aquí; la página lo muestra también en la primera fila del otro
+   * (`resumenParaLaPagina`), con la misma clave.
+   */
+  traspaso?: string;
+}
+
+/** La cuenta de una cifra «calculado» (24 nov): cada número con la cita de la empresa que lo dice, y la cuenta a la vista. */
+export interface CuentaGuardada {
+  factores: { valor: string; rotulo: string; cita: CitaDelResumen }[];
+  /** «10 clientes que se van × US$ 85 de cuota = US$ 850 al mes». La hace el código (`cuentaConTusCifras`). */
+  texto: string;
 }
 
 /** La magnitud de un área: la cifra con su unidad y período, cómo se sabe y, si hace falta, su base o lo que falta validar. */
@@ -127,8 +143,11 @@ export interface CifraDelResumen extends PiezaDelResumen {
   dimensionId: string | null;
   /**
    * Una persona tocó «Confirmar» en una cifra que dijo Smarteam y la empresa no corrigió (18 nov): queda «Lo dijiste tú».
+   * En una «calculado» (24 nov), quien presenta confirmó la cuenta: recién ahí sale al cliente.
    */
   confirmada?: boolean;
+  /** Solo una «calculado»: la cuenta con sus factores. Sin ella, la cifra no es calculada. */
+  cuenta?: CuentaGuardada;
 }
 
 /** Un punto clave (18 nov): de lo más crítico de toda la empresa, en orden de peso, con su título y su cita. */
@@ -147,6 +166,18 @@ export interface EtapaDelResumen extends PiezaDelResumen {
   icono?: IconoDelPaso | null;
   /** Acompaña mientras el cliente opera (Soporte, Customer Success): la página lo pinta en el bucle, no en la línea. */
   continuo?: boolean;
+  /** El traspaso de este paso al siguiente (24 nov): de qué equipo a cuál, qué pasa y su cifra, con su cita. */
+  traspaso?: TraspasoDelResumen;
+}
+
+/** Lo que pasa entre un paso y el siguiente: de un equipo a otro, qué pasa y, si se dijo, cuánto pasa (con su cita). */
+export interface TraspasoDelResumen {
+  de: string;
+  a: string;
+  texto: string;
+  cifra: string | null;
+  rotulo: string | null;
+  citas: CitaDelResumen[];
 }
 
 /** Un área operativa, como la empresa se organiza (Soporte, Customer Success), colgada de su equipo de la escala. */
@@ -378,8 +409,8 @@ const REGLAS = `Preparas el RESUMEN EJECUTIVO que Smarteam (una consultora de Hu
 
 Devuelves SOLO este JSON (P = {"texto":"…","citas":[C]}; C = {"reunion":"R1","turno":12,"texto":"lo dicho, palabra por palabra"}):
 {"tituloDelRecorrido":"…","negocio":{"tesis":[P],"etiquetas":[P,P,P],"tamano":[P],"vende":[P],"ingresos":[P],"abarca":[P],"fuera":[P],"motivo":[P],"busca":[P]},
- "recorrido":[{"etapa":"…","quien":"<equipo o equipos, o null en el resultado>","texto":"…","friccion":"… o null","icono":"<uno de la lista>","continuo":false,"citas":[C]}],
- "areas":[{"nombre":"…","area":"<id del equipo de la escala>","organizacion":[P],"bien":[P],"frena":[P],"retos":[{"texto":"…","dimension":"<id o null>","citas":[C]}],"cifras":[{"cifra":"…","texto":"…","estado":"declarado|estimado|pendiente","nota":"… o null","dimension":"<id o null>","citas":[C]}],"falta":"… o null"}],
+ "recorrido":[{"etapa":"…","quien":"<equipo o equipos, o null en el resultado>","texto":"…","friccion":"… o null","icono":"<uno de la lista>","continuo":false,"citas":[C],"traspaso":{"a":"<quien del paso siguiente>","texto":"…","cifra":"… o null","rotulo":"… o null","citas":[C]} o null}],
+ "areas":[{"nombre":"…","area":"<id del equipo de la escala>","organizacion":[P],"bien":[P],"frena":[P],"retos":[{"texto":"…","dimension":"<id o null>","traspaso":"<id del otro equipo o null>","citas":[C]}],"cifras":[{"cifra":"…","texto":"…","estado":"declarado|estimado|pendiente|calculado","nota":"… o null","dimension":"<id o null>","citas":[C],"cuenta":[{"valor":"…","rotulo":"…","cita":C}] o null}],"falta":"… o null"}],
  "porque":[{"area":"<id del equipo>","texto":"…"}],
  "confirmar":[{"dimension":"<id de una parte con porExplorar>","texto":"…"}],
  "pendientes":[{"tipo":"sin-dato|hipotesis|contradiccion","area":"<id o null>","texto":"…","citas":[C]}],
@@ -389,25 +420,29 @@ LA REGLA DE TODO: cada afirmación sobre la empresa (su negocio, su organizació
 
 LAS NOTAS DEL EQUIPO (N1, N2…, si te las damos): son lo que una persona del equipo de Smarteam CONFIRMÓ sobre la empresa y escribió en Nexus. Valen como evidencia y PESAN MÁS que las reuniones: si una nota y una reunión dicen cosas distintas (una cifra, quién decide, un problema que ya no aplica), escribe lo de la nota. Se citan como una reunión, con "reunion":"N1", su turno y lo escrito palabra por palabra. Las mismas reglas de siempre: solo lo que la nota dice, sin calcular ni concluir, y nunca el nombre de quien la escribió. No escribas que lo dijo el equipo: la página lo rotula sola. Una nota que es una tarea interna («llamar el lunes») o una opinión sin hecho no se usa.
 
-0 EL PESO DE CADA TEMA (antes de escribir nada): te damos cada sesión con su título y sus minutos. Con eso y con lo que se dijo, decide cuáles son los TEMAS de la empresa (un área, un proceso, un problema) y ordénalos por peso: cuánto tiempo y cuántas reuniones se le dedicaron, y cuánto lo señaló la empresa como urgente o crítico. El espacio del Resumen va según ese orden: el titular, los puntos clave y la mayor parte de los retos y las cifras son del tema que más pesó. Un tema del que se habló de pasada no puede ocupar el titular. El título de una reunión solo te orienta: nunca lo copies ni lo cites.
+0 EL PROBLEMA PRINCIPAL Y EL PESO (antes de escribir nada). PRIMERO busca el dolor que CRUZA EQUIPOS: el que aparece en las reuniones de dos o más equipos, o en el paso de un equipo a otro (lo que uno entrega y el otro no recibe, lo que uno no sabe del otro, los clientes o los leads que se pierden entre los dos). Si existe, ESE es el problema principal: va en el titular y en el primer punto clave, con citas de reuniones DISTINTAS (una de cada equipo). Un dolor de un solo equipo, aunque se repita, no le gana a uno que cruza equipos. Solo si ningún dolor cruza equipos, el problema principal es el del tema que más pesó. Para el peso te damos cada sesión con su título y sus minutos: con eso y con lo que se dijo, decide cuáles son los TEMAS de la empresa (un área, un proceso, un problema) y ordénalos: cuánto tiempo y cuántas reuniones se le dedicaron, y cuánto lo señaló la empresa como urgente o crítico. Los puntos clave y la mayor parte de las cifras siguen ese orden, pero CADA EQUIPO con reunión propia tiene su espacio (ver 3). Un tema del que se habló de pasada no puede ocupar el titular. El título de una reunión solo te orienta: nunca lo copies ni lo cites.
 
-1 NEGOCIO (forma editorial: la dirección lo lee en 60 segundos). «tesis» (1): el TITULAR. Nombra el PROBLEMA PRINCIPAL de la empresa: el del tema que más pesó. Dos frases cortas, de 3 a 8 palabras cada una, terminadas en punto: la primera, qué pasa hoy en ese tema (qué se hace a mano, dónde se pierde, qué no se ve); la segunda, su escala o su consecuencia, con un número o un hecho de la empresa (forma: «Las citas se confirman a mano. Cada recepción llama a 200 pacientes.»); dos citas, una por frase. LO QUE MÁS PESA ES EL DINERO: si la empresa dijo cuánto le cuesta ese problema (lo que pierde, no cobra o deja de vender), esa cifra va en el titular tal como la dijo, con su moneda y su cita (forma: «Se pierden US$ 40 mil al mes. La cartera vencida no se cobra.»). Sin dinero dicho, el titular sale del dolor que MÁS repitieron quienes dirigen o deciden (te damos quiénes son), dicho como lo que no pueden hacer o lo que les cuesta (forma: «La gerencia no ve qué vende cada asesor.»). NUNCA un titular que solo describe cómo operan («Las ventas se gestionan por WhatsApp.»): eso no le dice a la dirección qué le duele. NUNCA dos hechos neutros de la operación («Las ventas son por teléfono. Los clientes pagan a plazos.» describe y no dice qué duele). Cada frase con sujeto y verbo claros, sin metáforas ni imágenes («clientes que no dejan rastro»). Nada aspiracional ni de folleto («visión compartida», «crecimiento», «transformación»). «etiquetas» (3): de 1 a 5 palabras cada una, sin verbo conjugado y sin punto: qué vende, a quién o dónde, y cómo vende o cobra («Clínicas veterinarias», «Dueños de mascotas», «Planes de salud por año»). «tamano» (0 o 1): el tamaño del negocio que dijo la empresa, con el número primero y su unidad («120 clínicas», «3.000 pedidos al mes»): clientes, sedes, tiendas, transacciones. Si la empresa respondió solo con un número («500.»), busca otra intervención suya que lo diga con su unidad y cita esa. Nunca la cifra de un área (leads de marketing, casos de soporte); si nadie lo dijo, vacío. «abarca» y «fuera» (0 o 1 cada una, hasta 15 palabras): qué cubre este diagnóstico (unidad, marcas, países, equipos) y lo que la empresa dijo que queda fuera (solo lo que dijo: no lo deduzcas de lo que sí entra). «vende» (qué vende y a quién), «ingresos» (cómo cobra: el modelo, nunca una meta ni un monto), «motivo» (qué los movió a buscar ayuda) y «busca» (el resultado que quieren): 0 o 1 frase corta cada una; sostienen la tesis y las etiquetas. Nada corporativo ni genérico. Si una parte no se habló, déjala vacía: no la completes con suposiciones ni con lo que sabes de la industria.
+LO QUE NO VA: lo que la empresa ya resolvió o acordó cómo manejar (forma: «el sistema no tiene integración, pero exportamos a Excel y con eso basta»), y lo que no cambia el plan de trabajo. Si te queda la duda, no lo pongas.
 
-2 RECORRIDO: sigue a UN cliente desde el primer contacto hasta que opera con lo que compró, como pasa HOY, en 3 a 5 PASOS en línea (la captación, la venta, el cierre, la puesta en marcha o la entrega). Junta en un paso las etapas seguidas del mismo equipo; cuando el cliente pasa de un equipo a otro, es otro paso. El ÚLTIMO paso en línea es el resultado para el cliente («La mascota en control», «Pedido entregado», «Mueble instalado»), con «quien» null si ya no lo lleva un equipo; es el ÚNICO paso en línea con «quien» null. Aparte, con «continuo»: true y al final, el equipo o los equipos que acompañan MIENTRAS el cliente opera (soporte, Customer Success, postventa, reclamos): 0 a 2. Cada equipo que tuvo una reunión aparece por lo menos en un paso. «etapa»: su nombre, de 2 a 4 palabras. «quien»: el equipo o los equipos de los datos que lo llevan, hasta 3 palabras («Ventas», «Soporte + Customer Success»); si lo lleva alguien que no es un equipo de los datos, su rol («Vendedores», «Bodega»). Nunca dos pasos seguidos con el mismo «quien» y el mismo ícono: son uno. «texto»: un detalle de hasta 6 palabras, sin verbo en segunda persona («Llamada, correo y la web», «Contrato y planos a fábrica»). «friccion»: lo que se traba en ese paso o al pasar al siguiente, hasta 18 palabras (null si no se vio). «icono»: uno de captacion, contacto, visita, demo, cotizacion, cierre, configuracion, entrega, tienda, opera, filtro, soporte. Cada paso con su cita. Solo lo que hacen hoy: lo que desean o planean no es un paso; va en «busca». «tituloDelRecorrido»: «De <el primer paso> a <el último paso>.», en palabras del negocio, hasta 9 palabras («De la llamada al mueble instalado.»): como pasa HOY, nunca cómo debería ser ni lo que falta («con trazabilidad», «sin pérdidas»), y nada que los pasos no digan.
+LOS EQUIPOS se nombran como en los datos («Ventas», «Marketing», «Servicio» o el subequipo que la empresa nombró: «Soporte», «Customer Success»). Nunca «comercial», «el área comercial» ni «el equipo comercial»: para la empresa ese equipo es Ventas.
 
-3 AREAS: una entrada por subequipo de cada equipo de la escala con el que hubo reunión, en orden de peso (el que más se habló primero). Si un equipo tiene subequipos que trabajan distinto (Soporte y Customer Success dentro de «Servicio»), una entrada por subequipo, cada una con el id de ese equipo en «area»; si no, una sola entrada con el nombre del equipo. Un equipo sin reunión propia (aunque otro lo mencione) no lleva entrada. En cada una:
+1 NEGOCIO (forma editorial: la dirección lo lee en 60 segundos). «tesis» (1): el TITULAR. Nombra el PROBLEMA PRINCIPAL de la empresa (regla 0: el que cruza equipos, si hay uno). Dos frases cortas, de 3 a 8 palabras cada una, terminadas en punto: la primera, qué pasa hoy en ese tema (qué se hace a mano, dónde se pierde, qué no se ve); la segunda, su escala o su consecuencia, con un número o un hecho de la empresa (forma: «Las citas se confirman a mano. Cada recepción llama a 200 pacientes.»); dos citas, una por frase. LO QUE MÁS PESA ES EL DINERO: si la empresa dijo cuánto le cuesta ese problema (lo que pierde, no cobra o deja de vender), esa cifra va en el titular tal como la dijo, con su moneda y su cita (forma: «Se pierden US$ 40 mil al mes. La cartera vencida no se cobra.»). Sin dinero dicho y sin un dolor que cruce equipos, el titular sale del dolor que MÁS repitieron quienes dirigen o deciden (te damos quiénes son), dicho como lo que no pueden hacer o lo que les cuesta (forma: «La gerencia no ve qué vende cada asesor.»). NUNCA un titular que solo describe cómo operan («Las ventas se gestionan por WhatsApp.»): eso no le dice a la dirección qué le duele. NUNCA dos hechos neutros de la operación («Las ventas son por teléfono. Los clientes pagan a plazos.» describe y no dice qué duele). Cada frase con sujeto y verbo claros, sin metáforas ni imágenes («clientes que no dejan rastro»). Nada aspiracional ni de folleto («visión compartida», «crecimiento», «transformación»). «etiquetas» (3): de 1 a 5 palabras cada una, sin verbo conjugado y sin punto: qué vende, a quién o dónde, y cómo vende o cobra («Clínicas veterinarias», «Dueños de mascotas», «Planes de salud por año»). «tamano» (0 o 1): el tamaño del negocio que dijo la empresa, con el número primero y su unidad («120 clínicas», «3.000 pedidos al mes»): clientes, sedes, tiendas, transacciones. Si la empresa respondió solo con un número («500.»), busca otra intervención suya que lo diga con su unidad y cita esa. Nunca la cifra de un área (leads de marketing, casos de soporte); si nadie lo dijo, vacío. «abarca» y «fuera» (0 o 1 cada una, hasta 15 palabras): qué cubre este diagnóstico (unidad, marcas, países, equipos) y lo que la empresa dijo que queda fuera (solo lo que dijo: no lo deduzcas de lo que sí entra). «vende» (qué vende y a quién), «ingresos» (cómo cobra: el modelo, nunca una meta ni un monto), «motivo» (qué los movió a buscar ayuda) y «busca» (el resultado que quieren): 0 o 1 frase corta cada una; sostienen la tesis y las etiquetas. Nada corporativo ni genérico. Si una parte no se habló, déjala vacía: no la completes con suposiciones ni con lo que sabes de la industria.
+
+2 RECORRIDO: sigue a UN cliente desde el primer contacto hasta que opera con lo que compró, como pasa HOY, en 3 a 5 PASOS en línea (la captación, la venta, el cierre, la puesta en marcha o la entrega). Junta en un paso las etapas seguidas del mismo equipo; cuando el cliente pasa de un equipo a otro, es otro paso. El ÚLTIMO paso en línea es el resultado para el cliente («La mascota en control», «Pedido entregado», «Mueble instalado»), con «quien» null si ya no lo lleva un equipo; es el ÚNICO paso en línea con «quien» null. Aparte, con «continuo»: true y al final, el equipo o los equipos que acompañan MIENTRAS el cliente opera (soporte, Customer Success, postventa, reclamos): 0 a 2. Cada equipo que tuvo una reunión aparece por lo menos en un paso. «etapa»: su nombre, de 2 a 4 palabras. «quien»: el equipo o los equipos de los datos que lo llevan, hasta 3 palabras («Ventas», «Soporte + Customer Success»); si lo lleva alguien que no es un equipo de los datos, su rol («Vendedores», «Bodega»). Nunca dos pasos seguidos con el mismo «quien» y el mismo ícono: son uno. «texto»: un detalle de hasta 6 palabras, sin verbo en segunda persona («Llamada, correo y la web», «Contrato y planos a fábrica»). «friccion»: lo que se traba en ese paso o al pasar al siguiente, hasta 18 palabras (null si no se vio). «icono»: uno de captacion, contacto, visita, demo, cotizacion, cierre, configuracion, entrega, tienda, opera, filtro, soporte. Cada paso con su cita. «traspaso»: en cada paso en línea cuyo paso siguiente lo lleva OTRO equipo, lo que pasa al pasar de uno a otro: «a» (el «quien» del paso siguiente), «texto» (qué pasa en el traspaso, de 4 a 12 palabras, sin «tu»: «Los leads llegan sin datos de la campaña»), «cifra» y «rotulo» (cuántos pasan, si la empresa lo dijo: «180» y «leads al mes»; si no, null) y su cita (la de la cifra, si la hay). null en el último paso, en los que acompañan y entre pasos del mismo equipo. Solo lo que hacen hoy: lo que desean o planean no es un paso; va en «busca». «tituloDelRecorrido»: «De <el primer paso> a <el último paso>.», en palabras del negocio, hasta 9 palabras («De la llamada al mueble instalado.»): como pasa HOY, nunca cómo debería ser ni lo que falta («con trazabilidad», «sin pérdidas»), y nada que los pasos no digan.
+
+3 AREAS: una entrada por subequipo de cada equipo de la escala con el que hubo reunión, en orden de peso (el que más se habló primero). EL PISO: cada equipo con reunión propia lleva SIEMPRE su reto principal («frena») y por lo menos 2 retos, aunque se haya hablado poco de él; y no solo de cómo mide: lo que contó de su trabajo y de lo que le duele. LO QUE UN EQUIPO DICE DE OTRO (forma: Marketing cuenta que Ventas no le avisa qué pasó con los leads) es un reto del TRASPASO: va en el equipo que lo contó, con «traspaso» = el id del otro equipo (la página lo pone en los dos), y su cita es la de quien lo contó. Si un equipo tiene subequipos que trabajan distinto (Soporte y Customer Success dentro de «Servicio»), una entrada por subequipo, cada una con el id de ese equipo en «area»; si no, una sola entrada con el nombre del equipo. Un equipo sin reunión propia (aunque otro lo mencione) no lleva entrada. En cada una:
 - «organizacion» (2): primero QUIÉNES son, por su rol y cuántos, de 2 a 6 palabras («Coordinación + 3 técnicos», «Una persona, con apoyo externo»); después QUÉ HACEN, de 6 a 12 palabras. Si no se dijo quiénes son, solo qué hacen. Cuántos: el total como lo dijeron («somos cuatro» incluye a quien habla); no agregues «por marca», «por país» ni repartos que la cita no diga. Un horario, un turno o la antigüedad del equipo no es ninguna de las dos. Nunca un nombre.
 - «bien» (1): lo que ya hace o ya tiene (procesos, materiales, rutinas, mediciones), aunque sea a mano, de 6 a 12 palabras. Reconócelo siempre que la empresa lo haya dicho.
 - «frena» (1): EL RETO PRINCIPAL del subequipo, el título de su fila, de 4 a 10 palabras, sin «tu» y SIN NÚMEROS (la cifra en dinero va en «cifras» y la página la pone arriba de este título): lo más importante que se conversó sobre cómo vende y cuánto dinero gana o pierde ese equipo; si no se habló de dinero, el dolor que más repitieron quienes dirigen o deciden. Es lo que duele, no cómo operan: «Cuentas a crédito que no se cobran a tiempo», «La gerencia no puede medir a ventas por resultados»; nunca «Gestión de ventas por WhatsApp» ni una herramienta. Con su cita.
-- «retos» (de 1 a 4 según el PESO del subequipo: el tema que más pesó lleva 3 o 4, uno del que se habló poco lleva 1; el más respaldado primero): LOS PROBLEMAS QUE CAUSAN el reto principal, dichos como lo que hay que mejorar, de 5 a 10 palabras, empezando con un verbo en infinitivo y concreto de ESTA empresa («Confirmar cada cita un día antes», «Separar los reclamos de las consultas de uso»). Sale de un problema que la empresa contó, con su cita. Nunca «Implementar…» ni «Automatizar…» sueltos, ni una herramienta, ni lo que Smarteam vende: lo que hay que lograr, no cómo. Nunca un riesgo típico de la escala que la empresa no contó.
-- «cifras» (de 0 a 2 según el PESO del subequipo; la más reveladora primero): la magnitud de lo que pasa HOY, primero lo que se pierde o se escapa (clientes que se van, casos que esperan, tiempo en retrabajo) antes que un volumen. LA PRIMERA, si se dijo, es CUÁNTO CUESTA EN DINERO: lo que se pierde, no se cobra o se deja de vender, con su moneda en «cifra» como la dijeron («US$ 40 mil», «₡ 12 M») y en «texto» qué es («al mes en cuentas que no se cobran»); la página la pone de titular de la fila. Vale la regla de siempre: la que dijo la empresa; la que dijo Smarteam si nadie la corrigió («pendiente»); si la corrigieron, la corregida. UNA CIFRA ES UN SOLO DATO: todos los números de «cifra» y de «texto» salen de UNA misma cita; dos datos dichos en momentos distintos (un porcentaje y una comparación) son dos cifras aparte, cada una con su estado. Una cifra mide cuánto pasa (clientes, casos, días, un porcentaje): una definición («consideras activo a quien abrió en los últimos 6 meses») no es una cifra. «cifra» es lo que va en grande: solo el número, hasta 12 caracteres («40», «120–150», «≈60», «3,5 %», «9 de 30»); «texto» es su rótulo, de 2 a 6 palabras, sin verbo y sin «tu» ni «tus» («reuniones por semana», «pedidos al mes», «clientes que se van al mes»); el período y el contexto, si hacen falta, van en «nota». Si la cita da un rango o una lista de valores, la cifra es el rango como lo dijeron; nunca llames «máximo», «mínimo» ni «promedio» a un valor si no lo dijeron así. «estado»: «declarado» si lo dijo la empresa; «estimado» si es un cálculo o un resumen de Smarteam que la empresa confirmó (en «nota», la base y los supuestos); «pendiente» si se mencionó y hay que confirmarlo. USA TODO: una cifra que dijo alguien de Smarteam y la empresa NO corrigió en los turnos siguientes (no dijo que no, no dio otro número, no la puso en duda) también va, con «estado» «pendiente» y su cita de lo que dijo Smarteam; si la empresa la corrigió, no la pongas (o pon la corregida, con la cita de la empresa). «nota» le habla a la empresa («Falta confirmar el período y cómo se calcula»): nunca cita lo dicho ni dice quién lo dijo («según…», «estimado por…»). Si lo dijeron con dudas («si no me equivoco», «no tengo el dato exacto»), «nota» dice qué falta validar. Escribe la cifra como la dijeron («9 de 30», nunca la resta «21»): no calcules porcentajes, ni sumes, ni redondees. Si los números de una cita no cuadran entre sí (una parte más grande que el total, una suma que no da, una frase cortada), no la pongas en «cifras»: va en PENDIENTES como «Confirmar el total de…». Si la cita da un valor habitual y uno ocasional («en promedio 24 horas, a veces tres días»), la cifra es el habitual y el otro va en «nota»; no califiques el rótulo («habitual», «típico») si no lo dijeron. Una meta («quieren llegar a 50») no es una cifra de hoy: no la pongas sola; si la usas, que la cifra sea el resultado de hoy frente a la meta («25 de 50 reuniones»). Una comparación entre dos números que resumió Smarteam y la empresa confirmó («entran 40 y se van 9») es una cifra «estimado» valiosa: inclúyela con su base, sin sacar conclusiones. No saques conclusiones que la cifra no dice («tu cartera no crece»). Nunca inventes pérdidas en dinero.
-- «falta»: si ninguna cifra es en dinero, qué falta para saber CUÁNTO LE CUESTA esto a la empresa, en una frase que le habla («Falta medir cuánto deja de cobrar la cartera vencida al mes»): la página lo pone como «por validar»; nunca un monto que nadie dijo. Con una cifra en dinero, null.
+- «retos» (de 2 a 4 según el PESO del subequipo: el tema que más pesó lleva 3 o 4, uno del que se habló poco lleva 2; el más respaldado primero): LOS PROBLEMAS QUE CAUSAN el reto principal, dichos como lo que hay que mejorar, de 5 a 10 palabras, empezando con un verbo en infinitivo y concreto de ESTA empresa («Confirmar cada cita un día antes», «Separar los reclamos de las consultas de uso»). Sale de un problema que la empresa contó, con su cita. Nunca «Implementar…» ni «Automatizar…» sueltos, ni una herramienta, ni lo que Smarteam vende: lo que hay que lograr, no cómo. Nunca un riesgo típico de la escala que la empresa no contó.
+- «cifras» (de 0 a 2 según el PESO del subequipo; la más reveladora primero): la magnitud de lo que pasa HOY, primero lo que se pierde o se escapa (clientes que se van, casos que esperan, tiempo en retrabajo) antes que un volumen. LA PRIMERA, si se dijo, es CUÁNTO CUESTA EN DINERO: lo que se pierde, no se cobra o se deja de vender, con su moneda en «cifra» como la dijeron («US$ 40 mil», «₡ 12 M») y en «texto» qué es («al mes en cuentas que no se cobran»); la página la pone de titular de la fila. Vale la regla de siempre: la que dijo la empresa; la que dijo Smarteam si nadie la corrigió («pendiente»); si la corrigieron, la corregida. UNA CIFRA ES UN SOLO DATO: todos los números de «cifra» y de «texto» salen de UNA misma cita; dos datos dichos en momentos distintos (un porcentaje y una comparación) son dos cifras aparte, cada una con su estado. Una cifra mide cuánto pasa (clientes, casos, días, un porcentaje): una definición («consideras activo a quien abrió en los últimos 6 meses») no es una cifra. «cifra» es lo que va en grande: solo el número, hasta 12 caracteres («40», «120–150», «≈60», «3,5 %», «9 de 30»); «texto» es su rótulo, de 2 a 6 palabras, sin verbo y sin «tu» ni «tus» («reuniones por semana», «pedidos al mes», «clientes que se van al mes»); el período y el contexto, si hacen falta, van en «nota». Si la cita da un rango o una lista de valores, la cifra es el rango como lo dijeron; nunca llames «máximo», «mínimo» ni «promedio» a un valor si no lo dijeron así. «estado»: «declarado» si lo dijo la empresa; «estimado» si es un cálculo o un resumen de Smarteam que la empresa confirmó (en «nota», la base y los supuestos); «pendiente» si se mencionó y hay que confirmarlo; «calculado» si es CUÁNTO CUESTA y sale de multiplicar números que dijo la empresa (forma: 10 clientes que se van al mes y US$ 85 de cuota). En una «calculado» NO haces la cuenta: das «cuenta», de 2 a 3 factores, cada uno con «valor» (UN número como lo dijo la empresa, con su moneda o su «%»; nunca un rango ni «9 de 30»), «rotulo» (qué es, de 1 a 6 palabras, con el período si lo tiene: «clientes que se van al mes», «de cuota al mes»; si dos factores tienen período, el mismo) y «cita» (la de la EMPRESA que dice ese número, y su moneda si la tiene); «cifra» va vacía y «texto» dice qué cuesta («al mes en clientes que se van»). Nexus multiplica y quien presenta confirma la cuenta. Solo multiplicar: nunca sumas ni restas en una cuenta. Úsala cuando la empresa dio los números y no dijo el total en dinero. USA TODO lo que cambia el plan: una cifra que dijo alguien de Smarteam y la empresa NO corrigió en los turnos siguientes (no dijo que no, no dio otro número, no la puso en duda) también va, con «estado» «pendiente» y su cita de lo que dijo Smarteam; si la empresa la corrigió, no la pongas (o pon la corregida, con la cita de la empresa). «nota» le habla a la empresa («Falta confirmar el período y cómo se calcula»): nunca cita lo dicho ni dice quién lo dijo («según…», «estimado por…»). Si lo dijeron con dudas («si no me equivoco», «no tengo el dato exacto»), «nota» dice qué falta validar. Escribe la cifra como la dijeron («9 de 30», nunca la resta «21»): no calcules porcentajes, ni sumes, ni redondees. Si los números de una cita no cuadran entre sí (una parte más grande que el total, una suma que no da, una frase cortada), no la pongas en «cifras»: va en PENDIENTES como «Confirmar el total de…». Si la cita da un valor habitual y uno ocasional («en promedio 24 horas, a veces tres días»), la cifra es el habitual y el otro va en «nota»; no califiques el rótulo («habitual», «típico») si no lo dijeron. Una meta («quieren llegar a 50») no es una cifra de hoy: no la pongas sola; si la usas, que la cifra sea el resultado de hoy frente a la meta («25 de 50 reuniones»). Una comparación entre dos números que resumió Smarteam y la empresa confirmó («entran 40 y se van 9») es una cifra «estimado» valiosa: inclúyela con su base, sin sacar conclusiones. No saques conclusiones que la cifra no dice («tu cartera no crece»). Nunca inventes pérdidas en dinero.
+- «falta»: solo si ninguna cifra es en dinero (ni «calculado») Y el dato existe y no se dio: qué falta para saber CUÁNTO LE CUESTA, en una frase que le habla («Falta medir cuánto deja de cobrar la cartera vencida al mes»); la página lo pone como «por validar». Si la empresa dijo que NO tiene ese dato o no lo mide («no tenemos trazabilidad», «no sabemos cuántos se pierden»), eso es un HALLAZGO: va como reto (o reto principal), y «falta» es null. Nunca un monto que nadie dijo. Con una cifra en dinero, null.
 
 4 PORQUE (uno por equipo de la escala con nivel): una o dos frases (hasta 50 palabras) de por qué está en su nivel y no uno arriba ni uno abajo, con las partes por su nombre. Usa SOLO los niveles que te damos. Nunca escribas «provisional» ni «hipótesis»: si el nivel lo determina una parte con «porExplorar», di qué mide esa parte y no la presentes como un hecho («no existe»).
 
 5 CONFIRMAR (una por cada parte con «porExplorar» que determina el nivel de su equipo): una línea simple que diga qué falta confirmar, sin tono de duda y terminando con qué se logra. Ejemplo: «Confirmar cómo registran por qué ganan o pierden una venta; con eso terminamos de ubicar Ventas».
 
-6 PENDIENTES (0 a 2, solo lo que podría cambiar el diagnóstico): una línea cada uno, en palabras simples, dicha como lo que hay que hacer («Confirmar cuántos casos recibe Soporte al mes en total»). «sin-dato»: se preguntó y no hubo dato; «hipotesis»: algo que creemos y falta validar; «contradiccion»: dos cosas dichas que no cuadran (con las dos citas). Un equipo con el que no se conversó NO va aquí (se agrega solo) y nunca se presenta como de bajo rendimiento; lo de «confirmar» tampoco se repite aquí. Nunca cuentes cómo se armó una cifra ni qué se dijo en qué momento de la reunión («se construyó combinando…», «se dijo con dudas»): di solo qué hay que confirmar.
+6 PENDIENTES (0 a 2, solo lo que podría cambiar el diagnóstico): una línea cada uno, en palabras simples, dicha como lo que hay que hacer («Confirmar cuántos casos recibe Soporte al mes en total»). «sin-dato»: se preguntó, el dato existe y quedaron de darlo (si la empresa dijo que no lo tiene o no lo mide, NO es pendiente: es un reto); «hipotesis»: algo que creemos y falta validar; «contradiccion»: dos cosas dichas que no cuadran (con las dos citas). Un equipo con el que no se conversó NO va aquí (se agrega solo) y nunca se presenta como de bajo rendimiento; lo de «confirmar» tampoco se repite aquí. Nunca cuentes cómo se armó una cifra ni qué se dijo en qué momento de la reunión («se construyó combinando…», «se dijo con dudas»): di solo qué hay que confirmar.
 
 7 PUNTOS CLAVE (7 candidatos en orden de peso; la página se queda con los 5 primeros que pasen la verificación): lo MÁS CRÍTICO de toda la empresa (el primero, del tema que más pesó). Explican más que el titular: no lo repitas palabra por palabra. «titulo»: de 3 a 8 palabras, qué está crítico hoy, sin «tu», con lo que le cuesta a la empresa si lo dijo («US$ 40 mil al mes sin cobrar», «La cartera se asigna a mano»); nunca cómo operan sin decir qué duele; «texto»: una o dos frases, de 12 a 35 palabras, qué pasa y dónde, con lo que la empresa dijo; una consecuencia SOLO si la empresa la dijo (nunca «puede dañar…», «genera fricciones»: eso es una lectura nuestra); «area»: el id del equipo de la escala del que habla, o null. Cada uno con su cita de la EMPRESA, copiada palabra por palabra (es lo que más se cae); ninguno es una recomendación, una herramienta ni lo que Smarteam vende.
 
@@ -590,7 +625,19 @@ export interface ReglasDelResumen {
   personas: readonly string[];
   /** Los equipos de la escala que el cliente NO ve («Marketing»): ningún texto habla de ellos. */
   areasFuera?: readonly string[];
+  /**
+   * Los nombres de los equipos de la escala: si uno se llama «Comercial» (una edición de la escala), nombrarlo así vale.
+   * Si no, «el equipo comercial» no sale (24 nov, Centauro): para la empresa ese equipo es Ventas.
+   */
+  equipos?: readonly string[];
 }
+
+/**
+ * Un equipo nombrado «comercial» (24 nov, Centauro: «El equipo comercial no registra sus actividades»). Los equipos se
+ * nombran como en la escala. Solo cuando nombra a un EQUIPO o a su gente: «la propuesta comercial» no es un equipo. Sobre
+ * `paraComparar`.
+ */
+const EQUIPO_COMERCIAL = /\b(equipos?|areas?|departamentos?|gerencias?|jefaturas?|lado|parte|fuerza) comercial(es)?\b|\blos comerciales\b|\bcomercial(es)? (y|e) (marketing|mercadeo|servicio)\b|\b(marketing|mercadeo|servicio) (y|e) (lo )?comercial\b/;
 
 /**
  * ¿El texto pasa las reglas de lo que lee el cliente? Sin voseo, sin personas, sin precios ni Smarteam, y con tope. Los
@@ -617,6 +664,9 @@ export function textoValido(crudo: unknown, tope: number, o: ReglasDelResumen, c
   if (interna) return { ok: false, motivo: `trae una palabra interna («${interna[0]}»)` };
   // El código de una parte («(3.6)») es de adentro: el cliente lee su nombre.
   if (/\(\s*\d{1,2}\.\d{1,2}\s*\)/.test(texto)) return { ok: false, motivo: "trae el código de una parte de la escala" };
+  // «Comercial» no es un equipo de la escala (24 nov): se pide corregido con el nombre del equipo (es de forma).
+  const comercial = (o.equipos ?? []).some((e) => /comercial/.test(paraComparar(e))) ? null : t.match(EQUIPO_COMERCIAL);
+  if (comercial) return { ok: false, motivo: `nombra un equipo como «comercial» («${comercial[0]}»): nómbralo como en la escala (Ventas)` };
   for (const area of o.areasFuera ?? []) {
     const a = paraComparar(area);
     if (a && new RegExp(`(^|[^\\p{L}])${a}($|[^\\p{L}])`, "u").test(t)) return { ok: false, motivo: `habla de un equipo que el cliente no ve («${area}»)` };
@@ -1089,10 +1139,13 @@ export function estadoDeLaCifra(o: {
   citas: readonly CitaDelResumen[];
   mano?: boolean;
   confirmada?: boolean;
+  /** Una «calculado» (24 nov): con su cuenta es calculada, también confirmada; sin cuenta, no lo es. */
+  cuenta?: CuentaGuardada;
 }): { estado: EstadoDeLaCifra; nota: string | null } {
+  if (o.cuenta) return { estado: "calculado", nota: o.nota };
   // Una persona la confirmó (la dijo Smarteam y la empresa no la corrigió, 18 nov): es suya.
   if (o.confirmada) return { estado: "declarado", nota: o.nota };
-  let estado: EstadoDeLaCifra = ESTADOS_DE_LA_CIFRA.includes(o.estado as EstadoDeLaCifra) ? (o.estado as EstadoDeLaCifra) : "pendiente";
+  let estado: EstadoDeLaCifra = ESTADOS_DE_LA_CIFRA.includes(o.estado as EstadoDeLaCifra) && o.estado !== "calculado" ? (o.estado as EstadoDeLaCifra) : "pendiente";
   let nota = o.nota;
   const deLaEmpresa = o.citas.filter((c) => !c.confirmo && !c.sinCorregir);
   const loDijoLaEmpresa = !!deLaEmpresa.length && !cifrasDeMas(o.cifra, deLaEmpresa.map((c) => c.texto).join(" ")).length;
@@ -1161,6 +1214,8 @@ export interface PiezaPorArreglar {
   /** Un punto clave (18 nov): su título (ya verificado) y su equipo; se corrige solo el texto. */
   titulo?: string;
   areaId?: string | null;
+  /** Un reto del traspaso (24 nov): el otro equipo; el reto corregido lo conserva. */
+  traspaso?: string;
 }
 
 /** Una etapa por corregir: lo que escribió el agente, sus citas tal como las devolvió y por qué se cayó. */
@@ -1175,6 +1230,8 @@ export interface EtapaPorArreglar {
   /** Lo de la forma editorial, para que la etapa corregida no pierda su lugar en el bucle ni su ícono. */
   icono?: unknown;
   continuo?: unknown;
+  /** El traspaso al paso siguiente, como lo devolvió el agente (24 nov): se vuelve a verificar con la etapa corregida. */
+  traspaso?: unknown;
 }
 
 export interface DatoPorArreglar {
@@ -1231,6 +1288,68 @@ export function problemasDeLaCifra(
     ...(sobran.length ? [`trae números que no están en lo citado (${comoNumero(sobran)})`] : []),
     ...(herramientas.length ? [`nombra herramientas que la empresa no nombró (${herramientas.join(", ")})`] : []),
   ];
+}
+
+/**
+ * La revisión de una cifra «calculado» (24 nov), la misma en la lectura, en la página y en la auditoría: cada número de la
+ * cuenta está en su cita, la cuenta (`cuentaConTusCifras`, el código) sigue dando la cifra guardada, y el rótulo no trae
+ * números que las citas no digan. Vacío = pasa.
+ */
+export function problemasDelCalculado(c: { cifra: string; texto: string; cuenta?: CuentaGuardada }): string[] {
+  if (!c.cuenta) return ["es una cuenta sin sus números"];
+  const out: string[] = [];
+  for (const f of c.cuenta.factores) {
+    if (!cifrasDeMas(f.valor, "").length || cifrasDeMas(f.valor, f.cita.texto).length) out.push(`«${f.valor}» no está en lo que dijo la empresa`);
+    const moneda = monedaDelFactor(f);
+    if (moneda && monedaDe(f.cita.texto) !== moneda) out.push(`la moneda de «${f.valor}» no es la que dijo la empresa`);
+    if (cifrasDeMas(f.rotulo, f.cita.texto).length) out.push(`el rótulo de «${f.valor}» trae un número que su cita no dice`);
+  }
+  const hecha = cuentaConTusCifras(c.cuenta.factores);
+  if (!hecha.ok) out.push(hecha.motivo);
+  else if (paraComparar(hecha.cifra) !== paraComparar(c.cifra)) out.push(`la cuenta da ${hecha.cifra}, no ${c.cifra}`);
+  if (cifrasDeMas(c.texto, c.cuenta.factores.map((f) => f.cita.texto).join(" ")).length) out.push("el texto trae números que no están en sus citas");
+  return out;
+}
+
+/**
+ * Una cifra «calculado» del agente (24 nov): sus factores, cada uno con su cita de la EMPRESA (dicha o confirmada; lo que
+ * dijo Smarteam sin corregir no entra en una cuenta), y la cuenta la hace el código. Un número sin cita, o que su cita no
+ * dice, tumba la cuenta entera: nunca sale una cuenta a medias.
+ */
+export function calculadaConSusCitas(
+  v: unknown,
+  ctx: Pick<ContextoDelResumen, "reuniones">,
+  o: ReglasDelResumen,
+): { ok: true; cifra: Omit<CifraDelResumen, "id" | "dimensionId"> } | { ok: false; motivo: string } {
+  const x = objeto(v);
+  const crudos = arreglo(x.cuenta).map(objeto);
+  if (crudos.length < 2 || crudos.length > MAX_FACTORES) return { ok: false, motivo: `la cuenta trae ${crudos.length} números (van de 2 a ${MAX_FACTORES})` };
+  const factores: CuentaGuardada["factores"] = [];
+  for (const f of crudos) {
+    const valor = cadena(f.valor);
+    const [cita] = citasVerificadas([...(f.cita ? [f.cita] : []), ...arreglo(f.citas)], ctx.reuniones, { cifra: true, max: 1 });
+    if (!cita) return { ok: false, motivo: `«${valor}» no trae una cita de la empresa que lo diga` };
+    if (!cifrasDeMas(valor, "").length || cifrasDeMas(valor, cita.texto).length) return { ok: false, motivo: `«${valor}» no está en su cita` };
+    // La moneda también, la del número o la de su rótulo (revisión del 24 nov): «85 colones» no es «US$ 85».
+    const moneda = monedaDelFactor({ valor, rotulo: cadena(f.rotulo) });
+    if (moneda && monedaDe(cita.texto) !== moneda) return { ok: false, motivo: `la moneda de «${valor}» no es la que dijo la empresa` };
+    const rotulo = textoValido(f.rotulo, TOPE_DE_UN_NOMBRE, o, cita.texto);
+    if (!rotulo.ok) return { ok: false, motivo: `el rótulo de «${valor}» ${rotulo.motivo}` };
+    if (cifrasDeMas(rotulo.texto, cita.texto).length || herramientasDeMas(rotulo.texto, cita.texto, dichoEnSusReuniones([cita], ctx.reuniones)).length)
+      return { ok: false, motivo: `el rótulo de «${valor}» dice algo que su cita no dice` };
+    factores.push({ valor: valor.slice(0, 40), rotulo: rotulo.texto, cita });
+  }
+  const hecha = cuentaConTusCifras(factores);
+  if (!hecha.ok) return { ok: false, motivo: hecha.motivo };
+  if (hecha.cifra.length > TOPE_DE_LA_CIFRA) return { ok: false, motivo: `la cifra «${hecha.cifra}» no cabe` };
+  const vistas = new Set<string>();
+  const citas = factores.map((f) => f.cita).filter((c) => !vistas.has(`${c.reunion}:${c.turno}`) && !!vistas.add(`${c.reunion}:${c.turno}`));
+  const lo = citas.map((c) => c.texto).join(" ");
+  const texto = textoValido(sinLaConclusion(cadena(x.texto), lo) ?? x.texto, TOPE_DEL_TEXTO_DEL_RESUMEN, o, lo);
+  if (!texto.ok) return { ok: false, motivo: `el texto ${texto.motivo}` };
+  const deMas = cifrasDeMas(texto.texto, lo).length ? "trae números que no están en sus citas" : lecturaNuestra(texto.texto, lo) ? "califica con una lectura nuestra" : concluyeDeMas(texto.texto, lo) ? "saca una conclusión que las citas no dicen" : null;
+  if (deMas) return { ok: false, motivo: `el texto ${deMas}` };
+  return { ok: true, cifra: { cifra: hecha.cifra, texto: texto.texto, estado: "calculado", nota: null, citas, cuenta: { factores, texto: hecha.texto }, origen: origenDeLaCita(citas[0]) } };
 }
 
 /** Los años de las reuniones y los que dijo la empresa («en 2025»): solo eso vale en una cifra además de su cita. */
@@ -1342,8 +1461,8 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
   // Lo que no lleva cita propia: sus números los dijo la empresa misma, no un cálculo de Smarteam que confirmó.
   const dichoPorElla = ctx.reuniones.map((r) => r.turnos.filter((t) => esDelCliente(r, t.hablante)).map((t) => t.texto).join("\n")).join("\n");
   const piezasPorArreglar: PiezaPorArreglar[] = [];
-  const arreglarEn = (lugar: string, dimensionId?: string | null, indice?: number, largo?: number) => (x: { texto: string; citas: CitaDelResumen[]; problema: string }) =>
-    piezasPorArreglar.push({ lugar, ...x, dimensionId, ...(indice === undefined ? {} : { indice }), ...(largo === undefined ? {} : { largo }) });
+  const arreglarEn = (lugar: string, dimensionId?: string | null, indice?: number, largo?: number, traspaso?: string) => (x: { texto: string; citas: CitaDelResumen[]; problema: string }) =>
+    piezasPorArreglar.push({ lugar, ...x, dimensionId, ...(indice === undefined ? {} : { indice }), ...(largo === undefined ? {} : { largo }), ...(traspaso ? { traspaso } : {}) });
   const deLasAreas = new Set(ctx.areas.map((a) => a.id));
   const nombreDelArea = (id: string) => ctx.areas.find((a) => a.id === id)?.nombre ?? id;
 
@@ -1413,14 +1532,26 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
     const retos: RetoDelResumen[] = [];
     for (const y of arreglo(x.retos)) {
       if (retos.length >= MAX_RETOS) break;
-      const p = conSuCita(y, ctx, o, descartados, donde("un reto"), TOPE_DEL_TEXTO_DEL_RESUMEN, [], arreglarEn(`${id}:retos`, dimensionDelArea(ctx, areaId, objeto(y).dimension)));
-      if (p) retos.push({ id: `t${retos.length + 1}`, ...p, dimensionId: dimensionDelArea(ctx, areaId, objeto(y).dimension), origen: origenDeLaCita(p.citas[0]) });
+      // Lo que este equipo dijo de otro (24 nov): un reto del traspaso; la página lo muestra también en el otro.
+      const traspaso = deLasAreas.has(cadena(objeto(y).traspaso)) && cadena(objeto(y).traspaso) !== areaId ? cadena(objeto(y).traspaso) : undefined;
+      const p = conSuCita(y, ctx, o, descartados, donde("un reto"), TOPE_DEL_TEXTO_DEL_RESUMEN, [], arreglarEn(`${id}:retos`, dimensionDelArea(ctx, areaId, objeto(y).dimension), undefined, undefined, traspaso));
+      if (p) retos.push({ id: `t${retos.length + 1}`, ...p, dimensionId: dimensionDelArea(ctx, areaId, objeto(y).dimension), origen: origenDeLaCita(p.citas[0]), ...(traspaso ? { traspaso } : {}) });
     }
     const cifras: CifraDelResumen[] = [];
     let faltaDeLaCifra: string | null = null;
     for (const y of arreglo(x.cifras)) {
       if (cifras.length >= MAX_CIFRAS_POR_AREA) break;
       const c = objeto(y);
+      // Una «calculado» (24 nov, Elías): la cuenta la hace el código con los números de la empresa, cada uno con su cita.
+      if (cadena(c.estado) === "calculado") {
+        const k = calculadaConSusCitas(c, ctx, o);
+        if (!k.ok) {
+          descartados.push(`${donde("una cifra calculada")}: ${k.motivo}`);
+          continue;
+        }
+        if (!cifras.some((z) => paraComparar(z.cifra) === paraComparar(k.cifra.cifra))) cifras.push({ id: `c${cifras.length + 1}`, ...k.cifra, dimensionId: dimensionDelArea(ctx, areaId, c.dimension) });
+        continue;
+      }
       const crudas = { cifra: cadena(c.cifra), texto: cadena(c.texto), nota: nulo(c.nota) ? null : cadena(c.nota) };
       const citadoAntes = arreglo(c.citas).map((z) => cadena(objeto(z).texto)).join(" ");
       crudas.texto = sinLaConclusion(crudas.texto, citadoAntes) ?? crudas.texto;
@@ -1611,7 +1742,8 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
 /** Lo que se puede corregir sin volver a leer las reuniones: largo, lo prohibido que la cita no dice, números, herramientas. */
 // «nombra a una persona» también es de forma (21 nov, Tecnosagot: la tesis decía «Diego» y el titular se perdía): se pide
 // corregida con su rol, y la corregida se vuelve a verificar con la misma vara.
-const ES_DE_FORMA = /demasiado largo|habla de «|numeros|números|herramientas|lectura nuestra|conclusi|voseo|nombra a una persona/;
+// «comercial» también (24 nov): se pide corregido con el nombre del equipo de la escala.
+const ES_DE_FORMA = /demasiado largo|habla de «|numeros|números|herramientas|lectura nuestra|conclusi|voseo|nombra a una persona|comercial/;
 
 /**
  * Una etapa del recorrido, con su cita: el nombre, la fricción y el texto pasan las reglas y lo que dicen está en lo citado.
@@ -1623,7 +1755,7 @@ function etapaVerificada(
   o: Reglas,
 ): { ok: true; etapa: Omit<EtapaDelResumen, "id"> } | { ok: false; motivo: string; deForma: Omit<EtapaPorArreglar, "orden" | "problema"> | null } {
   const x = objeto(v);
-  const crudas = { etapa: cadena(x.etapa ?? x.nombre), quien: nulo(x.quien) ? null : cadena(x.quien), texto: cadena(x.texto), friccion: nulo(x.friccion) ? null : cadena(x.friccion), citas: arreglo(x.citas), icono: x.icono, continuo: x.continuo };
+  const crudas = { etapa: cadena(x.etapa ?? x.nombre), quien: nulo(x.quien) ? null : cadena(x.quien), texto: cadena(x.texto), friccion: nulo(x.friccion) ? null : cadena(x.friccion), citas: arreglo(x.citas), icono: x.icono, continuo: x.continuo, traspaso: x.traspaso };
   const verificadas = citasVerificadas(crudas.citas, ctx.reuniones);
   const citado = verificadas.map((c) => c.texto).join(" ");
   const caida = (motivo: string) => ({ ok: false as const, motivo, deForma: verificadas.length && ES_DE_FORMA.test(motivo) && crudas.etapa ? crudas : null });
@@ -1637,6 +1769,8 @@ function etapaVerificada(
   if (!p) return caida(motivos[0] ?? `etapa «${nombre.texto}» sin cita`);
   // El ícono, de la lista (uno que no está se deduce del nombre en la página); `continuo`, solo si lo dijo.
   const icono = (ICONOS_DEL_PASO as readonly string[]).includes(cadena(x.icono)) ? (cadena(x.icono) as IconoDelPaso) : null;
+  // El traspaso al paso siguiente (24 nov): si no pasa, se cae solo él, no la etapa.
+  const traspaso = x.continuo === true || !quien?.ok ? null : traspasoVerificado(x.traspaso, quien.texto, ctx, o);
   return {
     ok: true,
     etapa: {
@@ -1647,11 +1781,32 @@ function etapaVerificada(
       origen: origenDeLaCita(p.citas[0]),
       ...(icono ? { icono } : {}),
       ...(x.continuo === true ? { continuo: true } : {}),
+      ...(traspaso ? { traspaso } : {}),
     },
   };
 }
 
-const REGLAS_DE_LAS_ETAPAS = `Corriges etapas del recorrido de un cliente para una página que Smarteam le presenta a una empresa. Cada una se descartó por un problema de forma, que te digo en «problema»: dice algo que sus citas no dicen (un precio, una tarifa, un número, una herramienta), es demasiado larga o nombra a una persona (cámbiala por su rol: «la gerencia», «quien lleva cobranza»; nunca un nombre).
+/**
+ * El traspaso de un paso al siguiente (24 nov): de quién (el equipo de este paso) a quién, qué pasa y, si la empresa lo
+ * dijo, cuánto pasa. Con su cita, como cualquier pieza: lo que dice tiene que estar en lo citado. null si no viene o no
+ * pasa (la etapa queda igual).
+ */
+export function traspasoVerificado(v: unknown, de: string, ctx: ContextoDelResumen, o: Reglas): TraspasoDelResumen | null {
+  const x = objeto(v);
+  if (nulo(x.texto) || nulo(x.a)) return null;
+  const a = textoValido(x.a, TOPE_DE_UN_NOMBRE, o);
+  if (!a.ok || paraComparar(a.texto) === paraComparar(de)) return null;
+  const cifraCruda = nulo(x.cifra) ? null : cadena(x.cifra);
+  const cifra = cifraCruda && cifrasDeMas(cifraCruda, "").length && cifraCruda.length <= TOPE_DE_LA_CIFRA ? cifraCruda : null;
+  const rotulo = cifra && !nulo(x.rotulo) ? textoValido(x.rotulo, TOPE_DE_UN_NOMBRE, o) : null;
+  const p = conSuCita({ texto: x.texto, citas: x.citas }, ctx, o, [], "traspaso", TOPE_DEL_TEXTO_DEL_RESUMEN, [cifra ?? "", rotulo?.ok ? rotulo.texto : ""]);
+  if (!p) return null;
+  // La cifra tiene que estar en la cita misma (no en los turnos vecinos): es lo que va en grande en la flecha.
+  const conCifra = !!cifra && !cifrasDeMas(cifra, p.citas.map((c) => c.texto).join(" ")).length;
+  return { de, a: a.texto, texto: p.texto, cifra: conCifra ? cifra : null, rotulo: conCifra && rotulo?.ok ? rotulo.texto : null, citas: p.citas.slice(0, 3) };
+}
+
+const REGLAS_DE_LAS_ETAPAS = `Corriges etapas del recorrido de un cliente para una página que Smarteam le presenta a una empresa. Cada una se descartó por un problema de forma, que te digo en «problema»: dice algo que sus citas no dicen (un precio, una tarifa, un número, una herramienta), es demasiado larga, nombra a una persona (cámbiala por su rol: «la gerencia», «quien lleva cobranza»; nunca un nombre) o dice «comercial» (nombra el equipo como en la escala: «Ventas»).
 
 Reescribe «etapa» (hasta 5 palabras), «texto» (qué pasa ahí hoy, hasta 6 palabras, sin «tu» ni «tus») y «friccion» (lo que se traba, o null) usando SOLO lo que dicen sus «citas». Quita lo que las citas no digan; no lo reemplaces por otra palabra que lo insinúe. Si con las citas no se puede decir qué pasa en la etapa, omítela.
 
@@ -1680,7 +1835,7 @@ export function leerLasEtapas(
     const de = xs[i];
     if (!de || usados.has(i)) continue;
     usados.add(i);
-    const r = etapaVerificada({ etapa: x.etapa, quien: de.quien, texto: x.texto, friccion: x.friccion, citas: de.citas, icono: de.icono, continuo: de.continuo }, ctx, o);
+    const r = etapaVerificada({ etapa: x.etapa, quien: de.quien, texto: x.texto, friccion: x.friccion, citas: de.citas, icono: de.icono, continuo: de.continuo, traspaso: de.traspaso }, ctx, o);
     if (r.ok) etapas.push({ ...r.etapa, orden: de.orden });
     else descartados.push(`etapa corregida: ${r.motivo}`);
   }
@@ -1739,7 +1894,7 @@ function conElAvisoDelRecorrido(guardados: readonly string[], recorrido: readonl
 
 const REGLAS_DE_LAS_PIEZAS = `Corriges frases para una página que Smarteam le presenta a una empresa. Cada una se descartó por un problema de forma, que te digo en «problema»: dice algo que sus citas no dicen (un número, una herramienta, una conclusión, una calificación nuestra), o es demasiado larga.
 
-Reescribe «texto» con la forma que te doy en «forma», usando SOLO lo que dicen sus «citas». Si nombra a una persona, cámbiala por su rol («la gerencia», «quien lleva cobranza»); nunca un nombre. Sin «tu» ni «tus» salvo que «forma» lo pida; nunca voseo. Quita lo que las citas no digan; no lo reemplaces por otra palabra que lo insinúe. Si con las citas no se puede decir nada, omítela.
+Reescribe «texto» con la forma que te doy en «forma», usando SOLO lo que dicen sus «citas». Si nombra a una persona, cámbiala por su rol («la gerencia», «quien lleva cobranza»); nunca un nombre. Si dice «comercial», nombra el equipo como en la escala («Ventas»). Sin «tu» ni «tus» salvo que «forma» lo pida; nunca voseo. Quita lo que las citas no digan; no lo reemplaces por otra palabra que lo insinúe. Si con las citas no se puede decir nada, omítela.
 
 Devuelves SOLO este JSON: {"piezas":[{"i":<el número de la pieza>,"texto":"…"}]}`;
 
@@ -1827,7 +1982,7 @@ export function conLasPiezas<T extends Pick<LoQueEscribioElAgente, "negocio" | "
     const a = operativas.find((y) => y.id === donde);
     if (!a) continue;
     if (campo === "retos") {
-      if (a.retos.length < MAX_RETOS && !repetida(a.retos, p.texto)) a.retos.push({ id: nuevoId("tx", a.retos), ...base, dimensionId: p.dimensionId ?? null });
+      if (a.retos.length < MAX_RETOS && !repetida(a.retos, p.texto)) a.retos.push({ id: nuevoId("tx", a.retos), ...base, dimensionId: p.dimensionId ?? null, ...(p.traspaso ? { traspaso: p.traspaso } : {}) });
     } else if (campo === "organizacion" || campo === "bien" || campo === "frena") {
       const xs = a[campo];
       const max = campo === "frena" ? 2 : MAX_PIEZAS_POR_LISTA;
@@ -1948,6 +2103,112 @@ export function conLoArreglado(operativas: readonly AreaOperativa[], arreglados:
   });
 }
 
+// ── El piso de cada equipo y los retos del traspaso (24 nov) ─────────────────────
+
+/**
+ * Lo mínimo de un equipo con reunión propia: su reto principal y dos retos (24 nov, Centauro: Marketing quedaba solo en
+ * medición y todo se inclinaba hacia Ventas). Es por equipo de la escala, no por subequipo.
+ */
+export const RETOS_DEL_PISO = 2;
+
+/** Los equipos de la escala con una reunión propia (no una nota del equipo) que no llegan al piso. */
+export function equiposBajoElPiso(operativas: readonly Pick<AreaOperativa, "areaId" | "frena" | "retos">[], ctx: Pick<ContextoDelResumen, "areas" | "reuniones">): string[] {
+  const conReunion = [...new Set(ctx.reuniones.filter((r) => !esNotaDelEquipo(r)).flatMap((r) => (r.areaId ? [r.areaId] : [])))].filter((id) => ctx.areas.some((a) => a.id === id));
+  return conReunion.filter((id) => {
+    const suyas = operativas.filter((x) => x.areaId === id);
+    // Lo que otro equipo dijo de este (un reto del traspaso) también se ve en su fila: cuenta para el piso.
+    const delTraspaso = suyas.length ? operativas.filter((x) => x.areaId !== id).flatMap((x) => x.retos.filter((r) => r.traspaso === id)).length : 0;
+    return !suyas.some((x) => x.frena.length) || suyas.reduce((s, x) => s + x.retos.length, 0) + delTraspaso < RETOS_DEL_PISO;
+  });
+}
+
+const REGLAS_DEL_PISO = `Completas, para una página que Smarteam (una consultora) le presenta a una empresa, lo que encontramos de UN equipo de la empresa. Ese equipo tuvo su propia reunión y quedó con poco: te doy sus reuniones (cada línea es un turno: [número] quien habla: lo que dijo) y lo que ya tiene.
+
+Devuelve lo que le falta, solo con lo que dijo alguien de la EMPRESA en estas reuniones:
+- «frena» (0 o 1, solo si no tiene): EL RETO PRINCIPAL del equipo, de 4 a 10 palabras, sin números y sin «tu»: lo que le duele, no cómo opera ni una herramienta.
+- «retos» (los que falten para llegar a 2): los problemas que lo causan, de 5 a 10 palabras, empezando con un verbo en infinitivo y sin «tu», concretos de ESTA empresa; no solo cómo mide: también lo que contó de su trabajo y de lo que le duele. Si lo que contó es de OTRO equipo (forma: Marketing cuenta que Ventas no le avisa qué pasó con los leads), es un reto del traspaso: pon en «traspaso» el id de ese otro equipo.
+- «dimension»: el id de la parte de la escala que explica el reto, o null.
+Cada uno con 1 o 2 citas: lo dicho por alguien de la empresa, de 6 a 25 palabras seguidas de UNA intervención, copiado palabra por palabra, con su reunión y su turno; nunca pegues pedazos con «;» o «…». Todo lo que escribas tiene que estar en tus citas. No repitas lo que ya tiene. Nada de lo que la empresa ya resolvió o acordó cómo manejar. Los equipos se nombran como en los datos; nunca «comercial». Nunca el nombre de una persona (su rol). Si la reunión no da para más, devuelve listas vacías: no inventes.
+
+Devuelves SOLO este JSON: {"frena":[{"texto":"…","citas":[{"reunion":"R1","turno":12,"texto":"…"}]}],"retos":[{"texto":"…","dimension":"<id o null>","traspaso":"<id o null>","citas":[{"reunion":"R1","turno":12,"texto":"…"}]}]}`;
+
+/** Lo que ya tiene un equipo (para no repetirlo en el piso). */
+function loQueYaTiene(operativas: readonly AreaOperativa[], areaId: string): { frena: string[]; retos: string[] } {
+  const suyas = operativas.filter((x) => x.areaId === areaId);
+  return { frena: suyas.flatMap((x) => x.frena.map((p) => p.texto)), retos: suyas.flatMap((x) => x.retos.map((p) => p.texto)) };
+}
+
+/** El pedido del piso de UN equipo: solo sus reuniones (las de su equipo, hasta dos) y lo que ya tiene. */
+export function pedidoDelPisoDelEquipo(
+  area: Pick<AreaParaElResumen, "id" | "nombre" | "dimensiones">,
+  reuniones: readonly ReunionParaElResumen[],
+  operativas: readonly AreaOperativa[],
+  otros: readonly { id: string; nombre: string }[],
+): Anthropic.Messages.MessageCreateParamsNonStreaming {
+  const tiene = loQueYaTiene(operativas, area.id);
+  const contenido = [
+    `El equipo: ${area.nombre} (id ${area.id})`,
+    `Sus partes de la escala: ${area.dimensiones.map((d) => `${d.id} ${d.nombre}`).join(" · ")}`,
+    `Los otros equipos (para «traspaso»): ${otros.map((x) => `${x.id} ${x.nombre}`).join(" · ") || "ninguno"}`,
+    `Lo que ya tiene: reto principal: ${tiene.frena.join(" | ") || "(ninguno)"} · retos: ${tiene.retos.join(" | ") || "(ninguno)"}`,
+    ...reuniones.map((r) => `### ${r.clave} · ${r.fecha.slice(0, 10)}\n${r.turnos.map((t) => `[${t.n}] ${t.hablante}: ${t.texto}`).join("\n")}`),
+  ].join("\n\n");
+  return { model: MODELO_DEL_RESUMEN, max_tokens: 1500, system: REGLAS_DEL_PISO, messages: [{ role: "user", content: contenido }] };
+}
+
+/**
+ * Lee el piso de un equipo y lo verifica como cualquier pieza (`conSuCita`). Va al primer subequipo de ese equipo; si el
+ * agente no le dio ninguno, se crea uno con el nombre del equipo. Sin repetir y sin pasar los topes.
+ */
+export function conElPisoDelEquipo(
+  respuesta: Pick<Anthropic.Messages.Message, "content">,
+  areaId: string,
+  operativas: readonly AreaOperativa[],
+  ctx: ContextoDelResumen,
+  o: Reglas,
+): { operativas: AreaOperativa[]; descartados: string[] } {
+  const crudo = o.parse(respuesta.content.map((b) => (b.type === "text" ? b.text : "")).join(""));
+  const descartados: string[] = [];
+  const area = ctx.areas.find((x) => x.id === areaId);
+  const out = operativas.map((x) => ({ ...x, frena: [...x.frena], retos: [...x.retos] }));
+  if (!area) return { operativas: out, descartados };
+  const nuevoId = (prefijo: string, xs: readonly { id: string }[]) => {
+    let k = xs.length + 1;
+    while (xs.some((y) => y.id === `${prefijo}${k}`)) k++;
+    return `${prefijo}${k}`;
+  };
+  const piezas = (lista: unknown, que: string) =>
+    arreglo(lista).flatMap((y) => {
+      const p = conSuCita(y, ctx, o, descartados, `el piso de ${area.nombre} (${que})`);
+      return p ? [{ ...p, crudo: objeto(y) }] : [];
+    });
+  const frenas = piezas(crudo.frena, "reto principal").slice(0, 1);
+  const retos = piezas(crudo.retos, "reto");
+  if (!frenas.length && !retos.length) return { operativas: out, descartados };
+  let destino = out.find((x) => x.areaId === areaId);
+  if (!destino) {
+    destino = { id: nuevoId("o", out), nombre: area.nombre, areaId, organizacion: [], bien: [], frena: [], retos: [], cifras: [], falta: null };
+    out.push(destino);
+  }
+  const yaEsta = (xs: readonly { texto: string }[], t: string) => xs.some((y) => paraComparar(y.texto) === paraComparar(t));
+  if (!out.some((x) => x.areaId === areaId && x.frena.length))
+    for (const p of frenas) destino.frena.push({ id: nuevoId("fp", destino.frena), texto: p.texto, citas: p.citas, origen: origenDeLaCita(p.citas[0]) });
+  for (const p of retos) {
+    if (destino.retos.length >= MAX_RETOS || yaEsta(destino.retos, p.texto)) continue;
+    const otro = cadena(p.crudo.traspaso);
+    const traspaso = ctx.areas.some((x) => x.id === otro) && otro !== areaId ? otro : undefined;
+    destino.retos.push({ id: nuevoId("tp", destino.retos), texto: p.texto, citas: p.citas, dimensionId: dimensionDelArea(ctx, areaId, p.crudo.dimension), origen: origenDeLaCita(p.citas[0]), ...(traspaso ? { traspaso } : {}) });
+  }
+  return { operativas: out, descartados };
+}
+
+/** Un equipo con reunión propia que igual quedó sin su reto principal o sin dos retos: se avisa adentro. */
+export function avisosDelPiso(operativas: readonly Pick<AreaOperativa, "areaId" | "frena" | "retos">[], ctx: Pick<ContextoDelResumen, "areas" | "reuniones">): string[] {
+  return equiposBajoElPiso(operativas, ctx).map(
+    (id) => `${ctx.areas.find((a) => a.id === id)!.nombre} tuvo su reunión y quedó sin su reto principal o con menos de ${RETOS_DEL_PISO} retos: revísalo o rehaz el Resumen.`,
+  );
+}
+
 // ── Qué hicimos ─────────────────────────────────────────────────────────────────
 
 /** Una conferencia de más de esto es un error de los datos (alguien dejó la sala abierta): vale la del evento. */
@@ -2028,6 +2289,19 @@ export function porqueDeRespaldo(r: Pick<ResultadoDelTest, "areaNombre" | "nivel
   return partes.length ? partes.join(" ") : null;
 }
 
+/**
+ * Las partes de la escala de las que el Resumen dice algo con su cita (24 nov): un reto o una cifra con su parte. Una
+ * hipótesis así sube a evidencia: no se le pide «Confirmar cómo trabaja hoy…» y lleva sus riesgos y su detalle en la
+ * página de su área (lib/exploraciones/escala-para-el-cliente.ts). Lo escrito a mano también cuenta.
+ */
+export function partesConCitaDelResumen(g: Pick<ResumenGuardado, "v" | "operativas"> | null | undefined): Set<string> {
+  if (g?.v !== 2) return new Set();
+  // Una cuenta con sus cifras que nadie confirmó todavía no es evidencia, ni lo que solo dijo Smarteam y nadie corrigió
+  // (revisión del 24 nov: «sin pista del cliente no hay nivel»). Hace falta una cita de la empresa, o que la escribiera una persona.
+  const piezas = (g.operativas ?? []).flatMap((op) => [...op.retos, ...op.cifras.filter((c) => !c.cuenta || c.confirmada)]);
+  return new Set(piezas.filter((p) => !!p.dimensionId && (p.citas.some((c) => !c.sinCorregir) || !!p.mano)).map((p) => p.dimensionId!));
+}
+
 // ── Lo que ve la página ─────────────────────────────────────────────────────────
 
 /** ¿El texto nombra alguno de estos equipos? */
@@ -2044,7 +2318,13 @@ function nombraA(texto: string, areas: readonly string[] = []): boolean {
  * muestra. Sale solo si tiene cita y todos los números de su cifra, su texto y su nota están en lo citado (`cifrasDeMas`,
  * la misma vara que al armarla). La cita se guarda aunque la cifra cambie: al corregirla con lo que dijo la empresa, vuelve.
  */
-export function porQueNoSaleLaCifra(d: { cifra: string; texto: string; nota?: string | null; citas: readonly { texto: string }[] }): string | null {
+export function porQueNoSaleLaCifra(d: { cifra: string; texto: string; nota?: string | null; citas: readonly { texto: string }[]; cuenta?: CuentaGuardada; confirmada?: boolean }): string | null {
+  // Una «calculado» (24 nov): sale si su cuenta sigue dando esa cifra con números de sus citas, y si quien presenta la confirmó.
+  if (d.cuenta) {
+    const problemas = problemasDelCalculado({ cifra: d.cifra, texto: d.texto, cuenta: d.cuenta });
+    if (problemas.length) return `No sale al cliente: ${problemas[0]}. Corrígela o quítala.`;
+    return null;
+  }
   if (!d.citas.length) return "No sale al cliente: no tiene una cita de las reuniones que la sostenga. Si no va, quítala.";
   const sobran = cifrasDeMas(`${d.cifra} ${d.texto} ${d.nota ?? ""}`, d.citas.map((c) => c.texto).join(" ")).map((s) => `«${s.replace(/·$/, "").replace("·", " ")}»`);
   if (!sobran.length) return null;
@@ -2056,15 +2336,21 @@ export function porQueNoSaleLaCifra(d: { cifra: string; texto: string; nota?: st
  * lo causa y lo que ya funciona, de cada subequipo. Todo lo que pasó la verificación contra las transcripciones (o lo que
  * escribió una persona). Sin cifras: la descripción no lleva montos. "" sin Resumen del formato 2.
  */
-export function loQueEncontroElResumen(g: ResumenGuardado | null | undefined, areaId: string, areasFuera: readonly string[] = []): string {
+export function loQueEncontroElResumen(g: ResumenGuardado | null | undefined, areaId: string, areasFuera: readonly string[] = [], areasQueVe?: ReadonlySet<string>): string {
   if (g?.v !== 2) return "";
   const sale = (t: string) => !nombraA(t, areasFuera);
+  // Lo que otro equipo dijo de este (24 nov, los retos del traspaso): va con su primer subequipo, como en la página.
+  // De un equipo que el cliente no ve (`areasQueVe`), no: la página tampoco lo muestra.
+  const delTraspaso = (g.operativas ?? [])
+    .filter((op) => op.areaId !== areaId && sale(op.nombre) && (!areasQueVe || areasQueVe.has(op.areaId)))
+    .flatMap((op) => op.retos.filter((r) => r.traspaso === areaId));
+  const primero = (g.operativas ?? []).find((op) => op.areaId === areaId && sale(op.nombre));
   return (g.operativas ?? [])
     .filter((op) => op.areaId === areaId && sale(op.nombre))
     .map((op) => {
       const lineas = [
-        ...op.frena.map((p) => `El reto principal: ${p.texto}`),
-        ...op.retos.map((p) => `Lo que lo causa: ${p.texto}`),
+        ...op.frena.map((p) => `${ROTULO_DEL_RETO_PRINCIPAL}${p.texto}`),
+        ...[...op.retos, ...(op === primero ? delTraspaso : [])].map((p) => `${ROTULO_DE_LO_QUE_LO_CAUSA}${p.texto}`),
         ...op.bien.map((p) => `Lo que ya funciona: ${p.texto}`),
       ].filter(sale);
       return lineas.length ? `${op.nombre}:\n${lineas.map((l) => `- ${l}`).join("\n")}` : "";
@@ -2140,6 +2426,8 @@ export function resumenParaLaPagina(
   const fuera = (texto: string) => nombraA(texto, o.areasFuera);
   const g = guardado ?? null;
   const v2 = g?.v === 2;
+  // Una parte por explorar de la que el Resumen dice algo con su cita ya no es una hipótesis (24 nov).
+  const conCitaDeLaParte = partesConCitaDelResumen(g);
 
   // Los equipos de la escala: su nivel (normal, sin «provisional»: Elías, 11 nov) y por qué está ahí. `provisional` se
   // sigue calculando, solo para decir en «Qué falta validar» qué falta confirmar.
@@ -2149,7 +2437,7 @@ export function resumenParaLaPagina(
     // Un «por qué» guardado que dice «provisional» o «hipótesis» (los del 10 nov) no sale: se veía inseguro (Elías, 11 nov).
     const sinDuda = !!a?.porque && !/\bprovisional|\bhipotesis\b/.test(paraComparar(a.porque.texto));
     const vigente = sinDuda && !!r.nivel && a!.porque!.firma === firma;
-    const provisional = nivelProvisional(r, o.porExplorar?.[r.areaId] ?? []);
+    const provisional = nivelProvisional(r, (o.porExplorar?.[r.areaId] ?? []).filter((id) => !conCitaDeLaParte.has(id)));
     const respaldo = porqueDeRespaldo(r);
     return {
       areaId: r.areaId,
@@ -2175,18 +2463,22 @@ export function resumenParaLaPagina(
   const vacia = (): ListaDeLaPagina => ({ piezas: [], nueva: null });
   // Una cifra: su estado visible (la regla del código, también para lo editado) y, afuera, solo si su cita la sostiene.
   const cifra = (
-    d: { id: string; cifra: string; texto: string; citas: readonly CitaDelResumen[]; mano?: boolean; dimensionId: string | null; estado?: EstadoDeLaCifra; nota?: string | null; confirmada?: boolean },
+    d: { id: string; cifra: string; texto: string; citas: readonly CitaDelResumen[]; mano?: boolean; dimensionId: string | null; estado?: EstadoDeLaCifra; nota?: string | null; confirmada?: boolean; cuenta?: CuentaGuardada },
     clave: string,
     conNota: boolean,
   ): CifraDeLaPagina | null => {
-    if (fuera(`${d.cifra} ${d.texto} ${d.nota ?? ""}`)) return null;
+    if (fuera(`${d.cifra} ${d.texto} ${d.nota ?? ""} ${d.cuenta?.texto ?? ""}`)) return null;
     const noSale = porQueNoSaleLaCifra(d);
     if (noSale && !o.conCitas) return null;
-    const e = estadoDeLaCifra({ estado: d.estado ?? "declarado", cifra: d.cifra, nota: d.nota ?? null, citas: d.citas, mano: d.mano, confirmada: d.confirmada });
-    // La dijo Smarteam y la empresa no la corrigió (18 nov): adentro lleva «Confirmar».
-    const porConfirmar = !d.confirmada && soloLaDijoSmarteam(d);
+    // Una cuenta con sus cifras que nadie confirmó (24 nov) no sale afuera; adentro lleva «Confirmar».
+    if (d.cuenta && !d.confirmada && !o.conCitas) return null;
+    const e = estadoDeLaCifra({ estado: d.estado ?? "declarado", cifra: d.cifra, nota: d.nota ?? null, citas: d.citas, mano: d.mano, confirmada: d.confirmada, cuenta: d.cuenta });
+    // La dijo Smarteam y la empresa no la corrigió (18 nov), o es una cuenta con sus cifras (24 nov): adentro lleva «Confirmar».
+    const porConfirmar = d.cuenta ? !d.confirmada : !d.confirmada && soloLaDijoSmarteam(d);
+    // Una «calculado» lleva la cuenta a la vista, de nota («Con tus cifras · 10 clientes × US$ 85 = US$ 850 al mes»).
+    const deLaCuenta = d.cuenta ? { nota: d.cuenta.texto, cuenta: d.cuenta.texto } : {};
     return conCita(
-      { id: d.id, cifra: d.cifra, texto: d.texto, ...e, clave, conNota, dimensionNombre: nombreDeLaParte(d.dimensionId), fecha: noSale ? null : (d.citas[0]?.fecha ?? null), ...(d.mano ? { mano: true } : {}) },
+      { id: d.id, cifra: d.cifra, texto: d.texto, ...e, ...deLaCuenta, clave, conNota: conNota && !d.cuenta, dimensionNombre: nombreDeLaParte(d.dimensionId), fecha: noSale ? null : (d.citas[0]?.fecha ?? null), ...(d.mano ? { mano: true } : {}) },
       { citas: [...d.citas], ...(noSale ? { noSale } : {}), ...(porConfirmar ? { porConfirmar: true } : {}) },
     );
   };
@@ -2239,7 +2531,8 @@ export function resumenParaLaPagina(
       // CUÁNTO CUESTA (20 nov): la primera cifra de dinero que se pierde sale de las cifras y va de titular de la fila.
       const suyas = op.cifras.flatMap((c) => cifra(c, `${k}:cifra:${c.id}`, true) ?? []);
       // Solo una que su cita sostiene: adentro no puede ir de titular un monto que el cliente no verá.
-      const iCosto = suyas.findIndex((c) => esCosto(c) && !c.noSale);
+      // Tampoco una cuenta sin confirmar (24 nov): afuera no sale, y adentro la fila tiene que ser la que verá el cliente.
+      const iCosto = suyas.findIndex((c) => esCosto(c) && !c.noSale && !(c.cuenta && c.porConfirmar));
       sumar(op.areaId, {
         ...subequipoVacio(op.id, op.nombre || (areaDe(op.areaId)?.nombre ?? "")),
         claveDelNombre: `${k}:nombre`,
@@ -2253,10 +2546,24 @@ export function resumenParaLaPagina(
         claveDeLaFalta: `${k}:falta`,
       });
     }
+    /* Los retos del TRASPASO (24 nov): lo que un equipo dijo de otro sale también en la primera fila del otro. Se guarda
+       UNA vez (en el equipo que lo contó) y en los dos lleva la misma clave: corregirlo o quitarlo en cualquiera de las dos
+       pestañas cambia el único que hay. */
+    for (const op of g!.operativas ?? []) {
+      if (!deLaPagina.has(op.areaId) || fuera(op.nombre) || sinExplorar.includes(op.areaId)) continue;
+      for (const r of op.retos) {
+        const destino = r.traspaso && r.traspaso !== op.areaId ? subequipos.get(r.traspaso)?.[0] : undefined;
+        if (!destino || fuera(r.texto) || destino.retos.piezas.some((x) => paraComparar(x.texto) === paraComparar(r.texto))) continue;
+        destino.retos.piezas.push({ ...pieza(r, `op:${op.id}:reto:${r.id}`), id: `${op.id}-${r.id}` });
+      }
+    }
     /* La pérdida que la empresa validó en la preventa (20 nov): en la primera fila de Ventas. Si esa fila ya tiene un costo
        dicho en las reuniones, la pérdida va primera entre sus cifras: las dos son de la empresa y ninguna tapa a la otra. */
-    const ventas = o.perdida ? resultados.find((r) => r.areaId === AREA_DE_VENTAS && !sinExplorar.includes(r.areaId)) : undefined;
-    const primera = ventas ? subequipos.get(ventas.areaId)?.[0] : undefined;
+    // Al equipo de SU meta (24 nov, `Meta.equipo`): la de clientes que se van es de Servicio. Sin equipo, Ventas; y si su
+    // equipo no tiene fila en la página (sin explorar o sin entrada), también Ventas: una pérdida validada no se pierde.
+    const conFila = (areaId: string) => !sinExplorar.includes(areaId) && !!subequipos.get(areaId)?.length && resultados.some((r) => r.areaId === areaId);
+    const areaDeLaPerdida = o.perdida?.areaId && conFila(o.perdida.areaId) ? o.perdida.areaId : AREA_DE_VENTAS;
+    const primera = o.perdida && conFila(areaDeLaPerdida) ? subequipos.get(areaDeLaPerdida)?.[0] : undefined;
     if (o.perdida?.validada && primera) {
       const p = cifraDeLaPerdida(o.perdida.validada);
       if (primera.costo) primera.cifras = [p, ...primera.cifras];
@@ -2288,10 +2595,7 @@ export function resumenParaLaPagina(
      equipo sin sesiones, lo que falta confirmar de una parte que ubica el nivel), después lo que escribió el agente o una
      persona. Lo del agente que nombra un equipo sin explorar no se repite (en Centauro, Marketing salía dos veces). */
   const pendientes: PendienteDeLaPagina[] = [];
-  for (const id of sinExplorar) {
-    const nombre = areaDe(id)!.nombre;
-    pendientes.push({ id: `x${id}`, tipo: "no-explorada", texto: `Conversar con tu equipo de ${nombre}: todavía no tuvimos una sesión con él.`, clave: null, areaNombre: nombre });
-  }
+  // «Conversar con tu equipo de…» ya no sale (24 nov): era texto genérico, y su pestaña ya dice «Por explorar».
   for (const a of areas) {
     if (!a.provisional || sinExplorar.includes(a.areaId)) continue;
     const dims = resultados.find((r) => r.areaId === a.areaId)!.dimensiones.filter((d) => a.provisional!.includes(d.nombre));
@@ -2332,7 +2636,21 @@ export function resumenParaLaPagina(
         .filter((e) => !fuera(`${e.nombre} ${e.texto} ${e.friccion ?? ""} ${e.quien ?? ""}`))
         .map((e) =>
           conCita(
-            { id: e.id, nombre: e.nombre, quien: e.quien, texto: e.texto, friccion: e.friccion, icono: e.icono ?? iconoDelPaso(e.nombre, !!e.continuo), continuo: !!e.continuo, clave: `etapa:${e.id}`, ...(e.mano ? { mano: true } : {}) },
+            {
+              id: e.id,
+              nombre: e.nombre,
+              quien: e.quien,
+              texto: e.texto,
+              friccion: e.friccion,
+              icono: e.icono ?? iconoDelPaso(e.nombre, !!e.continuo),
+              continuo: !!e.continuo,
+              clave: `etapa:${e.id}`,
+              ...(e.mano ? { mano: true } : {}),
+              // El traspaso al paso siguiente (24 nov): solo si lo hay, así una página de antes no cambia.
+              ...(e.traspaso && !e.continuo && !fuera(`${e.traspaso.a} ${e.traspaso.texto} ${e.traspaso.rotulo ?? ""}`)
+                ? { traspaso: conCita({ de: e.traspaso.de, a: e.traspaso.a, texto: e.traspaso.texto, cifra: e.traspaso.cifra, rotulo: e.traspaso.rotulo }, { citas: [...e.traspaso.citas] }) }
+                : {}),
+            },
             { citas: [...e.citas] },
           ),
         )
@@ -2416,7 +2734,7 @@ export function resumenParaLaPagina(
  */
 const ID = "[\\w-]{1,20}";
 export const CLAVE_DEL_RESUMEN = new RegExp(
-  `^(hicimos|recorrido:titulo|rojo:${ID}(:cifra|:texto)?|hallazgo:\\d{1,4}:${ID}|porque:\\d{1,4}|(entendimos|falta|pendiente):${ID}|confirmar:\\d{1,2}\\.\\d{1,2}|negocio:(${TIPOS_DEL_NEGOCIO.join("|")}):${ID}|etapa:${ID}(:nombre|:texto|:friccion)?|punto:${ID}(:titulo|:texto)?|op:${ID}(:nombre|:falta|:(org|bien|frena|reto):${ID}|:cifra:${ID}(:cifra|:texto|:nota|:confirmar)?)?)$`,
+  `^(hicimos|recorrido:titulo|rojo:${ID}(:cifra|:texto)?|hallazgo:\\d{1,4}:${ID}|porque:\\d{1,4}|(entendimos|falta|pendiente):${ID}|confirmar:\\d{1,2}\\.\\d{1,2}|negocio:(${TIPOS_DEL_NEGOCIO.join("|")}):${ID}|etapa:${ID}(:nombre|:texto|:friccion|:traspaso)?|punto:${ID}(:titulo|:texto)?|op:${ID}(:nombre|:falta|:(org|bien|frena|reto):${ID}|:cifra:${ID}(:cifra|:texto|:nota|:confirmar)?)?)$`,
 );
 
 /** Lo que mide una clave de lo quitado: corta, para que la lectura del Json nunca la rechace. */
@@ -2608,6 +2926,13 @@ export function editarElResumen(g: ResumenGuardado, clave: string, crudo: string
         if (texto && !b) return { ok: false, error: "Elige qué parte de la etapa cambias." };
         return { ok: true, resumen: quitar({ ...g, recorrido: etapas.filter((x) => x.id !== a) }, clavesDeQuitado("pieza", e, "etapa")) };
       }
+      // El traspaso al paso siguiente (24 nov): se corrige su texto o se quita (vacío), sin tocar la etapa.
+      if (b === "traspaso") {
+        if (!e.traspaso) return { ok: false, error: "Ese paso no tiene traspaso." };
+        const { traspaso, ...sinTraspaso } = e;
+        const cambiada = texto ? { ...e, traspaso: { ...traspaso, texto }, mano: true, origen: origenDe(e) } : { ...sinTraspaso, mano: true, origen: origenDe(e) };
+        return { ok: true, resumen: { ...g, recorrido: etapas.map((x) => (x.id === a ? cambiada : x)) } };
+      }
       if (b === "nombre" && !texto) return { ok: false, error: "La etapa necesita un nombre." };
       const cambiada = { ...e, [b]: b === "friccion" ? texto || null : texto, mano: true, origen: origenDe(e) };
       const sigue = !cifrasDeMas(`${cambiada.nombre} ${cambiada.texto} ${cambiada.friccion ?? ""}`, e.citas.map((c) => c.texto).join(" ")).length;
@@ -2632,14 +2957,25 @@ export function editarElResumen(g: ResumenGuardado, clave: string, crudo: string
         const c = op.cifras.find((x) => x.id === id);
         if (!c) return { ok: false, error: "Esa cifra ya no está." };
         // «Confirmar» (18 nov): una cifra que dijo Smarteam y la empresa no corrigió pasa a ser suya. Sin la nota de por confirmar.
-        if (campo === "confirmar") return { ok: true, resumen: conOp({ ...op, cifras: op.cifras.map((x) => (x.id === id ? { ...x, confirmada: true, estado: "declarado" as const, nota: null, mano: true, origen: origenDe(x) } : x)) }) };
+        // Una «calculado» (24 nov) sigue calculada: confirmarla es lo que la deja salir al cliente.
+        if (campo === "confirmar")
+          return {
+            ok: true,
+            resumen: conOp({ ...op, cifras: op.cifras.map((x) => (x.id !== id ? x : x.cuenta ? { ...x, confirmada: true, mano: true, origen: origenDe(x) } : { ...x, confirmada: true, estado: "declarado" as const, nota: null, mano: true, origen: origenDe(x) })) }),
+          };
         if (!campo || (campo === "texto" && quitarLaPieza)) {
           if (texto && !campo) return { ok: false, error: "Elige qué parte de la cifra cambias." };
           return { ok: true, resumen: conOp({ ...op, cifras: op.cifras.filter((x) => x.id !== id) }, clavesDeQuitado("rojo", c)) };
         }
         if (!texto && campo !== "nota") return { ok: false, error: "La cifra no puede quedar vacía." };
         // La cita se queda aunque ya no diga lo escrito: afuera no sale y adentro sale marcada (`porQueNoSaleLaCifra`).
-        const cambiada = { ...c, [campo]: campo === "nota" ? texto || null : texto, mano: true, origen: origenDe(c) };
+        const cambiada: CifraDelResumen = { ...c, [campo]: campo === "nota" ? texto || null : texto, mano: true, origen: origenDe(c) };
+        // Cambiar el número de una cuenta (24 nov) la deja de ser: ya no es lo que dan sus cifras, y sale por confirmar.
+        if (c.cuenta && campo === "cifra") {
+          delete cambiada.cuenta;
+          delete cambiada.confirmada;
+          cambiada.estado = "pendiente";
+        }
         return { ok: true, resumen: conOp({ ...op, cifras: op.cifras.map((x) => (x.id === id ? cambiada : x)) }) };
       }
       const campoDeLista = ({ org: "organizacion", bien: "bien", frena: "frena", reto: "retos" } as const)[b as "org" | "bien" | "frena" | "reto"];
@@ -2897,7 +3233,7 @@ export async function escribirElResumen(
   le: { ctx: ContextoDelResumen; personas: readonly string[]; firmas: Readonly<Record<string, string>>; areasFuera?: readonly string[] },
   pedir: (p: Anthropic.Messages.MessageCreateParamsNonStreaming) => Promise<Respuesta>,
 ): Promise<LoQueEscribioElAgente & { usos: Anthropic.Messages.Usage[]; cortado: boolean }> {
-  const reglas: Reglas = { personas: le.personas, areasFuera: le.areasFuera ?? [], parse: parseObject, firmas: le.firmas, dicho: dichoPorLaEmpresa(le.ctx.reuniones) };
+  const reglas: Reglas = { personas: le.personas, areasFuera: le.areasFuera ?? [], equipos: le.ctx.areas.map((x) => x.nombre), parse: parseObject, firmas: le.firmas, dicho: dichoPorLaEmpresa(le.ctx.reuniones) };
   const usos: Anthropic.Messages.Usage[] = [];
   const mal = (r: Respuesta, e: LoQueEscribioElAgente) => r.stop_reason === "max_tokens" || (!e.operativas.length && le.ctx.areas.length > 0);
   // Los nombres de pila que `textoValido` rechazaría: se le dicen, así no gasta piezas que se caen.
@@ -2961,6 +3297,22 @@ export async function escribirElResumen(
       e = { ...e, descartados: [...e.descartados, "el arreglo de las piezas falló: quedaron fuera"] };
     }
   }
+  // El piso (24 nov): un equipo con reunión propia sin su reto principal o sin dos retos se pide leyendo solo sus reuniones.
+  if (!cortado) {
+    for (const areaId of equiposBajoElPiso(e.operativas, ctx)) {
+      const area = ctx.areas.find((x) => x.id === areaId);
+      const suyas = ctx.reuniones.filter((x) => x.areaId === areaId && !esNotaDelEquipo(x)).slice(-2);
+      if (!area || !suyas.length) continue;
+      try {
+        const r7 = await pedir(pedidoDelPisoDelEquipo(area, suyas, e.operativas, ctx.areas.filter((x) => x.id !== areaId)));
+        usos.push(r7.usage);
+        const a = conElPisoDelEquipo(r7, areaId, e.operativas, ctx, reglas);
+        e = { ...e, operativas: a.operativas, descartados: [...e.descartados, ...a.descartados] };
+      } catch {
+        e = { ...e, descartados: [...e.descartados, `el piso de ${area.nombre} falló: quedó con lo que tenía`] };
+      }
+    }
+  }
   // Un equipo que tuvo reunión y no quedó en el recorrido: se le pide su etapa leyendo solo esa reunión, sin forzarla.
   if (!cortado) {
     for (const areaId of equiposSinEtapa(conLasEtapas(e.recorrido, []), e.operativas, ctx)) {
@@ -2990,7 +3342,7 @@ export async function escribirElResumen(
     recorrido: limpio.resumen.recorrido,
     puntos: limpio.resumen.puntos ?? [],
     descartados: [...e.descartados, ...limpio.quitados.map((q) => `antes de guardar, ${q.donde}: ${q.problema}`)],
-    avisos: avisosDelRecorrido(limpio.resumen.recorrido, limpio.resumen.operativas, ctx),
+    avisos: [...avisosDelRecorrido(limpio.resumen.recorrido, limpio.resumen.operativas, ctx), ...avisosDelPiso(limpio.resumen.operativas, ctx)],
     usos,
     cortado,
   };
@@ -3077,6 +3429,7 @@ export function auditarElResumen(g: ResumenGuardado, reuniones: readonly Reunion
 type LugarDeLaPieza =
   | { tipo: "negocio"; parte: string; id: string }
   | { tipo: "etapa"; id: string }
+  | { tipo: "traspaso"; id: string }
   | { tipo: "lista"; operativa: string; campo: "organizacion" | "bien" | "frena" | "retos"; id: string }
   | { tipo: "cifra"; operativa: string; id: string }
   | { tipo: "pendiente"; id: string }
@@ -3120,6 +3473,11 @@ function revisarLasPiezas(g: ParaRevisar, reuniones: readonly ReunionParaElResum
   for (const e of g.recorrido ?? []) {
     lugar = { tipo: "etapa", id: e.id };
     pieza(`Recorrido · ${e.nombre}`, `${e.nombre} ${e.texto}`, e.citas, e.friccion ?? "", e.mano);
+    // El traspaso (24 nov), aparte: si no pasa, se quita solo él.
+    if (e.traspaso) {
+      lugar = { tipo: "traspaso", id: e.id };
+      pieza(`Recorrido · traspaso de ${e.nombre}`, e.traspaso.texto, e.traspaso.citas, `${e.traspaso.cifra ?? ""} ${e.traspaso.rotulo ?? ""}`, e.mano);
+    }
   }
   for (const op of g.operativas ?? []) {
     for (const [k, campo, xs] of [
@@ -3137,10 +3495,10 @@ function revisarLasPiezas(g: ParaRevisar, reuniones: readonly ReunionParaElResum
       lugar = { tipo: "cifra", operativa: op.id, id: c.id };
       const donde = `${op.nombre} · cifra «${c.cifra}»`;
       citasValidas(donde, c.citas);
-      for (const problema of problemasDeLaCifra(c, dicho, reuniones)) mal(donde, problema);
+      for (const problema of c.cuenta ? problemasDelCalculado(c) : problemasDeLaCifra(c, dicho, reuniones)) mal(donde, problema);
       if (voseoDelResumen(`${c.cifra} ${c.texto} ${c.nota ?? ""}`).length) mal(donde, "está en voseo");
       if (/\bprovisional|\bhipotesis\b/.test(paraComparar(`${c.texto} ${c.nota ?? ""}`))) mal(donde, "dice «provisional» o «hipótesis»");
-      const e = estadoDeLaCifra({ estado: c.estado, cifra: c.cifra, nota: c.nota, citas: c.citas, mano: c.mano, confirmada: c.confirmada });
+      const e = estadoDeLaCifra({ estado: c.estado, cifra: c.cifra, nota: c.nota, citas: c.citas, mano: c.mano, confirmada: c.confirmada, cuenta: c.cuenta });
       if (e.estado !== c.estado) mal(donde, `está guardada como «${c.estado}» y con sus citas es «${e.estado}»`);
       if (c.nota && CITA_EN_LA_NOTA.test(c.nota)) mal(donde, "la nota cita lo dicho o dice quién lo dijo");
     }
@@ -3171,7 +3529,14 @@ export function quitarLoQueNoPasa<T extends ParaRevisar>(g: T, reuniones: readon
   const resumen: T = {
     ...g,
     negocio: Object.fromEntries(Object.entries(g.negocio ?? {}).map(([parte, ps]) => [parte, (ps ?? []).filter((p) => !fuera({ tipo: "negocio", parte, id: p.id }))])),
-    recorrido: (g.recorrido ?? []).filter((e) => !fuera({ tipo: "etapa", id: e.id })),
+    recorrido: (g.recorrido ?? [])
+      .filter((e) => !fuera({ tipo: "etapa", id: e.id }))
+      .map((e) => {
+        if (!e.traspaso || !fuera({ tipo: "traspaso", id: e.id })) return e;
+        const { traspaso, ...sin } = e;
+        void traspaso;
+        return sin;
+      }),
     operativas: (g.operativas ?? []).map((op) => ({
       ...op,
       organizacion: op.organizacion.filter((p) => !fuera({ tipo: "lista", operativa: op.id, campo: "organizacion", id: p.id })),

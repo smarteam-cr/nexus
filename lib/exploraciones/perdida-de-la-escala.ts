@@ -12,6 +12,7 @@
  * va como «por validar», sin el monto (la coordinación, 20 nov). Solo el Resumen y la página de cada área: la propuesta, el
  * correo de seguimiento y el handoff no la leen.
  */
+import { EQUIPOS } from "./equipos";
 import { leerContenido } from "./esquemas";
 import { calcularLaPerdida, formatearMonto } from "./perdida";
 
@@ -39,6 +40,11 @@ export interface LaPerdidaEnLaEscala {
   validada: PerdidaDeLaEscala | null;
   /** Hay una cuenta hecha con las cifras de hoy que nadie validó con el cliente: va «por validar», sin monto. */
   porValidar: { meta: string } | null;
+  /**
+   * El equipo de la escala al que va (24 nov): el de su meta (`Meta.equipo`; la de clientes que se van, de Servicio).
+   * null: la meta no dice equipo, y va a Ventas como antes.
+   */
+  areaId?: string | null;
 }
 
 /**
@@ -49,9 +55,12 @@ export interface LaPerdidaEnLaEscala {
 export function perdidaDeLaEscala(contenido: unknown): LaPerdidaEnLaEscala {
   const guardada = validadaDe(contenido);
   let calculo: ReturnType<typeof calcularLaPerdida> = null;
+  let metas: readonly { que: string; equipo?: keyof typeof EQUIPOS }[] = [];
   if (contenido && typeof contenido === "object" && !Array.isArray(contenido)) {
     try {
-      calculo = calcularLaPerdida(leerContenido(contenido).casillas);
+      const casillas = leerContenido(contenido).casillas;
+      calculo = calcularLaPerdida(casillas);
+      metas = casillas.metas ?? [];
     } catch {
       calculo = null;
     }
@@ -59,7 +68,10 @@ export function perdidaDeLaEscala(contenido: unknown): LaPerdidaEnLaEscala {
   const vieja = !!guardada && !!calculo && calculo.huella !== guardada.huella;
   const validada = vieja ? null : guardada;
   const porValidar = !validada && calculo ? { meta: calculo.meta.replace(/[«»]/g, "").slice(0, 200) } : null;
-  return { validada, porValidar };
+  // El equipo de la meta: el del cálculo de hoy o, si ya no se calcula, el de la meta con el mismo nombre.
+  const equipo = validada ? (calculo?.huella === validada.huella ? calculo.equipo : metas.find((m) => m.que.trim() === validada.meta)?.equipo) : calculo?.equipo;
+  const areaId = equipo ? (EQUIPOS[equipo]?.area ?? null) : null;
+  return { validada, porValidar, ...(areaId ? { areaId } : {}) };
 }
 
 /** La pérdida validada (su `contenido` crudo), o null si no hay una validada con su cuenta. */
@@ -90,5 +102,5 @@ function validadaDe(contenido: unknown): PerdidaDeLaEscala | null {
 export function perdidaParaElAgente(l: LaPerdidaEnLaEscala): string {
   const p = l.validada;
   if (!p) return "";
-  return `La pérdida que la empresa VALIDÓ con quien lleva la preventa (sale sola en la página, en la fila de Ventas: NO escribas su número; úsala para saber qué pesa): pierde ~${p.cifra} ${p.rotulo}. La cuenta, con sus cifras: ${p.cuenta}.`;
+  return `La pérdida que la empresa VALIDÓ con quien lleva la preventa (sale sola en la página, en la fila del equipo de su meta: NO escribas su número; úsala para saber qué pesa, sin quitarle espacio a los otros equipos): pierde ~${p.cifra} ${p.rotulo}. La cuenta, con sus cifras: ${p.cuenta}.`;
 }

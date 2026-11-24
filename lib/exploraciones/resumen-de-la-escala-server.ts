@@ -79,6 +79,8 @@ import { bloquearFila, escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFil
 
 /** Cuántas reuniones lee como mucho (las más recientes de las sesiones) y cuánto texto entre todas. */
 const MAX_REUNIONES = 8;
+/** Cuántas reuniones se le guardan a cada equipo antes de llenar con las más nuevas (24 nov: todo se inclinaba a Ventas). */
+const REUNIONES_POR_EQUIPO = 2;
 // 18 nov: de 320 a 400 mil. Las siete reuniones de Cemaco (unos 360 mil con los nombres de quien habla) no cabían y se cortaba
 // la de cobranza, la más importante. Unos 25 mil tokens más de entrada: cerca de 0,08 USD por armado.
 const TOPE_DE_TODAS = 400_000;
@@ -119,6 +121,11 @@ const entornoDe = (f: Pick<FilaDeExploracion, "edicion" | "perfilCierre" | "perf
   perfilDespues: f.perfilDespues,
   escalaVersion: escala.version,
 });
+
+/** Los equipos del cliente cuya área de la escala NO está en la página (con área: Dirección no tiene y no se excluye). */
+function equiposQueNoVe(areasQueVe: readonly string[]): Set<ClaveDeEquipo> {
+  return new Set((Object.keys(EQUIPOS) as ClaveDeEquipo[]).filter((k) => !!EQUIPOS[k].area && !areasQueVe.includes(EQUIPOS[k].area!)));
+}
 
 /** Lo que el agente sabe de un área de la página: niveles por nombre, sus vecinos y lo que más la frena. */
 function areaParaElResumen(escala: Escala, x: ResultadoDeUnArea, contexto: string | null): AreaParaElResumen {
@@ -168,7 +175,12 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
   };
   // ⛔ Invariante 1: las dos pasan por el chokepoint de sesiones de ESTA empresa.
   const [conTexto, todas] = await Promise.all([
-    transcripcionesDeLaExploracion(deLaFila, { cuantas: MAX_REUNIONES, caracteres: TOPE_DE_UNA * 2 }, ahora),
+    transcripcionesDeLaExploracion(
+      deLaFila,
+      // Sin lugar para los equipos que el cliente no ve: sus reuniones no se leen (revisión del 24 nov).
+      { cuantas: MAX_REUNIONES, caracteres: TOPE_DE_UNA * 2, porEquipo: REUNIONES_POR_EQUIPO, sinLugar: equiposQueNoVe(l.deLasAreas.map((x) => x.resultado.areaId)) },
+      ahora,
+    ),
     reunionesDeLaExploracion(deLaFila, ahora),
   ]);
   const fuera = new Set(estado.contenido.fuera ?? []);

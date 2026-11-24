@@ -39,10 +39,16 @@ export function primeraOracion(texto: string): string {
   return `${corte.slice(0, Math.max(corte.lastIndexOf(" "), 1)).replace(/[,;:—-]+$/, "")}…`;
 }
 
-/** El detalle de cada dimensión preguntada y ubicada del resultado, por su id. */
+/**
+ * El detalle de cada dimensión preguntada y ubicada del resultado, por su id. `conAlgoVisto` (la escala de una empresa,
+ * 24 nov): las partes de las que se vio algo o que el Resumen liga a un reto; una parte fuera de ahí, sin nada escrito por
+ * una persona o la IA, no lleva detalle (Centauro: «más reuniones» en una parte de la que nadie habló). El test público no
+ * lo pasa y no cambia.
+ */
 export function detallesDelResultado(
   escala: Escala,
   r: Pick<ResultadoDelTest, "areaId" | "dimensiones"> & { redaccion?: ResultadoDelTest["redaccion"] },
+  o: { conAlgoVisto?: ReadonlySet<string> } = {},
 ): Record<string, DetalleDeLaDimension> {
   const area = escala.areas.find((a) => a.id === r.areaId);
   if (!area) return {};
@@ -62,6 +68,9 @@ export function detallesDelResultado(
     const debajoDeLaBase = LETRAS.indexOf(d.nivel) < LETRAS.indexOf("F");
     const deLaEscala = debajoDeLaBase ? dim.costoDeQuedarse : (nivel?.resultado ?? nivel?.descripcion ?? "");
     // La de la IA se escribió para el nivel de al lado: si el paso salta (de Deficiente a Funcional), sale la de la escala.
+    /* Sin nada visto ni escrito para ella (24 nov), la parte no lleva detalle: ni la tarjeta del radar ni «Ver detalles»
+       (sin `siguiente`, la página diría «Ya está en el nivel más alto», y no es cierto). */
+    if (o.conAlgoVisto && !o.conAlgoVisto.has(d.id) && !ia?.impacto && !ia?.prioridad) continue;
     const prioridad = (letraSiguiente === LETRAS[LETRAS.indexOf(d.nivel) + 1] ? ia?.prioridad : null) || primeraOracion(siguiente?.descripcion ?? "");
     out[d.id] = {
       impacto: ia?.impacto || primeraOracion(deLaEscala) || null,

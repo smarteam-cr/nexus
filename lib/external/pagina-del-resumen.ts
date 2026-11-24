@@ -145,12 +145,18 @@ export interface ListaDeLaPagina {
  * Cómo se sabe una cifra (10 nov): DECLARADO, la dijo la empresa; ESTIMADO, la calculó o la resumió alguien (con su base
  * y sus supuestos a la vista); PENDIENTE, se mencionó y falta confirmarla. Siempre con texto, nunca solo con color.
  */
-export type EstadoDeLaCifra = "declarado" | "estimado" | "pendiente";
-export const ESTADOS_DE_LA_CIFRA: readonly EstadoDeLaCifra[] = ["declarado", "estimado", "pendiente"];
+export type EstadoDeLaCifra = "declarado" | "estimado" | "pendiente" | "calculado";
+/**
+ * CALCULADO (24 nov, Elías: «el costo se calcula con las cifras que dio el cliente»): la cifra es una cuenta que hizo el
+ * CÓDIGO con números que dijo la empresa, cada uno con su cita (lib/exploraciones/cuenta-con-tus-cifras.ts). La cuenta va a
+ * la vista; afuera sale solo si quien presenta la confirmó.
+ */
+export const ESTADOS_DE_LA_CIFRA: readonly EstadoDeLaCifra[] = ["declarado", "estimado", "pendiente", "calculado"];
 export const ETIQUETA_DEL_ESTADO: Record<EstadoDeLaCifra, string> = {
   declarado: "Lo dijiste tú",
   estimado: "Estimado",
   pendiente: "Por confirmar",
+  calculado: "Con tus cifras",
 };
 
 export interface CifraDeLaPagina {
@@ -182,6 +188,11 @@ export interface CifraDeLaPagina {
    * texto fijo del Resumen `nombreFijo` (`CLAVES.delResumen`), atado a la huella de su cuenta. `cuenta`: la cuenta a la vista, que es su nota.
    */
   dePerdida?: { nombreFijo: string; cuenta: string };
+  /**
+   * Una cifra «calculado» (24 nov): la cuenta a la vista, hecha por el código con las cifras de la empresa («10 clientes ×
+   * US$ 85 = US$ 850 al mes»). Solo la trae una calculada.
+   */
+  cuenta?: string;
 }
 
 /** La etiqueta del estado de una cifra: la pérdida de la preventa la validó la empresa (20 nov), no la dijo en una reunión. */
@@ -249,6 +260,23 @@ export interface EtapaDeLaPagina {
   clave: string;
   citas?: CitaDelResumen[];
   mano?: boolean;
+  /**
+   * El traspaso de este paso al siguiente (24 nov): de qué equipo a cuál, qué pasa y, si la empresa la dijo, la cifra de lo
+   * que pasa de uno a otro («180 leads al mes»). Solo lo trae un paso con un traspaso verificado.
+   */
+  traspaso?: TraspasoDeLaPagina;
+}
+
+/** Lo que pasa entre dos pasos del recorrido, con su cifra si la empresa la dijo (el dibujo pone el volumen en la flecha). */
+export interface TraspasoDeLaPagina {
+  de: string;
+  a: string;
+  texto: string;
+  /** El número en grande («180»), o null si no se dijo. */
+  cifra: string | null;
+  /** Su rótulo («leads al mes»), o null. */
+  rotulo: string | null;
+  citas?: CitaDelResumen[];
 }
 
 /**
