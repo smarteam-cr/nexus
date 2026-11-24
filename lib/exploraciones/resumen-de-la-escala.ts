@@ -78,7 +78,7 @@ import type { LaPerdidaEnLaEscala, PerdidaDeLaEscala } from "./perdida-de-la-esc
 import { bloqueDeLasNotas, esNotaDelEquipo } from "./notas-del-equipo";
 import { cuentaConTusCifras, MAX_FACTORES, monedaDelFactor } from "./cuenta-con-tus-cifras";
 import { ROTULO_DE_LO_QUE_LO_CAUSA, ROTULO_DEL_RETO_PRINCIPAL } from "./rotulos-del-resumen";
-import { monedaDe } from "./perdida";
+import { monedaDe, porMesDe, porMesDelPrimero } from "./perdida";
 export { enHoras, MAX_ETIQUETAS, MAX_LINEAS_DEL_MAPA, MAX_PARRAFOS_DE_LA_PORTADA, TOPE_A_MANO, TOPE_DE_LA_CIFRA, TOPE_DE_UN_NOMBRE, TOPE_DEL_TITULO_DEL_PUNTO, TOPE_DEL_TITULO_DEL_RECORRIDO };
 export type { AreaDelResumenDeLaPagina, CitaDelResumen, DatoRojoDeLaPagina, EstadoDeLaCifra, LoQueHicimos, PreguntaDelResumen, ResumenDeLaPagina, ReunionMalLeida, TipoDelNegocio };
 
@@ -1326,6 +1326,11 @@ export interface PiezaPorArreglar {
   areaId?: string | null;
   /** Un reto del traspaso (24 nov): el otro equipo; el reto corregido lo conserva. */
   traspaso?: string;
+  /**
+   * Las citas que dio el agente, si se le sumó una encontrada (24 nov): de su vecindad valen los números chicos, también
+   * en la pieza corregida.
+   */
+  delAgente?: CitaDelResumen[];
 }
 
 /** Una etapa por corregir: lo que escribió el agente, sus citas tal como las devolvió y por qué se cayó. */
@@ -1460,6 +1465,12 @@ export function calculadaConSusCitas(
     if (!rotulo.ok) return { ok: false, motivo: `el rótulo de «${valor}» ${rotulo.motivo}` };
     if (cifrasDeMas(rotulo.texto, cita.texto).length || herramientasDeMas(rotulo.texto, cita.texto, dichoEnSusReuniones([cita], ctx.reuniones)).length)
       return { ok: false, motivo: `el rótulo de «${valor}» dice algo que su cita no dice` };
+    /* Si es de lo que se pierde o de lo que entra lo dice la empresa, no el rótulo del agente (revisión final del 24 nov:
+       «cerramos unos 25 clientes al mes» rotulado «clientes que se van»). Se mira la cita y lo que se dijo alrededor. */
+    const rot = paraComparar(rotulo.texto);
+    if (DICE_UNA_PERDIDA.test(rot) && !DICE_UNA_PERDIDA.test(paraComparar(`${alrededorDeLaCita(cita, ctx.reuniones)} ${cita.texto}`)))
+      return { ok: false, motivo: `el rótulo de «${valor}» dice una pérdida que su cita no dice` };
+    if (DICE_UNA_GANANCIA.test(rot) && DICE_UNA_PERDIDA.test(paraComparar(cita.texto))) return { ok: false, motivo: `el rótulo de «${valor}» dice una ganancia y su cita habla de una pérdida` };
     factores.push({ valor: valor.slice(0, 40), rotulo: rotulo.texto, cita });
   }
   const hecha = cuentaConTusCifras(factores);
@@ -1489,7 +1500,7 @@ export function calculadaConSusCitas(
 
 /** Lo que se pierde o no se cobra («se van», «no cierran», «vencidas»). Sobre `paraComparar`. */
 const DICE_UNA_PERDIDA =
-  /\b(se van|se va|se fueron|se nos van|se retir\w*|pierd\w*|perd\w*|baja|bajas|churn|desercion|no renuev\w*|no cierra\w*|no se cierra\w*|no se cobra\w*|sin cobrar|vencid\w*|morosi\w*|mora|cancela\w*|abandon\w*|fuga|dejan de|renuncia\w*)\b/;
+  /\b(se van|se va|se fueron|se nos van|se nos va|se retir\w*|pierd\w*|perd\w*|baja|bajas|churn|desercion|no renuev\w*|no cierra\w*|no se cierra\w*|no se cobra\w*|no se factura\w*|sin cobrar|vencid\w*|morosi\w*|mora|cancela\w*|abandon\w*|fuga|se escapa\w*|dejan de|deja de|renuncia\w*)\b/;
 /** Lo que se gana o entra («ventas nuevas», «clientes nuevos», «cierres»). Sobre `paraComparar`. */
 const DICE_UNA_GANANCIA = /\b(ventas? nuevas?|nuevas? ventas?|clientes nuevos|nuevos clientes|cierres?|captad\w*|captacion|ingresos nuevos|crecimiento|ganancia\w*)\b/;
 
@@ -1497,7 +1508,7 @@ const DICE_UNA_GANANCIA = /\b(ventas? nuevas?|nuevas? ventas?|clientes nuevos|nu
 export const sinMoneda = (x: string) =>
   x
     // «en dólares», «de colones»: se va con su preposición, para que la frase no quede rota («pérdida mensual en por…»).
-    .replace(/\s+(?:en|de)\s+(?:us\s?\$|usd|d[oó]lares|d[oó]lar|colones|euros?|quetzales)(?![\p{L}])/giu, "")
+    .replace(/\s+(?:en|de)\s+(?:us\s?\$|usd|d[oó]lares|d[oó]lar|colones|crc|euros?|eur|quetzales|gtq)(?![\p{L}])/giu, "")
     .replace(/us\s?\$|\busd\b|d[oó]lar(es)?|₡|\bcolones\b|\bcrc\b|€|\beuros?\b|\beur\b|\bquetzal(es)?\b|\bgtq\b|\bQ\s?(?=\d)|\$/gi, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -1597,7 +1608,9 @@ function unidadDe(texto: string, n: { desde: number; largo: number }, cuantas = 
   const resto = texto.slice(n.desde + n.largo);
   const porcentaje = /^\s*(%|por ciento)/i.test(resto);
   // Hasta el primer signo: en «1800 al mes, ¿verdad?», «verdad» no dice qué cuenta el número.
-  const palabras = paraComparar(resto.split(/[.,;:?!¿¡()]/)[0] ?? "")
+  // También en «y», «pero», «aunque», «mientras» o «sino»: lo de después es otra frase («500 clientes pero activos son 300»,
+  // «500 clientes y solo uno atendiendo»).
+  const palabras = paraComparar(resto.split(/[.,;:?!¿¡()]|\s(?:y|e|pero|aunque|mientras|sino)\s/i)[0] ?? "")
     .split(" ")
     .filter(Boolean)
     .slice(0, cuantas)
@@ -1623,7 +1636,7 @@ const nombraAlguna = (texto: string, ws: readonly string[]) => {
 };
 
 /** Otro momento u otra cosa alrededor de un número (un piloto, una meta, lo que tenían antes). Sobre `paraComparar`. */
-const OTRO_MOMENTO = new Set(["tuvimos", "teniamos", "tenia", "tuvo", "habia", "hubo", "antes", "anterior", "pasado", "piloto", "prueba", "meta", "objetivo", "queremos", "quisieramos", "esperamos", "proyectamos", "llegar", "competencia"]);
+const OTRO_MOMENTO = new Set(["tuvimos", "tuvieron", "teniamos", "tenian", "tenia", "tuvo", "habia", "hubo", "era", "eran", "fue", "fueron", "estaba", "estaban", "arrancamos", "empezamos", "antes", "anterior", "pasado", "piloto", "prueba", "meta", "objetivo", "queremos", "quisieramos", "esperamos", "proyectamos", "llegar", "competencia"]);
 /** «de esos 1800»: el número retoma uno que se dijo antes. Sobre `paraComparar` de lo que va justo antes del número. */
 const RETOMA_LO_DICHO = /\b(esos|esas|estos|estas)$/;
 /** Una intervención corta que es la respuesta a una pregunta («Aproximadamente unos 100»): su unidad está en la pregunta. */
@@ -1644,7 +1657,7 @@ function hablaDeLoMismo(
   r: ReunionParaElResumen,
   t: TurnoNumerado,
   valor: string,
-  pieza: { porcentaje: boolean; palabras: string[]; mide: string[]; texto: string },
+  pieza: { porcentaje: boolean; palabras: string[]; mide: string[]; texto: string; periodo: number | null },
   vueltas = 1,
 ): boolean {
   const aqui = numerosDistintivos(t.texto).find((x) => x.valor === valor);
@@ -1652,13 +1665,22 @@ function hablaDeLoMismo(
   /* Un número de otro momento o de otra cosa no sostiene el de hoy (revisión del 24 nov, segunda vuelta: «tuvimos 500
      clientes en el piloto» sostenía «~500 clientes activos»): si alrededor se habla de antes, de una prueba o de una meta,
      y la pieza no, no vale. */
-  if (paraComparar(alrededorDe(t.texto, aqui.desde)).split(" ").some((w) => OTRO_MOMENTO.has(w) && !nombraAlguna(pieza.texto, [w]))) return false;
-  const suya = unidadDe(t.texto, aqui);
   const cerca = r.turnos.filter((u) => u.n <= t.n && u.n >= t.n - VECINOS).map((u) => u.texto).join(" ");
+  // En una respuesta corta, el momento lo dice la pregunta («¿Y cuántos clientes tuvieron en el piloto?» · «Como unos 500»).
+  const corta = vueltas === 0 || palabrasDe(t.texto).length <= PALABRAS_DE_UNA_RESPUESTA_CORTA;
+  const alrededor = corta ? cerca : alrededorDe(t.texto, aqui.desde);
+  if (paraComparar(alrededor).split(" ").some((w) => OTRO_MOMENTO.has(w) && !nombraAlguna(pieza.texto, [raizDe(w)]))) return false;
+  // El mismo período (revisión final del 24 nov: «al año entran como 1800 tickets» sostenía «~1.800 tickets al mes»).
+  const periodo = periodoDelNumero(t.texto, aqui.desde) ?? (corta ? porMesDe(cerca) : null);
+  if (pieza.periodo !== null && periodo !== null && periodo !== pieza.periodo) return false;
+  const suya = unidadDe(t.texto, aqui);
   if (pieza.porcentaje) return suya.porcentaje && (!pieza.mide.length || nombraAlguna(cerca, pieza.mide));
   if (suya.porcentaje) return false;
   if (suya.palabras.length) {
     if (!suya.palabras.some((w) => pieza.palabras.includes(w))) return false;
+    // Si las dos le agregan algo a la unidad, es lo mismo («500 clientes inactivos» no sostiene «500 clientes activos»).
+    const agregaLaPieza = pieza.palabras.some((w) => !suya.palabras.includes(w));
+    if (agregaLaPieza && suya.palabras.some((w) => !pieza.palabras.includes(w))) return false;
     /* Lo que la pieza agrega a la unidad no puede estar dicho de OTRO número de la misma intervención («teníamos 500
        clientes, ahora activos son unos 300» no sostiene «500 clientes activos»); si la intervención no lo nombra, es el
        rótulo del agente («tickets de soporte») y vale. */
@@ -1668,11 +1690,18 @@ function hablaDeLoMismo(
   }
   // La vez anterior que se dijo el número (la que se retoma) se mira con lo que se hablaba ahí, sea corta o larga: basta
   // la cabeza de la unidad («tickets» en «tickets de soporte al mes»).
-  const corta = vueltas === 0 || palabrasDe(t.texto).length <= PALABRAS_DE_UNA_RESPUESTA_CORTA;
   if (corta && !!pieza.palabras.length && nombraAlguna(cerca, pieza.palabras.slice(0, 1))) return true;
   if (vueltas <= 0 || !RETOMA_LO_DICHO.test(paraComparar(t.texto.slice(0, aqui.desde)).trim())) return false;
   const antes = [...r.turnos].reverse().find((u) => u.n < t.n && numerosDistintivos(u.texto).some((x) => x.valor === valor));
   return !!antes && hablaDeLoMismo(r, antes, valor, pieza, vueltas - 1);
+}
+
+/**
+ * El período de un número en un texto: el que sigue al número hasta el próximo número («1.800 tickets al mes»), o el de
+ * las seis palabras de antes («al año entran como 1800»). null si no dice.
+ */
+function periodoDelNumero(texto: string, desde: number): number | null {
+  return porMesDelPrimero(texto.slice(desde)) ?? porMesDe(texto.slice(0, desde).split(/\s+/).slice(-6).join(" "));
 }
 
 /** El pedazo de una intervención alrededor de un número, como se dijo: hasta 8 palabras antes y 12 después. */
@@ -1695,7 +1724,7 @@ export function citasDeSusNumeros(texto: string, citas: readonly CitaDelResumen[
   const out: CitaDelResumen[] = [];
   for (const n of faltan) {
     const valor = n.valor;
-    const pieza = { ...unidadDe(texto, n), mide: queMideDe(texto, n), texto };
+    const pieza = { ...unidadDe(texto, n), mide: queMideDe(texto, n), texto, periodo: periodoDelNumero(texto, n.desde) };
     // Sin saber qué cuenta el número en la pieza, no se puede decir que otra intervención hable de lo mismo.
     if (!pieza.porcentaje && !pieza.palabras.length) continue;
     const candidatos = reuniones.flatMap((r) =>
@@ -1741,7 +1770,9 @@ const VAN_CON_LA_GENTE = new Set(["mas", "personas", "persona", "otros", "otras"
 /** Los roles con que alguien de la empresa se presenta o lo presentan, para buscar la cita de una línea. Sobre `paraComparar`. */
 const ROLES_DEL_MAPA = new Set(["lidera", "lidero", "lideran", "lider", "lideres", "gerente", "gerencia", "general", "director", "directora", "direccion", "dueno", "duena", "jefe", "jefa", "jefatura", "supervisor", "supervisora", "coordinador", "coordinadora", "encargado", "encargada", "encargo", "fundador", "fundadora", "socio", "socia"]);
 /** Lo único que puede ir entre un nombre y su rol («Fernando, nuestro gerente general», «el gerente general, Fernando»). */
-const ENTRE_NOMBRE_Y_ROL = new Set(["nuestro", "nuestra", "el", "la", "es", "que", "quien", "como", "de", "del", "y", "e", "este", "digamos", "pues", "actual"]);
+const ENTRE_NOMBRE_Y_ROL = new Set(["nuestro", "nuestra", "el", "la", "es", "que", "quien", "como", "de", "del", "este", "digamos", "pues", "actual"]);
+/** Lo que, antes del rol, dice que ya no lo es («el ex gerente general», «el anterior gerente»). Sobre `paraComparar`. */
+const ANTES_DEL_ROL_YA_NO = new Set(["ex", "anterior", "antiguo", "antigua", "previo", "previa"]);
 /**
  * Quien habla se presenta: «yo» o «me» (con a lo sumo un «digamos», «este», «pues» o «solo» en el medio) y uno de estos
  * verbos, con el rol o el equipo después y solo esto en el medio (`ENTRE_VERBO_Y_EQUIPO`): «yo digamos lidero el equipo de
@@ -1787,7 +1818,8 @@ function citaDeQuienEs(texto: string, ctx: ContextoDelResumen, equipos: Readonly
   const dePila = new Set((ctx.gente ?? []).map((n) => paraComparar(n.trim().split(/\s+/)[0] ?? "")).filter((x) => x.length >= 3));
   const personas = personasDeLaLinea(texto, dePila, equipos);
   const roles = new Set(paraComparar(texto).split(" ").filter((w) => ROLES_DEL_MAPA.has(w) || equipos.has(w)));
-  if (!personas.size || !roles.size) return null;
+  // Una cita encontrada sostiene a UNA persona: con dos en la línea, la otra saldría con un cargo que nadie le dio.
+  if (personas.size !== 1 || !roles.size) return null;
   const esRolOEquipo = (w: string) => roles.has(w) || ROLES_DEL_MAPA.has(w) || equipos.has(w);
   const candidatos: { distancia: number; r: ReunionParaElResumen; t: TurnoNumerado; desde: number; hasta: number }[] = [];
   for (const r of ctx.reuniones) {
@@ -1796,7 +1828,8 @@ function citaDeQuienEs(texto: string, ctx: ContextoDelResumen, equipos: Readonly
       if (!esDelCliente(r, t.hablante)) continue;
       const ws = t.texto.split(/\s+/).filter(Boolean);
       const ps = ws.map((w) => paraComparar(w));
-      const limpio = (desde: number, hasta: number) => !ps.slice(desde, Math.min(ps.length, hasta + 4)).some((w) => NIEGA_O_YA_NO.has(w));
+      const limpio = (desde: number, hasta: number) =>
+        !ps.slice(desde, Math.min(ps.length, hasta + 4)).some((w) => NIEGA_O_YA_NO.has(w)) && !ps.slice(Math.max(0, desde - 3), desde).some((w) => ANTES_DEL_ROL_YA_NO.has(w));
       const deRol = ps.flatMap((w, i) => (roles.has(w) ? [i] : []));
       for (const [nombre, apellidos] of personas) {
         // El nombre, escrito como nombre: con su mayúscula.
@@ -1806,7 +1839,9 @@ function citaDeQuienEs(texto: string, ctx: ContextoDelResumen, equipos: Readonly
             const desde = Math.min(x, y);
             const hasta = Math.max(x, y);
             const medio = ps.slice(desde + 1, hasta);
-            const vale = y > x ? medio.every((w) => ENTRE_NOMBRE_Y_ROL.has(w) || apellidos.has(w)) : medio.every((w) => ENTRE_NOMBRE_Y_ROL.has(w) || esRolOEquipo(w));
+            // Con el rol primero, «de» justo antes del nombre es de otra persona («la jefa de Rosa»).
+            const vale =
+              y > x ? medio.every((w) => ENTRE_NOMBRE_Y_ROL.has(w) || apellidos.has(w)) : medio.every((w) => ENTRE_NOMBRE_Y_ROL.has(w) || esRolOEquipo(w)) && !["de", "del"].includes(ps[x - 1] ?? "");
             if (hasta - desde <= PALABRAS_ENTRE_NOMBRE_Y_ROL && vale && limpio(desde, hasta)) candidatos.push({ distancia: hasta - desde, r, t, desde, hasta });
           }
         // Esa persona se presenta: quien habla tiene ese nombre de pila (y sus apellidos, si la línea los da).
@@ -1898,7 +1933,11 @@ export function lineaDelMapa(
     .find((w) => (!/^\d+$/.test(w) && !deLosNombres.has(w) && !NO_SON_NOMBRES_DEL_MAPA.has(w) && !VAN_CON_LA_GENTE.has(w)) || DOLOR_EN_EL_MAPA.test(w));
   if (deMas) {
     descartados.push(`${donde}: dice algo más que quién está («${deMas}» en «${p.texto.slice(0, 60)}»)`);
-    arreglar?.({ texto: p.texto, citas: p.citas, problema: `dice algo más que quién está («${deMas}»): deja solo quién está y dónde` });
+    /* Si lo de más dice que alguien ya no está o ya no tiene ese rol («se fue en marzo», «era la jefa», «ya no»), se cae:
+       pedirlo corregido con una cita que no lo dice podía devolver a esa persona como vigente (revisión final del 24 nov). */
+    const gente = paraComparar(p.texto.slice(i + 1)).split(" ");
+    if (!gente.some((w) => NIEGA_O_YA_NO.has(w) || ANTES_DEL_ROL_YA_NO.has(w)))
+      arreglar?.({ texto: p.texto, citas: p.citas, problema: `dice algo más que quién está («${deMas}»): deja solo quién está y dónde` });
     return null;
   }
   const texto = p.texto;
@@ -1924,10 +1963,12 @@ function conSuCita(
   donde: string,
   tope = TOPE_DEL_TEXTO_DEL_RESUMEN,
   extras: readonly string[] = [],
-  porArreglar?: (x: { texto: string; citas: CitaDelResumen[]; problema: string }) => void,
+  porArreglar?: (x: { texto: string; citas: CitaDelResumen[]; problema: string; delAgente?: CitaDelResumen[] }) => void,
+  vecinosDe?: readonly CitaDelResumen[],
 ): { texto: string; citas: CitaDelResumen[] } | null {
   const x = objeto(v);
   let citas = citasVerificadas([...arreglo(x.citas), ...(x.cita ? [x.cita] : [])], ctx.reuniones);
+  const delAgente = citas;
   let lo = citas.map((c) => c.texto).join(" ");
   const crudo = cadena(typeof v === "string" ? v : x.texto);
   // Una conclusión en la cola («…, lo que limita el crecimiento») se corta antes de mirar el resto.
@@ -1936,7 +1977,7 @@ function conSuCita(
   // Lo de forma, con alguna cita verificada, se pide corregido (12 nov: se tiraba entero).
   const caer = (motivo: string, texto: string) => {
     descartados.push(`${donde}: ${motivo}`);
-    if (porArreglar && citas.length && ES_DE_FORMA.test(motivo)) porArreglar({ texto, citas, problema: motivo });
+    if (porArreglar && citas.length && ES_DE_FORMA.test(motivo)) porArreglar({ texto, citas, problema: motivo, ...(citas !== delAgente ? { delAgente: [...(vecinosDe ?? delAgente)] } : {}) });
     return null;
   };
   if (!t.ok) return caer(t.motivo, crudo);
@@ -1948,7 +1989,7 @@ function conSuCita(
   const todo = [texto, ...extras].join(" ");
   // Los números chicos valen de la vecindad de las citas del AGENTE, no de una cita encontrada para otro número (revisión
   // del 24 nov, segunda vuelta): la vecindad de la nueva habla de otra cosa.
-  const vecindad = loDeSusReuniones(citas, ctx.reuniones);
+  const vecindad = loDeSusReuniones(vecinosDe ?? citas, ctx.reuniones);
   let sobran = cifrasDeMas(todo, lo, vecindad);
   /* Antes de descartar, se busca la cita (24 nov, segunda vuelta: en la corrida real de Centauro se perdían el «~1.800»,
      el churn y la portada): un número que la empresa sí dijo en otra intervención sobre lo mismo va como otra cita, aunque
@@ -2023,7 +2064,7 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
   // Lo que no lleva cita propia: sus números los dijo la empresa misma, no un cálculo de Smarteam que confirmó.
   const dichoPorElla = ctx.reuniones.map((r) => r.turnos.filter((t) => esDelCliente(r, t.hablante)).map((t) => t.texto).join("\n")).join("\n");
   const piezasPorArreglar: PiezaPorArreglar[] = [];
-  const arreglarEn = (lugar: string, dimensionId?: string | null, indice?: number, largo?: number, traspaso?: string) => (x: { texto: string; citas: CitaDelResumen[]; problema: string }) =>
+  const arreglarEn = (lugar: string, dimensionId?: string | null, indice?: number, largo?: number, traspaso?: string) => (x: { texto: string; citas: CitaDelResumen[]; problema: string; delAgente?: CitaDelResumen[] }) =>
     piezasPorArreglar.push({ lugar, ...x, dimensionId, ...(indice === undefined ? {} : { indice }), ...(largo === undefined ? {} : { largo }), ...(traspaso ? { traspaso } : {}) });
   const deLasAreas = new Set(ctx.areas.map((a) => a.id));
   const nombreDelArea = (id: string) => ctx.areas.find((a) => a.id === id)?.nombre ?? id;
@@ -2484,6 +2525,8 @@ const REGLAS_DE_LAS_PIEZAS = `Corriges frases para una página que Smarteam le p
 
 Reescribe «texto» con la forma que te doy en «forma», usando SOLO lo que dicen sus «citas». Si nombra a una persona, cámbiala por su rol («la gerencia», «quien lleva cobranza»); nunca un nombre, salvo que «forma» diga que van nombres. Si dice «comercial», nombra el equipo como en la escala («Ventas»). Sin «tu» ni «tus» salvo que «forma» lo pida; nunca voseo. Quita lo que las citas no digan; no lo reemplaces por otra palabra que lo insinúe («la mitad», «el doble», «un tercio» también son números: van solo si una cita los dice). Lo que queda no puede cambiar de sentido: si quitas un número de una excepción o de un límite («salvo los 300 de WhatsApp», «en 2 de las 5 tiendas»), conserva la excepción o el límite sin el número, y no dejes un «eso» o un «los» que remita a lo que quitaste. Si con las citas no se puede decir nada, omítela.
 
+Si una cita se ve cortada («anda entre 15 lits» por «1.500 leads»), no copies su número: quita el número.
+
 Si la pieza trae «titulo» (un punto clave), el problema puede estar en él: reescríbelo también, de 3 a 8 palabras, sin «tu», con la misma vara (cada número, en sus citas), y devuélvelo en «titulo»; si el título está bien, devuélvelo igual.
 
 Devuelves SOLO este JSON: {"piezas":[{"i":<el número de la pieza>,"texto":"…","titulo":"… (solo si la pieza trae «titulo»)"}]}`;
@@ -2547,7 +2590,15 @@ export function leerLasPiezas(
     const p =
       de.lugar === "negocio:quienes"
         ? lineaDelMapa({ texto: x.texto, citas }, ctx, o, descartados)
-        : conSuCita({ texto: x.texto, citas }, ctx, o, descartados, `pieza corregida (${de.lugar})`, TOPE_DEL_TEXTO_DEL_RESUMEN, titulo ? [titulo] : []);
+        : conSuCita({ texto: x.texto, citas }, ctx, o, descartados, `pieza corregida (${de.lugar})`, TOPE_DEL_TEXTO_DEL_RESUMEN, titulo ? [titulo] : [], undefined, de.delAgente ?? de.citas);
+    /* Un número que la IA tomó de una transcripción cortada (revisión final del 24 nov: «~1.500 leads» volvía como «~15»
+       porque la cita dice «entre 15 lits»): un número nuevo que es el comienzo de uno de la pieza y diez veces más chico,
+       o más grande, no pasa. */
+    const cortado = p && numeroCortado(`${de.titulo ?? ""} ${de.texto}`, `${titulo ?? ""} ${p.texto}`);
+    if (cortado) {
+      descartados.push(`pieza corregida (${de.lugar}): ${cortado}`);
+      continue;
+    }
     // La tesis corregida se vuelve a medir: si sigue larga, no llega al titular (revisión del 16 nov).
     if (p && de.lugar === "negocio:tesis" && tesisLarga(p.texto)) {
       descartados.push(`pieza corregida (${de.lugar}): sigue demasiado larga para el titular`);
@@ -2869,6 +2920,20 @@ function valoresDe(x: string): number[] {
     if (Number.isFinite(v) && v > 0) out.push(v);
   }
   return out;
+}
+
+/**
+ * Un número de `despues` que no estaba en `antes`, que es el comienzo de uno que sí estaba y diez veces distinto («15»
+ * por «1.500»): la huella de una transcripción cortada. El motivo, o null.
+ */
+export function numeroCortado(antes: string, despues: string): string | null {
+  const viejos = valoresDe(antes);
+  for (const n of valoresDe(despues)) {
+    if (viejos.includes(n)) continue;
+    const de = viejos.find((v) => Math.max(v, n) / Math.min(v, n) >= 10 && String(Math.round(v)).startsWith(String(Math.round(n))));
+    if (de !== undefined) return `«${n}» parece «${de}» cortado en la transcripción`;
+  }
+  return null;
 }
 
 /**
