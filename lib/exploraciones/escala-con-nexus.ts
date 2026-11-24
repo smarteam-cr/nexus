@@ -137,8 +137,8 @@ export function piezasDelResumen(res: ResumenDeLaPagina, textos: TextosDeLaPagin
   if (!res.at) return [];
   const out: PiezaDeLaEscala[] = [];
   const parte = (tipo: string): ListaDeLaPagina => res.negocio?.find((p) => p.tipo === tipo)?.lista ?? { piezas: [], nueva: null };
-  // El título es el nombre del entregable (24 nov), con los equipos explorados, como lo pinta la página.
-  const titular = res.hicimos ? titularDelResumen(res.tarjetas.filter((t) => !t.porExplorar).map((t) => t.nombre), textos) : null;
+  // El título es el nombre del entregable (24 nov, «Diagnóstico de rendimiento»), como lo pinta la página.
+  const titular = res.hicimos ? titularDelResumen(textos) : null;
   if (titular) {
     const p = fijo(titular.clave, titular.original, "El título (arriba de todo)", R.arriba, textos);
     out.push({ ...p, valor: titular.valor });

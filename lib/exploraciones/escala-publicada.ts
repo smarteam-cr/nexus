@@ -62,10 +62,18 @@ const sinVistazos = (p: EscalaParaElCliente): EscalaParaElCliente => ({
 });
 
 /**
+ * Sin la forma de la portada (24 nov, `FORMA_DE_LA_PORTADA`): dice cómo se PINTA la portada, no un dato de la empresa. Una
+ * foto publicada antes no la trae y se pinta como se publicó (Elías: «Que esperen a publicar»); contarla marcaba «Hay
+ * cambios que el cliente no ve» en todas las escalas publicadas, solo por el deploy.
+ */
+const sinLaFormaDeLaPortada = (p: EscalaParaElCliente): EscalaParaElCliente => ({ ...p, resumen: { ...p.resumen, formaDeLaPortada: undefined } });
+
+/**
  * Si lo de hoy es lo que ya está publicado. La fecha del pie no cuenta: sin niveles confirmados sale de la última vez que
  * se guardó cualquier cosa de la exploración (un contexto que el cliente no ve), y avisaba cambios que no había. El vistazo
- * de cada nivel tampoco (`sinVistazos`).
+ * de cada nivel tampoco (`sinVistazos`), ni la forma de la portada (`sinLaFormaDeLaPortada`).
  */
 export function mismaPagina(a: EscalaParaElCliente, b: EscalaParaElCliente): boolean {
-  return jsonEnOrden({ ...sinVistazos(a), fecha: null }) === jsonEnOrden({ ...sinVistazos(b), fecha: null });
+  const comparable = (p: EscalaParaElCliente) => jsonEnOrden({ ...sinLaFormaDeLaPortada(sinVistazos(p)), fecha: null });
+  return comparable(a) === comparable(b);
 }

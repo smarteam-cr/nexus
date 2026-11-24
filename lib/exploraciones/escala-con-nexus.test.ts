@@ -40,23 +40,18 @@ const resumen = (o: Partial<ResumenDeLaPagina> = {}): ResumenDeLaPagina =>
   }) as ResumenDeLaPagina;
 
 describe("las piezas del Resumen", () => {
-  it("el título es la misma pieza que edita la página: el nombre del diagnóstico, atado a los equipos explorados (24 nov)", () => {
-    const tarjetas = [
-      { areaId: "1", nombre: "Ventas", porExplorar: false, subequipos: [] },
-      { areaId: "2", nombre: "Marketing", porExplorar: false, subequipos: [] },
-      { areaId: "3", nombre: "Servicio", porExplorar: true, subequipos: [] },
-    ] as unknown as TarjetaDeLaPagina[];
-    const piezas = piezasDelResumen(resumen({ tarjetas }), {});
+  it("el título es la misma pieza que edita la página: «Diagnóstico de rendimiento», y Nexus lo puede cambiar (24 nov)", () => {
+    const piezas = piezasDelResumen(resumen(), {});
     const titular = piezas.find((p) => p.nombre.startsWith("El título"))!;
-    expect(titular.clave).toBe(`t/${claveAtadaDelResumen("titular.diagnostico", "Diagnóstico de Ventas y Marketing en HubSpot")}`);
-    expect(titular.valor).toBe("Diagnóstico de Ventas y Marketing en HubSpot");
-    expect(titular.aMano).toBe(false);
-    // Cambiado para esta empresa: se ve lo escrito y cuenta como escrito por el equipo.
+    expect(titular.clave).toBe(`t/${claveAtadaDelResumen("titular.diagnostico", "Diagnóstico de rendimiento")}`);
+    expect(titular).toMatchObject({ valor: "Diagnóstico de rendimiento", aMano: false, seccion: SECCIONES_DEL_RESUMEN.arriba });
+    // Cambiado para esta empresa: se ve lo escrito y cuenta como escrito por el equipo; se escribe con la operación de siempre.
     const clave = titular.clave.slice(2);
-    const cambiado = piezasDelResumen(resumen({ tarjetas }), { [clave]: "Diagnóstico comercial de tu equipo." }).find((p) => p.clave === titular.clave)!;
+    const cambiado = piezasDelResumen(resumen(), { [clave]: "Diagnóstico comercial de tu equipo." }).find((p) => p.clave === titular.clave)!;
     expect(cambiado).toMatchObject({ valor: "Diagnóstico comercial de tu equipo.", aMano: true });
-    // Sin ningún equipo explorado no hay título que pedirle.
-    expect(piezasDelResumen(resumen(), {}).some((p) => p.nombre.startsWith("El título"))).toBe(false);
+    expect(operacionDelCambio(titular, "Diagnóstico de tu operación")).toMatchObject({ op: "textoDeLaPagina", clave, texto: "Diagnóstico de tu operación" });
+    // Sin Resumen armado no hay título que pedirle.
+    expect(piezasDelResumen(resumen({ hicimos: null }), {}).some((p) => p.nombre.startsWith("El título"))).toBe(false);
   });
 
   it("el resumen debajo del título y quién es quién son piezas de su sección; sin resumen, la bajada (24 nov)", () => {

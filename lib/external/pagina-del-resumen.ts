@@ -81,18 +81,43 @@ export const MAX_LINEAS_DEL_MAPA = 7;
 /** Hasta dónde puede estar el «:» de una línea del mapa: lo de antes es el equipo (la página lo pone en negrita). */
 export const MAX_LARGO_DEL_EQUIPO_DEL_MAPA = 40;
 
-/** Una lista en palabras: «Ventas», «Ventas y Marketing», «Ventas, Marketing y Servicio». */
-const enLista = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`);
+/**
+ * El titular de la portada desde el 24 nov (Elías: «Creo que el título debería ser algo como diagnóstico de rendimiento. Y
+ * que se pueda editar a mano y cambiar con IA, como todo lo demás»): el nombre del entregable. Las áreas no van: ya están
+ * en las tarjetas de abajo. Es un texto fijo de la página: se cambia por empresa (a mano o con «✨ Mejorar con IA»).
+ */
+export const TITULO_DEL_DIAGNOSTICO = "Diagnóstico de rendimiento";
 
 /**
- * El titular de la portada (24 nov, Elías: «El nombre del entregable con un resumen»): «Diagnóstico de Ventas, Marketing y
- * Servicio en HubSpot.», con los equipos que se exploraron (los que tienen sesiones), en el orden de las pestañas. Hasta el
- * 24 nov decía lo que hicimos («7 sesiones y 9 h 16 min de conversación con 6 personas de tu equipo.»): esos números siguen
- * en las cifras de abajo. Sin ningún equipo explorado, null: la portada dice lo de siempre.
+ * Cómo se arma la portada (24 nov). 2: el título del entregable y el dolor de cada equipo. Una foto publicada antes no lo
+ * trae y se pinta como se publicó, con el titular de lo que hicimos (`tituloDeLoQueHicimos`) y sin el dolor de cada
+ * equipo (Elías: «Que esperen a publicar»). No cuenta como cambio al comparar con lo publicado (escala-publicada.ts).
  */
-export function tituloDelDiagnostico(exploradas: readonly string[]): string | null {
-  const nombres = exploradas.map((x) => x.trim()).filter(Boolean);
-  return nombres.length ? `Diagnóstico de ${enLista(nombres)} en HubSpot` : null;
+export const FORMA_DE_LA_PORTADA = 2;
+
+/**
+ * El titular de la portada del 21 al 24 nov, y el de una foto publicada antes (Elías, 21 nov: «En el H1 no debería estar
+ * el problema. Ahí debería estar las sesiones de exploración, cuántas horas de conversaciones, con cuántas personas se ha
+ * hablado»): «13 sesiones y 8 h de conversación con 3 personas de tu equipo.». Los números salen de lo que hicimos (nunca
+ * de la IA); `escritos` son los que una persona cambió en las cifras de abajo, para que el titular no diga otro número que
+ * ellas. Sin sesiones, null: la portada dice lo de siempre.
+ */
+export function tituloDeLoQueHicimos(
+  h: { sesiones: number; minutos: number; personas: number },
+  escritos: { sesiones?: string; tiempo?: string; personas?: string } = {},
+): string | null {
+  if (h.sesiones <= 0) return null;
+  // El singular sale del número que se ve: si una persona escribió «2», dice «2 sesiones» aunque el sistema contara 1.
+  const cuantos = (escrito: string | undefined, n: number) => {
+    const x = Number((escrito ?? "").trim().replace(",", "."));
+    return escrito !== undefined && escrito.trim() !== "" && Number.isFinite(x) ? x : n;
+  };
+  const s = cuantos(escritos.sesiones, h.sesiones);
+  const p = cuantos(escritos.personas, h.personas);
+  const sesiones = `${escritos.sesiones ?? h.sesiones} ${s === 1 ? "sesión" : "sesiones"}`;
+  const tiempo = h.minutos > 0 ? ` y ${escritos.tiempo ?? enHoras(h.minutos)} de conversación` : "";
+  const personas = h.personas > 0 ? ` con ${escritos.personas ?? h.personas} ${p === 1 ? "persona" : "personas"} de tu equipo` : "";
+  return `${sesiones}${tiempo}${personas}.`;
 }
 
 /**
@@ -539,6 +564,11 @@ export interface ResumenDeLaPagina {
   malLeidas?: ReunionMalLeida[];
   /** Solo adentro: el Resumen se armó leyendo las reuniones enteras (24 nov). Sin esto, rehacerlo lee enteras las cortadas. */
   leidasEnteras?: true;
+  /**
+   * Cómo se arma la portada (`FORMA_DE_LA_PORTADA`, 24 nov): con ella, el título del entregable y el dolor de cada equipo.
+   * Una foto publicada antes no la trae y se pinta como se publicó.
+   */
+  formaDeLaPortada?: number;
 }
 
 /** Un punto clave: un título corto y una o dos frases, con el equipo de la escala del que habla. */
@@ -627,14 +657,34 @@ export const claveAtadaDelResumen = (nombre: string, original: string): string =
 
 /**
  * El titular de la portada (el H1) como lo ve el cliente, con su clave de edición (23 nov: lo comparten la vista y «Pedirle a
- * Nexus», que lo cambia por el mismo texto fijo). Desde el 24 nov es el nombre del entregable (`tituloDelDiagnostico`) y va
- * atado a los equipos explorados: si se explora otro, el título cambia y lo escrito para el de antes deja de valer. Lo que
- * alguien escribió sobre el titular de antes (el de las sesiones) tampoco vale: era de otra frase. `exploradas`: los equipos
- * con sesiones, en el orden de la página. null: ninguno (la portada dice lo de siempre).
+ * Nexus», que lo cambia por el mismo texto fijo). Desde el 24 nov, «Diagnóstico de rendimiento» (`TITULO_DEL_DIAGNOSTICO`),
+ * que se cambia por empresa; lo que alguien escribió sobre el titular de antes (el de las sesiones) era de otra frase y no
+ * vale aquí.
  */
-export function titularDelResumen(exploradas: readonly string[], textos: TextosDeLaPagina | null | undefined): { clave: string; original: string; valor: string } | null {
-  const original = tituloDelDiagnostico(exploradas);
-  if (!original) return null;
-  const clave = claveAtadaDelResumen("titular.diagnostico", original);
-  return { clave, original, valor: textoDeLaPagina(textos, clave, original) };
+export function titularDelResumen(textos: TextosDeLaPagina | null | undefined): { clave: string; original: string; valor: string } {
+  const clave = claveAtadaDelResumen("titular.diagnostico", TITULO_DEL_DIAGNOSTICO);
+  return { clave, original: TITULO_DEL_DIAGNOSTICO, valor: textoDeLaPagina(textos, clave, TITULO_DEL_DIAGNOSTICO) };
+}
+
+/**
+ * El titular de una foto publicada antes del 24 nov (`FORMA_DE_LA_PORTADA`): el de lo que hicimos, con su clave atada a los
+ * números del SISTEMA (corregir una cifra no suelta lo escrito; rehacer el Resumen con otras sesiones, sí). `original`: con
+ * los números que se ven abajo. null: sin sesiones.
+ */
+export function titularDeLoQueHicimos(
+  h: { sesiones: number; minutos: number; personas: number } | null | undefined,
+  textos: TextosDeLaPagina | null | undefined,
+): { clave: string; original: string; valor: string; delSistema: string } | null {
+  if (!h) return null;
+  const delSistema = tituloDeLoQueHicimos(h);
+  if (!delSistema) return null;
+  const escrito = (nombre: string, original: string) => textoDeLaPagina(textos, claveAtadaDelResumen(nombre, original), original);
+  const conLosDeAbajo =
+    tituloDeLoQueHicimos(h, {
+      sesiones: escrito("hicimos.sesiones", String(h.sesiones)),
+      tiempo: h.minutos > 0 ? escrito("hicimos.tiempo", enHoras(h.minutos)) : undefined,
+      personas: h.personas > 0 ? escrito("hicimos.personas", String(h.personas)) : undefined,
+    }) ?? delSistema;
+  const clave = claveAtadaDelResumen("titular.hicimos", delSistema);
+  return { clave, original: conLosDeAbajo, valor: textoDeLaPagina(textos, clave, conLosDeAbajo), delSistema };
 }
