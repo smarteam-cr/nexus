@@ -9,6 +9,9 @@
  *   la rehace sin la de antes. Sin el campo, la guía conserva la que tenía.
  *   `sesionIds` (con «leer», 2026-11-17): varias sesiones de Meet en bloque; se leen una por corrida, en orden. Si el
  *   agente ya trabaja, las pedidas esperan en su cola (`encolada: true`) en vez de rebotar (cola-de-lectura.ts).
+ *   `proyectoDeContexto` (con «posicionar», 24 nov): en la preventa de un cliente, un proyecto de la empresa cuyo
+ *   handoff, cuestionarios, cronograma y memoria se leen como contexto («Ubicar con lo que ya sabemos»). El agente lo
+ *   descarta si no es de esta empresa (`proyectoDeContextoDeLaEmpresa`).
  *   Pide `ventas.write` (gasta IA).
  *
  * GET /api/sales/exploraciones/[id]/agente
@@ -45,6 +48,8 @@ const Cuerpo = z.object({
   revisar: z.boolean().optional(),
   /** Con «guia» (décima vuelta): la instrucción libre para rehacerla; `null`, sin la de antes. */
   instruccion: z.string().trim().min(1).max(MAX_INSTRUCCION_DE_LA_GUIA).nullable().optional(),
+  /** Con «posicionar» (24 nov): el proyecto de la empresa que se lee como contexto. */
+  proyectoDeContexto: z.string().min(1).max(64).nullable().optional(),
 });
 
 export async function POST(req: NextRequest, { params }: Ctx) {
@@ -61,7 +66,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const cuerpo = Cuerpo.safeParse(raw);
   if (!cuerpo.success) return cuerpoInvalido(cuerpo.error);
 
-  const { modo, sesionId, sesionIds, hubspotId, posicionar, regenerar, revisar, instruccion } = cuerpo.data;
+  const { modo, sesionId, sesionIds, hubspotId, posicionar, regenerar, revisar, instruccion, proyectoDeContexto } = cuerpo.data;
   const enBloque = modo === "leer" && sesionIds ? partirElPedido(sesionIds.map((s) => ({ id: s, por: guard.email }))) : null;
   const r = await lanzarCorrida(id, modo, {
     triggeredByEmail: guard.email,
@@ -71,6 +76,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     ...(modo === "casos" && regenerar ? { regenerar: true } : {}),
     ...(modo === "casos" && revisar ? { revisar: true } : {}),
     ...(modo === "guia" && instruccion !== undefined ? { instruccion } : {}),
+    ...(modo === "posicionar" && proyectoDeContexto ? { proyectoDeContexto } : {}),
     // Una reunión de HubSpot ya leída se vuelve a leer entera: propone y reemplaza lo que dijo de ella.
     ...(modo === "leer" && hubspotId ? { releer: { sesiones: [], hubspot: [hubspotId], documentos: [] }, completa: true } : {}),
   });

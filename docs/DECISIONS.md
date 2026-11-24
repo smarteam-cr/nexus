@@ -14285,7 +14285,8 @@ veía como mapa y no como el diagnóstico, «Dónde está hoy» no decía qué s
   vuelta tampoco podía ubicar otra área que la del equipo que habló, K11: ver la sección siguiente.) La cuenta sigue con su pedido de siempre (solo niveles, áreas en juego). El lector
   de cada sesión no cambió: sigue proponiendo niveles con cita al leer una reunión. Sin ninguna sesión con texto, la
   corrida termina en error con el motivo y no llama a la IA (no cae a los resúmenes de la empresa: no es lo que promete
-  el botón); una respuesta cortada por el largo también es un error, no una corrida «sin nada nuevo». Qué reuniones lee
+  el botón); desde el 24 nov, eso vale para un prospecto: la preventa de un cliente ubica con lo que ya sabemos (ver «La
+  escala de un cliente con lo que ya sabemos»). Una respuesta cortada por el largo también es un error, no una corrida «sin nada nuevo». Qué reuniones lee
   lo decide `reunionesParaUbicar` (posicionar.ts), y `guardas.test.ts` se pone rojo si se desconecta el cableado.
   *Cuándo corre:* solo con el botón, nunca solo ni al abrir. *Cuánto cuesta:* Sonnet 4.6; el pedido sin fuentes pesa
   ~25.000 caracteres (medido: las tres áreas con sus cinco niveles); con Centauro (2 sesiones), estimado, ~35.000 tokens de entrada y
@@ -14646,6 +14647,59 @@ separación de proyectos debería bastar»). Plan y números: `docs/empresas-con
 - **Etapa futura, no ahora: el grupo arriba, para la reportería.** Ver el TEC entero (AE + TAE) en un solo número
   —cartera, rentabilidad, uso de Nexus— pide una vista de grupo por encima de las fichas. Hoy no existe y nada la lee:
   cada ficha se reporta por su lado.
+
+## La escala de un cliente con lo que ya sabemos (2026-11-24, TEC · AE y TAE)
+
+Elías quiere el diagnóstico de La escala (el Resumen y la página de cada área, publicados con «Acceso») para un cliente que
+no tuvo sesiones de exploración pero sí reuniones de entrega: el TEC. Plan, datos de producción y las decisiones D1 a D4
+(Elías, 24 nov, lo recomendado en las cuatro): `docs/diagnostico-con-lo-que-sabemos-plan.md`. Corrige, para la preventa de
+un cliente, la tercera vuelta de La escala de la preventa (8 nov: «sin ninguna sesión con texto, la corrida termina en
+error»); para un prospecto, esa regla sigue igual.
+
+- **Dónde vive (D1): en la preventa de cada ficha.** Tiene Resumen, hipótesis, tarjetas, Acceso y Publicar; solo le faltaba
+  leer lo que ya sabemos. *Se descartó* darle sesiones y Resumen a la escala de la cuenta: contradice «la cuenta no tiene
+  sesiones» (Una sola escala, 28 oct). AE y TAE son dos fichas y dos preventas: nunca se mezclan (sección de arriba).
+- **«Ubicar con lo que ya sabemos».** En la preventa de una ficha que NO es prospecto (`partirDeLoQueYaSabemos`,
+  lib/exploraciones/posicionar.ts: `Client.kind` distinto de PROSPECTO), «Ubicar» (`posicionarLaEscala`, ahora sobre
+  `loQueLeeUbicar`) ya no falla sin sesiones: lee como la cuenta (las 8 reuniones más recientes de la empresa en resumen,
+  por el chokepoint, la memoria, las tareas, las ventas y, si se elige, el proyecto de contexto con su handoff, kickoff,
+  cuestionarios y cronograma). Con sesiones, lee las dos cosas: primero sus transcripciones enteras y después la base en
+  resumen, sin repetir ninguna y con los ids que siguen (`reunionesEnResumen` con `excepto` y `desde`). Siguen las
+  hipótesis y las tarjetas, y las tres áreas; la regla «sin una pista del cliente no hay nivel» no cambia. El pedido dice
+  qué es una reunión de trabajo y que lo que Smarteam explicó o configuró ahí no es un nivel (`reglaDeLoQueYaSabemos`:
+  `solo` sin sesiones de diagnóstico, `ademas` con alguna, y entonces ellas pesan más).
+  - **El proyecto de contexto se elige** con «Con el contexto de», el mismo selector de la ficha, con sugerido el proyecto
+    vivo más nuevo (`proyectosParaElContexto`). Solo uno de esta empresa: el agente lo vuelve a comprobar
+    (`proyectoDeContextoDeLaEmpresa`, invariante #1). Medido con AE: sin el proyecto no lee el handoff, que es lo que más
+    aporta.
+  - **El botón dice «Ubicar con lo que ya sabemos»** mientras no haya sesiones de diagnóstico; con alguna, el de siempre.
+  - *Por qué la base va en resumen y no con las transcripciones de la empresa:* es lo que ya lee la cuenta, y medido con AE
+    (simulacro, 24 nov) leer cuatro reuniones de entrega enteras como sesiones dio 1 nivel con cita y 14 por explorar
+    (US$ 0,29), y la base en resumen con el handoff dio 2 con cita y 8 por explorar (US$ 0,18). En una reunión de entrega
+    el cliente casi nunca dice algo que fije un nivel: lo que entra enteras son las reuniones que una persona elige.
+  - *Lo que se acepta:* la cita de un nivel puede salir del resumen de una reunión (su minuta), como en la cuenta, no de la
+    voz del cliente palabra por palabra. Para una cita de su voz, la reunión se suma entera (abajo).
+- **Las reuniones de entrega entran como REUNIÓN DE TRABAJO, no como sesión (D4).** Una sesión de la preventa de un cliente
+  se marca «Reunión de trabajo» (`SesionPlaneada.deLoQueYaSabemos`, en el Json de la exploración, sin SQL) o queda como
+  «Sesión de diagnóstico»; lo elige una persona en la cabecera de la sesión (`ReunionDeTrabajo.tsx`). Cuenta para «Ubicar»
+  y para el Resumen igual que una sesión, con su equipo, pero el pedido la nombra como reunión de trabajo y pesa menos.
+  La página del cliente nunca la presenta como exploración: «Lo que hicimos» dice «N reuniones de trabajo juntos y N
+  sesiones de diagnóstico».
+  - **Nexus sugiere cuáles** en «+ Agregar sesión», arriba de las que ya pasaron: «Reuniones de trabajo sugeridas»
+    (`sugerirReunionesDeTrabajo`, lib/exploraciones/reuniones-de-trabajo.ts, y GET …/reuniones-de-trabajo): las de la
+    empresa con transcripción, por cuánto habló el cliente (quien-hablo.ts, la misma medida que marca «mal leída» bajo el
+    28 %), primero la mejor de cada equipo y a igual parte la más nueva. Las de menos del 28 % van al final, marcadas. Se
+    suman con un clic o en bloque, y se pueden leer de paso. Las de la lista de siempre entran como sesión de diagnóstico.
+    *Por qué por cuánto habló el cliente:* en AE las capacitaciones de ventas dan 11 a 14 % (el Resumen las leería mal) y
+    las revisiones de avance, 40 a 59 %.
+- **Al sumar sesiones de diagnóstico se mejora sin perder nada**: «Ubicar» de nuevo nunca pisa lo confirmado; la línea de
+  arriba cuenta como nuevas también las sesiones de diagnóstico sobre una base de trabajo; el Resumen, al rehacerse, da más
+  peso a las sesiones de diagnóstico, y «Rehacer con IA» sigue respetando lo escrito a mano (`juntarConLoEditado`).
+- **TI no entra (D3)**, como dice la decisión del 19 nov. **La preventa vieja de AE se usa (D2)**, revisando lo que propuso
+  (la armaron con reuniones de TAE antes de separar el TEC).
+- **Simulacro:** `scripts/simular-ubicar-la-escala.ts` (solo lectura): qué lee «Ubicar», con `--llamar` qué propondría, con
+  `--sesiones` reuniones sumadas en memoria, con `--como-prospecto` lo de antes y con `--reuniones` cuánto habló el cliente
+  en cada reunión de la empresa.
 
 ## Una empresa con varias unidades: cada unidad es una ficha (2026-11-07)
 

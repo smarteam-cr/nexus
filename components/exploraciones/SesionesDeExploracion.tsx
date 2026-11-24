@@ -41,6 +41,7 @@ import AntesDeLaSesion from "./AntesDeLaSesion";
 import DespuesDeLaSesion from "./DespuesDeLaSesion";
 import DuranteLaSesion from "./DuranteLaSesion";
 import { EquipoDeLaSesion } from "./EquipoDeLaSesion";
+import { ReunionDeTrabajo } from "./ReunionDeTrabajo";
 import Segmentos from "./Segmentos";
 import { useLienzo, type MomentoDeLaSesion } from "./contexto";
 import { diaLargo } from "./piezas-de-la-sesion";
@@ -370,6 +371,8 @@ function EncabezadoDeLaSesion({
           <div className="mt-1.5">
             <EquipoDeLaSesion pestana={pestana} momento={momento} />
           </div>
+          {/* En la preventa de un cliente (24 nov): sesión de diagnóstico o reunión de trabajo (lo que ya sabemos). */}
+          <ReunionDeTrabajo pestana={pestana} momento={momento} />
           {momento !== "durante" && <LineaDeLaReunion pestana={pestana} onSumarMinuta={onSumarMinuta} />}
         </div>
         <span className="flex-1" />

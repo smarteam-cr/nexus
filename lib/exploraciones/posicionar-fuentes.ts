@@ -15,6 +15,7 @@ import "server-only";
  * Lo que falla se omite: el agente lee lo demás.
  */
 import { prisma } from "@/lib/db/prisma";
+import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import { loadSelectedUseCases } from "@/lib/business-cases/use-cases";
 import { inversionDelDocumento } from "@/lib/landing/forma-de-pago";
 import { memoriaDeLaCuenta, memoriaDelProyecto } from "@/lib/memoria";
@@ -95,6 +96,22 @@ async function cronogramaDelProyecto(projectId: string): Promise<string> {
   );
 }
 
+/**
+ * Los proyectos de la empresa que «Ubicar con lo que ya sabemos» puede leer como contexto (24 nov, la preventa de un
+ * cliente): los que ve un agente como contexto del cliente (`proyectoClasificableWhere`: activos, sin el contenedor
+ * «Información del cliente» ni los de prueba), el más nuevo primero. Solo de esta empresa: el agente igual lo vuelve a
+ * comprobar (`proyectoDeContextoDeLaEmpresa`).
+ */
+export async function proyectosParaElContexto(clientId: string): Promise<{ id: string; nombre: string }[]> {
+  const filas = await prisma.project.findMany({
+    where: proyectoClasificableWhere({ clientId }),
+    select: { id: true, name: true },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+  return filas.map((p) => ({ id: p.id, nombre: p.name }));
+}
+
 export interface LoQueLeePosicionar {
   fuentes: Fuente[];
   /** Las reuniones que leyó (en resumen): van a la corrida, no se marcan como leídas. */
@@ -117,6 +134,12 @@ export async function fuentesParaPosicionar(o: {
    * de las reuniones de la empresa en resumen. Ya vienen por el chokepoint.
    */
   reuniones?: { fuentes: Fuente[]; sesiones: string[] };
+  /**
+   * La preventa de un cliente (24 nov, «Ubicar con lo que ya sabemos»): ADEMÁS de `reuniones` (sus sesiones, si hay), la
+   * base de la empresa: sus reuniones en resumen, después de las sesiones, sin repetir ninguna y con los ids que siguen
+   * (S5, S6…). Sin `reuniones`, es lo mismo que la cuenta.
+   */
+  conLaBase?: boolean;
 }): Promise<LoQueLeePosicionar> {
   const real = o.projectId && !o.esContenedor ? o.projectId : null;
   const [hubspot, delProyecto, cuenta, proyecto, ventas, propuestas, tareas, cronograma, reuniones] = await Promise.all([
@@ -129,13 +152,15 @@ export async function fuentesParaPosicionar(o: {
     seguro(tareasDeLaCuentaParaAgentes(o.clientId), [], "las tareas"),
     real ? seguro(cronogramaDelProyecto(real), "", "el cronograma") : Promise.resolve(""),
     // Primero las que alguien eligió en una sesión de cualquier exploración de la empresa (escala única, 2026-10-28).
-    o.reuniones
+    o.reuniones && !o.conLaBase
       ? Promise.resolve(o.reuniones)
       : seguro(
-          reunionesElegidasDeLaEmpresa(o.clientId).then((elegidas) => reunionesEnResumen(o.clientId, { elegidas })),
+          reunionesElegidasDeLaEmpresa(o.clientId).then((elegidas) =>
+            reunionesEnResumen(o.clientId, { elegidas, excepto: o.reuniones?.sesiones, desde: (o.reuniones?.fuentes.length ?? 0) + 1 }),
+          ),
           { fuentes: [] as Fuente[], sesiones: [] as string[] },
           "las reuniones",
-        ),
+        ).then((base) => (o.reuniones && o.conLaBase ? { fuentes: [...o.reuniones.fuentes, ...base.fuentes], sesiones: [...o.reuniones.sesiones, ...base.sesiones] } : base)),
   ]);
 
   const f = FUENTES_DE_POSICIONAR;

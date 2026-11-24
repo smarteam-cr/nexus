@@ -120,6 +120,11 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
         if (g instanceof NextResponse) return g;
         email = g.email ?? "desconocido";
         objetivo = "la preventa";
+        // La preventa de un cliente lee también lo que ya sabemos (24 nov): con un proyecto de la empresa como contexto.
+        if (c.proyectoId) {
+          if (!(await esDeLaEmpresa(id, { projectId: c.proyectoId }))) return NextResponse.json({ error: "Ese proyecto no es de esta empresa." }, { status: 404 });
+          proyectoDeContexto = c.proyectoId;
+        }
       } else {
         let projectId: string;
         if (c.objetivo === CLAVE_DE_LA_CUENTA) {

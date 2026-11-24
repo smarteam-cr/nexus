@@ -409,6 +409,12 @@ export interface ExploracionParaLaPantalla {
   sinLeer?: ReunionSinLeer[];
   /** Los proyectos cuyo handoff ya la recibe (lib/exploraciones/handoff.ts). Igual que `sinLeer`. */
   proyectos?: { id: string; nombre: string; clientId: string }[];
+  /**
+   * La preventa de un cliente (24 nov, «Ubicar con lo que ya sabemos»): los proyectos activos de la empresa que se pueden
+   * leer como contexto (su handoff, cuestionarios, cronograma y memoria), el más nuevo primero: ese es el que se sugiere.
+   * Igual que `sinLeer`: solo al abrir y al recargar. Un prospecto no lo trae.
+   */
+  proyectosDeLaEmpresa?: { id: string; nombre: string }[];
   /** Las sesiones y los documentos sumados a mano, sin el texto (lib/exploraciones/documentos.ts). Igual que `sinLeer`. */
   documentos?: DocumentoDeLaLista[];
   /** Todas las reuniones, leídas o no, para ligarlas a cada sesión (lib/exploraciones/guia.ts). Igual que `sinLeer`. */

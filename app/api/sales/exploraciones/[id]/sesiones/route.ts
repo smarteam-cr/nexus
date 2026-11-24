@@ -14,6 +14,9 @@
  *     Lo que puede fallar sin depender de la reunión (el tope de sesiones, la sesión a unir) se mira ANTES de
  *     adoptar: adoptar le cambia el dueño en todo Nexus y no se deshace sola.
  *   · sinReunion: una sesión sin reunión todavía (`titulo`, `fecha`).
+ * `deLoQueYaSabemos` (con «pasada», 24 nov): en la preventa de un cliente, la sesión nueva es una REUNIÓN DE TRABAJO (lo que
+ * ya sabemos), no una sesión de diagnóstico (guia.ts › `SesionPlaneada.deLoQueYaSabemos`). En un prospecto o en la
+ * exploración de un proyecto no aplica y se ignora.
  * Con `paraSesionId`, en vez de agregar una sesión nueva se une esa (cambia su reunión). Agregar no
  * reemplaza la lista: si otra persona (o el agente) cambió la exploración entretanto, se aplica sobre lo
  * último. Pide poder cambiar la exploración (lib/exploraciones/guardia.ts).
@@ -29,6 +32,7 @@ import { guardDeLaExploracion } from "@/lib/exploraciones/guardia";
 import { MAX_SESIONES, nuevoIdDeSesion, type SesionPlaneada } from "@/lib/exploraciones/guia";
 import { listarDocumentos } from "@/lib/exploraciones/documentos";
 import { leerLoLeido } from "@/lib/exploraciones/lo-leido";
+import { partirDeLoQueYaSabemos } from "@/lib/exploraciones/posicionar";
 import { aplicarCambios, escalaParaExplorar, estadoDesdeFila, leerExploracion, paraLaPantalla, type FilaDeExploracion } from "@/lib/exploraciones/servidor";
 import { prisma } from "@/lib/db/prisma";
 import { prepararReunionParaElCliente } from "@/lib/sessions/agregar-sesion";
@@ -55,6 +59,7 @@ const Cuerpo = z.object({
     .optional(),
   sesionId: ID_DE_SESION.optional(),
   paraSesionId: ID_DE_SESION.optional(),
+  deLoQueYaSabemos: z.boolean().optional(),
 });
 
 type CuerpoDeAgregar = z.infer<typeof Cuerpo>;
@@ -111,13 +116,19 @@ async function unionPedida(c: CuerpoDeAgregar, fila: FilaDeExploracion, email: s
 }
 
 /** Las operaciones, armadas sobre lo último de la exploración (así se pueden volver a armar después de un 409). */
-function operaciones(estado: EstadoDeExploracion, c: CuerpoDeAgregar, union: Union, sesionId: string): { ok: true; ops: Operacion[] } | { ok: false; error: string } {
+function operaciones(
+  estado: EstadoDeExploracion,
+  c: CuerpoDeAgregar,
+  union: Union,
+  sesionId: string,
+  o: { deTrabajo: boolean } = { deTrabajo: false },
+): { ok: true; ops: Operacion[] } | { ok: false; error: string } {
   const claves = [union.reunion ? `${union.reunion.origen}:${union.reunion.id}` : null, union.evento ? `meet:gmeet_${union.evento.id}` : null].filter(
     (k): k is string => !!k,
   );
   // Lo que se une deja de estar «Fuera de la exploración».
   const sacarDeFuera: Operacion[] = claves.some((k) => estado.contenido.fuera.includes(k)) ? [{ op: "fuera", claves, fuera: false }] : [];
-  if (!c.paraSesionId) return { ok: true, ops: [{ op: "agregarSesion", sesion: { id: sesionId, ...union } }, ...sacarDeFuera] };
+  if (!c.paraSesionId) return { ok: true, ops: [{ op: "agregarSesion", sesion: { id: sesionId, ...union, ...(o.deTrabajo ? { deLoQueYaSabemos: true } : {}) } }, ...sacarDeFuera] };
   const actual = estado.contenido.sesiones.find((s) => s.id === c.paraSesionId);
   if (!actual) return { ok: false, error: "Esa sesión ya no está." };
   // `asociadaSola` (K5): una persona la vuelve a unir, así que ya no es «la unió Nexus».
@@ -168,10 +179,12 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const u = await unionPedida(c, lectura.fila, guard.email);
   if (!u.ok) return error(u.status, u.error);
   const sesionId = c.paraSesionId ?? c.sesionId ?? nuevoIdDeSesion();
+  // Una reunión de trabajo (lo que ya sabemos) solo en la preventa de un cliente, y solo una que ya pasó.
+  const deTrabajo = !!c.deLoQueYaSabemos && c.tipo === "pasada" && !lectura.fila.projectId && partirDeLoQueYaSabemos(lectura.fila.client.kind);
 
   let fila = lectura.fila;
   for (let intento = 0; intento < 2; intento++) {
-    const o = operaciones(estadoDesdeFila(fila), c, u.union, sesionId);
+    const o = operaciones(estadoDesdeFila(fila), c, u.union, sesionId, { deTrabajo });
     if (!o.ok) return error(404, o.error);
     const r = await aplicarCambios(id, fila.version, o.ops, escala.general, { eventosDeConfianza: true });
     switch (r.estado) {

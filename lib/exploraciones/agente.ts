@@ -153,7 +153,8 @@ import { fuentesDelProyecto, loVendidoDelProyecto } from "./fuentes-del-proyecto
 import { acuerdosDeLasReuniones } from "./historia-de-las-sesiones-server";
 import { memoriaDelProyecto } from "@/lib/memoria";
 import { proyectoDeContextoDeLaEmpresa } from "./escala-de-la-cuenta";
-import { fuentesParaPosicionar } from "./posicionar-fuentes";
+import { partirDeLoQueYaSabemos } from "./posicionar";
+import { fuentesParaPosicionar, type LoQueLeePosicionar } from "./posicionar-fuentes";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { loConfirmadoParaLosCasos } from "./lo-que-confirmo-el-equipo-server";
 import {
@@ -647,66 +648,21 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
  * la empresa en resumen; ubica las TRES áreas, no solo las en juego (si se habló de Marketing, Marketing se llena); y
  * propone hipótesis «por explorar» para lo que no tiene una frase que lo respalde pero sí pistas. Lo lanza una persona
  * desde La escala: nunca corre solo ni en cada visita.
+ *
+ * La preventa de una ficha que NO es prospecto (24 nov, el TEC: «Ubicar con lo que ya sabemos», `conLoQueYaSabemos`) parte
+ * de lo que ya sabemos de la empresa: sin sesiones con texto no falla, lee como la cuenta (las reuniones de la empresa en
+ * resumen, la memoria y, si se eligió, el proyecto de contexto con su handoff, cuestionarios y cronograma); con sesiones,
+ * lee las dos cosas, primero sus transcripciones (pesan más) y después la base en resumen. Hipótesis y tarjetas siguen.
  */
 async function posicionarLaEscala(
   runId: string,
   exploracionId: string,
-  d: { fila: Extract<Awaited<ReturnType<typeof leerExploracion>>, { estado: "ok" }>["fila"]; estado: EstadoDeExploracion; escala: EscalaDelLienzo },
+  d: { fila: FilaDeLaExploracion; estado: EstadoDeExploracion; escala: EscalaDelLienzo },
   opts: OpcionesDeLaCorrida,
 ) {
-  const { fila, estado, escala } = d;
+  const { fila } = d;
   await fase(runId, "Leyendo todo lo que Nexus sabe de la cuenta…");
-  const esContenedor = fila.projectId
-    ? (await prisma.project.findUnique({ where: { id: fila.projectId }, select: { serviceType: true } }))?.serviceType === SENTINEL_SERVICE_TYPE
-    : false;
-  // En la cuenta, el proyecto de contexto (si se eligió uno) se lee como si fuera el suyo. Solo uno de esta empresa.
-  const contexto = esContenedor ? await proyectoDeContextoDeLaEmpresa(fila.clientId, opts.proyectoDeContexto) : null;
-  const esPreventa = !fila.projectId;
-  const transcripciones = esPreventa
-    ? await transcripcionesDeLaExploracion({
-        exploracionId,
-        clientId: fila.clientId,
-        projectId: null,
-        creadaEn: fila.createdAt,
-        propuesta: estado.propuesta,
-        leido: leerLoLeido(fila.test),
-        sesiones: estado.contenido.sesiones,
-        fuera: estado.contenido.fuera,
-        elegidas: estado.contenido.reunionesElegidas,
-      }).catch((e) => {
-        console.error(`[exploraciones/agente] posicionar: no se pudieron leer las sesiones de ${exploracionId}`, e);
-        throw new FalloDeLaExploracion("No se pudieron leer las reuniones de las sesiones. Vuelve a intentarlo en un rato.");
-      })
-    : null;
-  // Lo que promete el botón son las reuniones: sin ninguna con texto, no se gasta IA ni se cae a otras fuentes.
-  if (transcripciones && !transcripciones.fuentes.length) {
-    throw new FalloDeLaExploracion("Ninguna sesión de esta preventa tiene transcripción o notas todavía: cuando la tenga, vuelve a ubicar la escala.");
-  }
-  const leido = await fuentesParaPosicionar({
-    clientId: fila.clientId,
-    projectId: contexto ?? fila.projectId,
-    esContenedor: esContenedor && !contexto,
-    companyId: fila.client.hubspotCompanyId,
-    ventaId: opts.ventaId ?? null,
-    escala,
-    ...(transcripciones ? { reuniones: transcripciones } : {}),
-  });
-  const ctx: ContextoDelPedido = {
-    modo: "leer",
-    marco: marcoDe(fila.marco).clave,
-    empresa: fila.client.name,
-    industria: fila.client.industry,
-    escala,
-    // La preventa ubica las tres áreas: lo que se habló de Marketing llena Marketing aunque no esté en juego.
-    areas: esPreventa ? [] : estado.areas,
-    ...(esPreventa ? { conHipotesis: true, reuniones: transcripciones?.reuniones ?? [] } : {}),
-    perfil: estado.perfilCierre && estado.perfilDespues ? `venta ${estado.perfilCierre} · relación ${estado.perfilDespues}` : null,
-    contenido: estado.contenido,
-    fuentes: leido.fuentes,
-    hoy: new Date().toISOString(),
-    equipo: await nombresDelEquipo(),
-  };
-  const hayDelCliente = leido.fuentes.some((f) => esFuenteDelCliente(f.id));
+  const { ctx, leido, hayDelCliente } = await loQueLeeUbicar(exploracionId, d, opts);
   let items: ItemPropuesto[] = [];
   let descartadas = 0;
   let tarjetas: TarjetasDeLaEscala | undefined;
@@ -720,19 +676,14 @@ async function posicionarLaEscala(
         triggeredByEmail: opts.triggeredByEmail,
         origen: "exploraciones/agente:posicionar",
       },
-      () =>
-        getAnthropic().messages.create(
-          pedidoDePosicionar({ ...ctx, objetivo: opts.objetivo ?? (esContenedor ? "la cuenta entera (sin un proyecto en particular)" : fila.projectId ? "el proyecto" : "la preventa") }),
-        ),
+      () => getAnthropic().messages.create(pedidoDePosicionar(ctx)),
     );
     // Una respuesta cortada por el largo no se lee entera: mejor un error claro que una corrida «sin nada nuevo».
     if (respuesta.stop_reason === "max_tokens") throw new FalloDeLaExploracion("La respuesta del agente salió cortada. Vuelve a intentarlo.");
-    const r = leerLaRespuesta(respuesta, ctx, runId);
-    // Solo niveles: el pedido no pide otra cosa, y si llega, no se guarda.
-    items = r.items.filter((it) => it.destino.tipo === "nivel");
-    descartadas = r.descartadas + (r.items.length - items.length);
-    // La tarjeta de cada dimensión sale de esta misma llamada (2026-11-08): la nueva reemplaza entera a la anterior.
-    if (r.tarjetas && Object.keys(r.tarjetas).length) tarjetas = { porDimension: r.tarjetas, en: new Date().toISOString(), corridaId: runId };
+    const r = leerLaRespuestaDeUbicar(respuesta, ctx, runId);
+    items = r.items;
+    descartadas = r.descartadas;
+    if (r.tarjetas) tarjetas = r.tarjetas;
   }
   await fase(runId, "Guardando lo propuesto…");
   const propuestos = await guardar(
@@ -750,6 +701,111 @@ async function posicionarLaEscala(
       output: JSON.stringify({ propuestos, descartadas, tarjetas: tarjetas ? Object.keys(tarjetas.porDimension).length : 0, fuentes: leido.fuentes.length, sinPistaDelCliente: !hayDelCliente, nadaNuevo: !hayDelCliente }),
     },
   });
+}
+
+/** La fila de una exploración como la lee el agente (`leerExploracion`). */
+export type FilaDeLaExploracion = Extract<Awaited<ReturnType<typeof leerExploracion>>, { estado: "ok" }>["fila"];
+
+/**
+ * Lo que lee «Ubicar» y el pedido que arma, SIN llamar a la IA ni escribir nada: lo usan la corrida (`posicionarLaEscala`)
+ * y el simulacro (scripts/simular-ubicar-la-escala.ts). `conLoQueYaSabemos`: la preventa de una ficha que no es prospecto,
+ * que suma lo que ya sabemos de la empresa (24 nov). `hayDelCliente`: alguna fuente es palabra o hecho del cliente; sin
+ * eso no se llama al modelo (sin una pista del cliente no hay nivel).
+ */
+export async function loQueLeeUbicar(
+  exploracionId: string,
+  d: { fila: FilaDeLaExploracion; estado: EstadoDeExploracion; escala: EscalaDelLienzo },
+  opts: Pick<OpcionesDeLaCorrida, "ventaId" | "objetivo" | "proyectoDeContexto">,
+): Promise<{ ctx: ContextoDelPedido & { objetivo: string }; leido: LoQueLeePosicionar; hayDelCliente: boolean; conLoQueYaSabemos: boolean }> {
+  const { fila, estado, escala } = d;
+  const esContenedor = fila.projectId
+    ? (await prisma.project.findUnique({ where: { id: fila.projectId }, select: { serviceType: true } }))?.serviceType === SENTINEL_SERVICE_TYPE
+    : false;
+  const esPreventa = !fila.projectId;
+  const conLoQueYaSabemos = esPreventa && partirDeLoQueYaSabemos(fila.client.kind);
+  /* En la cuenta y en la preventa de un cliente, el proyecto de contexto (si se eligió uno) se lee como si fuera el suyo.
+     Solo uno de esta empresa (invariante #1). */
+  const contexto = esContenedor || conLoQueYaSabemos ? await proyectoDeContextoDeLaEmpresa(fila.clientId, opts.proyectoDeContexto) : null;
+  const transcripciones = esPreventa
+    ? await transcripcionesDeLaExploracion({
+        exploracionId,
+        clientId: fila.clientId,
+        projectId: null,
+        creadaEn: fila.createdAt,
+        propuesta: estado.propuesta,
+        leido: leerLoLeido(fila.test),
+        sesiones: estado.contenido.sesiones,
+        fuera: estado.contenido.fuera,
+        elegidas: estado.contenido.reunionesElegidas,
+      }).catch((e) => {
+        console.error(`[exploraciones/agente] posicionar: no se pudieron leer las sesiones de ${exploracionId}`, e);
+        throw new FalloDeLaExploracion("No se pudieron leer las reuniones de las sesiones. Vuelve a intentarlo en un rato.");
+      })
+    : null;
+  /* Lo que promete el botón de un prospecto son las reuniones: sin ninguna con texto, no se gasta IA ni se cae a otras
+     fuentes. En la de un cliente el botón promete lo que ya sabemos: sin sesiones, lee la base. */
+  if (transcripciones && !transcripciones.fuentes.length && !conLoQueYaSabemos) {
+    throw new FalloDeLaExploracion("Ninguna sesión de esta preventa tiene transcripción o notas todavía: cuando la tenga, vuelve a ubicar la escala.");
+  }
+  const conSesiones = !!transcripciones?.fuentes.length;
+  // Con alguna sesión de diagnóstico, las sesiones pesan más que la base; con solo reuniones de trabajo, todo es base.
+  const deDiagnostico = (transcripciones?.reuniones ?? []).some((r) => !r.deTrabajo);
+  const leido = await fuentesParaPosicionar({
+    clientId: fila.clientId,
+    projectId: contexto ?? fila.projectId,
+    esContenedor: esContenedor && !contexto,
+    companyId: fila.client.hubspotCompanyId,
+    ventaId: opts.ventaId ?? null,
+    escala,
+    // Un prospecto: solo sus sesiones. Un cliente: sus sesiones primero (si hay) y la base de la empresa en resumen.
+    ...(transcripciones && (conSesiones || !conLoQueYaSabemos) ? { reuniones: transcripciones } : {}),
+    ...(conLoQueYaSabemos ? { conLaBase: true } : {}),
+  });
+  const objetivo =
+    opts.objetivo ??
+    (esContenedor
+      ? "la cuenta entera (sin un proyecto en particular)"
+      : fila.projectId
+        ? "el proyecto"
+        : conLoQueYaSabemos
+          ? "la preventa de un cliente, con lo que ya sabemos de la empresa"
+          : "la preventa");
+  const ctx: ContextoDelPedido & { objetivo: string } = {
+    modo: "leer",
+    marco: marcoDe(fila.marco).clave,
+    empresa: fila.client.name,
+    industria: fila.client.industry,
+    escala,
+    // La preventa ubica las tres áreas: lo que se habló de Marketing llena Marketing aunque no esté en juego.
+    areas: esPreventa ? [] : estado.areas,
+    ...(esPreventa ? { conHipotesis: true, reuniones: transcripciones?.reuniones ?? [] } : {}),
+    ...(conLoQueYaSabemos ? { loQueYaSabemos: deDiagnostico ? ("ademas" as const) : ("solo" as const) } : {}),
+    perfil: estado.perfilCierre && estado.perfilDespues ? `venta ${estado.perfilCierre} · relación ${estado.perfilDespues}` : null,
+    contenido: estado.contenido,
+    fuentes: leido.fuentes,
+    hoy: new Date().toISOString(),
+    equipo: await nombresDelEquipo(),
+    objetivo,
+  };
+  return { ctx, leido, hayDelCliente: leido.fuentes.some((f) => esFuenteDelCliente(f.id)), conLoQueYaSabemos };
+}
+
+/**
+ * La respuesta de «Ubicar», leída: solo niveles (el pedido no pide otra cosa y, si llega, no se guarda) y la tarjeta de cada
+ * dimensión, que sale de esta misma llamada (2026-11-08: la nueva reemplaza entera a la anterior).
+ */
+export function leerLaRespuestaDeUbicar(
+  respuesta: Anthropic.Messages.Message,
+  ctx: ContextoDelPedido,
+  runId: string,
+): { items: ItemPropuesto[]; descartadas: number; tarjetas: TarjetasDeLaEscala | null } {
+  const r = leerLaRespuesta(respuesta, ctx, runId);
+  const items = r.items.filter((it) => it.destino.tipo === "nivel");
+  return {
+    items,
+    descartadas: r.descartadas + (r.items.length - items.length),
+    tarjetas: r.tarjetas && Object.keys(r.tarjetas).length ? { porDimension: r.tarjetas, en: new Date().toISOString(), corridaId: runId } : null,
+  };
 }
 
 /** Los nombres del equipo de Smarteam, de alta o de baja: el agente no los pone como gente del cliente. */

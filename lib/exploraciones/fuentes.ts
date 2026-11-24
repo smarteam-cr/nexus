@@ -56,6 +56,7 @@ const MAX_NOTAS = 60_000;
 import type { ClaveDeEquipo } from "./equipos";
 import {
   claveDeReunion,
+  clavesDeTrabajo,
   equiposDeLasReuniones,
   LARGO_DE_UNA_TRANSCRIPCION_CORTA,
   pestanasDeSesiones,
@@ -1035,19 +1036,23 @@ export async function fuentesDeHubspotSinMarcar(o: { clientId: string; companyId
  * `elegidas` (escala única, 2026-10-28): las que una persona unió a una sesión van primero, aunque no estén entre las más
  * recientes; también por el chokepoint (una de otra empresa no sale). Ocupan como mucho la mitad de los lugares: el resto
  * es para lo más reciente, que es lo que dice dónde está la empresa HOY.
+ * `excepto` y `desde` (24 nov, la preventa de un cliente): sin las que ya van enteras como sesión, y con los ids que siguen
+ * a los de las sesiones (con 2 sesiones, la base empieza en S3).
  */
 export async function reunionesEnResumen(
   clientId: string,
-  o: { cuantas?: number; caracteres?: number; elegidas?: readonly string[] } = {},
+  o: { cuantas?: number; caracteres?: number; elegidas?: readonly string[]; excepto?: readonly string[]; desde?: number } = {},
 ): Promise<{ fuentes: Fuente[]; sesiones: string[] }> {
   const cuantas = o.cuantas ?? 8;
   const caracteres = o.caracteres ?? 3_000;
+  const desde = Math.max(1, o.desde ?? 1);
+  const excepto = new Set(o.excepto ?? []);
   const [deLasElegidas, recientes] = await Promise.all([
-    o.elegidas?.length ? getClientSessions(clientId, { ids: o.elegidas.slice(0, 40) }) : Promise.resolve([]),
+    o.elegidas?.length ? getClientSessions(clientId, { ids: o.elegidas.filter((id) => !excepto.has(id)).slice(0, 40) }) : Promise.resolve([]),
     getClientSessions(clientId, { take: 40 }),
   ]);
   const yaEstan = new Set(deLasElegidas.map((s) => s.id));
-  const candidatas = [...deLasElegidas, ...recientes.filter((s) => !yaEstan.has(s.id))];
+  const candidatas = [...deLasElegidas, ...recientes.filter((s) => !yaEstan.has(s.id) && !excepto.has(s.id))];
   if (!candidatas.length) return { fuentes: [], sesiones: [] };
   const internos = await dominiosInternos();
   const deAfuera = candidatas.filter((s) => !esReunionDePuertasAdentro({ participants: s.participants }, internos));
@@ -1067,7 +1072,7 @@ export async function reunionesEnResumen(
     if (fuentes.length >= cuantas) break;
     const texto = resumenDeReunion({ title: f.title, summary: f.summary, minuta: f.minute }).texto.trim();
     if (!texto) continue;
-    fuentes.push({ id: `S${fuentes.length + 1}`, etiqueta: `Reunión del ${fecha(f.date)} (resumen): ${f.title}`, texto: texto.slice(0, caracteres) });
+    fuentes.push({ id: `S${desde + fuentes.length}`, etiqueta: `Reunión del ${fecha(f.date)} (resumen): ${f.title}`, texto: texto.slice(0, caracteres) });
     sesiones.push(f.id);
   }
   return { fuentes, sesiones };
@@ -1092,7 +1097,7 @@ export async function transcripcionesDeLaExploracion(
   } & DeLaFila,
   o: { cuantas?: number; caracteres?: number; porEquipo?: number; sinLugar?: ReadonlySet<ClaveDeEquipo> } = {},
   ahora = new Date(),
-): Promise<{ fuentes: Fuente[]; reuniones: { fuente: string; etiqueta: string; equipo?: ClaveDeEquipo }[]; sesiones: string[] }> {
+): Promise<{ fuentes: Fuente[]; reuniones: { fuente: string; etiqueta: string; equipo?: ClaveDeEquipo; deTrabajo?: true }[]; sesiones: string[] }> {
   const cuantas = o.cuantas ?? REUNIONES_QUE_LEE_UBICAR;
   const caracteres = o.caracteres ?? 40_000;
   const armadas = await armarReuniones(opts, 30, ahora);
@@ -1101,7 +1106,15 @@ export async function transcripcionesDeLaExploracion(
   const equipoDeCadaUna = o.porEquipo
     ? equiposDeLasReuniones(armadas.todas.map((r) => ({ fuente: r.id, clave: `${r.origen}:${r.id}`, origen: r.origen, fecha: r.fecha })), pestanas)
     : {};
-  const candidatas = reunionesParaUbicar(armadas.todas, armadas.deSesiones, cuantas, o.porEquipo ? { porEquipo: o.porEquipo, equipoDe: (id) => equipoDeCadaUna[id] ?? null, sinLugar: o.sinLugar } : null);
+  // Las reuniones de trabajo (24 nov): cuentan, pero después de las sesiones de diagnóstico.
+  const deTrabajo = clavesDeTrabajo(pestanas);
+  const candidatas = reunionesParaUbicar(
+    armadas.todas,
+    armadas.deSesiones,
+    cuantas,
+    o.porEquipo ? { porEquipo: o.porEquipo, equipoDe: (id) => equipoDeCadaUna[id] ?? null, sinLugar: o.sinLugar } : null,
+    { deTrabajo },
+  );
   if (!candidatas.length) return { fuentes: [], reuniones: [], sesiones: [] };
   const deLaEmpresa = new Set((await getClientSessions(opts.clientId, { ids: candidatas })).map((s) => s.id));
   const filas = await prisma.firefliesSession.findMany({
@@ -1121,9 +1134,15 @@ export async function transcripcionesDeLaExploracion(
     leidas.push({ fuente: id, clave: `meet:${s.id}`, etiqueta, id: s.id, origen: "meet", fecha: s.date.toISOString(), titulo: s.title });
   }
   const equipos = equiposDeLasReuniones(leidas, pestanas);
+  // Las de una reunión de trabajo (24 nov, lo que ya sabemos de un cliente): el pedido las nombra aparte y pesan menos.
   return {
     fuentes,
-    reuniones: leidas.map((r) => ({ fuente: r.fuente, etiqueta: r.etiqueta, ...(equipos[r.fuente] ? { equipo: equipos[r.fuente] } : {}) })),
+    reuniones: leidas.map((r) => ({
+      fuente: r.fuente,
+      etiqueta: r.etiqueta,
+      ...(equipos[r.fuente] ? { equipo: equipos[r.fuente] } : {}),
+      ...(deTrabajo.has(r.clave) ? { deTrabajo: true as const } : {}),
+    })),
     sesiones: leidas.map((r) => r.id),
   };
 }

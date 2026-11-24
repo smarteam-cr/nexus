@@ -133,6 +133,13 @@ export interface SesionPlaneada {
    */
   equipo?: ClaveDeEquipo;
   /**
+   * 24 nov (la preventa de un cliente, «lo que ya sabemos»): la reunión de esta sesión es una REUNIÓN DE TRABAJO con el
+   * cliente (una capacitación, una revisión de avance), no una sesión de diagnóstico. Cuenta igual para «Ubicar» y para el
+   * Resumen, con su equipo, pero pesa menos que una de diagnóstico, y la página del cliente la nombra aparte: «N reuniones
+   * de trabajo juntos y N sesiones de diagnóstico» (D4). Lo marca una persona (Nexus sugiere cuáles al agregar).
+   */
+  deLoQueYaSabemos?: boolean;
+  /**
    * K5 (2026-10-27, asociar.ts): cuándo Nexus unió SOLO esta sesión a su reunión (sin duda: el job `exploraciones-asociar`).
    * La pantalla lo dice («Nexus la unió») para que se pueda deshacer. Sin esto, la unió una persona.
    */
@@ -1491,6 +1498,20 @@ export function loQueTraes(
  * de Meet es la que se ve). Una reunión que no es de ninguna pestaña hereda el equipo solo si es la otra cara de la misma
  * reunión (Meet y HubSpot a menos de dos horas) y hay una sola así: nunca de otra sesión del mismo día. Sin equipo, no va.
  */
+/**
+ * Las reuniones de las sesiones marcadas como reunión de trabajo (24 nov, `SesionPlaneada.deLoQueYaSabemos`), por su clave
+ * (`meet:<id>`): la de la pestaña y la que eligió la persona. Lo usan «Ubicar» y el Resumen para nombrarlas aparte.
+ */
+export function clavesDeTrabajo(pestanas: readonly Pick<PestanaDeSesion, "sesion" | "reunion">[]): Set<string> {
+  const out = new Set<string>();
+  for (const p of pestanas) {
+    if (!p.sesion?.deLoQueYaSabemos) continue;
+    if (p.reunion) out.add(claveDeReunion(p.reunion));
+    if (p.sesion.reunion) out.add(claveDeReunion(p.sesion.reunion));
+  }
+  return out;
+}
+
 export function equiposDeLasReuniones(
   reuniones: readonly { fuente: string; clave: string; origen: string; fecha: string }[],
   pestanas: readonly PestanaDeSesion[],

@@ -607,6 +607,7 @@ const SesionPlaneadaObjeto = z.object({
   hechas: z.array(z.string().min(1).max(40)).max(30).optional(),
   ajustesDeLaGuia: AjustesDeLaGuiaSchema.optional(),
   equipo: z.enum(EQUIPOS_DEL_CLIENTE).optional(),
+  deLoQueYaSabemos: z.boolean().optional(),
   asociadaSola: FECHA_ISO.optional(),
   conQuien: z
     .array(z.object({ nombre: textoLleno(120), puesto: textoLleno(120).optional(), area: textoLleno(80).optional() }))

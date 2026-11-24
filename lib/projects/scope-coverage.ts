@@ -218,6 +218,8 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "lib/tareas/mutaciones.ts": { modo: "criterio", criterio: "clasificable" },
   // El ámbito (interno / cliente): una empresa es interna si TODOS sus proyectos clasificables lo son.
   "lib/tareas/ambito-server.ts": { modo: "criterio", criterio: "clasificable" },
+  // «Ubicar con lo que ya sabemos» (24 nov): el proyecto de contexto de la preventa de un cliente es uno que ve un agente.
+  "lib/exploraciones/posicionar-fuentes.ts": { modo: "criterio", criterio: "clasificable" },
   // El chat de tareas (1B): las H# del chip de un cliente son sus proyectos activos (clasificables); los que nombra lo
   // pendiente se leen por id solo para su nombre.
   "lib/tareas/chat/contexto.ts": { modo: "criterio", criterio: "clasificable" },
