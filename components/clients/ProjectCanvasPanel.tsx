@@ -1151,12 +1151,12 @@ export default function ProjectCanvasPanel({
                     ? `${BOTON_DE_HERRAMIENTA_ACTIVO} shrink-0`
                     : `${BOTON_DE_HERRAMIENTA} shrink-0`
                 }
-                title="Conversa el cambio con el asistente antes de generarlo"
+                title="Conversa el cambio con Nexus antes de generarlo"
               >
                 <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                   <path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12z" />
                 </svg>
-                Asistente
+                Nexus
               </button>
             )}
           {/* Export PDF. Qué camino toma lo decide el REGISTRO de impresión leyendo la pieza del

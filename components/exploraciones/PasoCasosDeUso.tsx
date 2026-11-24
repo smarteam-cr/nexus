@@ -35,9 +35,10 @@
  *   - Las actividades de un caso, por etapa, con quién la hace, las veces, las horas y cómo se reparten (con el cliente /
  *     internas); el ⓘ abre qué se hace, qué incluye y de qué está hecho su tiempo.
  *   - «Mejorar con IA»: el CSE escribe una instrucción y el agente propone cómo quedan las actividades y lo que conviene
- *     sumar aparte; se revisa en `<AgentProposal>` y se aplica (con «Deshacer») o se descarta.
+ *     sumar aparte; se revisa en el chat «Nexus» (desde el 24 nov, el mismo de todos) y se aplica (con «Deshacer») o se
+ *     descarta.
  */
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useUndo } from "@/components/ui/UndoProvider";
 import {
   actividadesDelElegido,
@@ -78,8 +79,9 @@ import { claveDeInstrucciones, MAX_NOTA_DE_SESION, textoDeLaLectura } from "@/li
 import LecturaDelConsultor from "./LecturaDelConsultor";
 import { aplicarMejora, diferenciaDeActividades, MAX_LARGO_DE_LA_INSTRUCCION, resumenDeLaMejora, type PropuestaDeMejora } from "@/lib/casos-de-uso/mejorar";
 import Link from "next/link";
-import { AgentProposal } from "@/components/ai/AgentProposal";
-import { Alert, Badge, IconButton, Select, Selector, Textarea, useToast } from "@/components/ui";
+import ChatDeUnPedido, { PuntoDePropuesta, useAvisoDePropuestaLista } from "@/components/asistente/ChatDeUnPedido";
+import { Burbuja, PropuestaEnElHilo } from "@/components/asistente/CajonDeNexus";
+import { Alert, Badge, IconButton, Select, Selector, useToast } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { useMe } from "@/hooks/useMe";
 import { esCasoLibre, laEscalaTieneBase, sePuedeDeshacer, type CasoDeUsoElegido, type ItemPropuesto } from "@/lib/exploraciones/contenido";
@@ -478,8 +480,10 @@ function ActividadesDelCaso({ id, caso, editable }: { id: string; caso: CasoDeUs
 
 /**
  * «Mejorar con IA» de las actividades de un caso elegido (décima vuelta, lib/casos-de-uso/mejorar.ts): el CSE escribe
- * una instrucción, el agente propone cómo queda la lista y lo que conviene sumar aparte, y el CSE lo revisa en
- * `<AgentProposal>`: aplica (con «Deshacer») o descarta. Nada se guarda hasta aplicar.
+ * una instrucción, el agente propone cómo queda la lista y lo que conviene sumar aparte, y el CSE lo revisa: aplica (con
+ * «Deshacer») o descarta. Nada se guarda hasta aplicar. Desde el 24 nov va en el chat «Nexus» de todos (Elías: «todo debe
+ * abrir el mismo chat con la misma interfaz»): el pedido en la caja de abajo, con el caso como chip, y la propuesta en el
+ * hilo (antes era un panel dentro de la tarjeta).
  */
 function MejorarConIA({ id, caso }: { id: string; caso: CasoDeUsoElegido }) {
   const armado = useContext(ArmadoContexto);
@@ -487,20 +491,30 @@ function MejorarConIA({ id, caso }: { id: string; caso: CasoDeUsoElegido }) {
   const { pushUndo } = useUndo();
   const toast = useToast();
   const [abierto, setAbierto] = useState(false);
-  const [instruccion, setInstruccion] = useState("");
+  const [enviado, setEnviado] = useState<string | null>(null);
   const [pidiendo, setPidiendo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [propuesta, setPropuesta] = useState<{ p: PropuestaDeMejora; base: ActividadDelCaso[]; instruccion: string } | null>(null);
   const [elegidas, setElegidas] = useState<ReadonlySet<number>>(new Set());
   const [aplicando, setAplicando] = useState(false);
+  /** Lo que pasó con la propuesta, en el hilo («Listo: …», «Descartaste…»). */
+  const [hecho, setHecho] = useState<string | null>(null);
+  const avisarSiEstaCerrado = useAvisoDePropuestaLista(abierto);
   if (!armado) return null;
   const acts = actividadesDe(id, caso, armado);
 
-  const pedir = async () => {
-    const texto = instruccion.trim();
-    if (texto.length < 3 || pidiendo) return;
+  // ⚠ La propuesta de antes no se borra al pedir otra: se esconde mientras Nexus piensa y vuelve si el pedido falla.
+  const pedir = async (texto: string): Promise<boolean> => {
+    if (texto.length < 3 || pidiendo) return false;
+    const antes = { enviado, hecho };
+    const volver = () => {
+      setEnviado(antes.enviado);
+      setHecho(antes.hecho);
+    };
     setPidiendo(true);
     setError(null);
+    setEnviado(texto);
+    setHecho(null);
     try {
       const res = await fetch(`/api/sales/exploraciones/${exp.id}/casos/mejorar`, {
         method: "POST",
@@ -510,21 +524,31 @@ function MejorarConIA({ id, caso }: { id: string; caso: CasoDeUsoElegido }) {
       const data = (await res.json().catch(() => ({}))) as { propuesta?: PropuestaDeMejora; error?: string };
       if (!res.ok || !data.propuesta) {
         setError(data.error ?? "No se pudo pedir la mejora.");
-        return;
+        volver();
+        return false;
       }
       setPropuesta({ p: data.propuesta, base: acts, instruccion: texto });
       setElegidas(new Set());
+      // Llegó con el chat cerrado: se avisa, y el botón lleva su punto.
+      avisarSiEstaCerrado();
+      return true;
     } catch {
       setError("No se pudo pedir la mejora. Revisa tu conexión.");
+      volver();
+      return false;
     } finally {
       setPidiendo(false);
     }
   };
-  const cerrar = () => {
+  const empezarDeNuevo = () => {
     setPropuesta(null);
-    setAbierto(false);
-    setInstruccion("");
+    setEnviado(null);
     setError(null);
+    setHecho(null);
+  };
+  const descartar = () => {
+    setPropuesta(null);
+    setHecho("Descartaste la propuesta: las actividades no cambiaron.");
   };
   const aplicar = async () => {
     if (!propuesta) return;
@@ -536,21 +560,18 @@ function MejorarConIA({ id, caso }: { id: string; caso: CasoDeUsoElegido }) {
       if (!ok) return;
       pushUndo({ scope: `exploracion:${exp.id}`, label: `Aplicaste la mejora a «${caso.titulo}»`, undo: () => void cambiar([{ op: "casoDeUso", useCaseId: id, valor: caso }]) });
       toast.success(`Las actividades de «${caso.titulo}» quedaron con la mejora.`);
-      cerrar();
+      // El chat se queda abierto (como el de los documentos): lo aplicado queda dicho en el hilo.
+      setPropuesta(null);
+      setHecho(`Listo: las actividades de «${caso.titulo}» quedaron con la mejora. Ctrl+Z o «Deshacer» lo vuelven atrás.`);
     } finally {
       setAplicando(false);
     }
   };
 
-  if (!abierto)
-    return (
-      <BotonBlanco className="inline-flex items-center gap-1.5" disabled={guardando} onClick={() => setAbierto(true)}>
-        <IconoDeSugerencia className="h-3.5 w-3.5 text-brand" />
-        Mejorar con IA
-      </BotonBlanco>
-    );
-
-  if (propuesta) {
+  let detalle: ReactNode = null;
+  if (pidiendo) {
+    // Mientras Nexus piensa, la propuesta de antes no se ve (vuelve si el pedido falla).
+  } else if (propuesta) {
     const filas = diferenciaDeActividades(propuesta.base, propuesta.p.actividades);
     const r = resumenDeLaMejora(filas);
     const cambian = filas.filter((f) => f.estado !== "igual");
@@ -563,25 +584,23 @@ function MejorarConIA({ id, caso }: { id: string; caso: CasoDeUsoElegido }) {
       const lib = armado.porId.get(a.actividadId);
       return lib && !lib.horasPendientes ? formatoHoras(horasDeLaActividad(a, lib)) : "";
     };
-    return (
-      <AgentProposal
-        title="Propuesta para las actividades"
-        subtitle={`Tu instrucción: «${propuesta.instruccion}»`}
-        summary={[
+    detalle = (
+      <PropuestaEnElHilo
+        titulo="Propuesta para las actividades"
+        subtitulo={[
           r.nuevas ? `${r.nuevas} ${r.nuevas === 1 ? "entra" : "entran"}` : "",
           r.quitadas ? `${r.quitadas} ${r.quitadas === 1 ? "sale" : "salen"}` : "",
           r.cambiadas ? `${r.cambiadas} ${r.cambiadas === 1 ? "cambia" : "cambian"}` : "",
           antes !== despues ? `${formatoHoras(antes)} → ${formatoHoras(despues)} (desde ${formatoUsd(precioMinimo(despues, armado.tarifa))})` : "mismas horas",
-        ].filter(Boolean)}
-        reasoning={propuesta.p.cambios.join(" ")}
-        warnings={cambioMientras ? ["Las actividades cambiaron mientras el agente trabajaba: al aplicar, quedan las de esta propuesta."] : undefined}
-        applyLabel="Aplicar"
-        discardLabel="Descartar"
-        applying={aplicando || guardando}
-        onApply={aplicar}
-        onDiscard={cerrar}
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+        nota={propuesta.p.cambios.join(" ") || undefined}
+        aplicar={{ rotulo: "Aplicar", alHacer: () => void aplicar(), ocupado: aplicando || guardando }}
+        descartar={{ rotulo: "Descartar", alHacer: descartar, apagado: aplicando || guardando }}
       >
         <div className="space-y-3 text-xs">
+          {cambioMientras && <p className="text-warn-ink">⚠ Las actividades cambiaron mientras el agente trabajaba: al aplicar, quedan las de esta propuesta.</p>}
           {cambian.length === 0 ? (
             <p className="text-fg-secondary">La lista queda igual{propuesta.p.sugeridas.length ? ": lo que propone está en las sugeridas de abajo." : "."}</p>
           ) : (
@@ -656,46 +675,42 @@ function MejorarConIA({ id, caso }: { id: string; caso: CasoDeUsoElegido }) {
             </div>
           )}
         </div>
-      </AgentProposal>
+      </PropuestaEnElHilo>
     );
+  } else if (hecho) {
+    detalle = <Burbuja de="nexus">{hecho}</Burbuja>;
   }
 
+
   return (
-    <div className="space-y-2 rounded-lg border border-info-line bg-info-surface px-3 py-2.5">
-      <p className="flex items-center gap-1.5 text-xs font-medium text-fg">
+    <>
+      <BotonBlanco className="inline-flex items-center gap-1.5" disabled={guardando} onClick={() => setAbierto(true)} aria-expanded={abierto}>
         <IconoDeSugerencia className="h-3.5 w-3.5 text-brand" />
-        Mejorar con IA las actividades de este caso
-      </p>
-      <Textarea
-        aria-label="Qué quieres cambiar en las actividades"
-        rows={2}
-        maxLength={MAX_LARGO_DE_LA_INSTRUCCION}
-        placeholder="Por ejemplo: quita la capacitación y suma la integración con WhatsApp."
-        value={instruccion}
-        disabled={pidiendo}
-        onChange={(e) => setInstruccion(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void pedir();
+        Mejorar con IA
+        {propuesta && !abierto && <PuntoDePropuesta />}
+      </BotonBlanco>
+      <ChatDeUnPedido
+        abierto={abierto}
+        onClose={() => setAbierto(false)}
+        subtitulo={`Casos de uso › ${caso.titulo}`}
+        chip={`Sobre las actividades de «${caso.titulo}»`}
+        vacio={{
+          intro: "Dile qué quieres cambiar en las actividades de este caso. Por ejemplo:",
+          ejemplos: ["Quita la capacitación y suma la integración con WhatsApp."],
+          cierre: "Nexus propone cómo queda la lista y lo que conviene sumar aparte; nada cambia hasta que apliques.",
         }}
-      />
-      {error && <p className="text-xs text-danger-ink">{error}</p>}
-      <div className="flex flex-wrap items-center gap-2">
-        {pidiendo ? (
-          <p role="status" className="flex items-center gap-1.5 text-xs text-brand">
-            <IconoDeSugerencia className="h-3.5 w-3.5" />
-            El agente está revisando las actividades con tu instrucción… (unos 20 segundos)
-          </p>
-        ) : (
-          <>
-            <BotonAzul disabled={instruccion.trim().length < 3} onClick={() => void pedir()}>
-              Proponer cambios
-            </BotonAzul>
-            <BotonTexto onClick={cerrar}>Cancelar</BotonTexto>
-            <span className="text-[11px] text-fg-muted">No cambia nada hasta que apliques la propuesta.</span>
-          </>
-        )}
-      </div>
-    </div>
+        maxLength={MAX_LARGO_DE_LA_INSTRUCCION}
+        enviado={enviado}
+        pidiendo={pidiendo}
+        textoPensando="Nexus está revisando las actividades con tu pedido… (unos 20 segundos)"
+        error={error}
+        onPedir={pedir}
+        ocupado={aplicando || guardando}
+        onNueva={empezarDeNuevo}
+      >
+        {detalle}
+      </ChatDeUnPedido>
+    </>
   );
 }
 

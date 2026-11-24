@@ -25,6 +25,7 @@ const MOTOR = "components/landing/LandingView.tsx";
 const PROVEEDOR = "components/asistente/chat-de-seccion.tsx";
 const PANEL = "components/clients/ProjectCanvasPanel.tsx";
 const CHAT = "components/asistente/ChatDelAsistente.tsx";
+const MARCO = "components/asistente/CajonDeNexus.tsx";
 const HERRAMIENTAS = "components/business-cases/SectionTools.tsx";
 const ALCANCE = "lib/asistente/alcance.ts";
 const GANTT = "components/canvas/TimelineGantt.tsx";
@@ -207,13 +208,18 @@ describe("⭐ E4 P1 · el «IA» de una fase abre el chat del cronograma con esa
     const montaje = canvas.slice(canvas.indexOf("<ChatDelAsistente"), canvas.indexOf("/>", canvas.indexOf("<ChatDelAsistente")));
     expect(montaje.length).toBeGreaterThan(200);
     expect(montaje, "el cronograma no le pasa el pedido de foco al cajón").toContain("pedidoDeFoco={pedidoDeFoco}");
-    const cajon = sinComentarios(leer(CHAT)).replace(/\r\n/g, "\n");
+    // Desde el 24 nov el efecto vive en el marco común de los chats (CajonDeNexus.tsx); el chat se lo pasa.
+    const chat = sinComentarios(leer(CHAT));
+    expect(chat).toContain("pedidoDeFoco = 0,");
+    expect(chat, "el chat no le pasa el pedido de foco al marco").toContain("pedidoDeFoco={pedidoDeFoco}");
+    const cajon = sinComentarios(leer(MARCO)).replace(/\r\n/g, "\n");
     const iDeps = cajon.indexOf("}, [pedidoDeFoco]);");
     expect(iDeps, "el cajón no tiene un efecto que escuche SOLO el pedido de foco").toBeGreaterThan(-1);
     const efecto = cajon.slice(cajon.lastIndexOf("useEffect(() => {", iDeps), iDeps);
     expect(efecto.length).toBeGreaterThan(60);
     expect(efecto).toContain("if (!abierto || !pedidoDeFoco) return;");
-    expect(efecto).toContain("composerRef.current?.focus()");
+    expect(efecto).toContain("enfocar()");
+    expect(cajon).toContain("if (caja && !caja.disabled) caja.focus();");
     expect(cajon).toContain("pedidoDeFoco = 0,");
   });
 

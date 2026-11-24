@@ -115,7 +115,7 @@ export function CajonDeProyecto({
               onCerrar();
             }}
           >
-            Preguntarle al asistente
+            Preguntarle a Nexus
           </BotonTexto>
         ) : undefined
       }

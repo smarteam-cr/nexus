@@ -278,7 +278,9 @@ export function ChatDeNexus({
         <ChatDelAsistente
           base={base}
           pieza={PIEZA_NEXUS}
-          piezaLabel={`Nexus · ${nombre}`}
+          piezaLabel={nombre}
+          // El aviso ya dice la cuenta («Sobre Cemaco · …»): el subtítulo no la repite.
+          lugar={null}
           abierto={abierto}
           onClose={() => setAbierto(false)}
           onAplicar={onAplicar}

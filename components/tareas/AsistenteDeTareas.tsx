@@ -3,8 +3,8 @@
  * components/tareas/AsistenteDeTareas.tsx — EL CHAT DE TAREAS, una vez en el shell (docs/tareas-plan.md §6.1).
  *
  * El hilo es uno por persona y la sigue por todas las pantallas: por eso el cajón se monta acá y no en cada página.
- * Lo abren el botón «Asistente» de las pantallas de Tareas, «Preguntarle al asistente» en el cajón de una tarea o de
- * un proyecto (con su chip), y «o pídeselo al asistente» de «+ Tarea» (con lo que ya se escribió).
+ * Lo abren el botón «Nexus» de las pantallas de Tareas, «Preguntarle a Nexus» en el cajón de una tarea o de un proyecto
+ * (con su chip), y «o pídeselo a Nexus» de «+ Tarea» (con lo que ya se escribió). Hasta el 24 nov se llamaban «Asistente».
  *
  * ⛔ El cajón (ChatDelAsistente) no sabe de tareas: este envoltorio le pasa sus rótulos, el texto del botón y el
  * aplicar, que va al SERVIDOR (`POST /api/tareas/operaciones`): ahí se lee el acuerdo del hilo, se aplica todo o
@@ -154,6 +154,8 @@ export function AsistenteDeTareasProvider({ habilitado, email, children }: { hab
           base="/api/tareas"
           pieza={PIEZA_TAREAS}
           piezaLabel="Tus tareas"
+          // El aviso ya lo dice («Tus tareas, desde cualquier pantalla»).
+          lugar={null}
           abierto={abierto}
           onClose={cerrar}
           onAplicar={onAplicar}
@@ -180,7 +182,7 @@ export function AsistenteDeTareasProvider({ habilitado, email, children }: { hab
   );
 }
 
-/** El botón «Asistente» de las cabeceras de Tareas. Sin el chat (fuera del piloto o sin la celda), no se pinta. */
+/** El botón «Nexus» de las cabeceras de Tareas (se llamaba «Asistente» hasta el 24 nov). Sin el chat (fuera del piloto o sin la celda), no se pinta. */
 export function BotonDelAsistente({ chip = null }: { chip?: ChipDelChat | null }) {
   const asistente = useAsistenteDeTareas();
   if (!asistente) return null;
@@ -199,7 +201,8 @@ export function BotonDelAsistente({ chip = null }: { chip?: ChipDelChat | null }
       <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12z" />
       </svg>
-      Asistente
+      {/* Un solo nombre para el chat (24 nov): «Nexus», como en la ficha y en la preventa. */}
+      Nexus
     </button>
   );
 }

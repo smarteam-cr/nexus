@@ -217,7 +217,7 @@ export async function manejarPostDelAsistente(req: NextRequest, dueno: DuenoDeDo
   } catch (e) {
     /* El turno del CSE se pierde si el modelo falló — a propósito: guardar una pregunta que nadie
        contestó deja el hilo con un turno colgado que el próximo pedido reenvía como contexto. */
-    const msg = e instanceof Error ? e.message : "el asistente no pudo contestar";
+    const msg = e instanceof Error ? e.message : "Nexus no pudo contestar";
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 }

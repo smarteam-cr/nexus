@@ -2298,7 +2298,7 @@ export default function CronogramaCanvas({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...payload,
-          reason: resumen || "Cambio acordado en el asistente",
+          reason: resumen || "Cambio acordado con Nexus",
           kind: "AI_ASSIST",
           instruction: resumen || null,
         }),
@@ -3924,13 +3924,13 @@ export default function CronogramaCanvas({
                   ? BOTON_DE_HERRAMIENTA_ACTIVO
                   : BOTON_DE_HERRAMIENTA
               }
-              title="Conversa el cambio con el asistente: te dice qué se puede y qué fecha mueve."
+              title="Conversa el cambio con Nexus: te dice qué se puede y qué fecha mueve."
             >
-              {/* Mismo botón que «Asistente» en los demás documentos (rediseño del 2026-10-04). */}
+              {/* Mismo botón que «Nexus» en los demás documentos (rediseño del 2026-10-04; se llamaba «Asistente» hasta el 24 nov). */}
               <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                 <path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12z" />
               </svg>
-              Asistente
+              Nexus
               {/* Revisión de E3 (#17): llegó una propuesta y el chat no se abrió solo (la persona estaba en
                   otra cosa): el punto lo dice hasta que lo abra. */}
               {puntoDelChat !== null && puntoDelChat === tokenParaLaApertura && !chatAbierto ? (

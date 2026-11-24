@@ -16835,3 +16835,61 @@ El flujo vive en ARCHITECTURE Parte 0 · cap. D y en RUNBOOK › «Registro de l
   datos por tabla. Un `.sql` que cambia datos se mira en el simulacro antes del `--apply`.
 - **Queda para después:** que el deploy no arranque si a la base le falta un `.sql` del registro (la otra mitad de la
   oportunidad 4 de la evaluación). Hoy el registro informa y `/api/health` sigue siendo la red.
+
+## Un solo chat «Nexus»: la misma interfaz en toda la app (2026-11-24)
+
+Elías, 24 nov, al probar La escala de Centauro y Cemaco: «Todo debe abrir el mismo chat con la misma interfaz […] Me
+parece más acertado el diseño del chat de clientes, porque lo veo más sencillo.» Hasta ese día había cuatro caras: el
+cajón de los documentos, una ventana modal en la preventa, otra en los artefactos y el perfil de puesto, y un panel dentro
+de la tarjeta de un caso de uso.
+
+- **Un solo marco** (`components/asistente/CajonDeNexus.tsx`): cajón lateral sin fondo oscuro, título «Nexus» y debajo de
+  qué se habla; «Nueva conversación» en la cabecera, junto a la ✕, siempre a la vista (apagada si no hay nada); la caja
+  fija abajo, que crece, con dictado, Enter envía y Shift+Enter baja de renglón (en el celular, el botón; con un acento a
+  medio componer no envía); lo que se mejora como chip sobre la caja; «Nexus está pensando…»; el hilo baja solo al último
+  mensaje; Escape cierra (no por debajo de un modal); los ejemplos, solo con el chat vacío. Lo montan el chat de los
+  documentos, del cronograma, de la cuenta y de Tareas (`ChatDelAsistente`), la conversación de la preventa
+  (`PanelDeNexus`), el pedido a La escala (`PedirleANexus`) y los «Mejorar con IA» de un solo pedido (`ChatDeUnPedido`:
+  artefactos y documentos sin chat, el perfil de un puesto, las actividades de un caso). La guarda es
+  `lib/asistente/un-solo-chat.test.ts`. *Por qué el de clientes:* lo eligió Elías, y es el que deja ver la página: la
+  conversación es sobre lo que está en pantalla.
+- **La propuesta va en el hilo** (`PropuestaEnElHilo`): la caja azul del acuerdo, con «Aplicar» a todo el ancho y
+  «Descartar» debajo. *Por qué no `<AgentProposal>`:* en 400 px sus botones, a la derecha del título, no caben. Queda
+  anotado en su cabecera como paradigma propio.
+- **Un solo nombre por gesto:** el botón que abre el chat se llama «Nexus» (era «Asistente» en los documentos, el
+  cronograma, la propuesta comercial y Tareas); el que pide un cambio sobre una parte, «✨ Mejorar con IA» (era también
+  «Mejorar con el asistente» en la guía y «Cambiar con el chat» en las novedades de un documento). Es la pregunta 104 del
+  roadmap llevada a toda la app.
+- **Lo que se movió, sin quitar nada:** en la preventa, la ventana modal pasa a cajón; el párrafo de ayuda y el ejemplo de
+  la caja pasan al chat vacío; «Nueva conversación» sube a la cabecera; el rótulo «Nexus» de cada respuesta sale (el
+  título ya lo dice), y también la línea «Enter envía; Shift+Enter, otro renglón» (es la convención de todo chat);
+  «Volver a conversar» es la ✕ del chip de La escala; «Pedir» con Ctrl+Enter es «Enviar» con Enter, y lo pedido queda en
+  el hilo como el mensaje de la persona; «Nexus propone, tú aplicas; nada se publica» va en su propia línea debajo del
+  subtítulo, siempre a la vista y entera (en los pedidos de un solo paso, «Nada cambia hasta que lo apliques.»). En los documentos, «Asistente · Diagnóstico» pasa a «Nexus» con «Diagnóstico · …» de subtítulo. En los «Mejorar
+  con IA» de un pedido, la propuesta va en el chat y no en la página, y su error, en el hilo en vez de un aviso flotante;
+  la ventana vieja (`components/ai/AssistDialog.tsx`) se borró. Todos los chats ganan el dictado, y en una pantalla
+  táctil Enter baja de renglón y se envía con el botón (antes, los documentos enviaban con Enter también ahí).
+- **Lo que el chat ya no tapa, y se cuida (dos vueltas de revisión del 24 nov):** como la página sigue viva, se puede pasar
+  de la conversación al pedido de La escala sin cerrar el chat.
+  - La conversación queda montada (escondida) mientras se ve el pedido: ir y volver no pierde lo que se estaba mandando
+    ni lo escrito en la caja.
+  - Dejar la conversación (cerrar o pasar a La escala) cancela la cuenta regresiva de La escala solo si estaba A LA VISTA:
+    al volver no corre otra (`seVeLaCuentaDeLaEscala` y `avisoAlDejarLaConversacion`, lib/exploraciones/nexus-en-la-preventa.ts;
+    sin esto, rehacía La escala aunque la persona la hubiera cancelado). Si la revisión de la nota no había vuelto, la
+    cuenta no se veía: al volver se ve por primera vez, con su «Cancelar». *Enmienda* lo del 21 nov («mientras la revisión
+    no volvió, tampoco»): decir «la dejaste a la vista» sin que nadie la viera escondía que La escala había quedado vieja.
+  - Volver el foco al cerrar no mueve la página (`preventScroll`): al pasar a La escala saltaba arriba.
+  - Un «Mejorar con IA» de un pedido se puede cerrar mientras Nexus piensa (la ventana vieja no se cerraba): la propuesta
+    que llega con el chat cerrado se avisa, si el botón sigue en pantalla, y el botón lleva un punto. Pedir otra no borra
+    la de antes hasta que llega la nueva. *Lo que no cubre:* si la persona se va de esa pantalla mientras Nexus piensa (otro
+    paso de la preventa, otro artefacto, otro puesto), la propuesta se pierde; guardarla como la de La escala es un paso aparte.
+  - Lo que se escribe mientras Nexus piensa no se pierde si el envío falla, en los cuatro chats (`devolverALaCaja`,
+    lib/asistente/caja.ts); si junto pasa del largo máximo, la caja lo avisa y no deja enviar hasta acortarlo.
+  - En La escala, el «Deshacer» de lo último aplicado se queda si el pedido siguiente falla.
+- **Los textos que quedaban con «asistente»** dicen «Nexus»: el recorrido del cronograma («Pídele cambios a Nexus»), el
+  error del chat («Nexus no pudo contestar»), el origen de una tarea o de una pregunta de la guía («De Nexus», «Cambiada
+  por Nexus»), el borrador de un plan de Tareas y el motivo que guarda el cronograma («Cambio acordado con Nexus»).
+- **Lo que no cambia:** los motores. Detrás del botón siguen dos conversaciones (contar y preguntar; tareas, siguiente
+  paso y la guía) y los pedidos de un solo paso. Juntarlas es «Una sola conversación en el chat «Nexus»» del roadmap, un
+  paso propio (la etapa 2 del plan maestro ya lo separaba). Las notas, los hechos, el aviso de lo interno, «Aplicar
+  todo», «Deshacer» y el historial de versiones siguen igual.

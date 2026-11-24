@@ -212,7 +212,7 @@ export function LeerReunion({ abierto, onCerrar, onLeida }: { abierto: boolean; 
               onCerrar();
             }}
           >
-            Preguntarle al asistente
+            Preguntarle a Nexus
           </BotonTexto>
         ) : null}
         <BotonAzul onClick={onCerrar} disabled={leyendo}>

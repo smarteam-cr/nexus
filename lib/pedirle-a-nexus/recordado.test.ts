@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { PropuestaDeNexus } from "./contrato";
-import { leerRecordado, recordar, SIN_PEDIDO } from "./recordado";
+import { leerRecordado, loQueSeVeEnElHilo, recordar, SIN_PEDIDO } from "./recordado";
 
 const PROPUESTA: PropuestaDeNexus = {
   pedido: "cambia el titular",
@@ -43,5 +43,26 @@ describe("el pedido recordado de un lugar", () => {
     expect(leerRecordado("escala:e2:resumen").pedido).toBe("del Resumen");
     expect(leerRecordado("escala:e2:area:1").pedido).toBe("de Ventas");
     expect(leerRecordado("escala:e3:resumen")).toBe(SIN_PEDIDO);
+  });
+});
+
+describe("⛔ lo que muestra el hilo del pedido (24 nov, el chat «Nexus» de todos)", () => {
+  it("mientras Nexus piensa un pedido nuevo, se ve ESE pedido y la propuesta de antes se esconde", () => {
+    expect(loQueSeVeEnElHilo({ enviado: "agrega un punto sobre WhatsApp", pidiendo: true, propuesta: PROPUESTA })).toEqual({
+      pedido: "agrega un punto sobre WhatsApp",
+      conPropuesta: false,
+    });
+  });
+
+  it("si el pedido falla (enviado vuelve a null), la propuesta de antes vuelve con su pedido", () => {
+    expect(loQueSeVeEnElHilo({ enviado: null, pidiendo: false, propuesta: PROPUESTA })).toEqual({ pedido: "cambia el titular", conPropuesta: true });
+  });
+
+  it("con la propuesta nueva en la mano, se ven el pedido y la propuesta", () => {
+    expect(loQueSeVeEnElHilo({ enviado: "cambia el titular", pidiendo: false, propuesta: PROPUESTA })).toEqual({ pedido: "cambia el titular", conPropuesta: true });
+  });
+
+  it("sin nada pedido, nada", () => {
+    expect(loQueSeVeEnElHilo(SIN_PEDIDO)).toEqual({ pedido: null, conPropuesta: false });
   });
 });

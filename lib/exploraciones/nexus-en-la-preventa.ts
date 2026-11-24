@@ -286,3 +286,37 @@ export function resumenDeAplicarTodo(r: ResultadoDeAplicarTodo): string {
     : "";
   return `${frase}.${aMano}`;
 }
+
+/**
+ * El aviso de La escala en la conversación de la preventa: a la vista (con su cuenta regresiva de 10 s), cerrado por la
+ * persona, cancelado al dejar la conversación, o de una conversación de antes (al volver a la página).
+ */
+export type EstadoDelAvisoDeLaEscala = "abierto" | "cerrado" | "cancelado-al-cerrar" | "de-antes";
+
+/**
+ * ¿La cuenta regresiva de La escala está en pantalla? Con el chat abierto en la conversación (no en el pedido a La escala),
+ * la nota guardada, la revisión de vuelta diciendo que cambia La escala, y el aviso sin cerrar. Mientras la revisión no
+ * vuelve, NO: todavía no hay cuenta.
+ */
+export function seVeLaCuentaDeLaEscala(o: {
+  chatAbierto: boolean;
+  enLaConversacion: boolean;
+  notaGuardada: boolean;
+  /** Lo que dijo la revisión de la nota; null mientras no vuelve. */
+  revision: { cambia: boolean; fallo: boolean } | null;
+  aviso: EstadoDelAvisoDeLaEscala;
+}): boolean {
+  return o.chatAbierto && o.enLaConversacion && o.notaGuardada && !!o.revision && !o.revision.fallo && o.revision.cambia && o.aviso === "abierto";
+}
+
+/**
+ * ⛔ Al DEJAR la conversación —cerrar el chat o pasar al pedido de La escala con «✨ Mejorar con IA»— la cuenta que estaba
+ * A LA VISTA no vuelve a contar. La cuenta vive en el aviso (components/impacto/AvisoDeImpacto.tsx) y se pierde al salir de
+ * la pantalla: sin esto, al volver arrancaba otra de 10 s y rehacía La escala aunque la persona la hubiera cancelado
+ * (revisión del 24 nov: desde que el chat no tapa la página, se puede pasar a La escala sin cerrarlo). Si la cuenta todavía
+ * no se veía (la revisión no había vuelto), queda como está: al volver se ve por primera vez, con su «Cancelar». Decir «la
+ * dejaste a la vista» sin que nadie la viera escondía que La escala había quedado vieja (segunda revisión del 24 nov).
+ */
+export function avisoAlDejarLaConversacion(a: EstadoDelAvisoDeLaEscala, cuentaALaVista: boolean): EstadoDelAvisoDeLaEscala {
+  return cuentaALaVista && a === "abierto" ? "cancelado-al-cerrar" : a;
+}

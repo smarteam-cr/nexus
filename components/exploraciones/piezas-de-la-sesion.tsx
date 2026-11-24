@@ -224,8 +224,8 @@ export function ChipDeLaMarca({ marca, cambiada }: { marca: NonNullable<Pregunta
         : "Tuya"
       : marca === "asistente"
         ? cambiada
-          ? "Cambiada por el asistente"
-          : "Del asistente"
+          ? "Cambiada por Nexus"
+          : "De Nexus"
         : marca === "objetivo"
           ? "Por el objetivo"
           : "Regenerada";

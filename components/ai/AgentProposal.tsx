@@ -27,6 +27,10 @@ import { cn } from "@/lib/cn";
 //     lugar de cada casilla, con su «Usar / Descartar» y su fuente. Este banner
 //     solo resume lo pendiente de todas las corridas y ofrece usar o descartar
 //     todo junto; no es la propuesta de UNA corrida.
+//   - Una propuesta DENTRO del chat «Nexus» (24 nov: un solo chat en toda la app) →
+//     `PropuestaEnElHilo` (components/asistente/CajonDeNexus.tsx): el hilo mide 400 px y
+//     los botones van abajo, a todo el ancho, como la caja del acuerdo del chat; acá van
+//     a la derecha del título y no caben.
 //
 // `tone` mapea a los acentos ya establecidos: brand (propuesta general),
 // progress (avance detectado, esmeralda), deviation (particularidades, ámbar).

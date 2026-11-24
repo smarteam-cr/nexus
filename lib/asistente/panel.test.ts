@@ -32,9 +32,12 @@ function soloCodigo(src: string): string {
     .replace(/^\s*\/\/.*$/gm, "");
 }
 
-const PANEL = soloCodigo(
-  fs.readFileSync(path.join(RAIZ, "components/asistente/ChatDelAsistente.tsx"), "utf8"),
-);
+/* Desde el 24 nov el MARCO del cajón (portal, z, Escape, foco, la caja que crece) vive en `CajonDeNexus.tsx`, el mismo para
+   todos los chats («todo debe abrir el mismo chat con la misma interfaz», Elías). Las guardas miran los dos archivos: lo
+   que se mudó se sigue exigiendo donde está ahora. */
+const PANEL =
+  soloCodigo(fs.readFileSync(path.join(RAIZ, "components/asistente/ChatDelAsistente.tsx"), "utf8")) +
+  soloCodigo(fs.readFileSync(path.join(RAIZ, "components/asistente/CajonDeNexus.tsx"), "utf8"));
 
 
 describe("el panel del asistente NO es modal", () => {
@@ -91,8 +94,10 @@ describe("⚠ el cajón se puede usar sin mouse", () => {
   it("⛔ el foco entra al abrir y VUELVE al cerrar", () => {
     /* La edición que la pone en rojo: borrar el efecto. Nada falla a la vista; simplemente el
        chat deja de existir para quien no usa mouse. */
-    expect(PANEL).toContain("composerRef.current?.focus()");
-    expect(PANEL, "el foco no vuelve de donde vino: se cae a body").toContain("previo?.focus?.()");
+    // El marco enfoca la caja, o el cajón si la caja está apagada (24 nov).
+    expect(PANEL).toContain("if (caja && !caja.disabled) caja.focus();");
+    expect(PANEL).toContain("enfocar()");
+    expect(PANEL, "el foco no vuelve de donde vino: se cae a body").toContain("previo?.focus?.(");
   });
 
   it("⛔ y Escape no cierra el cajón por debajo de un modal", () => {
@@ -529,8 +534,9 @@ describe("⛔ lo que la revisión de calidad encontró, y son pérdidas de dato"
        colgando del acuerdo equivocado, y «Nueva» hace que se escriba sobre un hilo recién creado.
        La edición que la pone en rojo: sacar `aplicando` de cualquiera de los tres. */
     expect(PANEL).toContain("if (!mensaje || pensando || aplicando) return;");
-    expect(PANEL).toContain("disabled={pensando || aplicando || !texto.trim()}");
-    expect(PANEL).toContain("disabled={pensando || aplicando}");
+    // Desde el 24 nov el botón «Enviar» y «Nueva conversación» los pinta el marco común (CajonDeNexus); el chat les dice cuándo.
+    expect(PANEL).toContain("enviarApagado={pensando || aplicando || !texto.trim()}");
+    expect(PANEL).toContain("apagada: turnos.length === 0 || pensando || aplicando,");
   });
 
   it("⛔ «Nueva» no vacía la pantalla si el servidor rechazó", () => {
@@ -1093,8 +1099,10 @@ describe("⭐ E3 P5: el cajón con una propuesta abierta", () => {
     expect(i, "el foco se toma aunque el cajón se haya abierto solo").toBeGreaterThan(-1);
     const efecto = PANEL.slice(i, PANEL.indexOf("}, [abierto]);", i));
     expect(efecto.length, "la guarda no está mirando el efecto").toBeGreaterThan(80);
-    expect(efecto).toContain("composerRef.current?.focus()");
-    expect(efecto).toContain("previo?.focus?.()");
+    expect(efecto).toContain("enfocar()");
+    expect(efecto).toContain("previo?.focus?.(");
+    // El chat le pasa al marco común si se abrió solo (24 nov: el efecto vive en CajonDeNexus).
+    expect(PANEL).toContain("enfocarAlAbrir={enfocarAlAbrir}");
   });
 
   it("⛔ Escape ignora un campo editable FUERA del cajón", () => {
@@ -1167,20 +1175,21 @@ describe("⭐ E3 P5: el cajón con una propuesta abierta", () => {
        propuesta y van en la bienvenida. Las ediciones que la ponen en rojo: pintar el aviso solo con la
        conversación vacía (o dentro del estado vacío), mandar la bienvenida o la divisoria al POST, o volver a
        numerar la lista del acuerdo del cronograma. */
-    expect(PANEL).toContain('{aviso?.subtitulo ?? "Conversa el cambio antes de generarlo"}');
+    expect(PANEL).toContain('aviso?.subtitulo ?? "Conversa el cambio antes de generarlo"');
     expect(PANEL).toContain('placeholder={aviso?.placeholder ?? "Escribe qué quieres cambiar…"}');
     expect(PANEL, "volvió la referencia de E3").not.toMatch(/\breferencia\b/);
     expect(PANEL, "volvieron los ejemplos fijos").not.toContain("Integraciones");
 
-    // El aviso fijo va en el pie, DESPUÉS de la conversación, y no depende de que esté vacía.
-    const iMapa = PANEL.indexOf("{turnos.map(");
-    const iPie = PANEL.indexOf('<div className="px-3 py-3 border-t border-line shrink-0">');
+    // El aviso fijo va en el pie, DESPUÉS de la conversación, y no depende de que esté vacía. Desde el 24 nov el pie se
+    // arma aparte (`pieDelChat`) y el marco común lo pinta debajo del hilo (`{pie}` después de `{children}`).
+    const iPie = PANEL.indexOf("const pieDelChat = (");
     const iAviso = PANEL.indexOf("{aviso.aviso}");
-    expect(iMapa, "no encuentro la conversación").toBeGreaterThan(-1);
+    expect(iPie, "no encuentro el pie del chat").toBeGreaterThan(-1);
     expect(iAviso, "no se pinta el aviso fijo").toBeGreaterThan(-1);
-    expect(iPie, "el pie del cajón quedó antes de la conversación").toBeGreaterThan(iMapa);
+    expect(PANEL).toContain("pie={pieDelChat}");
+    expect(PANEL.indexOf("{pie}"), "el pie del cajón quedó antes de la conversación").toBeGreaterThan(PANEL.indexOf("{children}"));
     expect(iAviso, "el aviso fijo no está en el pie, arriba del campo").toBeGreaterThan(iPie);
-    expect(iAviso, "el aviso fijo quedó debajo del campo").toBeLessThan(PANEL.indexOf("<textarea", iPie));
+    expect(iAviso, "el aviso fijo quedó debajo del campo").toBeLessThan(PANEL.indexOf("<CajaDeNexus", iPie));
     expect(PANEL.slice(iPie, iAviso), "el aviso fijo se ató a la conversación vacía").not.toMatch(/turnos\.length/);
     // El estado vacío de siempre, solo sin aviso (los documentos) o sin propuesta.
     expect(PANEL).toContain('const conEstadoVacio = !aviso || aviso.variante === "sin-propuesta";');

@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { aplicarOperaciones, contenidoVacio, propuestaVacia, type EstadoDeExploracion, type Validez } from "./contenido";
 import { VALIDADOR_ESTRICTO } from "./esquemas";
-import { CASILLAS_PARA_NEXUS, comoSeVeElCambio, destinosDeLaPreventa, lineasDelValor } from "./nexus-en-la-preventa";
+import { avisoAlDejarLaConversacion, seVeLaCuentaDeLaEscala, CASILLAS_PARA_NEXUS, comoSeVeElCambio, destinosDeLaPreventa, lineasDelValor } from "./nexus-en-la-preventa";
 import { sePuedeReintentar } from "./reintento";
 import { leerElTurno } from "@/lib/chat-de-nexus/conversacion";
 import { destinosDeUnaNota, hechosVerificadosDeUnaNota } from "@/lib/seguimiento/hechos/de-una-nota";
@@ -137,5 +137,42 @@ describe("el chat no lee reuniones por su cuenta", () => {
       const s = readFileSync(f, "utf8");
       expect(s).not.toMatch(/fireflies[sS]ession|sessionProject/);
     }
+  });
+});
+
+describe("⛔ la cuenta regresiva de La escala no vuelve a correr al dejar la conversación (24 nov)", () => {
+  it("la cuenta a la vista pasa a «cancelado al cerrar»: al volver se lee, no cuenta", () => {
+    expect(avisoAlDejarLaConversacion("abierto", true)).toBe("cancelado-al-cerrar");
+  });
+
+  it("⛔ la que todavía no se veía (la revisión no había vuelto) queda abierta: al volver se ve por primera vez", () => {
+    expect(avisoAlDejarLaConversacion("abierto", false)).toBe("abierto");
+  });
+
+  it("los demás quedan como estaban", () => {
+    for (const a of ["cerrado", "cancelado-al-cerrar", "de-antes"] as const) expect(avisoAlDejarLaConversacion(a, true)).toBe(a);
+  });
+
+  it("la cuenta se ve solo con el chat abierto en la conversación, la nota guardada y la revisión diciendo que cambia", () => {
+    const base = { chatAbierto: true, enLaConversacion: true, notaGuardada: true, revision: { cambia: true, fallo: false }, aviso: "abierto" as const };
+    expect(seVeLaCuentaDeLaEscala(base)).toBe(true);
+    expect(seVeLaCuentaDeLaEscala({ ...base, revision: null }), "la revisión no volvió").toBe(false);
+    expect(seVeLaCuentaDeLaEscala({ ...base, revision: { cambia: false, fallo: false } })).toBe(false);
+    expect(seVeLaCuentaDeLaEscala({ ...base, revision: { cambia: true, fallo: true } })).toBe(false);
+    expect(seVeLaCuentaDeLaEscala({ ...base, enLaConversacion: false }), "en el pedido a La escala").toBe(false);
+    expect(seVeLaCuentaDeLaEscala({ ...base, chatAbierto: false })).toBe(false);
+    expect(seVeLaCuentaDeLaEscala({ ...base, notaGuardada: false })).toBe(false);
+    expect(seVeLaCuentaDeLaEscala({ ...base, aviso: "cerrado" })).toBe(false);
+  });
+
+  it("⛔ el chat lo usa al cerrar Y al pasar al pedido de La escala (el chat ya no tapa la página: se puede pasar sin cerrarlo)", () => {
+    const cajon = readFileSync("components/exploraciones/HablarConNexus.tsx", "utf8");
+    // Al cerrar.
+    const cerrar = cajon.slice(cajon.indexOf("const cerrar = () => {"), cajon.indexOf("};", cajon.indexOf("const cerrar = () => {")));
+    expect(cerrar).toContain("setAviso((a) => avisoAlDejarLaConversacion(a, cuentaALaVista.current))");
+    // Al pasar al pedido de La escala con «✨ Mejorar con IA».
+    const alPedir = cajon.slice(cajon.indexOf("const alPedir = (e: Event) => {"), cajon.indexOf("window.addEventListener(EVENTO_ABRIR_NEXUS"));
+    const conEscala = alPedir.slice(alPedir.indexOf("if (p.escala) {"), alPedir.indexOf("} else if (activo)"));
+    expect(conEscala).toContain("setAviso((a) => avisoAlDejarLaConversacion(a, cuentaALaVista.current))");
   });
 });
