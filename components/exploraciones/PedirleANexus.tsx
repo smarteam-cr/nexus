@@ -56,6 +56,17 @@ function Cambio({ c, estado, aplicando, onAplicar, onDescartar }: { c: CambioPro
       </div>
       {c.aMano && estado === "pendiente" && <p className="mt-1 text-[11px] text-fg-secondary">La escribió tu equipo: te pregunto antes de reemplazarla.</p>}
       {c.interno && <p className="mt-1 text-[11px] font-semibold text-warn-ink">{AVISO_DE_LO_INTERNO}</p>}
+      {/* Lo que lo respalda (24 nov): Nexus no juzga si dice lo mismo que lo pedido; quien aplica lo compara. */}
+      {c.respaldo && c.respaldo.length > 0 && (
+        <div className="mt-1.5 rounded-lg border border-dashed border-line bg-surface-muted px-2.5 py-1.5 text-[11px] text-fg-secondary">
+          <p className="font-semibold text-fg-muted">Lo que Nexus tiene de la cuenta (compáralo antes de aplicar):</p>
+          <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
+            {c.respaldo.map((r) => (
+              <li key={r}>«{r}»</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {c.antes !== null && <p className="mt-1.5 whitespace-pre-line text-xs text-fg-muted line-through">{c.antes}</p>}
       {c.despues !== null && <p className="mt-1 whitespace-pre-line text-sm text-fg">{c.despues}</p>}
       <div className="mt-2 flex items-center gap-2">
@@ -287,6 +298,7 @@ export default function PedirleANexus({
           aConfirmar
             ? [
                 aConfirmar.interno ? `${AVISO_DE_LO_INTERNO} Aplicar no publica: queda en «${aConfirmar.nombre}» hasta que alguien publique.` : null,
+                aConfirmar.respaldo?.length ? "Compara con lo que Nexus tiene de la cuenta, debajo del cambio: Nexus no revisa si dice lo mismo." : null,
                 aConfirmar.aMano ? `«${aConfirmar.nombre}» la escribió una persona. Si aplicas, queda lo que propone Nexus (y lo de antes, en el historial).` : null,
               ]
                 .filter(Boolean)

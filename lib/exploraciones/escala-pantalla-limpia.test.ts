@@ -222,5 +222,8 @@ describe("5 · lo interno entra si se pide", () => {
     const cajon = leer("components/exploraciones/PedirleANexus.tsx");
     expect(cajon).toContain("const sinPreguntar = pendientes.filter((c) => !c.aMano && !c.interno);");
     expect(cajon).toContain("onAplicar={() => (c.aMano || c.interno ? setAConfirmar(c) : void aplicar([c]))}");
+    // Con lo que lo respalda a la vista: el sentido lo compara quien aplica (veracidad.ts no lo juzga).
+    expect(cajon).toContain("{c.respaldo && c.respaldo.length > 0 && (");
+    expect(cajon).toContain("Lo que Nexus tiene de la cuenta (compáralo antes de aplicar):");
   });
 });

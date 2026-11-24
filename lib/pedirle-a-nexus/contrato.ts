@@ -66,6 +66,11 @@ export interface CambioPropuesto {
    * `AVISO_DE_LO_INTERNO`, lo deja fuera de «Aplicar todo» y pregunta antes de aplicarlo.
    */
   interno?: true;
+  /**
+   * Lo interno que se pidió: las oraciones de las notas de la cuenta (o de la página) que nombran el tema, para que quien
+   * aplica compare. El código no juzga si dicen lo mismo; la persona sí (24 nov, ./veracidad.ts). Solo adentro.
+   */
+  respaldo?: string[];
 }
 
 /** El aviso de un cambio que trae algo interno (24 nov): lo ve el cliente cuando alguien publique. */
