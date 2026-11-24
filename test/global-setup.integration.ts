@@ -7,7 +7,8 @@
  * dejaba a nexus_test atrás hasta que alguien volviera a correr el bootstrap, y los tests fallaban
  * con «la columna X no existe», que parece un bug del código (pasó el 2026-10-10 con
  * `LecturaDeReunion.seguimientoIntentos`: siete tests de Tareas en rojo por una base atrasada).
- * Los `.sql` ya son idempotentes por contrato (el bootstrap los reaplica en cada corrida).
+ * Los `.sql` ya son idempotentes por contrato (el bootstrap los reaplica en cada corrida). Cada uno queda anotado en el
+ * registro de nexus_test (`SqlAplicado`), que `test/setup.integration.ts` no trunca.
  *
  * Lee la URL de `.env.test` SIN tocar `process.env` (este proceso también corre los tests
  * unitarios cuando se corre todo junto). ⛔ Solo una base LOCAL: contra cualquier otro host lanza
@@ -17,10 +18,19 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "dotenv";
+import type { TestProject } from "vitest/node";
 import { describirDestino, esBaseLocal } from "../scripts/lib/guard";
 import { aplicarSqlPosteriores } from "../scripts/lib/sql-posteriores";
 
-export default async function ponerAlDiaLaBaseDeTest(): Promise<void> {
+declare module "vitest" {
+  export interface ProvidedContext {
+    /** Cuándo arrancó este setup (ms): lo anotado en el registro desde entonces es de ESTA corrida (registro-de-sql.int.test.ts). */
+    registroDesde: number;
+  }
+}
+
+export default async function ponerAlDiaLaBaseDeTest(project?: TestProject): Promise<void> {
+  project?.provide("registroDesde", Date.now());
   const raiz = process.cwd();
   const url = parse(readFileSync(join(raiz, ".env.test"))).DATABASE_URL;
   if (!esBaseLocal(url)) {
@@ -30,7 +40,7 @@ export default async function ponerAlDiaLaBaseDeTest(): Promise<void> {
     );
   }
   try {
-    const corridos = await aplicarSqlPosteriores(url as string, raiz);
+    const corridos = await aplicarSqlPosteriores(url as string, raiz, "test:int");
     console.log(`[integration] nexus_test al día: ${corridos.length} scripts/sql posteriores al baseline aplicados.`);
   } catch (e) {
     /* Un error de conexión trae su código (ECONNREFUSED, 3D000 si falta la base): eso lo explica el setup de cada

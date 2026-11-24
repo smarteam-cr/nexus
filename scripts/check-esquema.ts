@@ -2,9 +2,16 @@
  * scripts/check-esquema.ts — SOLO LECTURA. ¿A la base le falta algo que ESTE código usa?
  *
  * El aviso ANTES del deploy. Los cambios de esquema son SQL a mano que se corren antes de
- * desplegar (ARCHITECTURE Parte 0 · cap. D) y no hay registro de cuáles ya corrieron. Esto compara
- * lo que espera el cliente Prisma del checkout (tablas, columnas, enums y sus valores) contra el
- * catálogo de la base del `.env`, y dice qué falta y qué archivo de `scripts/sql/` lo crea:
+ * desplegar (ARCHITECTURE Parte 0 · cap. D). Esto contesta dos preguntas sobre la base del `.env`:
+ *
+ *   1. ¿Le falta algo que este código usa? Compara lo que espera el cliente Prisma del checkout
+ *      (tablas, columnas, enums y sus valores) contra el catálogo, y dice qué archivo de
+ *      `scripts/sql/` lo crea.
+ *   2. ¿Qué `scripts/sql/` posteriores al baseline no están en su registro (`SqlAplicado`, desde el
+ *      2026-11-23)? Ve lo que la pregunta 1 no ve: un `.sql` que solo crea un índice o una política,
+ *      o que cambia datos, y uno cuyo código todavía no salió. Dice también cuáles cambiaron después
+ *      de anotarse y cuáles anotó otra rama o la otra PC. Se aplican con `npm run db:sql`, que anota;
+ *      los que corrieron por fuera del registro se anotan con `npm run db:sql:backfill`.
  *
  *   npm run check:esquema          (o: npx tsx scripts/check-esquema.ts)
  *
@@ -17,9 +24,9 @@
  * error y no se lista.
  *
  * No escribe nada, nunca: la conexión nace de solo lectura (Postgres rechaza cualquier escritura)
- * y hace UNA consulta al catálogo. No usa `--apply` ni `ALLOW_PROD_WRITE`.
+ * y hace una consulta al catálogo y dos al registro. No usa `--apply` ni `ALLOW_PROD_WRITE`.
  *
- * Sale con 0 si no falta nada, 1 si falta algo, 2 si no pudo comparar.
+ * Sale con 0 si no falta nada, 1 si falta algo (en el esquema o en el registro), 2 si no pudo comparar.
  *
  * ⚠ Compara contra el cliente GENERADO. Si `prisma/schema.prisma` cambió (un `git pull`) y no se
  * corrió `npx prisma generate`, el cliente es de otro schema: el script lo detecta y no compara.
@@ -41,6 +48,8 @@ import {
   type Faltante,
 } from "../lib/db/esquema-esperado";
 import { esperadoDeEsteCliente, leerEsquemaDeLaBase } from "../lib/db/salud-del-esquema";
+import { SQL_DEL_REGISTRO, compararConElRegistro, type FilaDelRegistro } from "../lib/db/registro-de-sql";
+import { existeElRegistro, leerRegistro } from "../lib/db/registro-de-sql-base";
 
 const RAIZ = process.cwd();
 const SIN_SQL = "(ningún archivo de scripts/sql/ lo crea)";
@@ -124,10 +133,13 @@ async function main(): Promise<number> {
     return 2;
   }
 
-  const { prisma, close } = createScriptDb();
+  const { prisma, pool, close } = createScriptDb();
   let real: Esquema;
+  /** `null`: la base no tiene la tabla del registro. */
+  let registro: FilaDelRegistro[] | null;
   try {
     real = await leerEsquemaDeLaBase(prisma);
+    registro = (await existeElRegistro(pool)) ? await leerRegistro(pool) : null;
   } catch (e) {
     console.error(`⚠ No se pudo leer el catálogo de la base: ${e instanceof Error ? e.message : String(e)}`);
     return 2;
@@ -145,17 +157,53 @@ async function main(): Promise<number> {
     console.log(
       `✓ La base tiene todo lo que este código espera: ${esperado.tablas.size} tablas, ${columnas} columnas y ${esperado.enums.size} enums.`,
     );
-    return 0;
+  } else {
+    console.error(`✗ A la base le faltan ${faltantes.length} cosa(s) que este código usa:\n`);
+    for (const [sql, lineas] of agruparPorSql(faltantes)) {
+      console.error(`  ${sql}`);
+      for (const linea of lineas) console.error(`    - ${linea}`);
+    }
+    console.error("\n  Esos SQL van ANTES del deploy, en el orden de su fecha, con npm run db:sql (docs/RUNBOOK.md › Deploy).");
+    console.error("  Con esto sin correr, /api/health responde 503 y deploy.sh revierte solo a la imagen anterior.");
   }
+  const pendientesDelRegistro = informarDelRegistro(registro);
+  return faltantes.length > 0 || pendientesDelRegistro > 0 ? 1 : 0;
+}
 
-  console.error(`✗ A la base le faltan ${faltantes.length} cosa(s) que este código usa:\n`);
-  for (const [sql, lineas] of agruparPorSql(faltantes)) {
-    console.error(`  ${sql}`);
-    for (const linea of lineas) console.error(`    - ${linea}`);
+/** El registro de los SQL aplicados contra los `scripts/sql/` de este checkout. Devuelve cuántos quedan pendientes. */
+function informarDelRegistro(filas: FilaDelRegistro[] | null): number {
+  const lista = (lineas: string[]) => lineas.forEach((l) => console.error(`    - ${l}`));
+  if (filas === null) {
+    console.error("\n✗ La base no tiene el registro de los SQL aplicados (tabla SqlAplicado).");
+    console.error(`  Se crea con: npm run db:sql -- scripts/sql/${SQL_DEL_REGISTRO} --apply  (ALLOW_PROD_WRITE=1 en producción),`);
+    console.error("  y lo que ya corrió se anota con: npm run db:sql:backfill (simulacro), y después con --apply.");
+    return 1;
   }
-  console.error("\n  Esos SQL van ANTES del deploy, en el orden de su fecha (docs/RUNBOOK.md › Deploy).");
-  console.error("  Con esto sin correr, /api/health responde 503 y deploy.sh revierte solo a la imagen anterior.");
-  return 1;
+  const estado = compararConElRegistro(sqlDelRepo(), filas);
+  if (estado.sinAnotar.length === 0 && estado.cambiados.length === 0) {
+    console.log(`✓ Registro de SQL: los ${estado.posteriores} scripts/sql posteriores al baseline están anotados en esta base.`);
+  }
+  if (estado.sinAnotar.length > 0) {
+    console.error(
+      `\n✗ Registro de SQL: ${estado.sinAnotar.length} de ${estado.posteriores} scripts/sql posteriores al baseline sin anotar en esta base. ¿Corrieron?`,
+    );
+    lista(estado.sinAnotar);
+    console.error("  Si no corrieron: npm run db:sql -- scripts/sql/<archivo> (simulacro), y después con --apply.");
+    console.error("  Si corrieron por fuera del registro: npm run db:sql:backfill (los anota si el esquema lo demuestra, o con --marcar).");
+  }
+  if (estado.cambiados.length > 0) {
+    console.error(`\n⚠ Cambiaron después de anotarse (${estado.cambiados.length}): reaplícalos con npm run db:sql (son idempotentes).`);
+    lista(
+      estado.cambiados.map(
+        ({ archivo, fila }) => `${archivo}  (anotado el ${new Date(fila.aplicadoEn).toISOString().slice(0, 10)} desde ${fila.desde})`,
+      ),
+    );
+  }
+  if (estado.ajenos.length > 0) {
+    console.log(`\n· Anotados en esta base que este checkout no tiene (${estado.ajenos.length}): ¿de otra rama o de la otra PC? (git pull)`);
+    estado.ajenos.forEach((f) => console.log(`    - ${f.archivo}  (desde ${f.desde})`));
+  }
+  return estado.sinAnotar.length + estado.cambiados.length;
 }
 
 main()

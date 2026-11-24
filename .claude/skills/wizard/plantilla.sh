@@ -221,7 +221,7 @@ pausa
 
 etapa "Aplicar el SQL, antes del deploy"
 decir "El SQL va ANTES del código que lo usa; si no, el deploy se revierte solo."
-correr_en_prod "npx prisma db execute --file scripts/sql/AAAA-MM-DD-ejemplo.sql"
+correr_en_prod "npm run db:sql -- scripts/sql/AAAA-MM-DD-ejemplo.sql --apply"
 correr "npm run check:esquema"
 pausa
 
