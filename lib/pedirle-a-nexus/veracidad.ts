@@ -19,9 +19,9 @@
  *       3. LO PEDIDO, COMO SE PIDIÓ Y SI NEXUS LO TIENE. Si el pedido nombra lo interno que el cambio toca, el cambio ENTERO
  *          se escribe con las palabras del pedido (el modelo no lee las notas: lo que agrega, como una causa o una fecha, es
  *          inventado), y Nexus tiene que tenerlo de la cuenta (sus notas y su memoria, `interno`, o lo que la página ya
- *          muestra): el tema está ahí; cada número, en una nota junto al tema («20 mil», no el 20 de «20 vendedores»); sin
- *          números, la mayoría de lo nuevo; y la nota más parecida no dice lo contrario («no hay presupuesto» frena «hay
- *          presupuesto»).
+ *          muestra): el tema está ahí; cada número de lo interno, con su palabra, en una oración junto al tema («20 mil»,
+ *          no el 20 de «20 vendedores»; «1,5» no es «15»); la mayoría de lo nuevo (todo, si solo lo respalda la página); y
+ *          lo más parecido no dice lo contrario («no hay presupuesto» frena «hay presupuesto»; en un empate, frena).
  *     El modelo nunca lee las notas internas (lib/exploraciones/lo-que-confirmo-el-equipo.ts › `paraElAlcance` las corta),
  *     y su regla nombra los temas desde aquí (`NOMBRES_DE_LO_INTERNO`): no puede invitarlo a uno que el código no reconoce.
  *     Lo que no ve: el respaldo y la contradicción se miran por palabras, no por sentido; un tema fuera de la lista llega
@@ -64,7 +64,10 @@ export const TEMAS_INTERNOS: readonly { nombre: string; patron: RegExp }[] = [
     "nuestro precio, nuestra propuesta o un descuento que les damos",
     `nuestr[oa]s? (?:precio|propuesta|cotizaci[oó]n|oferta|descuento)${L}*|el precio de (?:smarteam|la licencia|las licencias|hubspot|la implementaci[oó]n)|(?:les?|te) (?:ofrecimos|ofrecemos|ofreceremos|damos|dimos|daremos|haremos) (?:un |el |una )?descuento${L}*`,
   ),
-  tema("quién decide, aprueba o firma la compra", `qui[eé]n(?:es)? (?:decide|deciden|firma|firman|aprueba|aprueban|manda)|decisor${L}*`),
+  tema(
+    "quién decide, aprueba o firma la compra; quién aprueba o firma la propuesta",
+    `qui[eé]n(?:es)? (?:decide|deciden|firma|firman|aprueba|aprueban|manda)|decisor${L}*|aprueb${L}* la compra|aprob${L}* la compra|(?:aprueb|aprob|firm)${L}* (?:la|nuestra) propuesta`,
+  ),
   tema("las objeciones", `objeci[oó]n${L}*|objet[aó]${L}*`),
   tema("las posturas o lo que una persona no quiere", `postura[s]?|desconf${L}*|no (?:quiere|quieren|est[aá]n? convencid${L}*|le gusta|les gusta|conf[ií]a[n]?)`),
   tema("la competencia", `competidor${L}*|la competencia`),
@@ -83,25 +86,32 @@ const terminos = (t: { patron: RegExp }, texto: string) => [...texto.matchAll(t.
  * pide en un pedido aparte, con todas sus letras. Solo en la voz de quien pide: «nunca tienen presupuesto», «el director no
  * quiere» o «para evitar retrasos» son lo que se cuenta.
  */
+const VERBO_DE_DECIR = "(?:inclu|pong|pon|dig|menci|habl|met|agreg|escrib|nombr|vea)[a-z]*";
 const PIDE_QUE_NO = new RegExp(
   [
-    "\\bnunca (?:menciones|pongas|digas|hables|incluyas|nombres|escribas|agregues)\\b",
-    "\\bsin (?:mencion|nombr|habl|inclu|pon|dec|met|agreg|escrib)[a-z]*",
-    "\\bsin (?:el|la|los|las|lo|nada)\\b",
-    "\\bno (?:inclu|pong|pon|dig|menci|habl|met|agreg|escrib|nombr|quiero|queremos|hace falta|deb|aparezc|salga|quede)[a-z]*",
-    "\\bque no se (?:mencion|nombr|pong|dig|inclu|habl|vea)[a-z]*",
-    "\\bni (?:hables|menciones|pongas|digas|nombres|incluyas)\\b",
-    "\\bdej[a-z]* (?:afuera|fuera)\\b",
-    "\\b(?:quita|quitalo|quitala|quitalos|saca|sacalo|sacala|omite|omitelo|evita|evitalo|elimina|eliminalo|borra|borralo)\\b",
+    // «no lo menciones», «nunca la pongas», «jamás menciones», «ni lo nombres», «que no se mencione», «el presupuesto no lo incluyas»
+    `\\b(?:no|nunca|jamas|ni) (?:(?:lo|la|los|las|le|les|se) )?${VERBO_DE_DECIR}`,
+    `\\bsin ${VERBO_DE_DECIR}`,
+    "\\bno (?:quiero|queremos|hace falta|deb[a-z]*|aparezc[a-z]*|salga|quede)\\b",
+    "\\bdej[a-z]* (?:[a-z]+ ){0,4}(?:afuera|fuera)\\b",
+    "\\b(?:quit|sac)(?:a|ale|ales|alo|ala|alos|alas|en|ar)\\b",
+    "\\b(?:omit|elimin|borr)(?:e|a|elo|ela|alo|ala|en|an|ir|ar)\\b",
+    `\\bevit(?:a|ar|en|alo) (?:${VERBO_DE_DECIR}|decir|poner|hablar)`,
     "\\b(?:excepto|salvo)\\b",
     "\\bnada (?:de|sobre)\\b",
   ].join("|"),
 );
+/** «…, sin el presupuesto»: un «sin» que abre una cláusula y va con un tema interno. «Sin el IVA» o «trabajan sin el presupuesto aprobado» son lo que se cuenta. */
+const sinElTema = (pedido: string) =>
+  TEMAS_INTERNOS.some((t) => new RegExp(`(?:^|[,;:]\\s*)sin (?:(?:el|la|los|las|lo|nada de) )?(?:${t.patron.source})`, "i").test(pedido));
 
 /** El texto en fichas: sin tildes ni signos, cada número entero («20.000» es «20000») y «%» como «pct». */
 function fichas(texto: string): string[] {
   return sinTildes(texto)
-    .replace(/\d[\d.,]*/g, (n) => ` ${cifrasDe(n)[0] ?? ""} `)
+    // «20.000» y «20,000» son 20000; «1,5» es «1d5», no 15 (un decimal no se junta con su entero).
+    .replace(/\d[\d.,]*\d|\d/g, (n) =>
+      /^\d{1,3}(?:[.,]\d{3})+$/.test(n) ? ` ${n.replace(/[.,]/g, "")} ` : /^\d+[.,]\d{1,2}$/.test(n) ? ` ${n.replace(/[.,]/, "d")} ` : ` ${cifrasDe(n)[0] ?? ""} `,
+    )
     .replace(/%/g, " pct ")
     .replace(/[^a-z0-9ñ ]+/g, " ")
     .split(/\s+/)
@@ -119,22 +129,28 @@ function frases(texto: string, n = 5): Set<string> {
 /** Las palabras que solo arman la frase (artículos, preposiciones, pronombres): no dicen nada que se pueda inventar. */
 const VACIAS = new Set("que los las les nos del con por para una uno unos unas sus mas muy ese esa eso este esta esto estos estas como pero sobre entre hasta desde cuando donde ellos ellas nuestro nuestra".split(" "));
 /** Las palabras que dicen algo: de tres letras o más, más «no» y «ni» (cambian lo que se dice); sin los números. */
-const palabras = (texto: string) => fichas(texto).filter((p) => (p.length >= 3 || p === "no" || p === "ni") && !/^\d+$/.test(p) && !VACIAS.has(p));
+const palabras = (texto: string) => fichas(texto).filter((p) => (p.length >= 3 || p === "no" || p === "ni") && !/^\d+(?:d\d+)?$/.test(p) && !VACIAS.has(p));
 
-/** Lo que acompaña a un número y le cambia el tamaño: «20 mil» no es «20». Lo demás («20 vendedores») no cuenta. */
-const MAGNITUD = new Set(["mil", "millon", "millones", "pct", "k", "m", "mm"]);
-/** Cada número de un texto con su magnitud, si la tiene. */
+/** Lo que une un número con lo que sigue sin decir qué es («20.000 al año», «20.000, lo aprobó»): no cuenta como su palabra. */
+const UNE = new Set(["y", "e", "o", "de", "del", "al", "a", "en", "por", "para", "con", "que", "lo", "la", "el", "es", "se", "los", "las"]);
+/** Cada número con la palabra que dice qué es: «20 mil» no es «20 vendedores» ni «20 dólares». */
 const numeros = (texto: string) => {
   const f = fichas(texto);
-  return f.flatMap((p, i) => (/^\d+$/.test(p) ? [MAGNITUD.has(f[i + 1] ?? "") ? `${p} ${f[i + 1]}` : p] : []));
+  return f.flatMap((p, i) => (/^\d+(?:d\d+)?$/.test(p) ? [f[i + 1] && !UNE.has(f[i + 1]) ? `${p} ${f[i + 1]}` : p] : []));
 };
 
 /** Las oraciones de un texto (un punto entre dígitos, «20.000», no corta). */
 const oracionesDe = (texto: string) => texto.split(/(?<=[.;!?])\s+|\n+/).map((x) => x.trim()).filter(Boolean);
 const igualQue = (a: string) => fichas(a).join(" ");
-/** Una cláusula dice que no: la contradicción se mira cláusula por cláusula («hay presupuesto, pero no quiere pasarse»). */
-const NIEGA = /\b(?:no|ni|nunca|sin|tampoco)\b/;
+/** La contradicción se mira cláusula por cláusula («hay presupuesto, pero no quiere pasarse»). */
+const NIEGA = /\b(?:no|ni|nunca|sin|tampoco|jamas)\b/;
 const clausulas = (texto: string) => sinTildes(texto).split(/[.;:!?,]|\by\b|\bpero\b|\bporque\b|\baunque\b/).map((c) => c.trim()).filter(Boolean);
+/** Si la cláusula niega el tema: un «no» en las tres palabras de antes («no tienen presupuesto», «todavía no saben su presupuesto»). */
+function niegaElTema(t: { patron: RegExp }, clausula: string): boolean {
+  const m = [...clausula.matchAll(t.patron)][0];
+  if (!m) return false;
+  return NIEGA.test(clausula.slice(0, m.index ?? 0).split(/\s+/).filter(Boolean).slice(-3).join(" "));
+}
 /** Sin números, cuánto de lo nuevo tiene que estar en lo que Nexus sabe de la cuenta. */
 const EN_LAS_NOTAS = 0.6;
 
@@ -161,14 +177,14 @@ export function revisarLaPropuesta(o: {
   // El contexto de la cuenta para lo interno pedido: las notas y su memoria, y lo que la página ya le muestra al cliente.
   const contexto = `${deLaCuenta}\n${pagina}`;
   const palabrasDelContexto = new Set(palabras(contexto));
-  const oracionesDeLaCuenta = oracionesDe(deLaCuenta);
-  // La contradicción se mira solo contra las notas: la página puede decir «sin» por otra cosa («agotar presupuesto sin medir»).
-  const clausulasDeLaCuenta = clausulas(deLaCuenta);
+  const palabrasDeLaPagina = new Set(palabras(pagina));
+  const oracionesDelContexto = oracionesDe(contexto);
+  const clausulasDelContexto = clausulas(contexto);
   const loQueSePuede = frases([pagina, ...o.delCliente].join("\n"));
   const deLoInterno = new Set([...frases(deLaCuenta)].filter((f) => !loQueSePuede.has(f)));
   const delPedido = frases(o.pedido);
   const palabrasDelPedido = new Set(palabras(o.pedido));
-  const pideQueNo = PIDE_QUE_NO.test(sinTildes(o.pedido));
+  const pideQueNo = PIDE_QUE_NO.test(sinTildes(o.pedido)) || sinElTema(o.pedido);
   const loPide = (t: (typeof TEMAS_INTERNOS)[number]) => !pideQueNo && terminos(t, o.pedido).length > 0;
 
   const cambios: CambioPropuesto[] = [];
@@ -246,27 +262,32 @@ export function revisarLaPropuesta(o: {
           descartar(`Dice de algo interno más de lo que pediste («${deMas}»): escríbelo en tu pedido tal como es.`);
           continue;
         }
-        // Cada número nuevo, en una nota junto al tema pedido (o, si lo pedido es una frase de una nota, en alguna nota).
-        const yaNumeros = new Set(numeros(antes ?? ""));
-        const nuevosNumeros = numeros(despues).filter((n) => !yaNumeros.has(n));
+        /* Cada número de lo interno (también el que la pieza ya tenía en otra oración), con su palabra, en una oración de las
+           notas (o de la página) junto al tema pedido; si lo pedido es una frase de una nota, en alguna nota. */
+        const numerosInternos = [...new Set(internas.flatMap((c) => numeros(c.oracion)))];
         const respaldado = (n: string) =>
-          oracionesDeLaCuenta.some((nota) => numeros(nota).includes(n) && (pedidos.length === 0 || pedidos.some((t) => terminos(t, nota).length > 0)));
-        const sinNumero = nuevosNumeros.find((n) => !respaldado(n));
-        const enLasNotas = nuevas.length ? nuevas.filter((p) => palabrasDelContexto.has(p)).length / nuevas.length : 1;
-        if (sinNumero || (!nuevosNumeros.length && enLasNotas < EN_LAS_NOTAS)) {
+          oracionesDelContexto.some((oracion) => numeros(oracion).includes(n) && (pedidos.length === 0 || pedidos.some((t) => terminos(t, oracion).length > 0)));
+        const sinNumero = numerosInternos.find((n) => !respaldado(n));
+        /* Lo nuevo, en lo que Nexus sabe: con el tema en las notas, la mayoría (la mitad si sus números ya están respaldados);
+           si solo lo respalda la página (el vocabulario de la escala), entero: es repetir lo que el cliente ya ve. */
+        const soloLaPagina = pedidos.some((t) => terminos(t, deLaCuenta).length === 0);
+        const cubre = nuevas.length ? nuevas.filter((p) => (soloLaPagina ? palabrasDeLaPagina : palabrasDelContexto).has(p)).length / nuevas.length : 1;
+        if (sinNumero || cubre < (soloLaPagina ? 1 : numerosInternos.length ? 0.5 : EN_LAS_NOTAS)) {
           descartar(`Lo que dice de algo interno${sinNumero ? ` («${sinNumero}»)` : ""} no está en lo que Nexus sabe de la cuenta: si es cierto, cuéntaselo primero.`);
           continue;
         }
-        // Y la nota más parecida no dice lo contrario.
+        /* Y lo más parecido de las notas o de la página no dice lo contrario. El «no» se mira justo antes del tema («no tienen
+           presupuesto»), no en toda la cláusula («agotar presupuesto sin que nadie mida»). Si dos empatan y una dice lo
+           contrario, cuenta como contradicción: el orden de las notas no decide. */
         const contradice = pedidos.some((t) =>
           internas.some((c) =>
             clausulas(c.oracion)
               .filter((cl) => terminos(t, cl).length)
               .some((cl) => {
                 const suyas = new Set(palabras(cl));
-                const delTema = clausulasDeLaCuenta.filter((n) => terminos(t, n).length);
-                const parecida = delTema.map((n) => ({ n, comun: palabras(n).filter((p) => suyas.has(p)).length })).sort((a, b) => b.comun - a.comun)[0];
-                return !!parecida && NIEGA.test(parecida.n) !== NIEGA.test(cl);
+                const delTema = clausulasDelContexto.filter((n) => terminos(t, n).length).map((n) => ({ n, comun: palabras(n).filter((p) => suyas.has(p)).length }));
+                const mejor = Math.max(0, ...delTema.map((x) => x.comun));
+                return delTema.some((x) => x.comun === mejor && mejor > 0 && niegaElTema(t, x.n) !== niegaElTema(t, cl));
               }),
           ),
         );

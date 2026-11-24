@@ -16584,8 +16584,8 @@ todavía: cada etapa arranca cuando él lo dice.
     fuentes, el botón podía pedir una sección que ninguna pieza dice. Lo pedido queda recordado por sección.
   - **Lo interno entra si la persona lo pide** (Elías: «sí debería poner lo que el usuario de Nexus diga, siempre y cuando
     lo tenga en su contexto»; hasta ese día no llegaba «aunque se pida»). `TEMAS_INTERNOS`, acotados a la venta: el
-    presupuesto; nuestro precio, nuestra propuesta o un descuento que les damos; quién decide, aprueba o firma la compra;
-    las objeciones; las posturas o lo que alguien no quiere; la competencia. La regla tiene tres partes
+    presupuesto; nuestro precio, nuestra propuesta o un descuento que les damos; quién decide, aprueba o firma la compra, y
+    quién aprueba o firma la propuesta; las objeciones; las posturas o lo que alguien no quiere; la competencia. La regla tiene tres partes
     (`lib/pedirle-a-nexus/veracidad.ts`):
     1. *Marca:* toda oración nueva o cambiada que toca un tema (aunque la pieza ya tuviera la palabra) o copia una nota
        interna llega marcada, con «Esto es interno de la venta y lo verá el cliente al publicar»; como lo escrito a mano,
@@ -16594,8 +16594,9 @@ todavía: cada etapa arranca cuando él lo dice.
        quitar ni dejar de mencionar nada (con eso, lo interno se pide aparte).
     3. *Lo pedido, como se pidió y si Nexus lo tiene:* si el pedido nombra lo interno que el cambio toca, el cambio ENTERO
        va con las palabras del pedido (el modelo no lee las notas: una causa o una fecha que agrega es inventada); el tema
-       está en las notas, su memoria o lo que la página ya muestra; cada número, en una nota junto al tema; y la nota más
-       parecida no dice lo contrario.
+       está en las notas, su memoria o lo que la página ya muestra (si solo la página lo respalda, todo lo nuevo está en
+       ella); cada número de lo interno, con su palabra, en una oración junto al tema; y lo más parecido no dice lo
+       contrario (en un empate, frena: el orden de las notas no decide).
     La regla del modelo nombra los temas desde la misma lista (`NOMBRES_DE_LO_INTERNO`). *Por qué acotada:* «precios»,
     «firma el contrato», «prefiere» o «inversión» solos son el vocabulario de la escala y de la operación del cliente;
     marcarlos frenaba ediciones normales. *Lo que no garantiza:* el respaldo y la contradicción se miran por palabras, no
