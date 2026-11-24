@@ -148,14 +148,15 @@ function AreaFuera({ area, onSumar }: { area: AreaDelLienzo; onSumar: () => void
 function LineaDeArriba() {
   const { exp, puedeEditar } = useLienzo();
   const { pestanas } = useSesiones();
-  const { corriendo, lanzando, lanzar } = useCorrida();
+  const { corrida, corriendo, lanzando, lanzar } = useCorrida();
   const ultima = [...exp.estado.propuesta.corridas].reverse().find((c) => c.modo === "posicionar");
   const linea = lineaDeLaEscala({
     reuniones: pestanas.flatMap((p) => (p.reunion && !p.noSeHizo ? [p.reunion] : [])),
     ubicadaEn: ultima?.en ?? null,
     leyo: ultima?.leyo,
     resumenEn: exp.estado.contenido.resumenDeLaEscala?.at ?? null,
-    ubicando: corriendo,
+    // Otro trabajo del agente (leer una reunión, la guía) no ubica la escala: la frase no cambia, solo el botón espera.
+    ubicando: corriendo && corrida?.modo === "posicionar",
   });
   return (
     <p role="status" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-secondary">
@@ -166,7 +167,11 @@ function LineaDeArriba() {
           variant={linea.boton.fuerte ? "primary" : "ghost"}
           loading={lanzando}
           disabled={corriendo}
-          title="El agente lee las transcripciones de las sesiones y ubica Ventas, Marketing y Servicio: lo que dijo el cliente con su cita, y lo demás como hipótesis por explorar. Nada se confirma solo."
+          title={
+            corriendo && linea.estado !== "ubicando"
+              ? "Nexus está trabajando en esta preventa: cuando termine, puedes ubicar la escala."
+              : "El agente lee las transcripciones de las sesiones y ubica Ventas, Marketing y Servicio: lo que dijo el cliente con su cita, y lo demás como hipótesis por explorar. Nada se confirma solo."
+          }
           onClick={() => void lanzar("posicionar")}
         >
           {linea.boton.etiqueta}

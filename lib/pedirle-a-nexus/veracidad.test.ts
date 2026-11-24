@@ -222,7 +222,7 @@ describe("lo interno que se pide y Nexus tiene de la cuenta (24 nov: Elías, «s
   it("los temas que la regla del modelo nombra son los que reconoce el código: nuestro precio, quién firma, lo que alguien no quiere, un descuento", () => {
     const casos = [
       { despues: "El precio de la licencia es de US$ 1.500 al mes.", pedido: "agrega que el precio de la licencia es de US$ 1.500 al mes", nota: "Les cotizamos: el precio de la licencia es de US$ 1.500 al mes." },
-      { despues: "El gerente general firma el contrato en enero.", pedido: "agrega que el gerente general firma el contrato en enero", nota: "El gerente general firma el contrato en enero." },
+      { despues: "Quien firma el contrato es el gerente general.", pedido: "agrega que quien firma el contrato es el gerente general", nota: "Ojo: quien firma el contrato es el gerente general." },
       { despues: "El director no quiere dejar Salesforce.", pedido: "agrega que el director no quiere dejar Salesforce", nota: "Ojo: el director no quiere dejar Salesforce." },
       { despues: "Les damos un descuento del 15%.", pedido: "agrega que les damos un descuento del 15%", nota: "Les damos un descuento del 15% si firman en diciembre." },
     ];
@@ -254,6 +254,8 @@ describe("lo que encontró la segunda revisión del 24 nov", () => {
       "El cliente firma la cotización por correo.",
       "Tu cliente prefiere comprar por WhatsApp.",
       "No miden el retorno de la inversión en pauta.",
+      "El cliente firma el contrato en papel.",
+      "Deciden la compra en comité.",
     ]) {
       const r = pedir("Un texto de antes.", despues, "hazlo más claro");
       expect(r.cambios, despues).toHaveLength(1);
@@ -291,6 +293,70 @@ describe("lo que encontró la segunda revisión del 24 nov", () => {
     );
     expect(r.cambios).toEqual([]);
     expect(r.descartados[0].motivo).toMatch(/«la competencia».*no nombra/);
+  });
+});
+
+describe("lo que encontró la tercera revisión del 24 nov", () => {
+  const pedir = (antes: string, despues: string, pedido: string, interno: string[] = []) =>
+    revisarLaPropuesta({ piezas: [pieza("p", antes, { quitable: true })], propuesto: [{ clave: "p", despues }], pedido, delCliente: [], interno });
+  const CAMPANAS = "Las campañas corren hasta agotar presupuesto sin que nadie mida qué dejan.";
+
+  it("⛔ con la palabra del tema ya en la pieza, lo interno pedido igual se verifica, y lo no pedido llega marcado (con su pregunta)", () => {
+    const pedido = pedir(CAMPANAS, "Las campañas corren hasta agotar un presupuesto de US$ 5.000 al mes, que aprueba el gerente.", "agrega que el presupuesto es de US$ 5.000 al mes y lo aprueba el gerente");
+    expect(pedido.cambios).toEqual([]);
+    expect(pedido.descartados[0].motivo).toMatch(/no está en lo que Nexus sabe|no tiene en lo que sabe/);
+    const sinPedir = pedir(CAMPANAS, "Las campañas corren hasta agotar presupuesto, que se congela en enero, sin que nadie mida qué dejan.", "hazlo más claro");
+    expect(sinPedir.cambios[0]).toMatchObject({ interno: true });
+    // Lo que no toca la oración interna no se marca.
+    expect(pedir(`${CAMPANAS} Nadie revisa los leads.`, `${CAMPANAS} Nadie revisa los contactos que llegan.`, "hazlo más claro").cambios[0].interno).toBeUndefined();
+  });
+
+  it("⛔ con lo interno pedido, el cambio ENTERO va con las palabras del pedido: ni una oración inventada al lado", () => {
+    const nota = "El presupuesto de marketing es de US$ 20.000 al año.";
+    const r = pedir("Un texto de antes.", "El presupuesto de marketing es de US$ 20.000 al año. Se aprobó en la junta de marzo.", "agrega que el presupuesto de marketing es de US$ 20.000 al año", [nota]);
+    expect(r.cambios).toEqual([]);
+    expect(r.descartados[0].motivo).toMatch(/más de lo que pediste/);
+  });
+
+  it("⛔ las palabras con tilde al final cuentan: «presupuestó», «objetó»", () => {
+    expect(pedir("Un texto de antes.", "La gerencia ya presupuestó el CRM para enero.", "mejóralo").descartados[0].motivo).toMatch(/«presupuesto».*no nombra/);
+    expect(pedir("Un texto de antes.", "El gerente objetó la fecha.", "mejóralo").descartados[0].motivo).toMatch(/interno.*no nombra/);
+  });
+
+  it("⛔ un número vale si está en una nota junto al tema, esté donde esté en la oración", () => {
+    const pide = "agrega que el presupuesto es de US$ 20.000 al año";
+    // En la nota, junto al presupuesto (aunque la frase siga distinto): pasa.
+    expect(pedir("Un texto de antes.", "El presupuesto es de US$ 20.000 al año.", pide, ["El presupuesto es de US$ 20.000, lo aprobó el gerente."]).cambios[0]).toMatchObject({ interno: true });
+    // El 20 de «20 vendedores» no respalda «20 mil», ni al final de la oración.
+    const vendedores = ["Tienen 20 vendedores. El presupuesto está por definirse."];
+    expect(pedir("Un texto de antes.", "El presupuesto es de 20 mil.", "agrega que el presupuesto es de 20 mil", vendedores).cambios).toEqual([]);
+    expect(pedir("Un texto de antes.", "El presupuesto es de 20.", "agrega que el presupuesto es de 20", vendedores).cambios).toEqual([]);
+    // Un número que la pieza ya tenía («20 vendedores») no se salta la revisión del de otro tamaño («20 mil»).
+    const r = pedir("Tienes 20 vendedores que usan Excel.", "Tienes 20 vendedores que usan Excel y presupuesto de 20 mil para el CRM.", "agrega que tienen presupuesto de 20 mil para el CRM", ["El presupuesto para el CRM es de 50 mil."]);
+    expect(r.cambios).toEqual([]);
+  });
+
+  it("⛔ la contradicción se mira contra la nota más parecida, no contra todas", () => {
+    const notas = ["No tienen presupuesto aprobado este año. Pidieron el presupuesto de la implementación por correo."];
+    const r = pedir("Un texto de antes.", "Tienen presupuesto aprobado este año.", "agrega que tienen presupuesto aprobado este año", notas);
+    expect(r.cambios).toEqual([]);
+    expect(r.descartados[0].motivo).toMatch(/contradice/);
+    // Lo que sí dice la otra nota, pasa.
+    expect(pedir("Un texto de antes.", "Pidieron el presupuesto de la implementación por correo.", "agrega que pidieron el presupuesto de la implementación por correo", notas).cambios[0]).toMatchObject({ interno: true });
+  });
+
+  it("más formas de «no lo menciones», y lo que se cuenta con «nunca», «sacan» o «evitar» no lo es", () => {
+    const nota = "Nunca tienen presupuesto para marketing.";
+    for (const pedido of ["hazlo más corto, sin el presupuesto", "que no se mencione el presupuesto", "ni hables del presupuesto"])
+      expect(pedir("Un texto de antes.", "Nunca tienen presupuesto para marketing.", pedido, [nota]).descartados[0]?.motivo, pedido).toMatch(/quitar o no mencionar/);
+    const r = pedir("Un texto de antes.", "Nunca tienen presupuesto para marketing.", "agrega que nunca tienen presupuesto para marketing", [nota]);
+    expect(r.cambios[0]).toMatchObject({ interno: true });
+  });
+
+  it("lo que la página ya muestra respalda el vocabulario de la escala («agotar presupuesto»), marcado", () => {
+    const pagina = [pieza("otra", CAMPANAS), pieza("p", "Un texto de antes.", { quitable: true })];
+    const r = revisarLaPropuesta({ piezas: pagina, propuesto: [{ clave: "p", despues: "Corren hasta agotar el presupuesto." }], pedido: "agrega que corren hasta agotar el presupuesto", delCliente: [], interno: [] });
+    expect(r.cambios[0]).toMatchObject({ interno: true });
   });
 });
 

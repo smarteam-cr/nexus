@@ -7,7 +7,7 @@
  * el …», y lo de «Dónde está hoy» (el objetivo de la primera venta, lo explorado y «Armado el … con lo que se habló»).
  * Queda UNA frase y UN botón, el de siempre: «Ubicar con las reuniones» (el agente lee las transcripciones de las sesiones
  * y propone los niveles). Lo que dice, en este orden:
- *   1. Nexus la está ubicando ahora.
+ *   1. Nexus la está ubicando ahora (otro trabajo del agente en la preventa no cambia la frase: el botón espera).
  *   2. Nunca se ubicó: con reuniones que leer, que falta hacerlo; sin ninguna, que no hay qué leer todavía.
  *   3. Hay reuniones de después de la última vez que se ubicó: cuántas, y el botón dice «Actualizar».
  *   4. La escala está al día pero el Resumen se armó antes de alguna reunión: se rehace con «Rehacer con IA», en el Resumen
@@ -59,12 +59,12 @@ export function lineaDeLaEscala(o: {
   leyo?: readonly string[];
   /** Cuándo se armó el Resumen (`resumenDeLaEscala.at`). */
   resumenEn: string | null;
-  /** Nexus está trabajando en esta preventa (cualquier corrida del agente: el botón espera). */
+  /** Corre «Ubicar con las reuniones» (la corrida `posicionar`). Otro trabajo del agente no cambia la frase. */
   ubicando: boolean;
 }): LineaDeLaEscala {
   const conTexto = o.reuniones.filter((r) => sirveParaUbicar(r) && !Number.isNaN(Date.parse(r.fecha)));
   const volver = { etiqueta: "Volver a ubicar con las reuniones", fuerte: false };
-  if (o.ubicando) return { estado: "ubicando", texto: "Nexus está trabajando en esta preventa: cuando termine, la escala se pone al día.", boton: { etiqueta: "Ubicando…", fuerte: false } };
+  if (o.ubicando) return { estado: "ubicando", texto: "Nexus está ubicando la escala con las reuniones.", boton: { etiqueta: "Ubicando…", fuerte: false } };
   if (!o.ubicadaEn) {
     if (!conTexto.length)
       return { estado: "sinReuniones", texto: "Todavía no hay reuniones con transcripción o notas para ubicar la escala.", boton: { etiqueta: "Ubicar con las reuniones", fuerte: false } };

@@ -64,7 +64,7 @@ describe("la línea de arriba de La escala", () => {
     expect(linea({ resumenEn: "2026-11-21T12:00:00.000Z" }).estado).toBe("alDia");
   });
 
-  it("mientras Nexus trabaja en la preventa, lo dice y el botón espera", () => {
+  it("mientras Nexus ubica la escala, lo dice y el botón espera (otro trabajo del agente no cambia la frase: PasoEscala)", () => {
     const l = linea({ ubicando: true, reuniones: [...ANTES, meet("2026-11-21T15:00:00.000Z")] });
     expect(l.estado).toBe("ubicando");
     expect(l.boton).toEqual({ etiqueta: "Ubicando…", fuerte: false });

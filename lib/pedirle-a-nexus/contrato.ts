@@ -61,8 +61,9 @@ export interface CambioPropuesto {
   /** Es una pieza nueva en una lista. */
   agregar: boolean;
   /**
-   * Trae algo interno de la venta (el presupuesto, quién decide, una nota del equipo) porque el pedido lo nombró y Nexus lo
-   * tiene de la cuenta (24 nov, ./veracidad.ts). La pantalla lo avisa con `AVISO_DE_LO_INTERNO`.
+   * Toca algo interno de la venta (el presupuesto, quién decide, una nota del equipo): lo pidió la persona y Nexus lo tiene
+   * de la cuenta, o reescribe una oración que ya hablaba de eso (24 nov, ./veracidad.ts). La pantalla lo avisa con
+   * `AVISO_DE_LO_INTERNO`, lo deja fuera de «Aplicar todo» y pregunta antes de aplicarlo.
    */
   interno?: true;
 }

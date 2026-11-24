@@ -80,6 +80,8 @@ describe("2 · arriba, una sola línea", () => {
     expect(paso).toContain("lineaDeLaEscala({");
     expect(paso).toContain('lanzar("posicionar")');
     expect(paso).toContain('{lugar === "preventa" && <LineaDeArriba />}');
+    // Solo «Ubicar» cambia la frase a «ubicando»; otro trabajo del agente solo hace esperar al botón.
+    expect(paso).toContain('ubicando: corriendo && corrida?.modo === "posicionar"');
   });
 
   it("se fueron la fila de los tres pasos, el objetivo, lo explorado y «Armado el…»", () => {
