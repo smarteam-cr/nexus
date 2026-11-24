@@ -252,7 +252,7 @@ export const CifrasSchema: z.ZodType<Cifras> = z
 export const PerdidaValidadaSchema: z.ZodType<PerdidaValidada> = z.object({
   montoAlMes: z.number().finite().nonnegative(),
   moneda: z.string().max(8).nullable(),
-  base: z.enum(["conversion", "negocios", "leads"]),
+  base: z.enum(["conversion", "negocios", "leads", "clientes"]),
   cuenta: textoLleno(MAX_TEXTO_DE_LA_PERDIDA),
   texto: textoLleno(MAX_TEXTO_DE_LA_PERDIDA),
   meta: z.string().trim().max(400),
@@ -1008,13 +1008,29 @@ const PiezaSchema = z.object({
   mano: z.boolean().optional(),
   origen: OrigenDelResumen,
 });
-const RetoDelResumenSchema = PiezaSchema.extend({ dimensionId: ID_DIMENSION.nullable() });
+// El traspaso (24 nov): lo que un equipo dijo de otro va en los dos; `traspaso` es el otro equipo. Un valor raro se cae solo.
+const RetoDelResumenSchema = PiezaSchema.extend({ dimensionId: ID_DIMENSION.nullable(), traspaso: ID_AREA.optional().catch(undefined) });
+/** La cuenta de una cifra «calculado» (24 nov): sus factores, cada uno con la cita que lo sostiene, y la cuenta a la vista. */
+const CuentaSchema = z.object({
+  factores: z.array(z.object({ valor: z.string().max(40), rotulo: z.string().max(120), cita: CitaDelResumenSchema })).min(2).max(3),
+  texto: z.string().max(TOPE_A_MANO),
+});
 const CifraSchema = PiezaSchema.extend({
   cifra: z.string().max(TOPE_DE_LA_CIFRA),
   estado: z.enum(ESTADOS_DE_LA_CIFRA as unknown as [string, ...string[]]),
   nota: z.string().max(TOPE_A_MANO).nullable(),
   dimensionId: ID_DIMENSION.nullable(),
   confirmada: z.boolean().optional().catch(undefined),
+  cuenta: CuentaSchema.optional().catch(undefined),
+});
+/** El traspaso de un paso del recorrido al siguiente (24 nov). */
+const TraspasoSchema = z.object({
+  de: z.string().max(TOPE_DE_UN_NOMBRE),
+  a: z.string().max(TOPE_DE_UN_NOMBRE),
+  texto: z.string().max(TOPE_A_MANO),
+  cifra: z.string().max(TOPE_DE_LA_CIFRA).nullable(),
+  rotulo: z.string().max(TOPE_A_MANO).nullable(),
+  citas: z.array(CitaDelResumenSchema).max(3),
 });
 /** Un punto clave (18 nov): su título, lo que explica, su equipo de la escala y sus citas. */
 const PuntoSchema = PiezaSchema.extend({
@@ -1038,6 +1054,7 @@ const EtapaSchema = PiezaSchema.extend({
   // La forma editorial (15 nov): su ícono y si acompaña mientras el cliente opera. Un valor raro se cae solo, no la etapa.
   icono: z.enum(ICONOS_DEL_PASO).nullable().optional().catch(undefined),
   continuo: z.boolean().optional().catch(undefined),
+  traspaso: TraspasoSchema.optional().catch(undefined),
 });
 const PendienteSchema = z.object({
   id: IdDelResumen,

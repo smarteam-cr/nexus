@@ -1090,13 +1090,18 @@ export async function transcripcionesDeLaExploracion(
     propuesta: PropuestaDeExploracion;
     leido?: LoLeidoDeHubspot;
   } & DeLaFila,
-  o: { cuantas?: number; caracteres?: number } = {},
+  o: { cuantas?: number; caracteres?: number; porEquipo?: number; sinLugar?: ReadonlySet<ClaveDeEquipo> } = {},
   ahora = new Date(),
 ): Promise<{ fuentes: Fuente[]; reuniones: { fuente: string; etiqueta: string; equipo?: ClaveDeEquipo }[]; sesiones: string[] }> {
   const cuantas = o.cuantas ?? 4;
   const caracteres = o.caracteres ?? 40_000;
   const armadas = await armarReuniones(opts, 30, ahora);
-  const candidatas = reunionesParaUbicar(armadas.todas, armadas.deSesiones, cuantas);
+  const pestanas = pestanasDeSesiones(opts.sesiones ?? [], armadas.todas, hoyEnCostaRica(ahora), { automaticas: armadas.automaticas, fuera: new Set(opts.fuera ?? []) });
+  // El cupo por equipo (24 nov, el Resumen de la escala): el equipo de cada reunión, con la misma regla que al leerlas.
+  const equipoDeCadaUna = o.porEquipo
+    ? equiposDeLasReuniones(armadas.todas.map((r) => ({ fuente: r.id, clave: `${r.origen}:${r.id}`, origen: r.origen, fecha: r.fecha })), pestanas)
+    : {};
+  const candidatas = reunionesParaUbicar(armadas.todas, armadas.deSesiones, cuantas, o.porEquipo ? { porEquipo: o.porEquipo, equipoDe: (id) => equipoDeCadaUna[id] ?? null, sinLugar: o.sinLugar } : null);
   if (!candidatas.length) return { fuentes: [], reuniones: [], sesiones: [] };
   const deLaEmpresa = new Set((await getClientSessions(opts.clientId, { ids: candidatas })).map((s) => s.id));
   const filas = await prisma.firefliesSession.findMany({
@@ -1115,7 +1120,6 @@ export async function transcripcionesDeLaExploracion(
     fuentes.push({ id, etiqueta, texto: texto.slice(0, caracteres) });
     leidas.push({ fuente: id, clave: `meet:${s.id}`, etiqueta, id: s.id, origen: "meet", fecha: s.date.toISOString(), titulo: s.title });
   }
-  const pestanas = pestanasDeSesiones(opts.sesiones ?? [], armadas.todas, hoyEnCostaRica(ahora), { automaticas: armadas.automaticas, fuera: new Set(opts.fuera ?? []) });
   const equipos = equiposDeLasReuniones(leidas, pestanas);
   return {
     fuentes,

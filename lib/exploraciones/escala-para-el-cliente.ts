@@ -32,6 +32,7 @@ import type { EstadoDeExploracion } from "./contenido";
 import type { AreaDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
 import { areasDeLaEscala, areasParaElCliente } from "./equipos-de-la-escala";
 import { descripcionDelArea, type DescripcionDelArea } from "./descripcion-de-la-escala";
+import { partesConCitaDelResumen } from "./resumen-de-la-escala";
 import { suHubspotDe } from "./casos-de-uso";
 
 export interface ResultadoDeUnArea {
@@ -124,6 +125,10 @@ export function resultadosDeLaEscala(
   areas: readonly string[] = areasDeLaPagina(lienzo, estado),
 ): ResultadoDeUnArea[] {
   const entorno = { edicion: estado.edicion, perfilCierre: estado.perfilCierre, perfilDespues: estado.perfilDespues, escalaVersion: escala.version };
+  /* Las partes de las que el Resumen dice algo con su cita (24 nov): una hipótesis así SUBE A EVIDENCIA en toda la página
+     (no lleva la marca «por explorar», lleva sus riesgos y su detalle). Lo que se escribió de ella como hipótesis no se
+     cuenta como visto (descripcion-de-la-escala.ts mira la fuente). */
+  const conCita = partesConCitaDelResumen(estado.contenido.resumenDeLaEscala);
   const out: ResultadoDeUnArea[] = [];
   for (const areaId of areas) {
     const area = lienzo.areas.find((a) => a.id === areaId);
@@ -133,9 +138,10 @@ export function resultadosDeLaEscala(
     for (const d of area.dimensiones) {
       const e = estado.contenido.chequeo[d.id];
       if (!d.aplica || !e) continue;
-      niveles[d.id] = { nivel: e.nivel, noLoSe: false, riesgo: !!e.riesgo, ...(e.fuente === "hipotesis" ? { hipotesis: true } : {}) };
+      const sospecha = e.fuente === "hipotesis" && !conCita.has(d.id);
+      niveles[d.id] = { nivel: e.nivel, noLoSe: false, riesgo: !!e.riesgo, ...(sospecha ? { hipotesis: true } : {}) };
       // Lo que contestó en el test lo dijo el cliente: no es «lo que creemos por lo conversado».
-      if (e.fuente === "hipotesis") porExplorar.push(d.id);
+      if (sospecha) porExplorar.push(d.id);
     }
     // Sin nada, sale igual (solo llega acá si el vendedor la eligió): «En medición», con todos sus ejes sin medir.
     const r = resultadoDelArea(escala, area, niveles, suHubspotDe(estado).usa);
@@ -145,6 +151,16 @@ export function resultadosDeLaEscala(
     out.push({ resultado: { ...r, sintesis: descripcion.texto, ...(redaccion ? { redaccion } : {}) }, porExplorar, descripcion });
   }
   return out;
+}
+
+/**
+ * Las partes con ALGO VISTO de la escala de una empresa (24 nov): las ubicadas con evidencia (no una hipótesis) y las
+ * hipótesis de las que el Resumen dice algo con su cita. Solo en ellas salen la tarjeta del radar y «Ver detalles» con el
+ * texto de la escala (`detallesDelResultado`): en las demás, solo lo que escribió una persona.
+ */
+export function partesConAlgoVisto(estado: Pick<EstadoDeExploracion, "contenido">): Set<string> {
+  const conCita = partesConCitaDelResumen(estado.contenido.resumenDeLaEscala);
+  return new Set(Object.entries(estado.contenido.chequeo).filter(([id, e]) => e.fuente !== "hipotesis" || conCita.has(id)).map(([id]) => id));
 }
 
 /** Cuántas partes aplican en las áreas de la página, tengan o no algo: contra eso dice el «Acceso» cuánto ve el cliente. */

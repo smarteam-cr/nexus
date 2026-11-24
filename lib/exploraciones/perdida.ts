@@ -8,10 +8,12 @@
  * próxima sesión) y entonces queda guardada, con la cuenta que la explica (`contenido.perdida`).
  *
  * La brecha SIEMPRE sale de una meta del cliente (de cuánto a cuánto): Nexus no supone una mejora que nadie dijo (la regla
- * de «sin pista del cliente no hay nivel»). Tres formas, la primera meta que alcance:
+ * de «sin pista del cliente no hay nivel»). Cuatro formas, la primera meta que alcance:
  *   · conversión — la meta es una tasa («del 4 % al 7 %»): leads al mes × (tasa meta − tasa hoy) × ticket;
  *   · negocios — la meta es una cantidad de ventas («de 10 a 15 cierres al mes»): (meta − hoy) × ticket;
- *   · leads — la meta es una cantidad de leads: (meta − hoy) × conversión × ticket.
+ *   · leads — la meta es una cantidad de leads: (meta − hoy) × conversión × ticket;
+ *   · clientes (24 nov) — la meta BAJA cuántos clientes se van («de 10 a 4 al mes»): (hoy − meta) × ticket.
+ * La cuenta guarda el equipo de su meta (`Meta.equipo`): en la escala va a la fila de ese equipo.
  * El ticket es el de Negocio o, si falta, el volumen entre las ventas del mismo período (dicho en la cuenta).
  *
  * ⛔ Nada de esto llega a la propuesta, al correo de seguimiento ni al handoff (Elías, 20 nov: «nada llega a la propuesta;
@@ -142,7 +144,8 @@ const r3 = (t: number) => Math.round(t * 1000) / 1000;
 
 // ── La cuenta ─────────────────────────────────────────────────────────────────
 
-export type BaseDeLaPerdida = "conversion" | "negocios" | "leads";
+/** `clientes` (24 nov): la meta baja cuántos clientes se van al mes; lo que se pierde es esa brecha × el ticket. */
+export type BaseDeLaPerdida = "conversion" | "negocios" | "leads" | "clientes";
 
 export interface CalculoDeLaPerdida {
   /** Lo que pierden en un mes. */
@@ -157,6 +160,8 @@ export interface CalculoDeLaPerdida {
   meta: string;
   /** Las cifras de las que sale: si cambian, la cuenta es otra. */
   huella: string;
+  /** El equipo de la meta de la que sale (24 nov, `Meta.equipo`): a la fila de ese equipo va en la escala. */
+  equipo?: Meta["equipo"];
 }
 
 /** Lo que el cálculo lee de lo confirmado. */
@@ -199,6 +204,11 @@ const DE_NEGOCIOS = /negocio|venta|cierre|cierra|cliente|contrato|pedido|compra|
 const DE_LEADS = /lead|prospecto|interesad|contacto|solicitud|cotizaci/i;
 /** Una meta en tasa solo es de conversión si habla de vender: «subir la retención del 60 % al 80 %» no lo es. */
 const DE_CONVERSION = /conver|cierr|cierra|venta|vend|compr|lead|oportunidad|cotizaci|prospect|interesad|negocio/i;
+/** Una meta de perder menos clientes («que se vayan menos clientes», «bajar las cancelaciones»): baja una cantidad. */
+const SE_VAN = /se (van|vayan|pierden|pierdan)|perd(er|emos|imos)|pierden|cancela|churn|abandon|fuga|deserci/i;
+/** Y tiene que hablar de clientes: «perder menos horas, de 10 a 4» no es una pérdida de clientes. */
+const DE_CLIENTES = /client|cuentas|suscript|abonad|socios|pacientes|alumnos/i;
+const DE_CLIENTES_QUE_SE_VAN = { test: (t: string) => SE_VAN.test(t) && DE_CLIENTES.test(t) };
 /** Una cantidad que se cuenta en negocios o leads, dicha como tal («15 cierres», «300 leads»). */
 const CANTIDAD_CONTADA = /\d[\d.,]*\s*(negocios?|cierres?|ventas?|clientes?|contratos?|pedidos?|deals?|leads?|prospectos?|interesados?|cotizaciones?|oportunidades?)\b/i;
 /** ¿La meta parece de plata aunque no diga la moneda? «de 100 mil a 150 mil al mes» no son 50.000 negocios más. */
@@ -238,9 +248,13 @@ export function calcularLaPerdida(c: CasillasParaLaPerdida): CalculoDeLaPerdida 
       texto: `Pierden ~${dicho} al mes por no llegar a «${m.que.trim()}»`,
       meta: m.que.trim(),
       huella: huellaDe(m),
+      ...(m.equipo ? { equipo: m.equipo } : {}),
     };
   };
 
+  /* Dos vueltas (revisión del 24 nov): primero las tres formas de siempre en todas las metas, y solo si ninguna alcanza,
+     la de clientes que se van. Así una cuenta que ya existía (y quizás se validó) no cambia de meta por la forma nueva. */
+  for (const vuelta of ["siempre", "clientes"] as const)
   for (const m of c.metas ?? []) {
     const texto = `${m.que} ${m.objetivo ?? ""} ${m.actual ?? ""}`;
     // Una meta en plata no es una brecha del embudo: no se cuenta acá.
@@ -260,6 +274,14 @@ export function calcularLaPerdida(c: CasillasParaLaPerdida): CalculoDeLaPerdida 
 
     const objetivo = numeroDe(m.objetivo);
     const actual = numeroDe(m.actual);
+    // 4. Clientes que se van (24 nov): la meta BAJA cuántos se pierden («de 10 a 4 al mes»): (hoy − meta) × ticket.
+    if (vuelta === "clientes") {
+      if (objetivo === null || actual === null || objetivo >= actual || !DE_CLIENTES_QUE_SE_VAN.test(m.que) || pareceMonto(m)) continue;
+      const porMes = porMesDelPrimero(m.actual) ?? porMesDelPrimero(m.objetivo) ?? porMesDe(m.que) ?? 1;
+      const hoy = r1(actual * porMes);
+      const meta = r1(objetivo * porMes);
+      return cierre((hoy - meta) * ticket.valor, `(${formatearNumero(hoy, 1)} − ${formatearNumero(meta, 1)}) clientes que se van al mes × ${ticket.dicho}`, "clientes", m);
+    }
     if (objetivo === null || actual === null || objetivo <= actual || pareceMonto(m)) continue;
     const porMes = porMesDelPrimero(m.objetivo) ?? porMesDelPrimero(m.actual) ?? porMesDe(m.que) ?? 1;
     const metaAlMes = r1(objetivo * porMes);
