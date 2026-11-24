@@ -26,9 +26,16 @@ export function operacionesDelChat(): Operacion<ContextoDelChat>[] {
   return [...(OPERACIONES as readonly Operacion<ContextoDelChat>[]).filter((o) => seOfrece(o.nombre)), ...(LECTURAS_DEL_CHAT as unknown as Operacion<ContextoDelChat>[])];
 }
 
-/** Lo que ve el modelo: cada operación sin el campo `clientId`, más la de soltar lo pendiente. Siempre en el mismo orden (la caché). */
-export function herramientasDelChat(): Anthropic.Messages.Tool[] {
-  return [...operacionesDelChat().map((o) => herramientaDeLaCuenta(herramientaDe(o)) as Anthropic.Messages.Tool), TOOL_DESCARTAR as Anthropic.Messages.Tool];
+/** La operación que guarda una nota de la cuenta (y la manda a HubSpot): en la preventa no se ofrece. */
+export const NOTA_DE_LA_CUENTA = "nota.crear";
+
+/**
+ * Lo que ve el modelo: cada operación sin el campo `clientId`, más la de soltar lo pendiente. Siempre en el mismo orden (la
+ * caché). `sinNotasDeLaCuenta`: desde la preventa, sin «nota.crear» (./turno-server.ts › FocoDelChat).
+ */
+export function herramientasDelChat(o: { sinNotasDeLaCuenta?: boolean } = {}): Anthropic.Messages.Tool[] {
+  const ops = operacionesDelChat().filter((x) => !(o.sinNotasDeLaCuenta && x.nombre === NOTA_DE_LA_CUENTA));
+  return [...ops.map((x) => herramientaDeLaCuenta(herramientaDe(x)) as Anthropic.Messages.Tool), TOOL_DESCARTAR as Anthropic.Messages.Tool];
 }
 
 /** El contexto de una persona explícita en una cuenta. */

@@ -182,6 +182,11 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     motivo:
       "Una versión del Resumen de La escala (21 nov): la vista previa (`paginaDeLaVersion`, la página interna armada con esa versión) y «Usar esta versión», que cambia el Resumen y nunca lo publicado. Pantalla interna, con la guardia de la exploración (leer para ver, escribir para usar).",
   },
+  "app/api/nexus-chat/[clientId]/asistente/route.ts": {
+    destino: "ventas",
+    motivo:
+      "El chat de la cuenta (23 nov, una sola puerta en la preventa): solo mira si el chip es una preventa de esta cuenta (clientId y projectId), para no ofrecer ahí las notas de la cuenta que van a HubSpot. No lee su contenido.",
+  },
   "app/api/sales/exploraciones/[id]/escala/nexus/route.ts": {
     destino: "ventas",
     motivo:

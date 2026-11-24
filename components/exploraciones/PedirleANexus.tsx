@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * components/exploraciones/PedirleANexus.tsx — el panel «✨ Pedirle a Nexus» de la página de La escala (23 nov, etapa 3 del
- * plan maestro de «Hablar con Nexus», versión SIN cajón aprobada por Elías): se abre en la misma página, al lado de lo que
- * se mejora. Un pedido, una propuesta: no es una conversación.
+ * components/exploraciones/PedirleANexus.tsx — «✨ Mejorar con IA» de La escala DENTRO del cajón «Nexus» (23 nov, etapas 2
+ * y 3 del plan maestro de «Hablar con Nexus»): lo monta HablarConNexus.tsx cuando el cajón se abrió con el lugar como chip.
+ * Hasta la etapa 2 era un panel al lado de la página; se retiró (no quedan los dos). Un pedido, una propuesta: no es una
+ * conversación. Cerrar el cajón pierde la propuesta que no se aplicó (lo aplicado queda, con su versión en el historial).
  *
  * Arriba, el lugar (lo pone el botón: el Resumen, un área o una pieza; la pieza se puede quitar para pedir sobre toda la
  * página) y la caja para pedir. Debajo, la propuesta en el marco de siempre (`<AgentProposal>`): cada cambio con el antes y
@@ -69,6 +70,7 @@ export default function PedirleANexus({
   foco,
   onQuitarFoco,
   onCerrar,
+  rotuloDeCerrar = "Cerrar",
   alCambiar,
 }: {
   exploracionId: string;
@@ -78,6 +80,8 @@ export default function PedirleANexus({
   foco: FocoDelPedido | null;
   onQuitarFoco: () => void;
   onCerrar: () => void;
+  /** El rótulo de `onCerrar`: dentro del cajón «Nexus», vuelve a la conversación. */
+  rotuloDeCerrar?: string;
   /** Después de aplicar o deshacer (o de un choque): la página y el lienzo se ponen al día. */
   alCambiar: () => void;
 }) {
@@ -169,7 +173,7 @@ export default function PedirleANexus({
           </p>
         </div>
         <Button size="sm" variant="secondary" onClick={onCerrar}>
-          Cerrar
+          {rotuloDeCerrar}
         </Button>
       </div>
 

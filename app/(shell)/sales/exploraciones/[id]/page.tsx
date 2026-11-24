@@ -12,6 +12,7 @@ import { Alert } from "@/components/ui";
 import ElegirResponsable from "@/components/exploraciones/ElegirResponsable";
 import LienzoDeExploracion from "@/components/exploraciones/LienzoDeExploracion";
 import { ChatDeNexus } from "@/components/nexus-chat/ChatDeNexus";
+import BotonDeNexus from "@/components/exploraciones/BotonDeNexus";
 import { AccionDeCabecera, CabeceraDeFicha, ChipHubspot } from "@/components/layout/CabeceraDeFicha";
 import { can } from "@/lib/auth/permissions/engine";
 import { requireInternalUser } from "@/lib/auth/supabase";
@@ -93,6 +94,9 @@ export default async function ExploracionPage({
   const portal = await prisma.hubspotAccount.findFirst({ where: { isSystem: true }, select: { hubspotPortalId: true } });
   const empresaUrl = hubspotCompanyUrl(portal?.hubspotPortalId ?? null, exp.empresa.hubspotCompanyId);
   const delLienzo = escala.estado === "ok" ? escalaDeLaExploracion(escala.general, exp.estado) : null;
+  // El cajón «Nexus» vive en el lienzo: solo con la escala publicada, para quien puede cambiar la preventa y si no está
+  // archivada. Sin él, el chat de la cuenta conserva su botón (nada que se veía queda sin abrirse).
+  const conCajon = escala.estado === "ok" && puedeEditar && !exp.estado.archivada;
   const edicion = delLienzo ? (delLienzo.edicion?.nombre ?? "Escala general") : null;
   const areas = delLienzo ? delLienzo.areas.filter((a) => exp.estado.areas.includes(a.id)).map((a) => a.nombre) : [];
 
@@ -124,7 +128,20 @@ export default async function ExploracionPage({
                 />
               </span>
             </span>
-            {puedeChat && <ChatDeNexus clientId={exp.empresa.clientId} nombre={exp.empresa.nombre} sinSugerencias />}
+            {/* Una sola puerta (23 nov, etapa 2 del plan maestro de «Hablar con Nexus»): «Nexus» abre el cajón de «Hablar
+                con Nexus». El chat de la cuenta queda montado SIN botón: lo abren la guía («Mejorar con el asistente») y
+                «Tareas, siguiente paso o la guía», dentro del cajón. En la preventa no ofrece las notas de la cuenta. */}
+            {/* El cajón solo se abre a quien puede cambiar la preventa: a quien no, le queda el chat de la cuenta con su botón. */}
+            {conCajon && <BotonDeNexus exploracionId={exp.id} />}
+            {puedeChat && (
+              <ChatDeNexus
+                clientId={exp.empresa.clientId}
+                nombre={exp.empresa.nombre}
+                sinSugerencias
+                sinBoton={conCajon}
+                exploracionId={exp.id}
+              />
+            )}
             {!empresaExcluida(exp.empresa.nombre) && (
               <AccionDeCabecera
                 href={`/escala/probar?cliente=${exp.empresa.clientId}&exploracion=${exp.id}`}

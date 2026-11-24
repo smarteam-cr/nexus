@@ -16,7 +16,8 @@ import { aVista } from "@/lib/asistente/handler";
 import { MODELO_DEL_ASISTENTE } from "@/lib/asistente/turno";
 import { PIEZA_NEXUS } from "@/lib/nexus-chat/constantes";
 import { quienPide, respuestaDeError } from "@/lib/nexus-chat/http-server";
-import { correrTurnoDeNexus } from "@/lib/nexus-chat/turno-server";
+import { correrTurnoDeNexus, type FocoDelChat } from "@/lib/nexus-chat/turno-server";
+import { prisma } from "@/lib/db/prisma";
 import { usoDeHoy } from "@/lib/nexus-chat/uso-server";
 import { decidirTope, textoDelTope } from "@/lib/nexus-chat/textos";
 
@@ -30,6 +31,25 @@ const bodySchema = z.union([
 ]);
 
 const TURNOS_A_LA_VISTA = 60;
+
+/**
+ * El foco del turno según el chip. «guia»: la guía de esa exploración. «preventa» (23 nov, el cajón «Nexus» de la preventa:
+ * «Tareas, siguiente paso o la guía»): sin guía. En una PREVENTA de esta cuenta, ninguno ofrece las notas de la cuenta (van
+ * a HubSpot; lo que se le cuenta a Nexus no). Un chip de otra cuenta o que no existe no cambia nada.
+ */
+async function focoDelChip(chip: { tipo: string; id: string } | undefined, clientId: string): Promise<FocoDelChat | undefined> {
+  if (!chip || (chip.tipo !== "guia" && chip.tipo !== "preventa")) return undefined;
+  let f: { clientId: string; projectId: string | null } | null;
+  try {
+    f = await prisma.exploracionDeVenta.findUnique({ where: { id: chip.id }, select: { clientId: true, projectId: true } });
+  } catch {
+    // Sin poder leerla, del lado seguro: sin las notas de la cuenta (y sin la guía, que tampoco se podría leer).
+    return { tipo: "preventa", exploracionId: chip.id, sinNotasDeLaCuenta: true };
+  }
+  const deLaPreventa = !!f && f.clientId === clientId && !f.projectId;
+  if (chip.tipo === "guia") return { tipo: "guia", exploracionId: chip.id, ...(deLaPreventa ? { sinNotasDeLaCuenta: true } : {}) };
+  return deLaPreventa ? { tipo: "preventa", exploracionId: chip.id, sinNotasDeLaCuenta: true } : undefined;
+}
 
 function vista(hilo: Awaited<ReturnType<typeof hiloVivo>>) {
   const v = aVista(hilo);
@@ -70,7 +90,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cli
 
     const hilo = await abrirHilo(pedido);
     const chip = "chip" in parsed.data ? parsed.data.chip : undefined;
-    const foco = chip?.tipo === "guia" ? { tipo: "guia" as const, exploracionId: chip.id } : undefined;
+    const foco = await focoDelChip(chip, clientId);
     const { acuerdo, costoUsd } = await correrTurnoDeNexus(hilo, parsed.data.mensaje, q, new Date(), foco);
     return NextResponse.json({ ...vista(await hiloVivo(pedido)), acuerdo, costoUsd });
   } catch (e) {

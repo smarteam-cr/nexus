@@ -16,8 +16,11 @@ export const PIEZA_NEXUS = "nexus";
 export const EVENTO_ABRIR_EL_CHAT = "nexus-chat:abrir";
 
 export interface PedidoDeAbrirElChat {
-  /** Lo que se señala: la guía de una exploración (`id` = la exploración). */
-  chip?: { tipo: "guia"; id: string; etiqueta: string };
+  /**
+   * Lo que se señala: la guía de una exploración, o la preventa entera (23 nov: «Tareas, siguiente paso o la guía» desde el
+   * cajón «Nexus» de la preventa). `id` = la exploración.
+   */
+  chip?: { tipo: "guia" | "preventa"; id: string; etiqueta: string };
   /** Llena el campo sin mandarlo. */
   texto?: string;
   /**
