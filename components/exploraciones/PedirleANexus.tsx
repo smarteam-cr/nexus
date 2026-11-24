@@ -56,7 +56,9 @@ function Cambio({ c, estado, aplicando, onAplicar, onDescartar }: { c: CambioPro
       </div>
       {c.aMano && estado === "pendiente" && <p className="mt-1 text-[11px] text-fg-secondary">La escribió tu equipo: te pregunto antes de reemplazarla.</p>}
       {c.interno && <p className="mt-1 text-[11px] font-semibold text-warn-ink">{AVISO_DE_LO_INTERNO}</p>}
-      {/* Lo que lo respalda (24 nov): Nexus no juzga si dice lo mismo que lo pedido; quien aplica lo compara. */}
+      {c.antes !== null && <p className="mt-1.5 whitespace-pre-line text-xs text-fg-muted line-through">{c.antes}</p>}
+      {c.despues !== null && <p className="mt-1 whitespace-pre-line text-sm text-fg">{c.despues}</p>}
+      {/* Lo que lo respalda (24 nov), debajo del cambio: Nexus no juzga si dice lo mismo que lo pedido; quien aplica lo compara. */}
       {c.respaldo && c.respaldo.length > 0 && (
         <div className="mt-1.5 rounded-lg border border-dashed border-line bg-surface-muted px-2.5 py-1.5 text-[11px] text-fg-secondary">
           <p className="font-semibold text-fg-muted">Lo que Nexus tiene de la cuenta (compáralo antes de aplicar):</p>
@@ -65,10 +67,13 @@ function Cambio({ c, estado, aplicando, onAplicar, onDescartar }: { c: CambioPro
               <li key={r}>«{r}»</li>
             ))}
           </ul>
+          {!!c.respaldoDeMas && (
+            <p className="mt-0.5 text-fg-muted">
+              Y {c.respaldoDeMas === 1 ? "otra oración que lo nombra" : `${c.respaldoDeMas} oraciones más que lo nombran`}, en las notas de la cuenta o en la página.
+            </p>
+          )}
         </div>
       )}
-      {c.antes !== null && <p className="mt-1.5 whitespace-pre-line text-xs text-fg-muted line-through">{c.antes}</p>}
-      {c.despues !== null && <p className="mt-1 whitespace-pre-line text-sm text-fg">{c.despues}</p>}
       <div className="mt-2 flex items-center gap-2">
         {estado === "pendiente" ? (
           <>

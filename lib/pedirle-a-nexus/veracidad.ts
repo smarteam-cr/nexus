@@ -18,10 +18,12 @@
  *          no pide quitar ni dejar de mencionar nada (`PIDE_QUE_NO`: con eso, lo interno se pide aparte). Una frase de una
  *          nota, solo si el pedido la trae o va con un tema pedido.
  *       3. LO PEDIDO, CON LAS PALABRAS DEL PEDIDO Y SI NEXUS LO TIENE. Si el pedido nombra lo interno que el cambio toca:
- *          todas las palabras y los números nuevos del cambio salen del pedido (el modelo no lee las notas: lo que agrega,
- *          una causa, una fecha o una cifra, es inventado), y el tema está en lo que Nexus tiene de la cuenta (sus notas y su
- *          memoria, `interno`, o lo que la página ya muestra). El cambio trae lo que lo respalda (`respaldo`: las oraciones
- *          de las notas o de la página que nombran el tema), y la pantalla lo muestra al lado.
+ *          cada oración nueva o cambiada sale del pedido y de su propia versión de antes, con sus palabras (también las que
+ *          dan vuelta lo dicho: «no», «sí», «ya», «más de», «hasta») y sus números («1,5» no es 15); el modelo no lee las
+ *          notas, así que lo que agrega (una causa, una fecha, una cifra) es inventado. Y el tema está en lo que Nexus tiene
+ *          de la cuenta (sus notas y su memoria, `interno`, o el resto de la página). El cambio trae lo que lo respalda
+ *          (`respaldo`: lo que más se parece al cambio, de a dos por tema, recortado alrededor del tema; `respaldoDeMas`,
+ *          cuántas más), y la pantalla lo muestra debajo.
  *     Lo que el código NO juzga es el sentido: si lo pedido dice lo mismo que la nota (o lo contrario, o otra cifra). Se
  *     intentó por palabras (la contradicción, la cobertura, cada número con su palabra) y cinco vueltas de revisión, el 24
  *     nov, encontraron siempre otro caso: «no está aprobado» con el «no» después del tema, una cifra en la oración de al
@@ -45,9 +47,15 @@ export interface PropuestoCrudo {
 
 const sinTildes = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-/** Los números de un texto, sin separadores: «4.800» y «4800» son el mismo; «2 de cada 10» da 2 y 10. */
+/**
+ * Los números de un texto: «4.800» y «4800» son el mismo (el separador de miles se va); «2 de cada 10» da 2 y 10; un
+ * decimal se queda («1,5» es «1.5», no 15: el 24 nov «1,5 millones» → «15 millones» pasaba como el mismo número).
+ */
 export function cifrasDe(texto: string): string[] {
-  return (texto.match(/\d[\d.,]*/g) ?? []).map((n) => n.replace(/[.,]+$/, "").replace(/[.,]/g, "")).filter(Boolean);
+  return (texto.match(/\d[\d.,]*/g) ?? [])
+    .map((n) => n.replace(/[.,]+$/, ""))
+    .map((n) => (/^\d{1,3}(?:[.,]\d{3})+$/.test(n) ? n.replace(/[.,]/g, "") : /^\d+[.,]\d{1,2}$/.test(n) ? n.replace(",", ".") : n.replace(/[.,]/g, "")))
+    .filter(Boolean);
 }
 
 /** Las letras de una palabra, con tilde o sin ella: `\b` y `[a-z]` no ven las tildes. */
@@ -106,16 +114,18 @@ const PIDE_QUE_NO = new RegExp(
   ].join("|"),
 );
 /**
- * «…, sin el presupuesto»: un «sin» que abre un pedido aparte (después de un signo, «y» o «pero») y va con un tema
- * interno. «Sin el IVA» o «trabajan sin el presupuesto aprobado» son lo que se cuenta.
+ * «…, sin el presupuesto» o «… . Sin el presupuesto»: un «sin» que abre un pedido aparte (después de una coma, un punto o
+ * un salto de línea) y va con un tema interno. «Sin el IVA», «trabajan sin el presupuesto aprobado», «y sin presupuesto»
+ * o «(sin presupuesto aprobado)» son lo que se cuenta: si así se pedía que no estuviera, el cambio igual llega marcado.
  */
 const sinElTema = (pedido: string) =>
-  TEMAS_INTERNOS.some((t) => new RegExp(`(?:^|[,;:.()\\n\\-–—]\\s*|\\by\\s+|\\bpero\\s+)sin (?:(?:el|la|los|las|lo|nada de) )?(?:${t.patron.source})`, "i").test(pedido));
+  TEMAS_INTERNOS.some((t) => new RegExp(`(?:^|[,;:.\\n]\\s*)sin (?:(?:el|la|los|las|lo|nada de) )?(?:${t.patron.source})`, "i").test(pedido));
 
 /** El texto en fichas: sin tildes ni signos, y cada número entero («20.000» es «20000»). */
 function fichas(texto: string): string[] {
   return sinTildes(texto)
-    .replace(/\d[\d.,]*/g, (n) => ` ${cifrasDe(n)[0] ?? ""} `)
+    // El número como lo lee `cifrasDe` («1,5» → «1d5»: el punto se iría con los signos y volvería a ser 15).
+    .replace(/\d[\d.,]*/g, (n) => ` ${(cifrasDe(n)[0] ?? "").replace(".", "d")} `)
     .replace(/[^a-z0-9ñ ]+/g, " ")
     .split(/\s+/)
     .filter(Boolean);
@@ -130,16 +140,26 @@ function frases(texto: string, n = 5): Set<string> {
 }
 
 /** Las palabras que solo arman la frase (artículos, preposiciones, pronombres): no dicen nada que se pueda inventar. */
-const VACIAS = new Set("que los las les nos del con por para una uno unos unas sus mas muy ese esa eso este esta esto estos estas como pero sobre entre hasta desde cuando donde ellos ellas nuestro nuestra".split(" "));
-/** Las palabras que dicen algo: de tres letras o más, más «no» y «ni» (cambian lo que se dice); sin los números. */
-const palabras = (texto: string) => fichas(texto).filter((p) => (p.length >= 3 || p === "no" || p === "ni") && !/^\d+$/.test(p) && !VACIAS.has(p));
+const VACIAS = new Set("que los las les nos del con por para una uno unos unas sus muy ese esa eso este esta esto estos estas como pero sobre entre desde cuando donde ellos ellas nuestro nuestra".split(" "));
+/** Las cortas que dan vuelta lo que se dice («sí tiene», «ya está», «más de», «hasta 20 mil»): cuentan como palabras. */
+const DAN_VUELTA = new Set(["no", "ni", "si", "ya", "mas", "menos", "hasta", "sin", "nunca", "casi", "solo"]);
+/** Las palabras que dicen algo: de tres letras o más y las que dan vuelta lo dicho; sin los números. */
+const palabras = (texto: string) => fichas(texto).filter((p) => (p.length >= 3 || DAN_VUELTA.has(p)) && !/^\d+(?:d\d+)?$/.test(p) && !VACIAS.has(p));
 
 /** Las oraciones de un texto (un punto entre dígitos, «20.000», no corta). */
 const oracionesDe = (texto: string) => texto.split(/(?<=[.;!?])\s+|\n+/).map((x) => x.trim()).filter(Boolean);
 const igualQue = (a: string) => fichas(a).join(" ");
-/** Cuántas oraciones de respaldo trae un cambio, y hasta qué largo cada una. */
-const MAX_RESPALDO = 3;
+/** Cuántas oraciones de respaldo trae un cambio (de a cuántas por tema), y hasta qué largo cada una. */
+const MAX_RESPALDO = 4;
+const POR_TEMA = 2;
 const LARGO_DEL_RESPALDO = 240;
+/** Una oración larga se recorta alrededor del primer tema que nombra, no desde el principio. */
+function recortar(oracion: string, temas: readonly { patron: RegExp }[]): string {
+  if (oracion.length <= LARGO_DEL_RESPALDO) return oracion;
+  const en = Math.min(...temas.map((t) => [...oracion.matchAll(t.patron)][0]?.index ?? Infinity), Infinity);
+  const desde = Number.isFinite(en) ? Math.max(0, Math.min(en - 80, oracion.length - LARGO_DEL_RESPALDO)) : 0;
+  return `${desde > 0 ? "…" : ""}${oracion.slice(desde, desde + LARGO_DEL_RESPALDO)}${desde + LARGO_DEL_RESPALDO < oracion.length ? "…" : ""}`;
+}
 
 export function revisarLaPropuesta(o: {
   /** Las piezas que se podían cambiar (la página o, con el pedido hecho desde una sección, las de esa sección). */
@@ -197,6 +217,7 @@ export function revisarLaPropuesta(o: {
     }
     let interno = false;
     let respaldo: string[] = [];
+    let respaldoDeMas = 0;
     if (despues) {
       const voseo = o.voseo?.(despues) ?? [];
       if (voseo.length) {
@@ -224,14 +245,16 @@ export function revisarLaPropuesta(o: {
         .filter((oracion) => !deAntes.has(igualQue(oracion)))
         .map((oracion) => ({ oracion, temas: TEMAS_INTERNOS.filter((t) => terminos(t, oracion).length > 0), copiadas: [...frases(oracion)].filter((f) => deLoInterno.has(f)) }))
         .filter((c) => c.temas.length || c.copiadas.length);
-      if (internas.some((c) => c.copiadas.length && !c.temas.some(loPide) && !c.copiadas.some((f) => delPedido.has(f)))) {
+      // Una frase de una nota cuenta como pedida si el pedido la trae y no pide quitar ni dejar de mencionar algo.
+      const laPide = (c: { copiadas: string[] }) => !pideQueNo && c.copiadas.some((f) => delPedido.has(f));
+      if (internas.some((c) => c.copiadas.length && !c.temas.some(loPide) && !laPide(c))) {
         descartar("Copia algo de lo interno (una nota del equipo que el cliente no ve) que tu pedido no nombra.");
         continue;
       }
       interno = internas.length > 0;
       // 3. Lo interno que se pidió: con las palabras del pedido, si Nexus lo tiene, y con lo que lo respalda a la vista.
       const pedidos = [...new Set(internas.flatMap((c) => c.temas.filter(loPide)))];
-      const pidioUnaNota = internas.some((c) => c.copiadas.some((f) => delPedido.has(f)));
+      const pidioUnaNota = internas.some(laPide);
       if (pedidos.length || pidioUnaNota) {
         // Lo que Nexus tiene: las notas y su memoria, y el resto de la página (la pieza que cambia no se respalda a sí misma).
         const deOtraParte = (o.pagina ?? o.piezas).filter((p) => p.clave !== x.clave && !p.noLaVeElCliente).map((p) => p.valor ?? "").join("\n");
@@ -240,22 +263,46 @@ export function revisarLaPropuesta(o: {
           descartar(`Habla de algo interno («${sinTenerlo.nombre}») que Nexus no tiene en lo que sabe de la cuenta: si es cierto, cuéntaselo primero.`);
           continue;
         }
-        // Todo lo nuevo del cambio (las palabras y los números, en todas sus oraciones) sale del pedido.
-        const yaDecia = new Set(palabras(antes ?? ""));
-        const deMas = palabras(despues).find((p) => !yaDecia.has(p) && !palabrasDelPedido.has(p));
-        const yaNumeros = new Set(cifrasDe(antes ?? ""));
-        const numeroDeMas = cifrasDe(despues).find((n) => !yaNumeros.has(n) && !numerosDelPedido.has(n));
-        if (deMas || numeroDeMas) {
-          descartar(`Dice de algo interno más de lo que pediste («${deMas ?? numeroDeMas}»): escríbelo en tu pedido tal como es.`);
+        /* Todo lo nuevo del cambio sale del pedido: cada oración nueva o cambiada, con sus palabras y sus números, se compara
+           con lo pedido y con SU versión de antes (la oración de la pieza que más se le parece, si comparte al menos la mitad).
+           Lo que dice otra oración de la pieza no vale: «20 mil contactos» no respalda «presupuesto de 20 mil», ni «no usa el
+           CRM» un «no hay presupuesto». */
+        const oracionesDeAntes = oracionesDe(antes ?? "");
+        let deMas: string | undefined;
+        for (const oracion of oracionesDe(despues).filter((x) => !deAntes.has(igualQue(x)))) {
+          const suyas = new Set(palabras(oracion));
+          const previa = oracionesDeAntes
+            .map((a) => ({ a, ps: palabras(a), comun: palabras(a).filter((p) => suyas.has(p)).length }))
+            .filter((x) => x.ps.length && x.comun / x.ps.length >= 0.5)
+            .sort((a, b) => b.comun - a.comun)[0]?.a;
+          const valen = new Set([...palabrasDelPedido, ...(previa ? palabras(previa) : [])]);
+          const numerosQueValen = new Set([...numerosDelPedido, ...(previa ? cifrasDe(previa) : [])]);
+          deMas = [...suyas].find((p) => !valen.has(p)) ?? cifrasDe(oracion).find((n) => !numerosQueValen.has(n));
+          if (deMas) break;
+        }
+        if (deMas) {
+          descartar(`Dice de algo interno más de lo que pediste («${deMas}»): escríbelo en tu pedido tal como es.`);
           continue;
         }
-        // Lo que lo respalda, para que quien aplica lo compare: primero las notas, después la página (sin esta pieza).
-        const temasDelRespaldo = pedidos.length ? pedidos : TEMAS_INTERNOS;
-        respaldo = [...oracionesDe(deLaCuenta), ...oracionesDe(deOtraParte)]
-          .filter((oracion) => (pidioUnaNota && [...frases(oracion)].some((f) => delPedido.has(f))) || temasDelRespaldo.some((t) => terminos(t, oracion).length > 0))
-          .filter((oracion, i, xs) => xs.indexOf(oracion) === i)
-          .slice(0, MAX_RESPALDO)
-          .map((oracion) => (oracion.length > LARGO_DEL_RESPALDO ? `${oracion.slice(0, LARGO_DEL_RESPALDO - 1)}…` : oracion));
+        /* Lo que lo respalda, para que quien aplica lo compare: primero lo que más se parece al cambio, de a dos por tema
+           pedido (y lo que comparte frase con el pedido, si se pidió una nota), recortado alrededor del tema. Lo que no entra
+           se cuenta (`respaldoDeMas`). */
+        const delCambio = new Set(palabras(despues));
+        const candidatas = [...oracionesDe(deLaCuenta), ...oracionesDe(deOtraParte)]
+          .filter((oracion, i, xs) => xs.findIndex((y) => igualQue(y) === igualQue(oracion)) === i)
+          .map((oracion) => ({
+            oracion,
+            temas: pedidos.filter((t) => terminos(t, oracion).length > 0),
+            deLaNota: pidioUnaNota && [...frases(oracion)].some((f) => delPedido.has(f)),
+            parecido: palabras(oracion).filter((p) => delCambio.has(p)).length,
+          }))
+          .filter((c) => c.temas.length || c.deLaNota)
+          .sort((a, b) => b.parecido - a.parecido);
+        const elegidas = new Set<string>();
+        for (const grupo of [...pedidos.map((t) => candidatas.filter((c) => c.temas.includes(t))), candidatas.filter((c) => c.deLaNota)])
+          for (const c of grupo.slice(0, POR_TEMA)) if (elegidas.size < MAX_RESPALDO) elegidas.add(c.oracion);
+        respaldo = candidatas.filter((c) => elegidas.has(c.oracion)).map((c) => recortar(c.oracion, pedidos));
+        respaldoDeMas = candidatas.length - respaldo.length;
       }
       const propias = new Set(cifrasDe(antes ?? ""));
       const inventadas = cifrasDe(despues).filter((c) => !permitidas.has(c) && !propias.has(c));
@@ -274,6 +321,7 @@ export function revisarLaPropuesta(o: {
       agregar: pieza.agregar,
       ...(interno ? { interno: true as const } : {}),
       ...(respaldo.length ? { respaldo } : {}),
+      ...(respaldoDeMas > 0 ? { respaldoDeMas } : {}),
     });
   }
   return { cambios, descartados };

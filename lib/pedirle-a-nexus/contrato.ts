@@ -71,6 +71,8 @@ export interface CambioPropuesto {
    * aplica compare. El código no juzga si dicen lo mismo; la persona sí (24 nov, ./veracidad.ts). Solo adentro.
    */
   respaldo?: string[];
+  /** Cuántas oraciones más lo nombran y no entraron en `respaldo` (la pantalla dice «y N más»). */
+  respaldoDeMas?: number;
 }
 
 /** El aviso de un cambio que trae algo interno (24 nov): lo ve el cliente cuando alguien publique. */
