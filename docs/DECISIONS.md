@@ -16612,10 +16612,10 @@ todavía: cada etapa arranca cuando él lo dice.
     2. *Lo no pedido no llega:* una palabra interna que la pieza no tenía, solo si el pedido nombra su tema y no pide
        quitar ni dejar de mencionar nada (con eso, lo interno se pide aparte).
     3. *Lo pedido, con las palabras del pedido, si Nexus lo tiene y con su respaldo a la vista:* si el pedido nombra lo
-       interno que el cambio toca, cada oración nueva o cambiada sale del pedido y de su propia versión de antes, con sus
-       palabras (también «no», «sí», «ya», «más de», «hasta») y sus números («1,5» no es 15): el modelo no lee las notas,
-       así que una causa, una fecha o una cifra que agrega es inventada; y el tema está en las notas, su memoria o el resto
-       de la página. El cambio muestra, debajo, lo que lo respalda («Lo que Nexus tiene de la cuenta»): lo que más se
+       interno que el cambio toca, cada palabra y cada número que aparece más veces que antes en la pieza sale del pedido
+       (se cuenta en la pieza entera: partir o juntar oraciones no cambia nada; «no», «más», «hasta» o «desde», con su
+       pareja; «1,5» no es 15): el modelo no lee las notas, así que una causa, una fecha o una cifra que agrega es inventada;
+       y el tema está en las notas, su memoria o el resto de la página. El cambio muestra, debajo, lo que lo respalda («Lo que Nexus tiene de la cuenta»): lo que más se
        parece al cambio, de a dos por tema pedido, recortado alrededor del tema, y cuántas oraciones más lo nombran.
     *El sentido lo juzga quien aplica, no el código.* Se intentó comparar por palabras si lo pedido dice lo mismo que la
     nota (contradicción, cobertura, cada número con su palabra) y cinco vueltas de revisión del 24 nov encontraron siempre

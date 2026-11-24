@@ -43,7 +43,9 @@ const ANTES = "Un texto de antes.";
 describe("las cifras", () => {
   it("lee los números sin el separador de miles, y con su decimal («1,5» no es 15)", () => {
     expect(cifrasDe("4.800 clientes, 2 de cada 10 y US$1,5M")).toEqual(["4800", "2", "10", "1.5"]);
-    expect(cifrasDe("20.000 y 20,000 y 200,00")).toEqual(["20000", "20000", "200.00"]);
+    expect(cifrasDe("20.000 y 20,000 y 200,00")).toEqual(["20000", "20000", "200"]);
+    // Miles y decimales a la vez: el último separador con uno o dos dígitos es el decimal; sus ceros no cuentan.
+    expect(cifrasDe("4800,50 · 4.800,50 · 1,234.56 · 2.000,00 · 200.000")).toEqual(["4800.5", "4800.5", "1234.56", "2000", "200000"]);
   });
 
   it("⛔ un número que cambia de tamaño no es el mismo: «1,5 millones» → «15 millones» no pasa", () => {
@@ -358,5 +360,64 @@ describe("lo que encontró la sexta revisión del 24 nov", () => {
       expect(r.cambios[0].respaldo?.[0]).toContain("el presupuesto para el CRM no está aprobado todavía");
       expect(r.cambios[0].respaldo?.[0].startsWith("…")).toBe(true);
     });
+  });
+});
+
+describe("lo que encontró la séptima revisión del 24 nov", () => {
+  it("cambiar el formato de un monto con miles y centavos no es otra cifra; multiplicarlo, sí", () => {
+    expect(pedir("Pagas US$ 4800,50 al mes.", "Pagas US$ 4.800,50 al mes.", "hazlo más claro").cambios).toHaveLength(1);
+    expect(pedir("Pagas US$ 2.000,00 al mes.", "Pagas US$ 2.000 al mes.", "hazlo más claro").cambios).toHaveLength(1);
+    expect(pedir("Pagas US$ 2.000,00 al mes.", "Pagas US$ 200.000 al mes.", "hazlo más claro").cambios).toEqual([]);
+  });
+
+  it("⛔ se cuenta en la pieza entera: juntar con «y» o con coma no deja pasar el segundo «20» ni el segundo «no»", () => {
+    const nota = ["El presupuesto es limitado.", "Hay presupuesto aprobado."];
+    expect(pedir("Tienes 20 mil contactos en la base.", "Tienes 20 mil contactos en la base y un presupuesto de 20 mil.", "agrega que el presupuesto es limitado", nota).cambios).toEqual([]);
+    expect(pedir("El equipo no usa el CRM.", "El equipo no usa el CRM y no hay presupuesto aprobado.", "agrega que hay presupuesto aprobado", nota).cambios).toEqual([]);
+    expect(pedir("El equipo no usa el CRM.", "El equipo no usa el CRM, no hay presupuesto aprobado.", "agrega que hay presupuesto aprobado", nota).cambios).toEqual([]);
+    expect(pedir("Hoy no hay CRM.", "Hoy no hay CRM. No hay presupuesto aprobado.", "agrega que hay presupuesto aprobado", nota).cambios).toEqual([]);
+  });
+
+  it("partir o juntar oraciones al agregar lo pedido no lo descarta", () => {
+    const nota = ["El presupuesto es limitado."];
+    const partida = pedir("Tienes 20 mil contactos y los usas en Excel.", "Tienes 20 mil contactos. Los usas en Excel. El presupuesto es limitado.", "agrega que el presupuesto es limitado", nota);
+    expect(partida.cambios[0]).toMatchObject({ interno: true });
+    const junta = pedir("Las cotizaciones se pierden. Tu equipo trabaja en Excel.", "Las cotizaciones se pierden y tu equipo trabaja en Excel. El presupuesto es limitado.", "agrega que el presupuesto es limitado", nota);
+    expect(junta.cambios[0]).toMatchObject({ interno: true });
+  });
+
+  it("⛔ un «más», «no» o «desde» suelto en el pedido no alcanza: tiene que venir con su pareja", () => {
+    const nota = ["El presupuesto es de 20 mil.", "El presupuesto está aprobado."];
+    expect(pedir(ANTES, "El presupuesto es de más de 20 mil.", "hazlo más claro y agrega que el presupuesto es de 20 mil", nota).cambios).toEqual([]);
+    expect(pedir(ANTES, "El presupuesto no está aprobado.", "agrega que el presupuesto está aprobado, y que no suene tan técnico", nota).cambios).toEqual([]);
+    expect(pedir(ANTES, "El presupuesto es desde 20 mil.", "agrega que el presupuesto es de 20 mil", nota).cambios).toEqual([]);
+    // Con la pareja en el pedido, sí.
+    expect(pedir(ANTES, "El presupuesto es de más de 20 mil.", "agrega que el presupuesto es de más de 20 mil", ["El presupuesto es de más de 20 mil."]).cambios[0]).toMatchObject({ interno: true });
+  });
+
+  it("el respaldo: la nota corta y exacta gana a las largas, un tercer tema tiene su lugar, y una nota pedida larga se recorta en su frase", () => {
+    const largas = [
+      "El presupuesto de marketing se revisa con el presupuesto de marketing del año anterior y con el presupuesto de marketing regional.",
+      "En la reunión hablamos del presupuesto de marketing, del presupuesto de marketing digital y del presupuesto de marketing de eventos.",
+    ];
+    const r = pedir(ANTES, "El presupuesto de marketing está aprobado.", "agrega que el presupuesto de marketing está aprobado", [...largas, "El presupuesto de marketing NO está aprobado."]);
+    expect(r.cambios[0].respaldo?.[0]).toBe("El presupuesto de marketing NO está aprobado.");
+
+    const tres = ["El presupuesto es fijo.", "El presupuesto de TI es chico.", "La competencia es Salesforce.", "La competencia es Zoho.", "El director no quiere dejar Excel."];
+    const t = pedir(ANTES, "El presupuesto es fijo, la competencia es Zoho y el director no quiere dejar Excel.", "agrega que el presupuesto es fijo, la competencia es Zoho y el director no quiere dejar Excel", tres);
+    expect(t.cambios[0].respaldo).toEqual(expect.arrayContaining(["El presupuesto es fijo.", "La competencia es Zoho.", "El director no quiere dejar Excel."]));
+
+    const fiscal = "el gerente financiero frenó la compra hasta enero por el cierre fiscal";
+    const larga = `${"Hablamos de muchas cosas con el equipo comercial durante la reunión, ".repeat(4)}y ${fiscal}`;
+    const n = revisar([{ clave: "quitable", despues: "El gerente financiero frenó la compra hasta enero por el cierre fiscal." }], { pedido: `agrega que ${fiscal}`, interno: [larga] });
+    expect(n.cambios[0].respaldo?.[0]).toContain("gerente financiero frenó la compra");
+  });
+
+  it("es rápido con una cuenta grande (cientos de oraciones de notas y de página)", () => {
+    const notas = Array.from({ length: 12 }, (_, i) => Array.from({ length: 40 }, (_, j) => `El presupuesto ${i}-${j} se revisa con el equipo comercial de la región ${j}.`).join(" "));
+    const otras = Array.from({ length: 30 }, (_, i) => pieza(`o${i}`, `Las campañas ${i} corren hasta agotar presupuesto sin que nadie mida qué dejan.`));
+    const t0 = performance.now();
+    for (let k = 0; k < 5; k++) pedir(ANTES, "El presupuesto está aprobado.", "agrega que el presupuesto está aprobado", notas, otras);
+    expect(performance.now() - t0).toBeLessThan(1500);
   });
 });

@@ -121,7 +121,7 @@ Cada sección del documento es UNA PIEZA de la página, con su clave, dónde est
 - Para AGREGAR una pieza nueva, escribe en la pieza marcada «lugar para AGREGAR» de esa lista (una por lista).
 - Cambia SOLO lo que el pedido pide, lo mínimo que lo cumple. Si señala una pieza, empieza por ella.
 - NUNCA inventes cifras, nombres de sistemas ni fechas: usa solo lo que dice la página, lo que el equipo confirmó (abajo) y lo que diga el pedido. Si el pedido trae una cifra, úsala tal cual.
-- LO INTERNO de la venta (${NOMBRES_DE_LO_INTERNO}) va en la página SOLO si el pedido lo pide con todas sus letras: entonces escríbelo con las palabras del pedido, sin agregar nada, y dilo en "__reasoning" (el cliente lo verá al publicar). Si el pedido no lo nombra, o pide que no esté, nunca lo escribas. Cualquier otra cosa de la venta que no sea del cliente (lo que se negocia, lo que opina una persona de la empresa), tampoco.
+- LO INTERNO de la venta (${NOMBRES_DE_LO_INTERNO}) va en la página SOLO si el pedido lo pide con todas sus letras: entonces escríbelo con las palabras del pedido, sin agregar nada y sin reescribir el resto de la pieza (agrégalo o cámbialo donde va), y dilo en "__reasoning" (el cliente lo verá al publicar). Si el pedido no lo nombra, o pide que no esté, nunca lo escribas. Cualquier otra cosa de la venta que no sea del cliente (lo que se negocia, lo que opina una persona de la empresa), tampoco.
 - Las piezas «la escribió el equipo» las cambias solo si el pedido las nombra o es imposible cumplirlo sin ellas.
 - Respeta el largo de cada pieza. Frases cortas y concretas, sin superlativos ni signos de exclamación.
 - "__reasoning": una o dos frases para la persona del equipo (no para el cliente) de qué cambiaste y por qué.`;
