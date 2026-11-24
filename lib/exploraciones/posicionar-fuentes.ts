@@ -15,6 +15,7 @@ import "server-only";
  * Lo que falla se omite: el agente lee lo demás.
  */
 import { prisma } from "@/lib/db/prisma";
+import { NO_ES_CONTENEDOR_WHERE } from "@/lib/projects/scope";
 import { loadSelectedUseCases } from "@/lib/business-cases/use-cases";
 import { inversionDelDocumento } from "@/lib/landing/forma-de-pago";
 import { memoriaDeLaCuenta, memoriaDelProyecto } from "@/lib/memoria";
@@ -95,6 +96,28 @@ async function cronogramaDelProyecto(projectId: string): Promise<string> {
   );
 }
 
+/**
+ * Los proyectos de la empresa que «Ubicar con lo que ya sabemos» puede leer como contexto (24 nov, la preventa de un
+ * cliente): todos menos el contenedor «Información del cliente» y los de prueba, como el selector de la ficha, los activos
+ * primero y entre ellos el más nuevo (el sugerido). Un proyecto terminado entra: el handoff de la implementación que ya
+ * cerró es justo lo que sirve para el diagnóstico de la renovación (revisión del 24 nov). Solo de esta empresa: el agente
+ * igual lo vuelve a comprobar (`proyectoDeContextoDeLaEmpresa`).
+ */
+export async function proyectosParaElContexto(clientId: string): Promise<{ id: string; nombre: string }[]> {
+  const filas = await prisma.project.findMany({
+    where: { AND: [{ clientId }, NO_ES_CONTENEDOR_WHERE, { esPrueba: false }] },
+    select: { id: true, name: true, status: true },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+  return filas
+    .sort((a, b) => Number(b.status === "active") - Number(a.status === "active"))
+    .map((p) => ({ id: p.id, nombre: `${p.name}${ESTADO_DEL_PROYECTO[p.status] ? ` (${ESTADO_DEL_PROYECTO[p.status]})` : p.status === "active" ? "" : ` (${p.status})`}` }));
+}
+
+/** Cómo se nombra el estado de un proyecto que no está activo en «Con el contexto de» (revisión del 24 nov: no todo es «cerrado»). */
+const ESTADO_DEL_PROYECTO: Record<string, string> = { paused: "en pausa", completed: "terminado", inactive: "terminado" };
+
 export interface LoQueLeePosicionar {
   fuentes: Fuente[];
   /** Las reuniones que leyó (en resumen): van a la corrida, no se marcan como leídas. */
@@ -117,6 +140,14 @@ export async function fuentesParaPosicionar(o: {
    * de las reuniones de la empresa en resumen. Ya vienen por el chokepoint.
    */
   reuniones?: { fuentes: Fuente[]; sesiones: string[] };
+  /**
+   * La preventa de un cliente (24 nov, «Ubicar con lo que ya sabemos»): ADEMÁS de `reuniones` (sus sesiones, si hay), la
+   * base de la empresa: sus reuniones en resumen, después de las sesiones, sin repetir ninguna y con los ids que siguen
+   * (S5, S6…). Sin `reuniones`, es lo mismo que la cuenta.
+   */
+  conLaBase?: boolean;
+  /** Las claves (`meet:<id>`) que alguien sacó con «Fuera de la exploración»: la base en resumen no las vuelve a traer. */
+  fuera?: readonly string[];
 }): Promise<LoQueLeePosicionar> {
   const real = o.projectId && !o.esContenedor ? o.projectId : null;
   const [hubspot, delProyecto, cuenta, proyecto, ventas, propuestas, tareas, cronograma, reuniones] = await Promise.all([
@@ -129,13 +160,19 @@ export async function fuentesParaPosicionar(o: {
     seguro(tareasDeLaCuentaParaAgentes(o.clientId), [], "las tareas"),
     real ? seguro(cronogramaDelProyecto(real), "", "el cronograma") : Promise.resolve(""),
     // Primero las que alguien eligió en una sesión de cualquier exploración de la empresa (escala única, 2026-10-28).
-    o.reuniones
+    o.reuniones && !o.conLaBase
       ? Promise.resolve(o.reuniones)
       : seguro(
-          reunionesElegidasDeLaEmpresa(o.clientId).then((elegidas) => reunionesEnResumen(o.clientId, { elegidas })),
+          reunionesElegidasDeLaEmpresa(o.clientId).then((elegidas) =>
+            reunionesEnResumen(o.clientId, {
+              elegidas,
+              excepto: [...(o.reuniones?.sesiones ?? []), ...(o.fuera ?? []).filter((k) => k.startsWith("meet:")).map((k) => k.slice(5))],
+              desde: (o.reuniones?.fuentes.length ?? 0) + 1,
+            }),
+          ),
           { fuentes: [] as Fuente[], sesiones: [] as string[] },
           "las reuniones",
-        ),
+        ).then((base) => (o.reuniones && o.conLaBase ? { fuentes: [...o.reuniones.fuentes, ...base.fuentes], sesiones: [...o.reuniones.sesiones, ...base.sesiones] } : base)),
   ]);
 
   const f = FUENTES_DE_POSICIONAR;

@@ -317,14 +317,24 @@ describe("⛔ «Ubicar con las reuniones» lee las transcripciones de las sesion
 
   it("en la preventa: las transcripciones (no los resúmenes), las tres áreas y las hipótesis", () => {
     expect(posicionar).toMatch(/const transcripciones = esPreventa\s*\?\s*await transcripcionesDeLaExploracion\(/);
-    expect(posicionar).toMatch(/\.\.\.\(transcripciones \? \{ reuniones: transcripciones \} : \{\}\)/);
+    expect(posicionar).toMatch(/\.\.\.\(transcripciones && \(conSesiones \|\| !conLoQueYaSabemos\) \? \{ reuniones: transcripciones \} : \{\}\)/);
     expect(posicionar).toMatch(/areas: esPreventa \? \[\] : estado\.areas/);
     expect(posicionar).toMatch(/conHipotesis: true/);
   });
 
-  it("sin transcripciones no gasta IA, y una respuesta cortada es un error, no una corrida vacía", () => {
-    expect(posicionar).toMatch(/if \(transcripciones && !transcripciones\.fuentes\.length\)/);
+  it("un prospecto sin transcripciones no gasta IA, y una respuesta cortada es un error, no una corrida vacía", () => {
+    expect(posicionar).toMatch(/if \(transcripciones && !transcripciones\.fuentes\.length && !conLoQueYaSabemos\)/);
     expect(posicionar).toMatch(/respuesta\.stop_reason === "max_tokens"/);
+  });
+
+  it("la preventa de un cliente parte de lo que ya sabemos: la base en resumen y el proyecto de contexto de la empresa (24 nov)", () => {
+    expect(posicionar).toMatch(/const conLoQueYaSabemos = esPreventa && partirDeLoQueYaSabemos\(fila\.client\.kind\)/);
+    expect(posicionar).toMatch(/\.\.\.\(conLoQueYaSabemos \? \{ conLaBase: true, fuera: estado\.contenido\.fuera \} : \{\}\)/);
+    // El proyecto de contexto solo si es de esta empresa (invariante #1).
+    expect(posicionar).toMatch(/esContenedor \|\| conLoQueYaSabemos \? await proyectoDeContextoDeLaEmpresa\(fila\.clientId, opts\.proyectoDeContexto\)/);
+    const fuentes = fs.readFileSync(path.join(RAIZ, "lib", "exploraciones", "posicionar-fuentes.ts"), "utf8");
+    // La base no repite las sesiones ni trae lo que se sacó con «Fuera de la exploración».
+    expect(fuentes).toMatch(/reunionesEnResumen\(o\.clientId, \{\s*elegidas,\s*excepto: \[\.\.\.\(o\.reuniones\?\.sesiones \?\? \[\]\), \.\.\.\(o\.fuera \?\? \[\]\)/);
   });
 
   it("las transcripciones salen por el chokepoint de sesiones (invariante #1)", () => {

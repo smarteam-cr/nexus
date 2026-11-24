@@ -39,11 +39,20 @@ export function useCorrida() {
    * `sesionId`: para leer una reunión de Meet puntual (la de una pestaña de sesión). `sesionIds`: varias, en bloque (se
    * leen una por corrida). `hubspotId`: para resumir una de HubSpot ya leída. Si el agente ya trabaja, una lectura de
    * Meet espera en su cola (2026-11-17). Devuelve si el agente arrancó con este pedido (no si quedó en cola, ni si falló).
+   * `proyectoDeContexto` (con «posicionar», 24 nov): en la preventa de un cliente, el proyecto que se lee como contexto.
    */
   const lanzar = useCallback(
     async (
       modo: ModoDeLaCorrida,
-      opciones: { sesionId?: string; sesionIds?: string[]; hubspotId?: string; regenerar?: boolean; revisar?: boolean; instruccion?: string | null } = {},
+      opciones: {
+        sesionId?: string;
+        sesionIds?: string[];
+        hubspotId?: string;
+        regenerar?: boolean;
+        revisar?: boolean;
+        instruccion?: string | null;
+        proyectoDeContexto?: string | null;
+      } = {},
     ): Promise<boolean> => {
       s.ponerLanzando(true);
       try {
@@ -59,6 +68,7 @@ export function useCorrida() {
             ...(opciones.revisar ? { revisar: true } : {}),
             // «Editar con IA» de la guía (décima vuelta): un texto la rehace con él; null, sin la de antes.
             ...(opciones.instruccion !== undefined ? { instruccion: opciones.instruccion } : {}),
+            ...(opciones.proyectoDeContexto ? { proyectoDeContexto: opciones.proyectoDeContexto } : {}),
           }),
         });
         const data = (await res.json().catch(() => ({}))) as { error?: string; yaCorria?: boolean; encolada?: boolean };

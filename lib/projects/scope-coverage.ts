@@ -222,6 +222,12 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   // pendiente se leen por id solo para su nombre.
   "lib/tareas/chat/contexto.ts": { modo: "criterio", criterio: "clasificable" },
   // ── Los exentos, cada uno con su motivo ────────────────────────────────────
+  "lib/exploraciones/posicionar-fuentes.ts": {
+    modo: "exento",
+    razon:
+      "no decide qué proyectos cuentan para una cifra: lista los proyectos de la empresa (sin el contenedor ni los de " +
+      "prueba), activos primero, solo para elegir de cuál se lee el handoff como contexto al ubicar la escala (24 nov).",
+  },
   "lib/exploraciones/escala-de-la-empresa.ts": {
     modo: "exento",
     razon:

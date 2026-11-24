@@ -383,6 +383,33 @@ export function reunionesElegidas(contenidos: readonly Pick<ContenidoDeExploraci
 export const REUNIONES_QUE_LEE_UBICAR = 4;
 
 /**
+ * ¿La preventa de esta ficha parte de lo que ya sabemos de la empresa? (24 nov, el TEC: «Ubicar con lo que ya sabemos».)
+ * Solo si la ficha es un CLIENTE: ya tiene reuniones de trabajo, handoff y memoria. Un prospecto no (lo único suyo son las
+ * reuniones de la preventa), y un aliado o una ficha interna tampoco: el pedido diría «esta empresa ya es cliente», y no lo
+ * es (revisión del 24 nov). Lo usan el agente (agente.ts › `loQueLeeUbicar`), las rutas, la pantalla y quien lee la marca de
+ * reunión de trabajo.
+ */
+export function partirDeLoQueYaSabemos(kind: string | null | undefined): boolean {
+  return kind === "CLIENTE";
+}
+
+/**
+ * Las reuniones de Meet de las sesiones marcadas como reunión de trabajo (24 nov), por su id: la elegida y la fila
+ * `gmeet_<evento>` de su evento. Sin la lista de reuniones (lo que liga la pantalla por fecha); para eso, `clavesDeTrabajo`
+ * (guia.ts). La usa el agente para no leer una reunión de trabajo como sesión. Quien llama mira antes que sea la preventa
+ * de un cliente.
+ */
+export function reunionesDeTrabajoDeLaPreventa(sesiones: readonly { deLoQueYaSabemos?: boolean; reunion?: { id: string; origen: string }; evento?: { id: string } }[]): Set<string> {
+  const ids = new Set<string>();
+  for (const s of sesiones) {
+    if (!s.deLoQueYaSabemos) continue;
+    if (s.reunion?.origen === "meet") ids.add(s.reunion.id);
+    if (s.evento?.id) ids.add(`gmeet_${s.evento.id}`);
+  }
+  return ids;
+}
+
+/**
  * Si una reunión tiene algo que «Ubicar con las reuniones» lea: de Meet, con texto, ni cortada ni de puertas adentro. La
  * misma regla la usa la línea de arriba de La escala (./linea-de-la-escala.ts) para contar las reuniones nuevas.
  */
@@ -397,18 +424,23 @@ export function sirveParaUbicar(r: { origen: string; texto?: string; corta?: unk
  * `porEquipo` (24 nov, el Resumen de la escala): antes de llenar con las más nuevas, cada equipo se lleva hasta ese número
  * de las suyas, de a una por vuelta (las más nuevas de cada uno primero). En Centauro se leían las más recientes sin cupo
  * y todo se inclinaba hacia Ventas. `equipoDe`: el equipo de cada reunión, o null (sin equipo no reserva lugar).
+ * `deTrabajo` (24 nov, la preventa de un cliente): las claves de las reuniones de trabajo (`clavesDeTrabajo`, guia.ts). Van
+ * DESPUÉS de las sesiones de diagnóstico aunque sean más nuevas: una sesión de diagnóstico nunca se queda afuera por una
+ * capacitación más reciente.
  */
 export function reunionesParaUbicar(
   todas: readonly { id: string; origen: string; fecha: string; texto?: string; corta?: unknown; puertasAdentro?: true }[],
   deSesiones: ReadonlySet<string>,
   cuantas: number,
   cupo: { porEquipo: number; equipoDe: (id: string) => string | null; sinLugar?: ReadonlySet<string> } | null = null,
+  o: { deTrabajo?: ReadonlySet<string> } = {},
 ): string[] {
+  const deTrabajo = (r: { id: string }) => (o.deTrabajo?.has(`meet:${r.id}`) ? 1 : 0);
   // `sinLugar`: los equipos que el cliente no ve. Sus reuniones no se eligen (se leían y se descartaban después: 6 de 8).
   const elegibles = todas
     .filter((r) => sirveParaUbicar(r) && deSesiones.has(`meet:${r.id}`))
     .filter((r) => !cupo?.sinLugar?.size || !cupo.sinLugar.has(cupo.equipoDe(r.id) ?? ""))
-    .sort((a, b) => Date.parse(b.fecha) - Date.parse(a.fecha));
+    .sort((a, b) => deTrabajo(a) - deTrabajo(b) || Date.parse(b.fecha) - Date.parse(a.fecha));
   if (!cupo || cupo.porEquipo <= 0) return elegibles.slice(0, cuantas).map((r) => r.id);
   const deCadaEquipo = new Map<string, string[]>();
   for (const r of elegibles) {

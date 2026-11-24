@@ -78,7 +78,8 @@ describe("2 · arriba, una sola línea", () => {
 
   it("la línea de arriba sale del cálculo puro, con el botón de siempre («posicionar»)", () => {
     expect(paso).toContain("lineaDeLaEscala({");
-    expect(paso).toContain('lanzar("posicionar")');
+    // Desde el 24 nov, en la preventa de un cliente, con el proyecto de contexto («Ubicar con lo que ya sabemos»).
+    expect(paso).toContain('lanzar("posicionar", conLoQueYaSabemos ? { proyectoDeContexto: contexto } : {})');
     expect(paso).toContain('{lugar === "preventa" && <LineaDeArriba />}');
     // Solo «Ubicar» cambia la frase a «ubicando»; otro trabajo del agente solo hace esperar al botón.
     expect(paso).toContain('ubicando: corriendo && corrida?.modo === "posicionar"');

@@ -152,7 +152,13 @@ export interface AreaExplorada {
 }
 
 export interface LoQueHicimos {
+  /** Todas: las sesiones de diagnóstico y las reuniones de trabajo. */
   sesiones: number;
+  /**
+   * Cuántas de ellas fueron reuniones de trabajo (24 nov, D4; la preventa de un cliente). La página las nombra aparte
+   * («4 reuniones de trabajo juntos y 2 sesiones de diagnóstico»): nunca se presentan como sesiones de exploración.
+   */
+  deTrabajo?: number;
   minutos: number;
   /** Reuniones sin duración conocida: el tiempo es «al menos». */
   sinDuracion: number;
@@ -164,6 +170,16 @@ export interface LoQueHicimos {
   mano: boolean;
   /** Los equipos de la escala que ve el cliente: los explorados (con sesiones) y los pendientes (sin ninguna). */
   areas: AreaExplorada[];
+}
+
+/**
+ * El rótulo de la cifra de las reuniones de trabajo en «Lo que hicimos» (24 nov, D4): la cifra es cuántas reuniones de
+ * trabajo, y en la misma celda las sesiones de diagnóstico si hubo («reuniones de trabajo juntos y 2 sesiones de
+ * diagnóstico»). Nunca «sesiones de exploración».
+ */
+export function rotuloDeLasReunionesDeTrabajo(trabajo: number, diagnostico: number): string {
+  const deTrabajo = trabajo === 1 ? "reunión de trabajo juntos" : "reuniones de trabajo juntos";
+  return diagnostico > 0 ? `${deTrabajo} y ${diagnostico} ${diagnostico === 1 ? "sesión de diagnóstico" : "sesiones de diagnóstico"}` : deTrabajo;
 }
 
 /** Una afirmación del Resumen tal como sale: su texto, cómo se edita y, solo adentro, de dónde sale. */

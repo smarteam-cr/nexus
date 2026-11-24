@@ -56,6 +56,7 @@ const MAX_NOTAS = 60_000;
 import type { ClaveDeEquipo } from "./equipos";
 import {
   claveDeReunion,
+  clavesDeTrabajo,
   equiposDeLasReuniones,
   LARGO_DE_UNA_TRANSCRIPCION_CORTA,
   pestanasDeSesiones,
@@ -85,7 +86,7 @@ import {
   type ReunionSinLeer,
 } from "./lectura";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
-import { REUNIONES_QUE_LEE_UBICAR, reunionesParaUbicar } from "./posicionar";
+import { partirDeLoQueYaSabemos, REUNIONES_QUE_LEE_UBICAR, reunionesParaUbicar } from "./posicionar";
 import { REUNIONES } from "./sesion";
 import { leerSitioWeb } from "./sitio-web";
 import { hostDelSitio } from "./sitio-web-reglas";
@@ -501,7 +502,7 @@ export async function corteDeLaExploracion(o: { clientId: string; creadaEn: Date
     prisma.client.findUnique({ where: { id: o.clientId }, select: { kind: true } }),
     salesPresenceEmails().catch(() => new Set<string>()),
   ]);
-  return { desde: desdeCuando(o), esProspecto: cliente?.kind === "PROSPECTO", ventas };
+  return { desde: desdeCuando(o), esProspecto: cliente?.kind === "PROSPECTO", esCliente: partirDeLoQueYaSabemos(cliente?.kind), ventas };
 }
 
 /** ¿La empresa ya no es prospecto (un cliente, una empresa con historia)? Si no se puede leer, no: sin memoria. */
@@ -866,12 +867,14 @@ export async function reunionesDeLasSesionesDeLaPreventa(clientId: string, candi
 
   const filas = await prisma.exploracionDeVenta.findMany({
     where: { clientId, archivadaEn: null, ...DE_LA_PREVENTA },
-    select: { id: true, clientId: true, projectId: true, createdAt: true, contenido: true, propuesta: true, test: true },
+    select: { id: true, clientId: true, projectId: true, createdAt: true, contenido: true, propuesta: true, test: true, client: { select: { kind: true } } },
   });
   const deMeet = new Set<string>();
+  // Una reunión de trabajo (24 nov, la preventa de un cliente) no es una reunión de venta: el análisis no la toma.
+  const deTrabajo = new Set<string>();
   for (const f of filas) {
     const c = leerContenido(f.contenido);
-    const { deSesiones } = await armarReuniones(
+    const { deSesiones, todas, automaticas } = await armarReuniones(
       {
         exploracionId: f.id,
         clientId: f.clientId,
@@ -887,7 +890,11 @@ export async function reunionesDeLasSesionesDeLaPreventa(clientId: string, candi
       ahora,
     );
     for (const k of deSesiones) if (k.startsWith("meet:")) deMeet.add(k.slice(5));
+    // La misma regla que «Ubicar», el Resumen y la línea: las pestañas (también las unidas por su evento o por fecha).
+    if (!f.projectId && partirDeLoQueYaSabemos(f.client.kind))
+      for (const k of clavesDeTrabajo(pestanasDeSesiones(c.sesiones, todas, hoyEnCostaRica(ahora), { automaticas, fuera: new Set(c.fuera) }))) if (k.startsWith("meet:")) deTrabajo.add(k.slice(5));
   }
+  for (const id of deTrabajo) deMeet.delete(id);
   const ids = new Set(candidatas.filter((id) => deMeet.has(id)));
   memoriaDeLasSesiones.set(clientId, { firma, ids, en: +ahora });
   return new Set(ids);
@@ -911,7 +918,10 @@ export async function reunionesSinLeer(
   ahora = new Date(),
 ): Promise<ReunionSinLeer[]> {
   const armadas = await armarReuniones(opts, 10, ahora);
-  const deLaSesion = (r: { origen: string; id: string }) => armadas.deSesiones.has(claveDeReunion(r));
+  /* Una reunión de trabajo (24 nov, la preventa de un cliente) no queda «sin leer»: no se lee como sesión (la lee «Ubicar
+     con lo que ya sabemos»), y contarla empujaba a leerla como de diagnóstico. */
+  const deTrabajo = !opts.projectId && armadas.corte.esCliente ? clavesDeTrabajo(pestanasDeSesiones(opts.sesiones ?? [], armadas.todas, hoyEnCostaRica(ahora), { automaticas: armadas.automaticas, fuera: new Set(opts.fuera ?? []) })) : new Set<string>();
+  const deLaSesion = (r: { origen: string; id: string }) => armadas.deSesiones.has(claveDeReunion(r)) && !deTrabajo.has(claveDeReunion(r));
   const deMeetSinLeer: ReunionSinLeer[] = armadas.todas
     .filter((r) => r.origen === "meet" && deLaSesion(r) && !r.leida && r.texto !== "nada" && !r.corta)
     .map((r) => ({ id: r.id, titulo: r.titulo, fecha: r.fecha, origen: "meet" }));
@@ -1035,19 +1045,23 @@ export async function fuentesDeHubspotSinMarcar(o: { clientId: string; companyId
  * `elegidas` (escala única, 2026-10-28): las que una persona unió a una sesión van primero, aunque no estén entre las más
  * recientes; también por el chokepoint (una de otra empresa no sale). Ocupan como mucho la mitad de los lugares: el resto
  * es para lo más reciente, que es lo que dice dónde está la empresa HOY.
+ * `excepto` y `desde` (24 nov, la preventa de un cliente): sin las que ya van enteras como sesión, y con los ids que siguen
+ * a los de las sesiones (con 2 sesiones, la base empieza en S3).
  */
 export async function reunionesEnResumen(
   clientId: string,
-  o: { cuantas?: number; caracteres?: number; elegidas?: readonly string[] } = {},
+  o: { cuantas?: number; caracteres?: number; elegidas?: readonly string[]; excepto?: readonly string[]; desde?: number } = {},
 ): Promise<{ fuentes: Fuente[]; sesiones: string[] }> {
   const cuantas = o.cuantas ?? 8;
   const caracteres = o.caracteres ?? 3_000;
+  const desde = Math.max(1, o.desde ?? 1);
+  const excepto = new Set(o.excepto ?? []);
   const [deLasElegidas, recientes] = await Promise.all([
-    o.elegidas?.length ? getClientSessions(clientId, { ids: o.elegidas.slice(0, 40) }) : Promise.resolve([]),
+    o.elegidas?.length ? getClientSessions(clientId, { ids: o.elegidas.filter((id) => !excepto.has(id)).slice(0, 40) }) : Promise.resolve([]),
     getClientSessions(clientId, { take: 40 }),
   ]);
   const yaEstan = new Set(deLasElegidas.map((s) => s.id));
-  const candidatas = [...deLasElegidas, ...recientes.filter((s) => !yaEstan.has(s.id))];
+  const candidatas = [...deLasElegidas, ...recientes.filter((s) => !yaEstan.has(s.id) && !excepto.has(s.id))];
   if (!candidatas.length) return { fuentes: [], sesiones: [] };
   const internos = await dominiosInternos();
   const deAfuera = candidatas.filter((s) => !esReunionDePuertasAdentro({ participants: s.participants }, internos));
@@ -1067,7 +1081,7 @@ export async function reunionesEnResumen(
     if (fuentes.length >= cuantas) break;
     const texto = resumenDeReunion({ title: f.title, summary: f.summary, minuta: f.minute }).texto.trim();
     if (!texto) continue;
-    fuentes.push({ id: `S${fuentes.length + 1}`, etiqueta: `Reunión del ${fecha(f.date)} (resumen): ${f.title}`, texto: texto.slice(0, caracteres) });
+    fuentes.push({ id: `S${desde + fuentes.length}`, etiqueta: `Reunión del ${fecha(f.date)} (resumen): ${f.title}`, texto: texto.slice(0, caracteres) });
     sesiones.push(f.id);
   }
   return { fuentes, sesiones };
@@ -1092,7 +1106,7 @@ export async function transcripcionesDeLaExploracion(
   } & DeLaFila,
   o: { cuantas?: number; caracteres?: number; porEquipo?: number; sinLugar?: ReadonlySet<ClaveDeEquipo> } = {},
   ahora = new Date(),
-): Promise<{ fuentes: Fuente[]; reuniones: { fuente: string; etiqueta: string; equipo?: ClaveDeEquipo }[]; sesiones: string[] }> {
+): Promise<{ fuentes: Fuente[]; reuniones: { fuente: string; etiqueta: string; equipo?: ClaveDeEquipo; deTrabajo?: true }[]; sesiones: string[] }> {
   const cuantas = o.cuantas ?? REUNIONES_QUE_LEE_UBICAR;
   const caracteres = o.caracteres ?? 40_000;
   const armadas = await armarReuniones(opts, 30, ahora);
@@ -1101,7 +1115,16 @@ export async function transcripcionesDeLaExploracion(
   const equipoDeCadaUna = o.porEquipo
     ? equiposDeLasReuniones(armadas.todas.map((r) => ({ fuente: r.id, clave: `${r.origen}:${r.id}`, origen: r.origen, fecha: r.fecha })), pestanas)
     : {};
-  const candidatas = reunionesParaUbicar(armadas.todas, armadas.deSesiones, cuantas, o.porEquipo ? { porEquipo: o.porEquipo, equipoDe: (id) => equipoDeCadaUna[id] ?? null, sinLugar: o.sinLugar } : null);
+  /* Las reuniones de trabajo (24 nov): cuentan, pero después de las sesiones de diagnóstico. La marca vale solo en la preventa
+     de un cliente: en un prospecto o en un proyecto se ignora (la pantalla no la muestra ni deja quitarla). */
+  const deTrabajo = !opts.projectId && armadas.corte.esCliente ? clavesDeTrabajo(pestanas) : new Set<string>();
+  const candidatas = reunionesParaUbicar(
+    armadas.todas,
+    armadas.deSesiones,
+    cuantas,
+    o.porEquipo ? { porEquipo: o.porEquipo, equipoDe: (id) => equipoDeCadaUna[id] ?? null, sinLugar: o.sinLugar } : null,
+    { deTrabajo },
+  );
   if (!candidatas.length) return { fuentes: [], reuniones: [], sesiones: [] };
   const deLaEmpresa = new Set((await getClientSessions(opts.clientId, { ids: candidatas })).map((s) => s.id));
   const filas = await prisma.firefliesSession.findMany({
@@ -1121,9 +1144,15 @@ export async function transcripcionesDeLaExploracion(
     leidas.push({ fuente: id, clave: `meet:${s.id}`, etiqueta, id: s.id, origen: "meet", fecha: s.date.toISOString(), titulo: s.title });
   }
   const equipos = equiposDeLasReuniones(leidas, pestanas);
+  // Las de una reunión de trabajo (24 nov, lo que ya sabemos de un cliente): el pedido las nombra aparte y pesan menos.
   return {
     fuentes,
-    reuniones: leidas.map((r) => ({ fuente: r.fuente, etiqueta: r.etiqueta, ...(equipos[r.fuente] ? { equipo: equipos[r.fuente] } : {}) })),
+    reuniones: leidas.map((r) => ({
+      fuente: r.fuente,
+      etiqueta: r.etiqueta,
+      ...(equipos[r.fuente] ? { equipo: equipos[r.fuente] } : {}),
+      ...(deTrabajo.has(r.clave) ? { deTrabajo: true as const } : {}),
+    })),
     sesiones: leidas.map((r) => r.id),
   };
 }

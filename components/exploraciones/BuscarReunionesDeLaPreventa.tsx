@@ -20,6 +20,10 @@
  * (POST /api/sales/exploraciones/[id]/sesiones), que relee el evento en Google y decide de quién es.
  * Las que ya pasaron se pueden marcar y agregar EN BLOQUE (Elías, 2026-11-17), y de paso pedir que el agente las lea:
  * entran a su cola de lectura, una por corrida y en orden de fecha (lib/exploraciones/cola-de-lectura.ts).
+ * En la preventa de un CLIENTE (24 nov, «lo que ya sabemos»), arriba de las que ya pasaron: «Reuniones de trabajo
+ * sugeridas», las que Nexus sugiere por cuánto habló el cliente (lib/exploraciones/reuniones-de-trabajo.ts). Se suman como
+ * REUNIÓN DE TRABAJO (`deLoQueYaSabemos`): cuentan para ubicar la escala y para el Resumen, y la página del cliente no las
+ * presenta como sesiones de diagnóstico. Las de la lista de siempre entran como sesión de diagnóstico.
  */
 import { useEffect, useState } from "react";
 import { Modal, useToast } from "@/components/ui";
@@ -27,6 +31,9 @@ import { BotonAzul, BotonBlanco, ROTULO_DEL_SISTEMA } from "@/components/ui/sist
 import { cn } from "@/lib/cn";
 import type { AgendadaDelSelector } from "@/lib/exploraciones/calendario";
 import type { ReunionDeLaEmpresa } from "@/lib/exploraciones/fuentes";
+import { EQUIPOS } from "@/lib/exploraciones/equipos";
+import type { ReunionDeTrabajoSugerida } from "@/lib/exploraciones/reuniones-de-trabajo";
+import { partirDeLoQueYaSabemos } from "@/lib/exploraciones/posicionar";
 import { diaConAnio, diaConSemana } from "@/lib/exploraciones/fechas";
 import { horaDeCostaRica } from "@/lib/exploraciones/inicio";
 import { mismaReunion } from "@/lib/exploraciones/lectura";
@@ -71,7 +78,7 @@ interface Marcada {
 type Agregar =
   | { tipo: "agendada"; evento: { id: string; calendario: string; serie?: boolean } }
   | { tipo: "agendada"; origen: "hubspot"; sessionId: string }
-  | { tipo: "pasada"; sessionId: string }
+  | { tipo: "pasada"; sessionId: string; deLoQueYaSabemos?: true }
   | { tipo: "pasada"; origen: "hubspot" | "documento"; sessionId: string };
 
 function IconoDeCalendario({ activo }: { activo: boolean }) {
@@ -147,6 +154,8 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
   const conAgendadas = abierto && ver !== "pasadas";
   const conPasadas = abierto && ver !== "agendadas";
   const unir = modo?.tipo === "unir" ? modo.sesionId : null;
+  // La preventa de un cliente sugiere sus reuniones de trabajo (24 nov), solo al agregar una sesión nueva.
+  const conLoQueYaSabemos = conPasadas && !unir && !exp.projectId && partirDeLoQueYaSabemos(exp.empresa.kind);
 
   const [busqueda, setBusqueda] = useState("");
   const [ocupado, setOcupado] = useState<string | null>(null);
@@ -157,6 +166,7 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
   // Cada respuesta se guarda con la clave que la pidió: una vieja nunca se pinta debajo de una búsqueda nueva.
   const [datos, setDatos] = useState<{ clave: string; r: RespuestaDeReuniones | null; error?: boolean } | null>(null);
   const [agendadas, setAgendadas] = useState<{ r: RespuestaDeAgendadas | null; error?: boolean } | null>(null);
+  const [deTrabajo, setDeTrabajo] = useState<{ sugeridas: ReunionDeTrabajoSugerida[] | null; error?: string } | null>(null);
   const q = busqueda.trim();
   const clave = conPasadas ? (q.length >= MIN_BUSQUEDA_CALENDARIO ? q : "") : null;
   const pendientes = clave !== null && datos?.clave !== clave;
@@ -200,6 +210,24 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
     return () => ctrl.abort();
   }, [conAgendadas, exp.id]);
 
+  // Las reuniones de trabajo sugeridas, una vez por apertura (contar quién habló lee cada transcripción).
+  useEffect(() => {
+    if (!conLoQueYaSabemos) return;
+    const ctrl = new AbortController();
+    fetch(`/api/sales/exploraciones/${exp.id}/reuniones-de-trabajo`, { signal: ctrl.signal })
+      .then(async (r) => {
+        const j = (await r.json().catch(() => ({}))) as { sugeridas?: ReunionDeTrabajoSugerida[]; error?: string };
+        // Sin acceso a la empresa (403) el servidor dice por qué: se muestra tal cual.
+        if (!r.ok) throw new Error(j.error ?? "No se pudieron sugerir las reuniones de trabajo. Prueba de nuevo en un momento.");
+        return j.sugeridas ?? [];
+      })
+      .then((sugeridas) => setDeTrabajo({ sugeridas }))
+      .catch((e: unknown) => {
+        if (!ctrl.signal.aborted) setDeTrabajo({ sugeridas: null, error: e instanceof Error ? e.message : "No se pudieron sugerir las reuniones de trabajo." });
+      });
+    return () => ctrl.abort();
+  }, [conLoQueYaSabemos, exp.id]);
+
   /* Qué reunión ya es la sesión N (la de Meet o de HubSpot de cada sesión, y en un prospecto también las
      que entraron solas). Una de Meet sin transcripción que también está en HubSpot cuenta como esa. */
   const numeroDe = new Map<string, number>();
@@ -234,6 +262,7 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
     setMarcadas(new Map());
     // La próxima vez se vuelven a pedir (con el esqueleto mientras tanto).
     setAgendadas(null);
+    setDeTrabajo(null);
   };
 
   const agregar = async (id: string, cuerpo: Agregar) => {
@@ -265,30 +294,36 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
 
   const boton = (id: string, cuerpo: Agregar, title?: string) => (
     <BotonBlanco className="font-semibold" disabled={ocupado !== null} title={title} onClick={() => void agregar(id, cuerpo)}>
-      {ocupado === id ? "Agregando…" : unir ? "Unir a esta sesión" : "Agregar como sesión"}
+      {ocupado === id ? "Agregando…" : unir ? "Unir a esta sesión" : cuerpo.tipo === "pasada" && "deLoQueYaSabemos" in cuerpo && cuerpo.deLoQueYaSabemos ? "Sumar como reunión de trabajo" : "Agregar como sesión"}
     </BotonBlanco>
   );
   const yaEsLa = (n: number) => <span className="text-xs text-fg-muted">Ya es la sesión {n}</span>;
 
-  const alternar = (id: string, m: Marcada) =>
+  /** `excluye`: la misma reunión marcada en la otra lista (24 nov): marcarla aquí la desmarca allá, y entra con UNA clase. */
+  const alternar = (id: string, m: Marcada, excluye?: string) =>
     setMarcadas((antes) => {
       const nuevas = new Map(antes);
       if (nuevas.has(id)) nuevas.delete(id);
-      else nuevas.set(id, m);
+      else {
+        nuevas.set(id, m);
+        if (excluye) nuevas.delete(excluye);
+      }
       return nuevas;
     });
   /** La casilla de una reunión pasada que se puede agregar (va donde las agendadas llevan su ícono). */
-  const casilla = (id: string, m: Marcada, titulo: string) =>
+  const casilla = (id: string, m: Marcada, titulo: string, excluye?: string) =>
     enBloque ? (
       <input
         type="checkbox"
         className="h-4 w-4 flex-none accent-[var(--color-brand)]"
         checked={marcadas.has(id)}
         disabled={ocupado !== null}
-        onChange={() => alternar(id, m)}
+        onChange={() => alternar(id, m, excluye)}
         aria-label={`Marcar «${titulo || "Sin título"}» para agregarla`}
       />
     ) : undefined;
+  /** La clave de una reunión marcada como reunión de trabajo (la de la lista de siempre es su id: entra de diagnóstico). */
+  const deTrabajoClave = (sessionId: string) => `trabajo:${sessionId}`;
 
   /**
    * Agrega las marcadas, de la más vieja a la más nueva (así quedan numeradas en orden), una por una: cada alta se aplica
@@ -397,8 +432,45 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
           </Seccion>
         )}
 
+        {conLoQueYaSabemos && !q && (
+          <Seccion titulo="Reuniones de trabajo sugeridas">
+            {!deTrabajo ? (
+              <li className="h-12 rounded-[10px] skeleton-shimmer" aria-label="Buscando las reuniones de trabajo" />
+            ) : deTrabajo.error ? (
+              <li className="text-xs text-warn-ink">{deTrabajo.error}</li>
+            ) : !deTrabajo.sugeridas?.length ? (
+              <li className="text-xs text-fg-muted">Todavía no hay reuniones con transcripción donde haya hablado la empresa.</li>
+            ) : (
+              <>
+                <li className="text-xs leading-[18px] text-fg-muted">
+                  Las reuniones con la empresa donde más habló el cliente. Súmalas como reunión de trabajo: cuentan para ubicar la escala y para el Resumen, y el cliente
+                  no las ve como sesiones de diagnóstico. No se leen al sumarlas: «Ubicar con lo que ya sabemos» las lee enteras.
+                </li>
+                {deTrabajo.sugeridas.map((s) => {
+                  const n = yaEs(s.sessionId, s.fecha, false);
+                  const cuerpo: Agregar = { tipo: "pasada", sessionId: s.sessionId, deLoQueYaSabemos: true };
+                  return (
+                    <Fila
+                      key={`trabajo-${s.sessionId}`}
+                      /* Una reunión entra con UNA clase: marcarla aquí la desmarca en «De la empresa» (y al revés). Sin
+                         lectura: el lector de una sesión la tomaría como de diagnóstico (revisión del 24 nov). */
+                      icono={n === null ? casilla(deTrabajoClave(s.sessionId), { cuerpo, fecha: s.fecha, leer: null }, s.titulo, s.sessionId) : undefined}
+                      titulo={s.titulo}
+                      fecha={diaConAnio(s.fecha)}
+                      pildora={<Pildora tono={s.pocoDelCliente ? "atencion" : "bien"}>habló el cliente {s.delCliente} %</Pildora>}
+                      abajo={[s.equipo ? `parece de ${EQUIPOS[s.equipo].nombre}` : null, s.pocoDelCliente ? "la empresa habló poco: el Resumen la leería mal" : null].filter(Boolean).join(" · ")}
+                      apagada={n !== null}
+                      derecha={n !== null ? yaEsLa(n) : boton(`trabajo-${s.sessionId}`, cuerpo)}
+                    />
+                  );
+                })}
+              </>
+            )}
+          </Seccion>
+        )}
+
         {conPasadas && (
-          <Seccion titulo="De la empresa · ya pasaron">
+          <Seccion titulo={conLoQueYaSabemos ? "De la empresa · ya pasaron (como sesión de diagnóstico)" : "De la empresa · ya pasaron"}>
             {pendientes && !r ? (
               <li className="h-12 rounded-[10px] skeleton-shimmer" aria-label="Buscando las reuniones" />
             ) : deLaEmpresa.length === 0 ? (
@@ -418,7 +490,11 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
                 return (
                   <Fila
                     key={s.sessionId}
-                    icono={n === null ? casilla(s.sessionId, { cuerpo: { tipo: "pasada", sessionId: s.sessionId }, fecha: s.date, leer: s.texto === "nada" ? null : s.sessionId }, s.title) : undefined}
+                    icono={
+                      n === null
+                        ? casilla(s.sessionId, { cuerpo: { tipo: "pasada", sessionId: s.sessionId }, fecha: s.date, leer: s.texto === "nada" ? null : s.sessionId }, s.title, deTrabajoClave(s.sessionId))
+                        : undefined
+                    }
                     titulo={s.title}
                     fecha={diaConAnio(s.date)}
                     pildora={

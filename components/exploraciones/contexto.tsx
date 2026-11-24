@@ -87,6 +87,11 @@ export interface Lienzo {
   posicionamientoAnterior: string | null;
   /** Las preguntas para el demo del último análisis de la venta (al abrir y al recargar), o null: «Para el demo». */
   paraElDemo: NonNullable<ExploracionParaLaPantalla["paraElDemo"]> | null;
+  /**
+   * La preventa de un cliente (24 nov): los proyectos de la empresa para «Con el contexto de». Viven aparte de `exp` (llegan
+   * solo al abrir y al recargar): leerlos de `exp` los perdía con la respuesta del primer cambio.
+   */
+  proyectosDeLaEmpresa: NonNullable<ExploracionParaLaPantalla["proyectosDeLaEmpresa"]>;
   puedeEditar: boolean;
   /** Armar y enlazar la propuesta comercial es de Ventas (`ventas.write`); Customer Success trabaja la preventa sin eso. */
   puedeProponer: boolean;

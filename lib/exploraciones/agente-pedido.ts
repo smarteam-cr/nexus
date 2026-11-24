@@ -138,7 +138,7 @@ export interface ContextoDelPedido {
    * y lo que se planeó preguntar en la más reciente (rediseño de las sesiones, 2026-10-07). `equipo` (K11, 2026-10-28):
    * con qué equipo del cliente fue, el de su sesión. Lo que dice ese equipo va a las dimensiones de su área.
    */
-  reuniones?: { fuente: string; etiqueta: string; equipo?: ClaveDeEquipo }[];
+  reuniones?: { fuente: string; etiqueta: string; equipo?: ClaveDeEquipo; deTrabajo?: true }[];
   planeado?: { objetivo: string | null; preguntas: { para: string; pregunta: string }[] };
   /**
    * Los nombres del equipo de Smarteam (TeamMember): el pedido se los dice al agente y lo que proponga
@@ -150,6 +150,29 @@ export interface ContextoDelPedido {
    * dimensiones que las reuniones no dejan ver directo pero sí dejan pistas. Solo el pedido de posicionar las pide.
    */
   conHipotesis?: boolean;
+  /**
+   * «Ubicar con lo que ya sabemos» (24 nov, la preventa de un cliente): `solo`, no hay sesiones de diagnóstico y se ubica
+   * con la base de la empresa (sus reuniones de trabajo en resumen, el handoff, los cuestionarios, la memoria); `ademas`,
+   * las sesiones van enteras primero y la base en resumen después, y pesan más las sesiones.
+   */
+  loQueYaSabemos?: "solo" | "ademas";
+}
+
+/** Cómo nombra el pedido una reunión de trabajo (24 nov, `SesionPlaneada.deLoQueYaSabemos`). */
+export const REUNION_DE_TRABAJO = "reunión de trabajo con Smarteam (lo que ya sabemos), no una sesión de diagnóstico";
+
+/**
+ * Lo que dice el pedido de «Ubicar» sobre lo que ya sabemos de un cliente (24 nov). Vacío si no aplica.
+ */
+export function reglaDeLoQueYaSabemos(loQueYaSabemos: ContextoDelPedido["loQueYaSabemos"]): string {
+  if (loQueYaSabemos === "solo")
+    return `
+- Esta empresa ya es cliente y todavía no tuvo sesiones de diagnóstico: la ubicas con lo que ya sabemos de ella, sobre todo sus reuniones de trabajo con Smarteam (S: las que eligió el equipo van con su transcripción entera, las demás en resumen), el handoff (V0) y los cuestionarios (Q0). Una reunión de trabajo (una capacitación, una revisión de avance) habla de lo que se está implementando: lo que el cliente contó ahí de cómo trabaja hoy sí sirve; lo que Smarteam explicó o configuró no es un nivel de la empresa.
+- Cada hipótesis y cada tarjeta habla de lo que se sabe hoy: lo que falta confirmar se pregunta en una sesión de diagnóstico.`;
+  if (loQueYaSabemos === "ademas")
+    return `
+- Esta empresa ya es cliente: además de las sesiones de diagnóstico (las reuniones con su transcripción entera que no dicen «reunión de trabajo»), lees lo que ya sabemos de ella: sus reuniones de trabajo con Smarteam (las marcadas así y las S «en resumen»), el handoff (V0) y los cuestionarios (Q0). Las sesiones de diagnóstico pesan más: si se contradicen con una reunión de trabajo, vale lo que el cliente dijo en la sesión, salvo que la reunión de trabajo sea más nueva y cuente que algo cambió desde entonces (ahí vale la más nueva, como con cualquier fuente: dilo en porQue). Lo que Smarteam explicó o configuró en una reunión de trabajo no es un nivel de la empresa.`;
+  return "";
 }
 
 /**
@@ -765,7 +788,7 @@ function bloqueDeLasReuniones(ctx: Pick<ContextoDelPedido, "reuniones" | "planea
   const conEquipo = !!ctx.escala && ctx.reuniones?.some((r) => r.equipo);
   return (
     (ctx.reuniones?.length
-      ? `=== REUNIONES QUE LEES ===\n${ctx.reuniones.map((r) => `${r.fuente}: ${r.etiqueta}${r.equipo ? ` · fue ${conQuienFue(r.equipo, ctx.escala)}` : ""}`).join("\n")}\n${conEquipo ? `${REGLA_DEL_EQUIPO_DE_LA_REUNION}\n` : ""}\n`
+      ? `=== REUNIONES QUE LEES ===\n${ctx.reuniones.map((r) => `${r.fuente}: ${r.etiqueta}${r.equipo ? ` · fue ${conQuienFue(r.equipo, ctx.escala)}` : ""}${r.deTrabajo ? ` · ${REUNION_DE_TRABAJO}` : ""}`).join("\n")}\n${conEquipo ? `${REGLA_DEL_EQUIPO_DE_LA_REUNION}\n` : ""}\n`
       : "") +
     (ctx.planeado?.preguntas.length || ctx.planeado?.objetivo?.trim()
       ? `=== LO QUE SE PLANEÓ PREGUNTAR EN LA REUNIÓN MÁS RECIENTE ===\n${ctx.planeado.objetivo ? `Objetivo: ${ctx.planeado.objetivo}\n` : ""}${ctx.planeado.preguntas
@@ -1964,7 +1987,7 @@ Reglas estrictas:
 - Lees como un consultor de HubSpot con experiencia: entiendes los retos que contaron, cómo trabajan hoy y qué usan, y con eso eliges el nivel que mejor describe lo que ves. Lo que entregas es la ubicación en la escala de su industria, nada más.
 - Una dimensión con una frase del cliente que la respalda va en niveles. Una de la que no dijeron nada directo pero sí dejaron pistas va en hipotesis, sin cita: es lo que crees, para confirmarlo en la próxima reunión. Cada hipótesis nombra la reunión de donde sale la pista. Sin ninguna pista, no la propongas.`
       : ""
-  }`;
+  }${reglaDeLoQueYaSabemos(ctx.loQueYaSabemos)}`;
   const cuerpo =
     lineaDeHoy(ctx) +
     `Empresa: ${ctx.empresa}${ctx.industria ? ` · Industria en HubSpot: ${ctx.industria}` : ""}${ctx.perfil ? ` · Perfil: ${ctx.perfil}` : ""}\n` +

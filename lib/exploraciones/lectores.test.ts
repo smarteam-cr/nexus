@@ -302,6 +302,10 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "ventas",
     motivo: "Al abrir la preventa, sumar las reuniones que se grabaron con HubSpot (y que el agente lea las nuevas).",
   },
+  "app/api/sales/exploraciones/[id]/reuniones-de-trabajo/route.ts": {
+    destino: "ventas",
+    motivo: "«Reuniones de trabajo sugeridas» del selector de «Agregar sesión» en la preventa de un cliente (24 nov): solo mira de qué empresa es y si es prospecto, y sugiere. Nada llega al cliente.",
+  },
   "app/api/sales/exploraciones/[id]/agendadas/route.ts": {
     destino: "ventas",
     motivo: "«Agendadas · próximas 6 semanas» del selector de «Agregar sesión» (etapa A): lee el calendario y dice si ya es una sesión.",
