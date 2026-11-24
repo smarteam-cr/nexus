@@ -2135,6 +2135,14 @@
   font-size: 11px; font-weight: 600; color: var(--text-muted);
   text-transform: uppercase; letter-spacing: 0.04em;
 }
+/* Texto de ayuda que se lee como ayuda y no como un valor ya escrito: en «Sesiones y horarios» el
+   «Martes 11:00» de una franja vacía, en negrita y azul, se tomaba por una franja real (24 nov). */
+.stl .stl-pista::placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+  font-weight: 400;
+  opacity: 1;
+}
 
 /* Prosa de cuerpo (markdown de bloques de texto) — ex kl-prose. Distinta de
    .stl-md (que asume el .stl-body envolvente): copia exacta, no mapear. */

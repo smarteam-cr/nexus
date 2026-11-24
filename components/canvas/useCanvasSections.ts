@@ -30,6 +30,7 @@ import { useUndo, type AnclaDeDeshacer } from "@/components/ui/UndoProvider";
 import { useAgentRuns } from "@/components/ai/AgentRunsProvider";
 import { resolverAncla } from "@/lib/ui/deshacer";
 import { cuerpoParaRestaurar, type BloqueBorrado } from "@/lib/canvas/restaurar-bloque";
+import { crearFilaDeGuardados, sigueEsperando } from "@/lib/canvas/guardados-en-fila";
 
 export interface SectionWithBlocks {
   id: string;
@@ -153,12 +154,31 @@ export function useCanvasSections(
   // tipear/arrastrar podría leer la DB ANTES de que el último request llegara →
   // "la versión publicada no es la última mostrada". `flushPending` lo espera.
   const pendingWrites = useRef(0);
+  // Los PUT de un mismo bloque salen en fila (ver `saveBlock`). Una por hook (la fila es de esta pantalla),
+  // creada una sola vez: `useState` con inicializador perezoso.
+  const [encolarGuardado] = useState(crearFilaDeGuardados);
   const flushPending = useCallback(async (): Promise<void> => {
-    // Cap defensivo (5s): un fetch que jamás resuelve (red caída) no debe colgar
-    // el publish para siempre — mejor publicar lo último asentado y seguir.
-    for (let i = 0; i < 100 && pendingWrites.current > 0; i++) {
+    // Cap defensivo: un fetch que jamás resuelve (red caída) no debe colgar el publish para
+    // siempre — mejor publicar lo último asentado y seguir. Es por QUIETUD y no por tiempo total
+    // (`sigueEsperando`): con la fila por bloque, los guardados salen de a uno y se suman.
+    const inicio = Date.now();
+    let ultimoAvance = inicio;
+    let antes = pendingWrites.current;
+    while (sigueEsperando(pendingWrites.current, Date.now() - ultimoAvance, Date.now() - inicio)) {
       await new Promise((r) => setTimeout(r, 50));
+      if (pendingWrites.current < antes) ultimoAvance = Date.now();
+      antes = pendingWrites.current;
     }
+  }, []);
+
+  // Cerrar o recargar con guardados pendientes los pierde: los que esperan en la fila todavía no
+  // salieron. El navegador pregunta antes (mismo idioma que el cronograma).
+  useEffect(() => {
+    const alSalir = (e: BeforeUnloadEvent) => {
+      if (pendingWrites.current > 0) e.preventDefault();
+    };
+    window.addEventListener("beforeunload", alSalir);
+    return () => window.removeEventListener("beforeunload", alSalir);
   }, []);
 
   /**
@@ -376,11 +396,26 @@ export function useCanvasSections(
               },
         ),
       );
-      const ok = await mutate(sectionId, { method: "PUT", headers: JSON_HEADERS, body: JSON.stringify({ blockId, ...updates }) });
+      /* EN FILA por bloque (lib/canvas/guardados-en-fila.ts): el PUT lleva el `data` ENTERO, así que
+         dos PUT del mismo bloque que se cruzan en la red dejaban en la base el que llegó último, no
+         el que se hizo último (franjas del kickoff, 24 nov). `pendingWrites` cuenta desde que entra
+         a la fila: «Subir al cliente» tiene que esperar también al que todavía no salió. */
+      pendingWrites.current++;
+      let ok = false;
+      let vieneOtro = false;
+      try {
+        ({ valor: ok, vieneOtro } = await encolarGuardado(blockId, () =>
+          mutate(sectionId, { method: "PUT", headers: JSON_HEADERS, body: JSON.stringify({ blockId, ...updates }) }),
+        ));
+      } finally {
+        pendingWrites.current--;
+      }
       // En FALLO no refrescamos (diseño original): el optimista deja el texto del CSE
       // visible y `error` avisa — reintenta sin perder lo tipeado.
       if (ok) {
-        refetch();
+        // Relee solo el último de la fila: una relectura entre dos guardados del mismo bloque puede
+        // leer la base antes de que aterrice el siguiente y pintar por un momento lo viejo.
+        if (!vieneOtro) refetch();
         if (!skipUndo && snap) {
           const prev = { content: snap.content ?? "", data: snap.data };
           pushUndo({
@@ -393,7 +428,7 @@ export function useCanvasSections(
       }
       return ok;
     },
-    [mutate, refetch, pushUndo, undoScope, findBlock],
+    [mutate, refetch, pushUndo, undoScope, findBlock, encolarGuardado],
   );
 
   // Deshacer de 1 nivel un bloque: intercambia content/data con su versión previa
