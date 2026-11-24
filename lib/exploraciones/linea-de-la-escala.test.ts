@@ -3,8 +3,9 @@
  * entender es si alguna parte tiene que actualizarse»): una frase y el botón de siempre, «Ubicar con las reuniones».
  */
 import { describe, expect, it } from "vitest";
+import { lineaDeLaReunion } from "@/components/exploraciones/ReunionesMalLeidas";
 import { diaConAnio, diaCorto } from "./fechas";
-import { lineaDeLaEscala, type ReunionDeLaLinea } from "./linea-de-la-escala";
+import { cortadasQueSeLeenEnteras, lineaDeLaEscala, malLeidasParaMostrar, type ReunionDeLaLinea } from "./linea-de-la-escala";
 
 const meet = (fecha: string, o: Partial<ReunionDeLaLinea> = {}): ReunionDeLaLinea => ({ fecha, origen: "meet", texto: "transcripcion", ...o });
 const UBICADA = "2026-11-17T18:00:00.000Z";
@@ -91,5 +92,42 @@ describe("la línea de arriba de La escala", () => {
     const viejas = Array.from({ length: 5 }, (_, i) => meet(`2026-11-0${i + 1}T16:00:00.000Z`, { titulo: `R${i + 1}` }));
     const leyoLasNuevas = viejas.slice(1).map((r) => `Reunión del ${diaConAnio(r.fecha)}: ${r.titulo}`);
     expect(linea({ reuniones: viejas, leyo: leyoLasNuevas }).estado).toBe("alDia");
+  });
+});
+
+describe("las reuniones que el Resumen leyó cortadas o casi sin la empresa (24 nov)", () => {
+  const CORTADA = { reunion: "gmeet_1", fecha: "2026-11-06T20:00:00.000Z", titulo: "DIAGNÓSTICO DE VENTAS", motivos: ["recortada" as const], leido: 86, delCliente: 55 };
+  const DEMO = { reunion: "gmeet_2", fecha: "2026-11-19T15:15:00.000Z", titulo: "DEMO", motivos: ["poco-del-cliente" as const], leido: 100, delCliente: 26 };
+  const DE_ANTES = { malLeidas: [CORTADA, DEMO] };
+
+  it("un Resumen de antes de leerlas enteras: la línea dice cuántas leyó cortadas y que rehacerlo las lee enteras", () => {
+    expect(cortadasQueSeLeenEnteras(DE_ANTES)).toBe(1);
+    const l = linea({ resumenEn: "2026-11-24T14:49:00.000Z", cortadas: 1 });
+    expect(l.estado).toBe("resumenAtrasado");
+    expect(l.texto).toBe("La escala está al día, pero el Resumen leyó cortada 1 reunión larga: rehazlo con IA en el Resumen para que la lea entera.");
+    expect(linea({ resumenEn: "2026-11-11T14:49:00.000Z", cortadas: 3 }).texto).toBe(
+      "La escala está al día, pero el Resumen se armó antes de la última reunión y leyó cortadas 3 reuniones largas: rehazlo con IA en el Resumen para que las lea enteras.",
+    );
+    // Sin Resumen no hay nada que rehacer.
+    expect(linea({ resumenEn: null, cortadas: 2 }).estado).toBe("alDia");
+  });
+
+  it("⛔ uno armado ya leyéndolas enteras no pide rehacer: una cortada era más larga que el tope", () => {
+    expect(cortadasQueSeLeenEnteras({ ...DE_ANTES, leidasEnteras: true })).toBe(0);
+    expect(cortadasQueSeLeenEnteras(null)).toBe(0);
+  });
+
+  it("la nota de La escala no repite lo que dice la línea, y lo que no tiene arreglo queda como nota", () => {
+    // Antes de leerlas enteras: la cortada la arregla rehacer (la dice la línea); la demo queda en la nota.
+    expect(malLeidasParaMostrar([CORTADA, DEMO], false).map((m) => m.reunion)).toEqual(["gmeet_2"]);
+    // Con el Resumen ya leído entero, una cortada era más larga que el tope: queda en la nota.
+    expect(malLeidasParaMostrar([CORTADA, DEMO], true).map((m) => m.reunion)).toEqual(["gmeet_1", "gmeet_2"]);
+    // Cada una es una línea gris, sin botón (Elías eligió «Una línea gris, sin botón»).
+    expect(lineaDeLaReunion(DEMO)).toBe(
+      `La reunión del ${diaCorto(DEMO.fecha)} («DEMO») la presentamos nosotros (la empresa dijo el 26 % de lo dicho): lo que dijimos entra solo como cifra por confirmar.`,
+    );
+    expect(lineaDeLaReunion(CORTADA, true)).toMatch(/^Esta reunión es más larga de lo que el Resumen alcanza a leer y se leyó el 86 %/);
+    // Una con los dos motivos pierde solo el que arregla rehacer.
+    expect(malLeidasParaMostrar([{ ...DEMO, motivos: ["recortada", "poco-del-cliente"] }], false)[0].motivos).toEqual(["poco-del-cliente"]);
   });
 });

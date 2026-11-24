@@ -1163,6 +1163,8 @@ export function leerResumenGuardado(raw: unknown): ResumenGuardado | undefined {
           // Del 18 nov: los puntos clave y las reuniones que no se pudieron leer bien.
           ...(Array.isArray(r.puntos) ? { puntos: cadaUno(r.puntos, PuntoSchema, 40) } : {}),
           ...(Array.isArray(r.malLeidas) ? { malLeidas: cadaUno(r.malLeidas, MalLeidaSchema, 40) } : {}),
+          // Del 24 nov: se armó leyendo las reuniones enteras (una cortada de antes se arregla rehaciéndolo).
+          ...(r.leidasEnteras === true ? { leidasEnteras: true as const } : {}),
         }
       : {};
   return {

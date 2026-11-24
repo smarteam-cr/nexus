@@ -1,61 +1,41 @@
 "use client";
 
 /**
- * ReunionesMalLeidas — «Esta reunión no se pudo leer bien» (18 nov, Elías tras el diagnóstico de Cemaco). Al armar el
- * Resumen de la escala, una reunión a la que se le cortó un pedazo del medio, o donde la empresa dijo menos del 28 % de
- * lo dicho (la del 16 nov de Cemaco: casi toda la presentó Smarteam), queda en `ResumenGuardado.malLeidas`. Se avisa en La
- * escala (arriba del Resumen, todas) y en la sesión de esa reunión (solo la suya), con «Volver a leer».
+ * ReunionesMalLeidas — cómo leyó el Resumen las reuniones que no pudo leer bien (18 nov, Elías tras el diagnóstico de
+ * Cemaco; rehecho el 24 nov). Al armar el Resumen de la escala, una reunión a la que se le cortó un pedazo del medio, o
+ * donde la empresa dijo menos del 28 % de lo dicho, queda en `ResumenGuardado.malLeidas`. Se ve en La escala (arriba del
+ * Resumen, todas) y en la sesión de esa reunión (solo la suya).
  *
- * Volver a leer trae la transcripción de nuevo y la vuelve a leer el agente de la exploración; el Resumen se rehace aparte
- * («Rehacer con IA»). Si la reunión de verdad fue casi toda nuestra, el aviso se queda: lo dice para que no sorprenda.
+ * 24 nov (Elías eligió «Una línea gris, sin botón»): ninguna alerta amarilla se queda sin algo que hacer. Lo medido con
+ * Centauro y Cemaco · Ecuador: «Volver a leer» no traía de nuevo la transcripción (el agente relee la que ya está
+ * guardada), así que en una reunión que presentamos nosotros el aviso volvía igual al terminar. Por eso:
+ *   · una cortada por larga en un Resumen de antes de leerlas enteras NO sale aquí: la arregla rehacer el Resumen, y lo
+ *     dice la línea de arriba de La escala (lib/exploraciones/linea-de-la-escala.ts › `cortadasQueSeLeenEnteras`);
+ *   · una que la presentamos nosotros (la empresa habló poco) se leyó entera: una línea gris, sin botón, que dice qué pasa
+ *     con lo nuestro (entra solo como cifra por confirmar);
+ *   · una que quedó cortada aun leyéndolas enteras (más larga que el tope) también es una línea gris: nada la arregla.
  */
-import { Alert } from "@/components/ui";
-import { BotonBlanco } from "@/components/ui/sistema";
 import { diaCorto } from "@/lib/exploraciones/fechas";
-import { MOTIVO_DE_MAL_LEIDA, type ReunionMalLeida } from "@/lib/external/pagina-del-resumen";
-import { useLienzo } from "./contexto";
-import { useCorrida } from "./useCorrida";
+import { malLeidasParaMostrar } from "@/lib/exploraciones/linea-de-la-escala";
+import type { ReunionMalLeida } from "@/lib/external/pagina-del-resumen";
 
-/** Por qué no se pudo leer bien, en una frase, con los números de esa reunión. */
-export function porQueNoSeLeyo(m: ReunionMalLeida): string {
-  return m.motivos
-    .map((x) => (x === "recortada" ? `${MOTIVO_DE_MAL_LEIDA.recortada} (se leyó el ${m.leido} %)` : `${MOTIVO_DE_MAL_LEIDA["poco-del-cliente"]} (el ${m.delCliente} % de lo dicho)`))
-    .join("; ");
+/** La línea de una reunión: qué pasó y qué significa para el Resumen. `sola`: en la pestaña de esa sesión (sin el título). */
+export function lineaDeLaReunion(m: ReunionMalLeida, sola = false): string {
+  const cual = sola ? "Esta reunión" : `La reunión del ${diaCorto(m.fecha)}${m.titulo ? ` («${m.titulo}»)` : ""}`;
+  const partes: string[] = [];
+  if (m.motivos.includes("poco-del-cliente")) partes.push(`la presentamos nosotros (la empresa dijo el ${m.delCliente} % de lo dicho): lo que dijimos entra solo como cifra por confirmar`);
+  if (m.motivos.includes("recortada")) partes.push(`es más larga de lo que el Resumen alcanza a leer y se leyó el ${m.leido} %: el pedazo del medio no llega al Resumen`);
+  return `${cual} ${partes.join("; y ")}.`;
 }
 
-export default function ReunionesMalLeidas({ reuniones, sola = false }: { reuniones: readonly ReunionMalLeida[]; sola?: boolean }) {
-  const { puedeEditar } = useLienzo();
-  const { corriendo, lanzando, lanzar } = useCorrida();
-  if (!reuniones.length) return null;
-  const titulo = sola || reuniones.length === 1 ? "Esta reunión no se pudo leer bien" : `${reuniones.length} reuniones no se pudieron leer bien`;
+export default function ReunionesMalLeidas({ reuniones, enteras = false, sola = false }: { reuniones: readonly ReunionMalLeida[]; enteras?: boolean; sola?: boolean }) {
+  const vistas = malLeidasParaMostrar(reuniones, enteras);
+  if (!vistas.length) return null;
   return (
-    <Alert variant="warning" title={titulo}>
-      <ul className="mt-1 flex flex-col gap-1.5">
-        {reuniones.map((m) => (
-          <li key={m.reunion} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="min-w-0 flex-1">
-              {!sola && (
-                <b className="font-semibold">
-                  {m.titulo ? `«${m.titulo}»` : "Reunión"} · {diaCorto(m.fecha)}:{" "}
-                </b>
-              )}
-              {porQueNoSeLeyo(m)}.
-            </span>
-            {/* Volver a leer solo sirve si faltaba la voz de la empresa (una transcripción que llegó a medias). Una reunión
-                cortada por larga vuelve a salir cortada: el largo y el tope son los mismos (revisión del 18 nov). */}
-            {puedeEditar && m.motivos.includes("poco-del-cliente") && (
-              <BotonBlanco disabled={lanzando || corriendo} onClick={() => void lanzar("leer", { sesionId: m.reunion })}>
-                Volver a leer
-              </BotonBlanco>
-            )}
-          </li>
-        ))}
-      </ul>
-      <p className="mt-1.5">
-        Lo que no se leyó no llega al Resumen. Si la empresa habló poco, vuelve a leerla y después rehaz el Resumen con IA; si
-        de verdad casi todo lo dijimos nosotros, el aviso se queda y lo nuestro solo entra como cifra por confirmar. Una
-        reunión cortada por larga no se arregla volviendo a leerla.
-      </p>
-    </Alert>
+    <div role="note" className="flex flex-col gap-0.5 text-[13px] text-fg-muted">
+      {vistas.map((m) => (
+        <p key={m.reunion}>{lineaDeLaReunion(m, sola)}</p>
+      ))}
+    </div>
   );
 }

@@ -42,6 +42,9 @@ import {
   nivelProvisional,
   partirElTamano,
   MAX_ETIQUETAS,
+  MAX_LARGO_DEL_EQUIPO_DEL_MAPA,
+  MAX_LINEAS_DEL_MAPA,
+  MAX_PARRAFOS_DE_LA_PORTADA,
   TIPOS_DEL_NEGOCIO,
   TOPE_DEL_TITULO_DEL_RECORRIDO,
   TITULO_DEL_NEGOCIO,
@@ -75,7 +78,7 @@ import { bloqueDeLasNotas, esNotaDelEquipo } from "./notas-del-equipo";
 import { cuentaConTusCifras, MAX_FACTORES, monedaDelFactor } from "./cuenta-con-tus-cifras";
 import { ROTULO_DE_LO_QUE_LO_CAUSA, ROTULO_DEL_RETO_PRINCIPAL } from "./rotulos-del-resumen";
 import { monedaDe } from "./perdida";
-export { enHoras, MAX_ETIQUETAS, TOPE_A_MANO, TOPE_DE_LA_CIFRA, TOPE_DE_UN_NOMBRE, TOPE_DEL_TITULO_DEL_PUNTO, TOPE_DEL_TITULO_DEL_RECORRIDO };
+export { enHoras, MAX_ETIQUETAS, MAX_LINEAS_DEL_MAPA, MAX_PARRAFOS_DE_LA_PORTADA, TOPE_A_MANO, TOPE_DE_LA_CIFRA, TOPE_DE_UN_NOMBRE, TOPE_DEL_TITULO_DEL_PUNTO, TOPE_DEL_TITULO_DEL_RECORRIDO };
 export type { AreaDelResumenDeLaPagina, CitaDelResumen, DatoRojoDeLaPagina, EstadoDeLaCifra, LoQueHicimos, PreguntaDelResumen, ResumenDeLaPagina, ReunionMalLeida, TipoDelNegocio };
 
 // ── Lo que se guarda ────────────────────────────────────────────────────────────
@@ -284,6 +287,12 @@ export interface ResumenGuardado {
   puntos?: PuntoClave[];
   /** Las reuniones que no se pudieron leer bien al armarlo (18 nov): se avisan en La escala y en su sesión. */
   malLeidas?: ReunionMalLeida[];
+  /**
+   * Se armó leyendo las reuniones ENTERAS (24 nov, Elías: «que se lean enteras»). Un Resumen sin esta marca con una reunión
+   * cortada se arregla rehaciéndolo, y lo dice la línea de arriba de La escala; con la marca, una cortada era tan larga que
+   * no entró ni con el tope nuevo.
+   */
+  leidasEnteras?: true;
 }
 
 /** Los topes de lo que escribe el agente. */
@@ -292,7 +301,18 @@ export const MAX_HALLAZGOS_POR_AREA = 3;
 export const MAX_PREGUNTAS = 3;
 export const MAX_POR_PARTE_DEL_NEGOCIO = 2;
 /** Cuántas piezas lleva cada parte del negocio: las etiquetas son tres (forma editorial, 15 nov); la tesis y el tamaño, una. */
-export const maxDelNegocio = (tipo: TipoDelNegocio): number => (tipo === "etiquetas" ? MAX_ETIQUETAS : tipo === "tesis" || tipo === "tamano" ? 1 : MAX_POR_PARTE_DEL_NEGOCIO);
+export const maxDelNegocio = (tipo: TipoDelNegocio): number =>
+  tipo === "etiquetas"
+    ? MAX_ETIQUETAS
+    : tipo === "tesis" || tipo === "tamano"
+      ? 1
+      : tipo === "quienes"
+        ? MAX_LINEAS_DEL_MAPA
+        : tipo === "portada"
+          ? MAX_PARRAFOS_DE_LA_PORTADA
+          : MAX_POR_PARTE_DEL_NEGOCIO;
+/** Una línea de quién es quién: el equipo y su gente, corta. */
+export const TOPE_DE_UNA_LINEA_DEL_MAPA = 140;
 
 export const MAX_ETAPAS = 7;
 export const MAX_AREAS_OPERATIVAS = 6;
@@ -300,6 +320,11 @@ export const MAX_AREAS_OPERATIVAS = 6;
 export const MAX_RETOS = 4;
 /** Los puntos clave (18 nov, Marco: «5 puntos clave que están críticos»). */
 export const MAX_PUNTOS = 5;
+/**
+ * Los candidatos a punto clave que se guardan hasta el final de la corrida (24 nov): el agente da 7 en orden de peso, y si
+ * la revisión de lo ya resuelto saca uno, entra el siguiente. Al guardar quedan los 5 primeros.
+ */
+export const MAX_CANDIDATOS_A_PUNTO = 7;
 export const MAX_CIFRAS_POR_AREA = 3;
 export const MAX_PIEZAS_POR_LISTA = 3;
 export const MAX_PENDIENTES = 2;
@@ -386,6 +411,11 @@ export interface ContextoDelResumen {
   deciden?: string;
   /** La pérdida que la empresa validó en la preventa (`perdidaParaElAgente`): orienta qué pesa; su número lo pone la página. */
   perdida?: string;
+  /**
+   * La gente de la EMPRESA (24 nov): quienes hablaron de su lado en las reuniones y quienes deciden. Son los únicos nombres
+   * que pueden salir, y solo en «Quién es quién» (`lineaDelMapa`). La de Smarteam o de otra empresa nunca.
+   */
+  gente?: string[];
 }
 
 /** Una sesión con su peso, para el agente. */
@@ -408,7 +438,7 @@ export const MAX_TOKENS_DEL_RESUMEN = 16000;
 const REGLAS = `Preparas el RESUMEN EJECUTIVO que Smarteam (una consultora de HubSpot) le presenta a una empresa después de las reuniones de diagnóstico de sus equipos. Lo lee la dirección de la empresa en 2 o 3 minutos y tiene que pensar: «entendieron cómo funciona mi negocio, cómo están organizadas mis áreas y qué problemas tenemos que resolver». En este entregable LA VERACIDAD ES LO MÁS IMPORTANTE: cada cosa tiene que ser exactamente lo que la empresa dijo. Lees las transcripciones (numeradas por turno), lo que ya se ubicó de cada equipo en la escala y una guía que anotó el equipo de Smarteam.
 
 Devuelves SOLO este JSON (P = {"texto":"…","citas":[C]}; C = {"reunion":"R1","turno":12,"texto":"lo dicho, palabra por palabra"}):
-{"tituloDelRecorrido":"…","negocio":{"tesis":[P],"etiquetas":[P,P,P],"tamano":[P],"vende":[P],"ingresos":[P],"abarca":[P],"fuera":[P],"motivo":[P],"busca":[P]},
+{"tituloDelRecorrido":"…","negocio":{"tesis":[P],"etiquetas":[P,P,P],"tamano":[P],"vende":[P],"ingresos":[P],"abarca":[P],"fuera":[P],"motivo":[P],"busca":[P],"portada":[P,P],"quienes":[P,P,P]},
  "recorrido":[{"etapa":"…","quien":"<equipo o equipos, o null en el resultado>","texto":"…","friccion":"… o null","icono":"<uno de la lista>","continuo":false,"citas":[C],"traspaso":{"a":"<quien del paso siguiente>","texto":"…","cifra":"… o null","rotulo":"… o null","citas":[C]} o null}],
  "areas":[{"nombre":"…","area":"<id del equipo de la escala>","organizacion":[P],"bien":[P],"frena":[P],"retos":[{"texto":"…","dimension":"<id o null>","traspaso":"<id del otro equipo o null>","citas":[C]}],"cifras":[{"cifra":"…","texto":"…","estado":"declarado|estimado|pendiente|calculado","nota":"… o null","dimension":"<id o null>","citas":[C],"cuenta":[{"valor":"…","rotulo":"…","cita":C}] o null}],"falta":"… o null"}],
  "porque":[{"area":"<id del equipo>","texto":"…"}],
@@ -422,11 +452,13 @@ LAS NOTAS DEL EQUIPO (N1, N2…, si te las damos): son lo que una persona del eq
 
 0 EL PROBLEMA PRINCIPAL Y EL PESO (antes de escribir nada). PRIMERO busca el dolor que CRUZA EQUIPOS: el que aparece en las reuniones de dos o más equipos, o en el paso de un equipo a otro (lo que uno entrega y el otro no recibe, lo que uno no sabe del otro, los clientes o los leads que se pierden entre los dos). Si existe, ESE es el problema principal: va en el titular y en el primer punto clave, con citas de reuniones DISTINTAS (una de cada equipo). Un dolor de un solo equipo, aunque se repita, no le gana a uno que cruza equipos. Solo si ningún dolor cruza equipos, el problema principal es el del tema que más pesó. Para el peso te damos cada sesión con su título y sus minutos: con eso y con lo que se dijo, decide cuáles son los TEMAS de la empresa (un área, un proceso, un problema) y ordénalos: cuánto tiempo y cuántas reuniones se le dedicaron, y cuánto lo señaló la empresa como urgente o crítico. Los puntos clave y la mayor parte de las cifras siguen ese orden, pero CADA EQUIPO con reunión propia tiene su espacio (ver 3). Un tema del que se habló de pasada no puede ocupar el titular. El título de una reunión solo te orienta: nunca lo copies ni lo cites.
 
-LO QUE NO VA: lo que la empresa ya resolvió o acordó cómo manejar (forma: «el sistema no tiene integración, pero exportamos a Excel y con eso basta»), y lo que no cambia el plan de trabajo. Si te queda la duda, no lo pongas.
+LO QUE NO VA: lo que la empresa ya resolvió o acordó cómo manejar (forma: «el sistema no tiene integración, pero exportamos a Excel y con eso basta»), y lo que no cambia el plan de trabajo. Antes de escribir un reto, un punto clave, una fricción o un pendiente, lee lo que se dijo DESPUÉS en esa misma reunión: si ahí se acordó cómo manejarlo (lo propuso la empresa o Smarteam y nadie lo objetó: un archivo que se exporta, un paso a mano que les sirve, «lo armamos con lo que es posible hoy»), ya está resuelto y no va. Si te queda la duda, no lo pongas.
 
 LOS EQUIPOS se nombran como en los datos («Ventas», «Marketing», «Servicio» o el subequipo que la empresa nombró: «Soporte», «Customer Success»). Nunca «comercial», «el área comercial» ni «el equipo comercial»: para la empresa ese equipo es Ventas.
 
 1 NEGOCIO (forma editorial: la dirección lo lee en 60 segundos). «tesis» (1): el TITULAR. Nombra el PROBLEMA PRINCIPAL de la empresa (regla 0: el que cruza equipos, si hay uno). Dos frases cortas, de 3 a 8 palabras cada una, terminadas en punto: la primera, qué pasa hoy en ese tema (qué se hace a mano, dónde se pierde, qué no se ve); la segunda, su escala o su consecuencia, con un número o un hecho de la empresa (forma: «Las citas se confirman a mano. Cada recepción llama a 200 pacientes.»); dos citas, una por frase. LO QUE MÁS PESA ES EL DINERO: si la empresa dijo cuánto le cuesta ese problema (lo que pierde, no cobra o deja de vender), esa cifra va en el titular tal como la dijo, con su moneda y su cita (forma: «Se pierden US$ 40 mil al mes. La cartera vencida no se cobra.»). Sin dinero dicho y sin un dolor que cruce equipos, el titular sale del dolor que MÁS repitieron quienes dirigen o deciden (te damos quiénes son), dicho como lo que no pueden hacer o lo que les cuesta (forma: «La gerencia no ve qué vende cada asesor.»). NUNCA un titular que solo describe cómo operan («Las ventas se gestionan por WhatsApp.»): eso no le dice a la dirección qué le duele. NUNCA dos hechos neutros de la operación («Las ventas son por teléfono. Los clientes pagan a plazos.» describe y no dice qué duele). Cada frase con sujeto y verbo claros, sin metáforas ni imágenes («clientes que no dejan rastro»). Nada aspiracional ni de folleto («visión compartida», «crecimiento», «transformación»). «etiquetas» (3): de 1 a 5 palabras cada una, sin verbo conjugado y sin punto: qué vende, a quién o dónde, y cómo vende o cobra («Clínicas veterinarias», «Dueños de mascotas», «Planes de salud por año»). «tamano» (0 o 1): el tamaño del negocio que dijo la empresa, con el número primero y su unidad («120 clínicas», «3.000 pedidos al mes»): clientes, sedes, tiendas, transacciones. Si la empresa respondió solo con un número («500.»), busca otra intervención suya que lo diga con su unidad y cita esa. Nunca la cifra de un área (leads de marketing, casos de soporte); si nadie lo dijo, vacío. «abarca» y «fuera» (0 o 1 cada una, hasta 15 palabras): qué cubre este diagnóstico (unidad, marcas, países, equipos) y lo que la empresa dijo que queda fuera (solo lo que dijo: no lo deduzcas de lo que sí entra). «vende» (qué vende y a quién), «ingresos» (cómo cobra: el modelo, nunca una meta ni un monto), «motivo» (qué los movió a buscar ayuda) y «busca» (el resultado que quieren): 0 o 1 frase corta cada una; sostienen la tesis y las etiquetas. Nada corporativo ni genérico. Si una parte no se habló, déjala vacía: no la completes con suposiciones ni con lo que sabes de la industria.
+«portada» (1 o 2 párrafos): el resumen que va debajo del título del diagnóstico; lo primero que lee la dirección. Cada párrafo de 15 a 35 palabras (hasta 220 caracteres), en tercera persona, con el nombre de la empresa. El primero: en qué invierte hoy la empresa (equipos, canales, campañas, volumen) y dónde se rompe ese esfuerzo, con un número suyo si lo dijo (forma inventada: «Ferretería Norte invierte en tres tiendas y 20 vendedores, pero no sabe qué pedido sale de cada visita.»). El segundo, si hay de qué: dónde se pierde la trazabilidad o el dinero, con sus cifras (forma: «Los pedidos llegan por teléfono y se anotan en papel: la gerencia ve las ventas a fin de mes.»). Solo lo que dijo la empresa, con sus citas (hasta 3 por párrafo, una por cada dato); sin adjetivos de folleto.
+«quienes» (QUIÉN ES QUIÉN, de 0 a 7 líneas): la gente de la empresa por su NOMBRE DE PILA, en qué equipo está y quién lidera. Si alguien lidera de forma transversal (la gerencia, quien dirige los equipos), la primera línea es «Lidera: <nombre>, <su rol como lo dijeron>». Después, una línea por equipo con reunión: «<equipo>: <nombres>» y, si lo dijeron, cuántos más y su rol («Marketing: Catalina, Verónica y Fabián», «Ventas: Laura y 8 asesores», «Soporte y onboarding: Emiley»). Hasta 140 caracteres por línea. Solo gente de la EMPRESA (te damos quiénes son); nunca de Smarteam ni de otra empresa. Un nombre va solo si esa persona habló en las reuniones o la cita lo nombra. Es la ÚNICA parte con nombres y NUNCA lleva un dolor, una crítica ni lo que alguien hace o no hace: solo quién está y dónde. Cada línea con su cita (la presentación de la persona, o lo dicho de quién lleva ese equipo).
 
 2 RECORRIDO: sigue a UN cliente desde el primer contacto hasta que opera con lo que compró, como pasa HOY, en 3 a 5 PASOS en línea (la captación, la venta, el cierre, la puesta en marcha o la entrega). Junta en un paso las etapas seguidas del mismo equipo; cuando el cliente pasa de un equipo a otro, es otro paso. El ÚLTIMO paso en línea es el resultado para el cliente («La mascota en control», «Pedido entregado», «Mueble instalado»), con «quien» null si ya no lo lleva un equipo; es el ÚNICO paso en línea con «quien» null. Aparte, con «continuo»: true y al final, el equipo o los equipos que acompañan MIENTRAS el cliente opera (soporte, Customer Success, postventa, reclamos): 0 a 2. Cada equipo que tuvo una reunión aparece por lo menos en un paso. «etapa»: su nombre, de 2 a 4 palabras. «quien»: el equipo o los equipos de los datos que lo llevan, hasta 3 palabras («Ventas», «Soporte + Customer Success»); si lo lleva alguien que no es un equipo de los datos, su rol («Vendedores», «Bodega»). Nunca dos pasos seguidos con el mismo «quien» y el mismo ícono: son uno. «texto»: un detalle de hasta 6 palabras, sin verbo en segunda persona («Llamada, correo y la web», «Contrato y planos a fábrica»). «friccion»: lo que se traba en ese paso o al pasar al siguiente, hasta 18 palabras (null si no se vio). «icono»: uno de captacion, contacto, visita, demo, cotizacion, cierre, configuracion, entrega, tienda, opera, filtro, soporte. Cada paso con su cita. «traspaso»: en cada paso en línea cuyo paso siguiente lo lleva OTRO equipo, lo que pasa al pasar de uno a otro: «a» (el «quien» del paso siguiente), «texto» (qué pasa en el traspaso, de 4 a 12 palabras, sin «tu»: «Los leads llegan sin datos de la campaña»), «cifra» y «rotulo» (cuántos pasan, si la empresa lo dijo: «180» y «leads al mes»; si no, null) y su cita (la de la cifra, si la hay). null en el último paso, en los que acompañan y entre pasos del mismo equipo. Solo lo que hacen hoy: lo que desean o planean no es un paso; va en «busca». «tituloDelRecorrido»: «De <el primer paso> a <el último paso>.», en palabras del negocio, hasta 9 palabras («De la llamada al mueble instalado.»): como pasa HOY, nunca cómo debería ser ni lo que falta («con trazabilidad», «sin pérdidas»), y nada que los pasos no digan.
 
@@ -444,13 +476,13 @@ LOS EQUIPOS se nombran como en los datos («Ventas», «Marketing», «Servicio�
 
 6 PENDIENTES (0 a 2, solo lo que podría cambiar el diagnóstico): una línea cada uno, en palabras simples, dicha como lo que hay que hacer («Confirmar cuántos casos recibe Soporte al mes en total»). «sin-dato»: se preguntó, el dato existe y quedaron de darlo (si la empresa dijo que no lo tiene o no lo mide, NO es pendiente: es un reto); «hipotesis»: algo que creemos y falta validar; «contradiccion»: dos cosas dichas que no cuadran (con las dos citas). Un equipo con el que no se conversó NO va aquí (se agrega solo) y nunca se presenta como de bajo rendimiento; lo de «confirmar» tampoco se repite aquí. Nunca cuentes cómo se armó una cifra ni qué se dijo en qué momento de la reunión («se construyó combinando…», «se dijo con dudas»): di solo qué hay que confirmar.
 
-7 PUNTOS CLAVE (7 candidatos en orden de peso; la página se queda con los 5 primeros que pasen la verificación): lo MÁS CRÍTICO de toda la empresa (el primero, del tema que más pesó). Explican más que el titular: no lo repitas palabra por palabra. «titulo»: de 3 a 8 palabras, qué está crítico hoy, sin «tu», con lo que le cuesta a la empresa si lo dijo («US$ 40 mil al mes sin cobrar», «La cartera se asigna a mano»); nunca cómo operan sin decir qué duele; «texto»: una o dos frases, de 12 a 35 palabras, qué pasa y dónde, con lo que la empresa dijo; una consecuencia SOLO si la empresa la dijo (nunca «puede dañar…», «genera fricciones»: eso es una lectura nuestra); «area»: el id del equipo de la escala del que habla, o null. Cada uno con su cita de la EMPRESA, copiada palabra por palabra (es lo que más se cae); ninguno es una recomendación, una herramienta ni lo que Smarteam vende.
+7 PUNTOS CLAVE (7 candidatos en orden de peso; la página se queda con los 5 primeros que pasen la verificación): lo MÁS CRÍTICO de toda la empresa (el primero, del tema que más pesó). Explican más que el titular: no lo repitas palabra por palabra. «titulo»: de 3 a 8 palabras, qué está crítico hoy, sin «tu», con lo que le cuesta a la empresa si lo dijo («US$ 40 mil al mes sin cobrar», «La cartera se asigna a mano»); nunca cómo operan sin decir qué duele; si lleva un número, la cita de ese número va en «citas»; «texto»: una o dos frases, de 12 a 30 palabras y hasta 220 caracteres (cuéntalos: lo más largo se descarta), qué pasa y dónde, con lo que la empresa dijo; una consecuencia SOLO si la empresa la dijo (nunca «puede dañar…», «genera fricciones»: eso es una lectura nuestra); «area»: el id del equipo de la escala del que habla, o null. Cada uno con su cita de la EMPRESA, copiada palabra por palabra (es lo que más se cae); ninguno es una recomendación, una herramienta ni lo que Smarteam vende.
 
 CÓMO DISTINGUIR: que algo no se haya preguntado no significa que no lo tengan: «no tienen X» solo si la empresa lo dijo. Separa lo que hacen hoy (organización, recorrido, retos, cifras), lo que quieren (busca, metas) y lo que propondríamos nosotros (eso no va aquí). No asumas herramientas, integraciones ni compras: una herramienta se nombra solo si la empresa la nombró en sus reuniones.
 
 LOS EJEMPLOS de estas reglas son inventados: muestran la FORMA, no el contenido. No copies su estructura ni sus palabras; cada pieza sale de las reuniones de ESTA empresa.
 
-Cómo escribes: español neutro, nunca voseo. El tuteo («tu equipo», «tus clientes») es para las frases que le hablan a la empresa: la fricción, «falta», los pendientes, «confirmar», el «porque» y el texto de un punto clave. Las etiquetas, el tamaño, el paso y su detalle, la organización, lo que funciona, los retos, el título de un punto clave y el rótulo de una cifra son rótulos: sin «tu» ni «tus» y sin verbos en segunda persona («Envía el blog cada mes a…», no «Envías…»). Cada pieza con el largo que se le pide arriba (un pendiente o un «confirmar», de 6 a 16 palabras; un «porque», hasta 50), en presente, sin markdown ni frases hechas: si no cabe, quita palabras, nunca hechos. Nunca el código de una parte («3.6»): su nombre. Nunca escribas el nombre de una persona (ni de la empresa ni de Smarteam): di su rol («quien lleva Customer Success», «la jefatura de ventas»). No nombres a Smarteam, no hables de precios, presupuestos ni de lo que Smarteam vende, no recomiendes herramientas. Habla SOLO de los equipos de los datos.`;
+Cómo escribes: español neutro, nunca voseo. El tuteo («tu equipo», «tus clientes») es para las frases que le hablan a la empresa: la fricción, «falta», los pendientes, «confirmar», el «porque» y el texto de un punto clave. Las etiquetas, el tamaño, el paso y su detalle, la organización, lo que funciona, los retos, el título de un punto clave y el rótulo de una cifra son rótulos: sin «tu» ni «tus» y sin verbos en segunda persona («Envía el blog cada mes a…», no «Envías…»). Cada pieza con el largo que se le pide arriba (un pendiente o un «confirmar», de 6 a 16 palabras; un «porque», hasta 50), en presente, sin markdown ni frases hechas: si no cabe, quita palabras, nunca hechos. Ningún texto pasa de 240 caracteres: el código descarta lo más largo. Nunca el código de una parte («3.6»): su nombre. Nunca escribas el nombre de una persona (ni de la empresa ni de Smarteam): di su rol («quien lleva Customer Success», «la jefatura de ventas»). La única excepción es «quienes», con la gente de la empresa. No nombres a Smarteam, no hables de precios, presupuestos ni de lo que Smarteam vende, no recomiendes herramientas. Habla SOLO de los equipos de los datos.`;
 
 /**
  * La tabla del peso (18 nov): cada sesión con sus minutos y su parte del tiempo total, la más larga primero. Las que no se
@@ -541,7 +573,8 @@ export function pedidoDelResumen(ctx: ContextoDelResumen, aviso = ""): Anthropic
     ctx.perdida ?? "",
     bloqueDeLasNotas(notas),
     `Las reuniones de diagnóstico (cada línea es un turno: [número] quien habla: lo que dijo):\n\n${reuniones.join("\n\n")}`,
-    ctx.noNombrar?.length ? `Nombres que NUNCA van en lo que escribes (di su rol): ${ctx.noNombrar.join(", ")}.` : "",
+    ctx.noNombrar?.length ? `Nombres que NUNCA van en lo que escribes (di su rol), salvo los de la gente de la empresa en «quienes»: ${ctx.noNombrar.join(", ")}.` : "",
+    ctx.gente?.length ? `La gente de la EMPRESA (los únicos nombres de «quienes»): ${ctx.gente.join(", ")}.` : "",
     ctx.instrucciones,
     aviso,
   ].filter(Boolean);
@@ -1376,6 +1409,248 @@ const COCINA = /\bse constru(y|i)\w*|\bcombinand\w*|\bestimaciones\b|\bmomentos 
  * números y sus herramientas están en lo citado. `extras`: otros textos de la pieza que se miran igual (la fricción de una
  * etapa, la nota de una cifra). null y el motivo en `descartados` si no pasa.
  */
+/** Las citas de una pieza: las guardadas aceptan hasta tres (lib/exploraciones/esquemas.ts). */
+export const MAX_CITAS_DE_UNA_PIEZA = 3;
+
+/**
+ * Los números que distinguen un dato (24 nov): de tres cifras o más («1.800», «23 000», «23 mil») o con decimales
+ * («2,8»). Uno chico («3 asesores») sale en muchas intervenciones y no dice de cuál es. Cada uno con su valor canónico:
+ * «1.800», «1,800» y «1800» son 1800; «23 mil», 23000; «2,8» y «2.8», 2.8 (un separador seguido de tres cifras es de
+ * miles; de una o dos, decimal). Un año no distingue nada: «2025» después de «en», «de», «desde»… o sin una unidad
+ * después; «2000 tickets» y «2.000», sí son cantidades. `desde` y `largo`: dónde está en el texto.
+ */
+export function numerosDistintivos(texto: string): { valor: string; desde: number; largo: number }[] {
+  const out: { valor: string; desde: number; largo: number }[] = [];
+  // El separador de miles: punto, coma, espacio, el espacio duro y el fino («1 800»).
+  const SEP = `[.,${String.fromCharCode(0xa0, 0x202f)} ]`;
+  const MILES = new RegExp(String.raw`^\d{1,3}(?:${SEP}\d{3})+$`);
+  const CON_SEPARADOR = new RegExp(SEP, "g");
+  const CON_MIL = /^(\d+(?:[.,]\d{1,2})?)\s*mil$/i;
+  const NUMERO = new RegExp(
+    String.raw`(?<![\d.,])\d+(?:[.,]\d{1,2})?\s*mil(?!\p{L})|(?<![\d.,])\d{1,3}(?:${SEP}\d{3})+(?!\d)|(?<![\d.,])\d+(?:[.,]\d{1,2})?(?!\d)`,
+    "giu",
+  );
+  for (const m of texto.matchAll(NUMERO)) {
+    const crudo = m[0];
+    const desde = m.index ?? 0;
+    const conMil = crudo.match(CON_MIL);
+    const miles = !conMil && MILES.test(crudo);
+    const valor = conMil ? String(Math.round(Number(conMil[1].replace(",", ".")) * 1000)) : miles ? crudo.replace(CON_SEPARADOR, "") : crudo.replace(",", ".");
+    const entero = valor.split(".")[0];
+    const decimal = valor.includes(".");
+    if (!conMil && !miles && /^(19|20)\d\d$/.test(valor)) {
+      const antes = paraComparar(texto.slice(0, desde)).split(" ").filter(Boolean).at(-1) ?? "";
+      if (DE_UN_ANIO.has(antes) || (!ES_UNA_CANTIDAD.has(antes) && !unidadDe(texto, { desde, largo: crudo.length }).palabras.length)) continue;
+    }
+    if (entero.length >= 3 || decimal) out.push({ valor: String(Number(valor)), desde, largo: crudo.length });
+  }
+  return out;
+}
+
+/** Lo que va antes de una cantidad, no de un año («unos 2000», «como 1950»). Sobre `paraComparar`. */
+const ES_UNA_CANTIDAD = new Set(["unos", "unas", "como", "aproximadamente", "cerca", "casi", "alrededor", "mas", "menos", "sobre"]);
+/** Lo que va antes de un año («en 2025», «desde 2024»). Sobre `paraComparar`. */
+const DE_UN_ANIO = new Set(["en", "de", "del", "desde", "hasta", "para", "ano", "el", "al", "durante", "antes", "despues"]);
+
+/** Lo que no dice de qué habla un número («al mes», «unos», «de»). Sobre `paraComparar`. */
+const NO_DICEN_DE_QUE = new Set(["al", "mes", "meses", "ano", "anos", "semana", "semanas", "dia", "dias", "por", "de", "del", "la", "el", "los", "las", "un", "una", "unos", "unas", "que", "con", "sin", "en", "y", "o", "a", "aproximadamente", "cerca", "mas", "menos", "casi", "hoy", "cada", "son", "es", "se", "su", "sus", "tu", "tus", "entre", "como", "hay", "tiene", "tienen", "tenemos", "mensual", "mensuales", "anual", "diario", "diarios", "semanal", "semanales", "esos", "esas", "estos", "estas", "alrededor", "pero", "porque", "entonces", "digamos", "okay", "bueno"]);
+
+/** La misma palabra escrita de otra forma, y en singular («tiquetes» y «tickets» son «ticket»). Sobre `paraComparar`. */
+const raizDe = (w: string) => w.replace(/^tiquete/, "ticket").replace(/(es|s)$/, "");
+
+/**
+ * La unidad de un número en un texto: las palabras que dicen QUÉ cuenta, de las tres que lo siguen («1.800 tickets al
+ * mes» → «ticket»), y si es un porcentaje. Revisión del 24 nov: las palabras de ANTES («Marketing recibe…») y un comienzo
+ * parecido («recibe» y «recién») daban por iguales dos números de cosas distintas.
+ */
+function unidadDe(texto: string, n: { desde: number; largo: number }): { porcentaje: boolean; palabras: string[] } {
+  const resto = texto.slice(n.desde + n.largo);
+  const porcentaje = /^\s*(%|por ciento)/i.test(resto);
+  // Hasta el primer signo: en «1800 al mes, ¿verdad?», «verdad» no dice qué cuenta el número.
+  const palabras = paraComparar(resto.split(/[.,;:?!¿¡()]/)[0] ?? "")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 3)
+    .filter((w) => w.length >= 4 && !NO_DICEN_DE_QUE.has(w) && !/^\d/.test(w))
+    .map(raizDe);
+  return { porcentaje, palabras: [...new Set(palabras)] };
+}
+
+/** Lo que mide un porcentaje en un texto: las palabras con contenido de las tres de antes («churn» en «churn del 2,8 %»). */
+function queMideDe(texto: string, n: { desde: number }): string[] {
+  return paraComparar(texto.slice(0, n.desde))
+    .split(" ")
+    .filter(Boolean)
+    .slice(-3)
+    .filter((w) => w.length >= 4 && !NO_DICEN_DE_QUE.has(w) && !/^\d/.test(w))
+    .map(raizDe);
+}
+
+/** Si un texto nombra alguna de estas palabras (la palabra entera, en singular o plural). */
+const nombraAlguna = (texto: string, ws: readonly string[]) => {
+  const ps = new Set(paraComparar(texto).split(" ").map(raizDe));
+  return ws.some((w) => ps.has(w));
+};
+
+/** «de esos 1800»: el número retoma uno que se dijo antes. Sobre `paraComparar` de lo que va justo antes del número. */
+const RETOMA_LO_DICHO = /\b(esos|esas|estos|estas)$/;
+/** Una intervención corta que es la respuesta a una pregunta («Aproximadamente unos 100»): su unidad está en la pregunta. */
+const PALABRAS_DE_UNA_RESPUESTA_CORTA = 8;
+
+/**
+ * Si un número de una intervención habla de lo mismo que en la pieza (revisión del 24 nov, dos vueltas).
+ *   · Un porcentaje, con un porcentaje; y si la pieza dice qué mide («churn»), la intervención o las cuatro de antes lo
+ *     nombran.
+ *   · Si la intervención dice la unidad del número («1.800 dólares»), tiene que ser la de la pieza: «dólares» no es
+ *     «tickets», aunque se haya hablado de tickets antes.
+ *   · Sin unidad: si es una respuesta corta («Aproximadamente unos 100»), la unidad está en las cuatro de antes; si retoma
+ *     el número con «esos» (Centauro, 6 nov: Emiley, «de esos 1800, 100 son de facturas», veinte intervenciones después de
+ *     «Tiquetes» y de Marco, «1800 al mes»), vale la vez anterior que se dijo ese número en la reunión, con estas mismas
+ *     reglas. Si no, no.
+ */
+function hablaDeLoMismo(r: ReunionParaElResumen, t: TurnoNumerado, valor: string, pieza: { porcentaje: boolean; palabras: string[]; mide: string[] }, vueltas = 1): boolean {
+  const aqui = numerosDistintivos(t.texto).find((x) => x.valor === valor);
+  if (!aqui) return false;
+  const suya = unidadDe(t.texto, aqui);
+  const cerca = r.turnos.filter((u) => u.n <= t.n && u.n >= t.n - VECINOS).map((u) => u.texto).join(" ");
+  if (pieza.porcentaje) return suya.porcentaje && (!pieza.mide.length || nombraAlguna(cerca, pieza.mide));
+  if (suya.porcentaje) return false;
+  if (suya.palabras.length) return suya.palabras.some((w) => pieza.palabras.includes(w));
+  // La vez anterior que se dijo el número (la que se retoma) se mira con lo que se hablaba ahí, sea corta o larga.
+  const corta = vueltas === 0 || palabrasDe(t.texto).length <= PALABRAS_DE_UNA_RESPUESTA_CORTA;
+  if (corta && nombraAlguna(cerca, pieza.palabras)) return true;
+  if (vueltas <= 0 || !RETOMA_LO_DICHO.test(paraComparar(t.texto.slice(0, aqui.desde)).trim())) return false;
+  const antes = [...r.turnos].reverse().find((u) => u.n < t.n && numerosDistintivos(u.texto).some((x) => x.valor === valor));
+  return !!antes && hablaDeLoMismo(r, antes, valor, pieza, vueltas - 1);
+}
+
+/** El pedazo de una intervención alrededor de un número, como se dijo: hasta 8 palabras antes y 12 después. */
+function alrededorDe(texto: string, desde: number): string {
+  const antes = texto.slice(0, desde).split(/\s+/).filter(Boolean);
+  const despues = texto.slice(desde).split(/\s+/).filter(Boolean);
+  return [...antes.slice(-8), ...despues.slice(0, 12)].join(" ");
+}
+
+/**
+ * Las citas de los números de una pieza que su cita no trae (24 nov, Centauro: «~1.800 tickets al mes» lo dijo la empresa
+ * el 6 nov, «de esos 1800, 100 son de facturas», y el punto citaba otra frase). Solo los números que distinguen
+ * (`numerosDistintivos`), solo lo que dijo la EMPRESA (o una nota del equipo), y solo una intervención que habla de LO
+ * MISMO (`hablaDeLoMismo`; revisión del 24 nov: «pagamos como 1.800 dólares al año» no sostiene «1.800 tickets»). Primero en las reuniones de sus citas, la intervención más cercana; si no, en otra reunión, pero solo si una
+ * sola intervención de la empresa lo dice. Cada una pasa por `citaVerificada`, la vara de siempre.
+ */
+export function citasDeSusNumeros(texto: string, citas: readonly CitaDelResumen[], reuniones: readonly ReunionParaElResumen[]): CitaDelResumen[] {
+  const yaDichos = new Set(numerosDistintivos(citas.map((c) => c.texto).join(" ")).map((x) => x.valor));
+  const faltan = numerosDistintivos(texto).filter((x, i, xs) => !yaDichos.has(x.valor) && xs.findIndex((y) => y.valor === x.valor) === i);
+  const out: CitaDelResumen[] = [];
+  for (const n of faltan) {
+    const valor = n.valor;
+    const pieza = { ...unidadDe(texto, n), mide: queMideDe(texto, n) };
+    // Sin saber qué cuenta el número en la pieza, no se puede decir que otra intervención hable de lo mismo.
+    if (!pieza.porcentaje && !pieza.palabras.length) continue;
+    const candidatos = reuniones.flatMap((r) =>
+      r.turnos
+        .filter((t) => (!!r.delEquipo || esDelCliente(r, t.hablante)) && numerosDistintivos(t.texto).some((x) => x.valor === valor))
+        .filter((t) => hablaDeLoMismo(r, t, valor, pieza))
+        .map((t) => ({ r, t })),
+    );
+    if (!candidatos.length) continue;
+    const deSusReuniones = candidatos.filter(({ r }) => citas.some((c) => c.reunion === r.id));
+    const cerca = (n: number, r: ReunionParaElResumen) => Math.min(...citas.filter((c) => c.reunion === r.id).map((c) => Math.abs(c.turno - n)));
+    const elegido = deSusReuniones.length ? [...deSusReuniones].sort((a, b) => cerca(a.t.n, a.r) - cerca(b.t.n, b.r))[0] : candidatos.length === 1 ? candidatos[0] : null;
+    if (!elegido) continue;
+    const donde = numerosDistintivos(elegido.t.texto).find((x) => x.valor === valor)!.desde;
+    const pedazo = alrededorDe(elegido.t.texto, donde);
+    const c = citaVerificada({ reunion: elegido.r.clave, turno: elegido.t.n, texto: pedazo }, reuniones);
+    if (c && !out.some((y) => y.reunion === c.reunion && y.turno === c.turno)) out.push(c);
+  }
+  return out;
+}
+
+/** Las palabras de un equipo en «Quién es quién», además de los equipos de la escala. Sobre `paraComparar`. */
+const EQUIPOS_DEL_MAPA = ["ventas", "marketing", "mercadeo", "servicio", "soporte", "onboarding", "customer", "success", "atencion", "cliente", "clientes", "posventa", "postventa", "operaciones", "finanzas", "cobranza", "credito", "cobro", "ti", "tecnologia", "sistemas", "direccion", "gerencia", "comunicacion", "contenido", "ecommerce", "comercio", "retencion", "implementacion", "comercial"];
+/**
+ * Las palabras con mayúscula de una línea del mapa que no son nombres de personas: los roles y las de un equipo (una sola
+ * lista con `EQUIPOS_DEL_MAPA`: «Servicio: Ana (Atención al cliente)» se caía por «Atención»). Sobre `paraComparar`.
+ */
+const NO_SON_NOMBRES_DEL_MAPA = new Set([...EQUIPOS_DEL_MAPA, "y", "e", "al", "a", "con", "el", "la", "los", "las", "un", "una", "de", "del", "equipo", "lidera", "ceo", "coo", "cfo", "cto", "gerente", "general", "director", "directora", "jefe", "jefa", "lider", "asesores", "asesoras", "asesor", "asesora", "socio", "socia", "socios", "dueno", "duena", "coordinador", "coordinadora", "supervisor", "supervisora"]);
+/** Quién lidera en «Quién es quién» («Lidera», «CEO», «Gerencia general», «Dueño»). Sobre `paraComparar`. */
+const QUIEN_LIDERA = /^(lider\w*|ceo|gerencia|gerente|direccion|director\w*|duen[oa]s?|fundador\w*)\b/;
+/** Un dolor pegado a una persona en «Quién es quién»: ahí solo va quién está y dónde. Sobre `paraComparar`. */
+const DOLOR_EN_EL_MAPA = /\b(no|sin|nunca|falta|faltan|problemas?|error(es)?|mal|tarde|olvida\w*|pierde\w*|duplicad\w*|manual\w*|desorden\w*|reclam\w*|queja\w*)\b/;
+
+/** Las palabras de la parte del equipo de una línea del mapa: quién lidera o un equipo, sin más. */
+const MAX_PALABRAS_DEL_EQUIPO_DEL_MAPA = 5;
+/**
+ * Lo único que puede ir con los nombres en la gente de una línea del mapa, además de los roles y las cantidades: «y 3
+ * personas más», «jefatura y 5 asesores». Lo demás (revisión del 24 nov: «que está saturada», «sobrecargada», «solo ella
+ * atiende todo») es una calificación de la persona y no va. Sobre `paraComparar`.
+ */
+const VAN_CON_LA_GENTE = new Set(["mas", "personas", "persona", "otros", "otras", "otro", "otra", "apoyo", "externo", "externa", "externos", "jefatura", "gerencia", "direccion", "analista", "analistas", "ejecutivo", "ejecutivos", "ejecutiva", "ejecutivas", "vendedor", "vendedores", "vendedora", "vendedoras", "agente", "agentes", "tecnico", "tecnicos", "tecnica", "tecnicas", "especialista", "especialistas", "practicante", "practicantes", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez", "once", "doce", "su", "sus"]);
+
+/**
+ * Una línea de «Quién es quién» (24 nov, Elías: el mapa de los equipos con su gente y quién lidera, como el business case
+ * de Marco para Centauro). Es la ÚNICA pieza con nombres: los de la gente de la EMPRESA (`ContextoDelResumen.gente`),
+ * nunca de Smarteam ni de otra empresa, y nunca pegados a un dolor. Pasa la vara de siempre (su cita, los números, las
+ * herramientas), sin el rechazo de los nombres de la empresa, y además: tiene la forma «<equipo o quién lidera>: <gente>»;
+ * cada nombre es de alguien de la empresa que habló en las reuniones o quien decide (también su diminutivo: «Cata» por
+ * «Catalina»), o lo nombra su cita; el nombre de pila de alguien de Smarteam no pasa aunque sea el apellido de alguien de
+ * la empresa («Ana Marco» no deja pasar a Marco Salas); y la línea entera no lleva un dolor (tampoco antes de los dos
+ * puntos: «Soporte que olvida los tickets: Emiley»). Sin la gente de la empresa (una empresa sin dominios de correo
+ * registrados, donde no se sabe quién es de afuera) no pasa ningún nombre, ni con su cita. No se pide corregida: una línea
+ * que no pasa, se cae.
+ */
+export function lineaDelMapa(v: unknown, ctx: ContextoDelResumen, o: Reglas, descartados: string[]): { texto: string; citas: CitaDelResumen[] } | null {
+  const primero = (n: string) => paraComparar(n.trim().split(/\s+/)[0] ?? "");
+  // Cada palabra de cada nombre (24 nov, Centauro: «Luis Humberto» es un nombre de pila compuesto).
+  const gente = new Set((ctx.gente ?? []).flatMap((n) => paraComparar(n).split(" ")).filter((x) => x.length >= 3));
+  const deLaEmpresa = new Set((ctx.gente ?? []).map(primero));
+  // Los nombres de pila que no son de la empresa (los de Smarteam y los de otra empresa que hablaron).
+  const deAfuera = new Set(o.personas.filter((n) => !(ctx.gente ?? []).some((g) => paraComparar(g) === paraComparar(n))).map(primero).filter((x) => x.length >= 3 && !deLaEmpresa.has(x)));
+  const donde = "«Quién es quién»";
+  const p = conSuCita(v, ctx, { ...o, personas: o.personas.filter((n) => !deLaEmpresa.has(primero(n))) }, descartados, donde, TOPE_DE_UNA_LINEA_DEL_MAPA);
+  if (!p) return null;
+  const i = p.texto.indexOf(":");
+  // Lo de antes de los dos puntos es quién lidera o un equipo (24 nov, Centauro: «También mencionado: Eduardo…» no lo es).
+  const equipo = i > 0 ? paraComparar(p.texto.slice(0, i)) : "";
+  const deEquipos = new Set([...EQUIPOS_DEL_MAPA, ...(o.equipos ?? []).flatMap((e) => paraComparar(e).split(" "))]);
+  if (
+    !equipo ||
+    i > MAX_LARGO_DEL_EQUIPO_DEL_MAPA ||
+    equipo.split(" ").length > MAX_PALABRAS_DEL_EQUIPO_DEL_MAPA ||
+    !(QUIEN_LIDERA.test(equipo) || equipo.split(" ").some((w) => deEquipos.has(w)))
+  ) {
+    descartados.push(`${donde}: no dice quién lidera ni de qué equipo es («${p.texto.slice(0, 60)}»)`);
+    return null;
+  }
+  if (DOLOR_EN_EL_MAPA.test(paraComparar(p.texto))) {
+    descartados.push(`${donde}: le pega un dolor a la gente («${p.texto.slice(0, 60)}»)`);
+    return null;
+  }
+  const citado = new Set(paraComparar(p.citas.map((c) => c.texto).join(" ")).split(" "));
+  // Toda la línea, también antes de los dos puntos (revisión del 24 nov: «Lidera Eduardo Mora: Ventas» se saltaba).
+  const nombres = [...p.texto.matchAll(/(?<!\p{L})\p{Lu}\p{Ll}+(?!\p{L})/gu)].map((m) => m[0]).filter((w) => !NO_SON_NOMBRES_DEL_MAPA.has(paraComparar(w)) && !deEquipos.has(paraComparar(w)));
+  const deLosNombres = new Set(nombres.map((w) => paraComparar(w)));
+  const deMas = paraComparar(p.texto.slice(i + 1))
+    .split(" ")
+    .filter(Boolean)
+    .find((w) => !/^\d+$/.test(w) && !deLosNombres.has(w) && !NO_SON_NOMBRES_DEL_MAPA.has(w) && !VAN_CON_LA_GENTE.has(w));
+  if (deMas) {
+    descartados.push(`${donde}: dice algo más que quién está («${deMas}» en «${p.texto.slice(0, 60)}»)`);
+    return null;
+  }
+  const desconocido = nombres.find((w) => {
+    const x = paraComparar(w);
+    if (!gente.size || deAfuera.has(x)) return true;
+    if (citado.has(x)) return false;
+    return ![...gente].some((g) => g === x || (x.length >= 3 && g.startsWith(x)));
+  });
+  if (desconocido) {
+    descartados.push(`${donde}: nombra a alguien que no habló en las reuniones ni sale en su cita («${desconocido}»)`);
+    return null;
+  }
+  return p;
+}
+
 function conSuCita(
   v: unknown,
   ctx: ContextoDelResumen,
@@ -1387,8 +1662,8 @@ function conSuCita(
   porArreglar?: (x: { texto: string; citas: CitaDelResumen[]; problema: string }) => void,
 ): { texto: string; citas: CitaDelResumen[] } | null {
   const x = objeto(v);
-  const citas = citasVerificadas([...arreglo(x.citas), ...(x.cita ? [x.cita] : [])], ctx.reuniones);
-  const lo = citas.map((c) => c.texto).join(" ");
+  let citas = citasVerificadas([...arreglo(x.citas), ...(x.cita ? [x.cita] : [])], ctx.reuniones);
+  let lo = citas.map((c) => c.texto).join(" ");
   const crudo = cadena(typeof v === "string" ? v : x.texto);
   // Una conclusión en la cola («…, lo que limita el crecimiento») se corta antes de mirar el resto.
   const sinCola = citas.length ? (sinLaConclusion(crudo, lo) ?? crudo) : crudo;
@@ -1405,8 +1680,21 @@ function conSuCita(
     return null;
   }
   const todo = [t.texto, ...extras].join(" ");
-  const suReunion = loDeSusReuniones(citas, ctx.reuniones);
-  const sobran = cifrasDeMas(todo, lo, suReunion);
+  let sobran = cifrasDeMas(todo, lo, loDeSusReuniones(citas, ctx.reuniones));
+  /* Un número que la empresa sí dijo, en otra intervención (24 nov, Centauro: «~1.800 tickets al mes» y «2,8 %» se perdían
+     porque la cita del punto no traía el número): se busca la intervención de la empresa que lo dice y va como otra cita. */
+  if (sobran.length) {
+    const con = [...citas, ...citasDeSusNumeros(todo, citas, ctx.reuniones)];
+    if (con.length > citas.length && con.length <= MAX_CITAS_DE_UNA_PIEZA) {
+      const loCon = con.map((c) => c.texto).join(" ");
+      const quedan = cifrasDeMas(todo, loCon, loDeSusReuniones(con, ctx.reuniones));
+      if (!quedan.length) {
+        citas = con;
+        lo = loCon;
+        sobran = quedan;
+      }
+    }
+  }
   if (sobran.length) return caer(`números que no están en su cita (${sobran.map((s) => s.replace(/·$/, "").replace("·", " ")).join(", ")})`, t.texto);
   const herramientas = herramientasDeMas(todo, lo, dichoEnSusReuniones(citas, ctx.reuniones));
   if (herramientas.length) return caer(`nombra herramientas que la empresa no nombró en sus reuniones (${herramientas.join(", ")})`, t.texto);
@@ -1474,6 +1762,12 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
     const max = maxDelNegocio(tipo);
     for (const v of tipo === "tesis" ? unaTesis(arreglo(objeto(crudo.negocio).tesis)) : arreglo(objeto(crudo.negocio)[tipo])) {
       if (piezas.length >= max) break;
+      // Quién es quién (24 nov): la única parte con nombres, los de la gente de la empresa.
+      if (tipo === "quienes") {
+        const l = lineaDelMapa(v, ctx, o, descartados);
+        if (l && !piezas.some((y) => paraComparar(y.texto) === paraComparar(l.texto))) piezas.push({ id: `n${++n}`, ...l, origen: origenDeLaCita(l.citas[0]) });
+        continue;
+      }
       const p = conSuCita(v, ctx, o, descartados, `«${TITULO_DEL_NEGOCIO[tipo]}»`, TOPE_DEL_TEXTO_DEL_RESUMEN, [], arreglarEn(`negocio:${tipo}`));
       // La tesis es el titular (16 nov: salían frases de 14 palabras): una frase de más de 9 se pide corregida.
       if (p && tipo === "tesis" && tesisLarga(p.texto)) {
@@ -1717,7 +2011,7 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
   // 7 · Los puntos clave (18 nov, Marco: «5 puntos clave que están críticos»): de toda la empresa, en orden de peso, con su cita.
   const puntos: PuntoClave[] = [];
   for (const v of arreglo(crudo.puntos)) {
-    if (puntos.length >= MAX_PUNTOS) break;
+    if (puntos.length >= MAX_CANDIDATOS_A_PUNTO) break;
     const x = objeto(v);
     const titulo = textoValido(x.titulo, TOPE_DEL_TITULO_DEL_PUNTO, o);
     if (!titulo.ok) {
@@ -1906,6 +2200,7 @@ export function formaDelLugar(x: Pick<PiezaPorArreglar, "lugar" | "indice" | "la
     if (campo === "etiquetas") return "de 1 a 5 palabras, sin verbo conjugado, sin «tu» ni «tus» y sin punto";
     if (campo === "tesis") return `dos frases de 3 a ${MAX_PALABRAS_DE_LA_TESIS - 1} palabras cada una (cuéntalas: ninguna pasa de ${MAX_PALABRAS_DE_LA_TESIS - 1}), terminadas en punto, con sujeto y verbo claros y sin metáforas; si no cabe, quita palabras, nunca un hecho`;
     if (campo === "tamano") return "el número primero y su unidad, de 2 a 5 palabras («120 clínicas»)";
+    if (campo === "portada") return "un párrafo de 15 a 35 palabras y hasta 220 caracteres, en tercera persona con el nombre de la empresa: en qué invierte y dónde se rompe, con sus números";
     return "una frase corta, hasta 15 palabras, sin «tu» ni «tus»";
   }
   if (campo === "organizacion" && (x.indice ?? 0) === 0 && (x.largo ?? 2) >= 2) return "quiénes son: su rol y cuántos, de 2 a 6 palabras; sin número si las citas no lo dicen";
@@ -1990,7 +2285,162 @@ export function conLasPiezas<T extends Pick<LoQueEscribioElAgente, "negocio" | "
     }
   }
   const lugar = (id: string) => Number(id.replace(/\D/g, "")) || 99;
-  return { ...e, negocio, operativas, ...(e.puntos ? { puntos: puntos.sort((a, b) => lugar(a.id) - lugar(b.id)).slice(0, MAX_PUNTOS) } : {}) };
+  return { ...e, negocio, operativas, ...(e.puntos ? { puntos: puntos.sort((a, b) => lugar(a.id) - lugar(b.id)).slice(0, MAX_CANDIDATOS_A_PUNTO) } : {}) };
+}
+
+// ── Lo que ya está resuelto (24 nov) ────────────────────────────────────────────
+
+/**
+ * Cuántas intervenciones después de su cita se miran para saber si algo se resolvió (24 nov, Centauro: «La extranet no
+ * tiene API» salió como punto clave, y en esa misma reunión se acordó exportar un Excel diario que HubSpot toma solo).
+ * Medido con Centauro: el punto cita la intervención 25 y el acuerdo está entre la 84 y la 140; con 40 no se veía.
+ */
+export const TURNOS_DESPUES_DE_LA_CITA = 120;
+/** Lo que se le manda de cada intervención: lo justo para leer si se acordó algo. */
+const LARGO_DE_UN_TURNO_PARA_LO_RESUELTO = 280;
+
+/** Una pieza que podría estar resuelta: lo que se ve al cliente y dónde se dijo. */
+export interface PiezaParaLoResuelto {
+  /** Dónde va: `punto:<id>`, `<operativa>:frena:<id>`, `etapa:<id>` (su fricción), `pendiente:<id>`. */
+  lugar: string;
+  donde: string;
+  texto: string;
+  /** La reunión (su id) y la intervención de su primera cita. */
+  reunion: string;
+  turno: number;
+}
+
+/**
+ * Las piezas que el cliente vería como un problema y que pudieron quedar resueltas en la misma reunión: los puntos clave,
+ * el reto principal de cada equipo, lo que se traba en cada paso y los pendientes. Los retos de cada equipo no (son lo que
+ * hay que mejorar, y con ellos el pedido se triplicaba: medido con Centauro).
+ */
+export function piezasParaLoResuelto(e: Pick<LoQueEscribioElAgente, "puntos" | "operativas" | "recorrido" | "pendientes">, reuniones: readonly ReunionParaElResumen[]): PiezaParaLoResuelto[] {
+  const out: PiezaParaLoResuelto[] = [];
+  const de = (lugar: string, donde: string, texto: string, citas: readonly CitaDelResumen[]) => {
+    const c = citas.find((x) => reuniones.some((r) => r.id === x.reunion && !r.delEquipo));
+    if (c && texto.trim()) out.push({ lugar, donde, texto, reunion: c.reunion, turno: c.turno });
+  };
+  for (const p of e.puntos) de(`punto:${p.id}`, `el punto clave «${p.titulo}»`, `${p.titulo}. ${p.texto}`, p.citas);
+  for (const a of e.operativas) {
+    for (const p of a.frena) de(`${a.id}:frena:${p.id}`, `el reto principal de ${a.nombre}`, p.texto, p.citas);
+  }
+  for (const x of e.recorrido) if (x.friccion) de(`etapa:${x.id}`, `lo que se traba en «${x.nombre}»`, x.friccion, x.citas);
+  for (const p of e.pendientes) de(`pendiente:${p.id}`, "un pendiente", p.texto, p.citas);
+  return out;
+}
+
+const REGLAS_DE_LO_RESUELTO = `Revisas, antes de que lo vea la dirección de una empresa, los problemas que anotó un resumen de sus reuniones de diagnóstico. Cada problema tiene su reunión y la intervención donde se dijo; te damos lo que se habló DESPUÉS en esa misma reunión.
+
+Un problema está RESUELTO en dos casos: (1) la empresa dijo que ya lo resolvió; (2) es una LIMITACIÓN con la que se acordó convivir: algo que no se puede cambiar (un sistema cerrado, una regla de la casa matriz) y para lo que la empresa aceptó un paso que le alcanza (forma: «el sistema no tiene integración» y después «exportamos un Excel diario y con eso nos basta», «armamos el caso con lo que es posible hoy»). NO está resuelto lo que el proyecto va a resolver: si Smarteam propone sincronizar, integrar, automatizar o configurar algo para arreglarlo, ese problema es justo lo que la empresa tiene que ver en su diagnóstico. Tampoco si solo se dijo que hay que resolverlo, que se quiere, o si se habló de otra cosa. En la duda, no lo marques: quitar un problema que sigue abierto le esconde algo real a la empresa.
+
+La cita es lo que dijo alguien de la EMPRESA (no de Smarteam) que muestra que ya está resuelto o que acepta convivir con eso. Devuelves SOLO este JSON: {"resueltos":[{"i":<el número del problema>,"turno":<la intervención de esa cita>,"cita":"lo dicho, palabra por palabra, de 6 a 25 palabras seguidas de esa intervención","como":"cómo quedó resuelto, hasta 15 palabras"}]}. Sin ninguno: {"resueltos":[]}.`;
+
+/** El pedido: cada problema con lo que se dijo después en su reunión (sin repetir las intervenciones que comparten). */
+export function pedidoDeLoResuelto(piezas: readonly PiezaParaLoResuelto[], reuniones: readonly ReunionParaElResumen[]): Anthropic.Messages.MessageCreateParamsNonStreaming {
+  const porReunion = new Map<string, Set<number>>();
+  for (const p of piezas) {
+    const r = reuniones.find((x) => x.id === p.reunion);
+    if (!r) continue;
+    const ns = porReunion.get(r.id) ?? new Set<number>();
+    for (const t of r.turnos) if (t.n >= p.turno && t.n <= p.turno + TURNOS_DESPUES_DE_LA_CITA) ns.add(t.n);
+    porReunion.set(r.id, ns);
+  }
+  const bloques = [...porReunion.entries()].map(([id, ns]) => {
+    const r = reuniones.find((x) => x.id === id)!;
+    const corto = (t: string) => (t.length > LARGO_DE_UN_TURNO_PARA_LO_RESUELTO ? `${t.slice(0, LARGO_DE_UN_TURNO_PARA_LO_RESUELTO)}…` : t);
+    const lineas = r.turnos.filter((t) => ns.has(t.n)).map((t) => `[${t.n}] ${t.hablante}: ${corto(t.texto)}`);
+    return `### ${r.clave} · ${r.fecha.slice(0, 10)}${r.titulo ? ` · «${r.titulo}»` : ""}\n${lineas.join("\n")}`;
+  });
+  const lista = piezas.map((p, i) => ({ i, problema: p.texto, reunion: reuniones.find((r) => r.id === p.reunion)?.clave ?? p.reunion, turno: p.turno }));
+  return {
+    model: MODELO_DEL_RESUMEN,
+    max_tokens: 1500,
+    system: REGLAS_DE_LO_RESUELTO,
+    messages: [
+      {
+        role: "user",
+        content: `Los problemas:\n${JSON.stringify(lista, null, 1)}\n\nLo que se habló después de cada uno (cada línea es una intervención: [número] quien habla: lo que dijo):\n\n${bloques.join("\n\n")}`,
+      },
+    ],
+  };
+}
+
+/** Las palabras de una intervención de la empresa que acepta un acuerdo después de lo que dijo Smarteam («Mhm.» no alcanza). */
+const PALABRAS_DE_UNA_ACEPTACION = 4;
+/**
+ * Una objeción, una queja, una duda o un aplazamiento: no es una aceptación («No, eso no nos sirve», «eso nos complica»,
+ * «puede ser, habría que ver», «déjame consultarlo», «lo vemos después»). Sobre `paraComparar`.
+ */
+const OBJETA =
+  /^(no|nunca|tampoco|ni)\b|\bno (nos |me |les )?(sirve|funciona|alcanza|basta)\b|\bno es suficiente\b|\bimposible\b|\bcomplica\w*|\bproblema\w*|\bdificil\w*|\bqueja\w*|\bmalo\b|\bpeor\b|\bpuede ser\b|\b(habria|hay|tendriamos) que (ver|revisar|consultar)\b|\bconsultar\w*|\blo vemos (despues|luego|con)\b|\b(te|les) confirmo\b|\bveremos\b|\bquizas?\b|\btal vez\b|\bno se\b|\bpasemos\b|\botro tema\b/;
+/** Una aceptación dicha: lo que tiene que traer la respuesta de la empresa a lo que propuso Smarteam. Sobre `paraComparar`. */
+const ACEPTA = /\b(si|claro|perfecto|excelente|de acuerdo|dale|listo|me parece|nos parece|nos basta|basta|nos sirve|funciona|esta bien|positivo|correcto|exacto|hagamoslo|genial)\b/;
+
+/**
+ * Lee lo resuelto y lo VERIFICA: la cita tiene que estar en esa reunión, en una intervención de después de la del problema
+ * (dentro de las que se le mandaron), y ser de la EMPRESA: lo que propone Smarteam no resuelve nada por sí solo. Si el
+ * modelo cita a Smarteam (Centauro: «vamos a armar el caso de negocio bajo lo que es posible hoy», de Marco), vale solo si
+ * la empresa lo confirmó, o si la PRIMERA respuesta de la empresa (en las dos intervenciones siguientes) acepta: trae un
+ * «sí», «perfecto», «nos basta», «me parece»… y ninguna objeción, duda, aplazamiento ni cambio de tema (revisión del 24
+ * nov, dos vueltas: «No, eso no nos sirve» partido en dos intervenciones, una queja de antes de la propuesta, la respuesta a
+ * OTRA pregunta del mismo turno, «puede ser, habría que ver», «pasemos al otro tema»). Si lo de Smarteam termina con una
+ * pregunta, la respuesta es a esa pregunta y no vale. Una cita de la empresa vale si su intervención ENTERA no objeta (se
+ * citaba solo la segunda frase de «No, eso no nos sirve. Lo que hacemos hoy es…»). Lo que se guarda como prueba es lo que
+ * dijo la empresa. Lo que no se verifica no quita nada.
+ */
+export function leerLoResuelto(
+  respuesta: Pick<Anthropic.Messages.Message, "content">,
+  piezas: readonly PiezaParaLoResuelto[],
+  reuniones: readonly ReunionParaElResumen[],
+  parse: (texto: string) => Record<string, unknown>,
+): { lugar: string; motivo: string }[] {
+  const crudo = parse(respuesta.content.map((b) => (b.type === "text" ? b.text : "")).join(""));
+  const out: { lugar: string; motivo: string }[] = [];
+  for (const v of arreglo(crudo.resueltos)) {
+    const x = objeto(v);
+    const p = piezas[typeof x.i === "number" ? x.i : Number(x.i)];
+    const r = p && reuniones.find((y) => y.id === p.reunion);
+    if (!p || !r || out.some((y) => y.lugar === p.lugar)) continue;
+    if (cadena(x.cita).split(" ").filter(Boolean).length < PALABRAS_DE_UNA_CITA) continue;
+    const enLaVentana = r.turnos.filter((t) => t.n > p.turno && t.n <= p.turno + TURNOS_DESPUES_DE_LA_CITA);
+    const c = verificarCita({ turno: Number(x.turno), texto: cadena(x.cita) }, enLaVentana);
+    if (!c) continue;
+    const objeta = (texto: string) => texto.includes("?") || OBJETA.test(paraComparar(texto));
+    const deLaEmpresa = esDelCliente(r, c.hablante);
+    const suTurno = r.turnos.find((t) => t.n === c.turno)?.texto ?? c.texto;
+    if (deLaEmpresa && (objeta(c.texto) || objeta(suTurno))) continue;
+    const confirmo = deLaEmpresa ? null : confirmacion(r, c.turno, finDeLaCita(r, c));
+    // La primera respuesta de la empresa a lo que propuso Smarteam, si lo propuesto no terminó en una pregunta.
+    const respuesta = deLaEmpresa || confirmo || suTurno.includes("?") ? undefined : enLaVentana.find((t) => t.n > c.turno && esDelCliente(r, t.hablante));
+    const alLado =
+      respuesta &&
+      respuesta.n <= c.turno + 2 &&
+      palabrasDe(respuesta.texto).length >= PALABRAS_DE_UNA_ACEPTACION &&
+      !objeta(respuesta.texto) &&
+      !CORRIGE.test(paraComparar(respuesta.texto)) &&
+      ACEPTA.test(paraComparar(respuesta.texto))
+        ? respuesta
+        : null;
+    if (!deLaEmpresa && !confirmo && !alLado) continue;
+    const prueba = alLado ? { turno: alLado.n, texto: alLado.texto } : confirmo ? { turno: c.turno, texto: `${c.texto} · ${confirmo.texto}` } : c;
+    const como = cadena(x.como);
+    out.push({ lugar: p.lugar, motivo: `${p.donde}: ya está resuelto en la misma reunión (${r.clave}, intervención ${prueba.turno}: «${prueba.texto.slice(0, 90)}»)${como ? `: ${como}` : ""}` });
+  }
+  return out;
+}
+
+/** Quita lo resuelto: la pieza entera, o solo la fricción de un paso del recorrido (el paso sigue). */
+export function sinLoResuelto<T extends Pick<LoQueEscribioElAgente, "puntos" | "operativas" | "recorrido" | "pendientes">>(e: T, lugares: readonly string[]): T {
+  if (!lugares.length) return e;
+  const fuera = new Set(lugares);
+  return {
+    ...e,
+    puntos: e.puntos.filter((p) => !fuera.has(`punto:${p.id}`)),
+    operativas: e.operativas.map((a) => ({ ...a, frena: a.frena.filter((p) => !fuera.has(`${a.id}:frena:${p.id}`)) })),
+    recorrido: e.recorrido.map((x) => (fuera.has(`etapa:${x.id}`) ? { ...x, friccion: null } : x)),
+    pendientes: e.pendientes.filter((p) => !fuera.has(`pendiente:${p.id}`)),
+  };
 }
 
 // ── La etapa del equipo que falta en el recorrido (12 nov) ──────────────────────
@@ -2627,8 +3077,13 @@ export function resumenParaLaPagina(
   pendientes.splice(0, pendientes.length, ...pendientes.filter((p) => visibles.includes(p)));
 
   // El negocio y el recorrido: solo el formato 2 los tiene.
+  /* El resumen de la portada y quién es quién (24 nov) van afuera solo si tienen algo: la foto publicada se compara entera
+     (escala-publicada.ts › `mismaPagina`), y dos partes vacías de más decían «Hay cambios que el cliente no ve» en todas
+     las escalas publicadas antes, sin que nada hubiera cambiado. */
   const negocio = v2
-    ? TIPOS_DEL_NEGOCIO.map((tipo) => ({ tipo, titulo: TITULO_DEL_NEGOCIO[tipo], lista: lista((g!.negocio?.[tipo] ?? []).filter((p) => !fuera(p.texto)), `negocio:${tipo}`) }))
+    ? TIPOS_DEL_NEGOCIO.map((tipo) => ({ tipo, titulo: TITULO_DEL_NEGOCIO[tipo], lista: lista((g!.negocio?.[tipo] ?? []).filter((p) => !fuera(p.texto)), `negocio:${tipo}`) })).filter(
+        (x) => o.conCitas || x.lista.piezas.length > 0 || !NACIDAS_EL_24_NOV.includes(x.tipo),
+      )
     : null;
   const recorrido = v2
     ? (g!.recorrido ?? [])
@@ -2719,7 +3174,7 @@ export function resumenParaLaPagina(
     /* Solo si hay: una página publicada antes del 18 nov no tiene estas claves, y con ellas vacías «Publicar» diría «Hay
        cambios que el cliente no ve» en todas las escalas sin que nada cambiara. Agregar un punto es solo de adentro. */
     ...(puntos.length ? { puntos } : {}),
-    ...(o.conCitas ? { puntoNuevo: v2 ? "punto:nuevo" : null, escalaCambio, avisos: conElAvisoDelRecorrido(sinAvisosResueltos(g), recorrido), malLeidas: g?.malLeidas ?? [] } : {}),
+    ...(o.conCitas ? { puntoNuevo: v2 ? "punto:nuevo" : null, escalaCambio, avisos: conElAvisoDelRecorrido(sinAvisosResueltos(g), recorrido), malLeidas: g?.malLeidas ?? [], ...(g?.leidasEnteras ? { leidasEnteras: true } : {}) } : {}),
   };
 }
 
@@ -2887,7 +3342,15 @@ export function editarElResumen(g: ResumenGuardado, clave: string, crudo: string
       const tipoDelNegocio = a as TipoDelNegocio;
       const yaHay = (g.negocio?.[tipoDelNegocio] ?? []).length;
       if (b === "nuevo" && texto && yaHay >= maxDelNegocio(tipoDelNegocio) && PARTES_ENTERAS.includes(tipoDelNegocio))
-        return { ok: false, error: tipoDelNegocio === "etiquetas" ? `Ya hay ${MAX_ETIQUETAS} etiquetas: cambia o quita una.` : "Ya hay una: cámbiala en su lugar." };
+        return {
+          ok: false,
+          error:
+            tipoDelNegocio === "etiquetas"
+              ? `Ya hay ${MAX_ETIQUETAS} etiquetas: cambia o quita una.`
+              : maxDelNegocio(tipoDelNegocio) > 1
+                ? `Ya hay ${maxDelNegocio(tipoDelNegocio)}: cambia o quita una.`
+                : "Ya hay una: cámbiala en su lugar.",
+        };
       const r = editarUnaLista(g.negocio?.[tipoDelNegocio] ?? [], b, texto, () => aMano("n"), "pieza", `negocio:${tipoDelNegocio}`);
       if (!r.ok) return r;
       return { ok: true, resumen: quitar({ ...g, negocio: { ...g.negocio, [tipoDelNegocio]: r.lista } }, r.quitadas) };
@@ -3039,9 +3502,12 @@ const mismaCifra = (a: { cifra: string; origen?: string; citas: readonly CitaDel
 /**
  * La tesis, las etiquetas y el tamaño (forma editorial) se rehacen o se quedan ENTEROS: si una persona cambió, agregó o
  * quitó alguna, quedan como los dejó (revisión del 15 nov: las tres etiquetas salen de la misma cita, así que juntarlas
- * pieza por pieza borraba las otras al rehacer). Para cambiarlas otra vez, se editan.
+ * pieza por pieza borraba las otras al rehacer). Para cambiarlas otra vez, se editan. Lo mismo el resumen de la portada y
+ * quién es quién (24 nov): se leen enteros, de arriba abajo.
  */
-const PARTES_ENTERAS: readonly TipoDelNegocio[] = ["tesis", "etiquetas", "tamano"];
+const PARTES_ENTERAS: readonly TipoDelNegocio[] = ["tesis", "etiquetas", "tamano", "portada", "quienes"];
+/** Las partes del negocio que nacieron el 24 nov: afuera, sin piezas, no van (`resumenParaLaPagina`). */
+const NACIDAS_EL_24_NOV: readonly TipoDelNegocio[] = ["portada", "quienes"];
 const laTocoUnaPersona = (g: ResumenGuardado, tipo: TipoDelNegocio) =>
   (g.negocio?.[tipo] ?? []).some((p) => p.mano) || (g.quitados ?? []).some((k) => k.startsWith(`negocio:${tipo}|`));
 
@@ -3329,6 +3795,22 @@ export async function escribirElResumen(
       }
     }
   }
+  /* Lo que ya se resolvió en la misma reunión no le llega al cliente (24 nov, Elías: «la extranet no tiene API» salió aunque
+     se acordó exportar a Excel). Una llamada chica, sin las transcripciones: cada problema con lo que se dijo después. Lo
+     que el modelo marca se verifica (la cita está después del problema, en su reunión); si falla, queda todo como estaba. */
+  if (!cortado) {
+    const piezas = piezasParaLoResuelto(e, ctx.reuniones);
+    if (piezas.length) {
+      try {
+        const r8 = await pedir(pedidoDeLoResuelto(piezas, ctx.reuniones));
+        usos.push(r8.usage);
+        const resueltas = leerLoResuelto(r8, piezas, ctx.reuniones, reglas.parse);
+        e = { ...e, ...sinLoResuelto(e, resueltas.map((x) => x.lugar)), descartados: [...e.descartados, ...resueltas.map((x) => x.motivo)] };
+      } catch {
+        e = { ...e, descartados: [...e.descartados, "la revisión de lo ya resuelto falló: quedó todo como estaba"] };
+      }
+    }
+  }
   // Las etapas sin el orden interno, y los avisos con el recorrido final.
   const recorrido = conLasEtapas(e.recorrido, []);
   // Lo que la auditoría marcaría NO llega a la página (12 nov): se quita antes de guardar.
@@ -3340,7 +3822,8 @@ export async function escribirElResumen(
     ...e,
     ...limpio.resumen,
     recorrido: limpio.resumen.recorrido,
-    puntos: limpio.resumen.puntos ?? [],
+    // Los 5 primeros en orden de peso, después de sacar lo resuelto (un candidato de más ocupa su lugar).
+    puntos: (limpio.resumen.puntos ?? []).slice(0, MAX_PUNTOS),
     descartados: [...e.descartados, ...limpio.quitados.map((q) => `antes de guardar, ${q.donde}: ${q.problema}`)],
     avisos: [...avisosDelRecorrido(limpio.resumen.recorrido, limpio.resumen.operativas, ctx), ...avisosDelPiso(limpio.resumen.operativas, ctx)],
     usos,
@@ -3364,6 +3847,24 @@ export function equiposSinEtapa(
 
 /** El grabador de la reunión aparece como un hablante más: no es de la empresa. */
 export const NO_ES_UNA_PERSONA = /notetaker|note taker|smarteam|gemini|fireflies|otter|read\.ai|tl;?dv/i;
+
+/**
+ * Si quien habla es alguien del equipo de Smarteam escrito de otra forma (revisión del 24 nov, dos vueltas): una sala de
+ * Meet con su nombre («Presentación de Marco Salas»: su nombre entero, palabra por palabra), o su nombre acortado
+ * («María Vargas» por «María José Vargas»: el mismo nombre de pila y el mismo último apellido, y nada que no esté en el
+ * suyo). Por palabras enteras: «Juliana Morales» no es «Ana Mora». `equipo`: los nombres del equipo (`nombresDelEquipo`).
+ * Un nombre de una sola palabra no cuenta: «Luis» puede ser de cualquiera.
+ */
+export function esDeSmarteamPorElNombre(nombre: string, equipo: readonly string[]): boolean {
+  const ps = paraComparar(nombre).split(" ").filter(Boolean);
+  return equipo.some((n) => {
+    const suyo = paraComparar(n).split(" ").filter(Boolean);
+    if (suyo.length < 2) return false;
+    const entero = ps.some((_, i) => suyo.every((w, k) => ps[i + k] === w));
+    const acortado = ps.length >= 2 && ps[0] === suyo[0] && ps[ps.length - 1] === suyo[suyo.length - 1] && ps.every((w) => suyo.includes(w));
+    return entero || acortado;
+  });
+}
 
 /**
  * ¿Quien habló es de OTRA empresa (ni del cliente ni de Smarteam)? Por los correos de los invitados: alguno de un dominio

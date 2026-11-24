@@ -188,6 +188,7 @@ async function main() {
     avisos: escrito.avisos,
     puntos: escrito.puntos,
     malLeidas: le.malLeidas,
+    leidasEnteras: true as const,
   };
   const entorno = { edicion: l.fila.edicion, perfilCierre: l.fila.perfilCierre, perfilDespues: l.fila.perfilDespues, escalaVersion: l.escala.version };
   const porExplorar = Object.fromEntries(l.deLasAreas.map((x) => [x.resultado.areaId, x.porExplorar]));
