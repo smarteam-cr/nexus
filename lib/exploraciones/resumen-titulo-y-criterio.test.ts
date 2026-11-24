@@ -14,11 +14,12 @@ import {
   citasDeSusNumeros,
   citasVerificadas,
   escribirElResumen,
-  genteSinLoDeMas,
   leerElArreglo,
   leerLasPiezas,
-  rotuloSinLaCola,
-  sinLoQueNoDicen,
+  formaDelLugar,
+  pedidoDeLasPiezas,
+  pedidoDelArreglo,
+  problemasDelCalculado,
   leerElResumen,
   leerLoResuelto,
   lineaDelMapa,
@@ -162,8 +163,7 @@ describe("Quién es quién: los nombres de la gente de la empresa, y nada más (
   });
 
   it("⛔ nunca un dolor pegado a una persona, y siempre de qué equipo es", () => {
-    // Desde la segunda vuelta del 24 nov se quita lo que sobra y queda la persona, salvo que lo quitado la niegue.
-    // Lo que se quita niega a la persona («que no registra»): la línea se cae entera (revisión de la segunda vuelta).
+    // Un dolor pegado a la persona no sale (desde la segunda vuelta del 24 nov, se pide corregido a la IA).
     expect(linea("Soporte: Emiley, que no registra los tickets").l).toBeNull();
     // Si no queda nadie, o el dolor está en el equipo, la línea se cae.
     expect(linea("Soporte: no registran los tickets").l).toBeNull();
@@ -472,9 +472,12 @@ describe("lo que encontró la segunda vuelta de la revisión del 24 nov", () => 
   it("⛔ quién es quién: nada más que quién está (ni «saturada», ni nombres antes de los dos puntos, ni un equipo de más de 40 letras)", () => {
     const cita = [C("R1", 10, "Yo soy Emiley, llevo onboarding y soporte con el equipo de casa matriz")];
     const linea = (texto: string) => lineaDelMapa({ texto, citas: cita }, CTX, REGLAS, []);
-    // Lo que califica a la persona se quita (segunda vuelta del 24 nov: «Lo justo es quitar la palabra que sobra, no la línea»).
-    for (const conDeMas of ["Soporte: Emiley, que está saturada", "Soporte: Emiley, sobrecargada", "Soporte: Emiley (solo ella atiende todo)"])
-      expect(linea(conDeMas)?.texto, conDeMas).toBe("Soporte: Emiley");
+    // Lo que califica a la persona no sale: se pide corregido a la IA (segunda vuelta del 24 nov).
+    for (const conDeMas of ["Soporte: Emiley, que está saturada", "Soporte: Emiley, sobrecargada", "Soporte: Emiley (solo ella atiende todo)"]) {
+      const pedidas: string[] = [];
+      expect(lineaDelMapa({ texto: conDeMas, citas: cita }, CTX, REGLAS, [], (x) => pedidas.push(x.texto)), conDeMas).toBeNull();
+      expect(pedidas, conDeMas).toEqual([conDeMas]);
+    }
     for (const mala of ["Lidera Eduardo Mora: Ventas", "Ventas Laura: asesores", "Implementación y comunicación con clientes de la casa: Emiley"]) expect(linea(mala), mala).toBeNull();
     for (const buena of ["Soporte y onboarding: Emiley y otras personas más", "Lidera: Fernando, gerente general", "Customer Success: Luis Humberto Rodríguez Acevedo"]) expect(linea(buena)?.texto, buena).toBe(buena);
   });
@@ -490,99 +493,122 @@ describe("lo que encontró la segunda vuelta de la revisión del 24 nov", () => 
   });
 });
 
-describe("⛔ antes de descartar, se repara (24 nov, segunda vuelta: la corrida real de Centauro)", () => {
-  // Luis habla entrecortado: tres intervenciones suyas con un «Mejoro.» y un «Okay.» de Marco en el medio.
+describe("⛔ antes de descartar, se busca la cita; lo que reescribe el texto lo hace la IA (24 nov, segunda vuelta)", () => {
+  // Luis habla entrecortado; Fernando y los cargos, como en Centauro.
   const RETENCION: ReunionParaElResumen = {
     id: "gmeet_retencion",
     clave: "R3",
     fecha: "2026-11-09T20:00:00.000Z",
     equipo: "Servicio",
     areaId: "3",
-    delCliente: ["Luis Humberto Rodríguez Acevedo", "Emiley Calvo Jiménez"],
+    delCliente: ["Luis Humberto Rodríguez Acevedo", "Emiley Calvo Jiménez", "Catalina Calvo"],
     deSmarteam: ["Marco Salas"],
     turnos: [
+      { n: 55, hablante: "Catalina Calvo", texto: "Nosotros este yo digamos lidero el equipo de comunicación y marketing y Vero se encarga del contenido." },
       { n: 75, hablante: "Luis Humberto Rodríguez Acevedo", texto: "Sí, ahí Fernando fue Fernando nuestro gerente general y lo disculpo porque no pudo estar hoy." },
+      { n: 76, hablante: "Luis Humberto Rodríguez Acevedo", texto: "Mi jefe es el gerente general y yo solo llevo Customer Success en la empresa." },
       { n: 113, hablante: "Marco Salas", texto: "Y esta jefatura le reporta directamente a dirección hoy día." },
-      { n: 266, hablante: "Marco Salas", texto: "unos 25 al mes. Okay. ¿Tienen algún ticket promedio actual?" },
       { n: 268, hablante: "Luis Humberto Rodríguez Acevedo", texto: "85 más o menos ese promedio." },
       { n: 300, hablante: "Luis Humberto Rodríguez Acevedo", texto: "se nos van unos 14 clientes al mes, más o menos, eso lo vemos en la extranet." },
       { n: 419, hablante: "Luis Humberto Rodríguez Acevedo", texto: "desde marzo estamos mejorando la retención. Entonces sí creo que ahorita estamos eh 70 30." },
-      { n: 420, hablante: "Marco Salas", texto: "Mejoro." },
+      { n: 420, hablante: "Marco Salas", texto: "¿Y eso cómo lo miden ustedes hoy?" },
       { n: 421, hablante: "Luis Humberto Rodríguez Acevedo", texto: "Sí, sí, sí, estamos mejor," },
-      { n: 422, hablante: "Marco Salas", texto: "Okay." },
+      { n: 422, hablante: "Marco Salas", texto: "¿Mejor en qué sentido exactamente?" },
       { n: 423, hablante: "Luis Humberto Rodríguez Acevedo", texto: "pero pero creo que estamos como un 70 30, o sea, un 70 reactivo y 30 proactivo," },
+      { n: 500, hablante: "Emiley Calvo Jiménez", texto: "en soporte todo es reactivo, no tenemos nada proactivo todavía en el equipo." },
     ],
   };
   const CON: ContextoDelResumen = { ...CTX, reuniones: [SOPORTE, EXTRANET, RETENCION] };
   const soporte = (cifras: unknown[]) => [{ nombre: "Soporte", area: "3", organizacion: [], bien: [], frena: [], retos: [], cifras, falta: null }];
+  const T40 = C("R1", 40, "los tickets nos llegan por WhatsApp y por correo y no quedan en ningún lado centralizados");
 
-  it("una cita de corrido que la transcripción partió en tres intervenciones de la misma persona", () => {
-    const de = citasVerificadas([C("R3", 423, "ahorita estamos eh 70 30. Sí, sí, sí, estamos mejor, pero pero creo que estamos como un 70")], CON.reuniones);
-    // Cada pedazo, tal como está en la transcripción (sin la coma del final de una intervención).
-    expect(de.map((c) => c.texto).join(" ").replace(/,/g, "")).toBe("ahorita estamos eh 70 30. Sí sí sí estamos mejor pero pero creo que estamos como un 70");
-    expect(de.length).toBeGreaterThanOrEqual(2);
-    // Un pedazo que nadie dijo no se cuela: la cita entera no pasa.
-    expect(citasVerificadas([C("R3", 423, "ahorita estamos eh 70 30. y vamos a llegar al 50 50 este mismo año")], CON.reuniones)).toEqual([]);
+  describe("una cita de corrido partida en intervenciones", () => {
+    const TROZADA = "ahorita estamos eh 70 30. Sí, sí, sí, estamos mejor, pero pero creo que estamos como un 70";
+    it("vale en hasta tres intervenciones de la misma persona, cada pedazo como su cita", () => {
+      const de = citasVerificadas([C("R3", 423, TROZADA)], CON.reuniones);
+      expect(de.map((c) => c.turno)).toEqual([419, 421, 423]);
+      expect(citasVerificadas([C("R3", 423, "ahorita estamos eh 70 30. y vamos a llegar al 50 50 este mismo año")], CON.reuniones)).toEqual([]);
+    });
+    it("⛔ no junta tres pedazos de personas distintas", () => {
+      const tres: ReunionParaElResumen = {
+        ...RETENCION,
+        turnos: RETENCION.turnos.map((t) => (t.n === 421 ? { ...t, hablante: "Emiley Calvo Jiménez" } : t)),
+      };
+      expect(citasVerificadas([C("R3", 423, TROZADA)], [tres])).toEqual([]);
+    });
+    it("⛔ el tope de tres guarda por lo menos un pedazo de cada cita del agente", () => {
+      const de = citasVerificadas([C("R3", 423, TROZADA), C("R3", 500, "en soporte todo es reactivo, no tenemos nada proactivo")], CON.reuniones);
+      expect(de).toHaveLength(3);
+      expect(de.map((c) => c.turno)).toContain(500);
+    });
   });
 
-  it("se quita la frase o el paréntesis con lo que la cita no dice, nunca un pedazo de frase", () => {
-    const sobra = (x: string) => /14/.test(x);
-    expect(sinLoQueNoDicen("Con 25 cierres y 14 bajas, el crecimiento es mínimo. Customer Success revisa la salud de cada cliente uno a uno.", sobra)).toBe(
-      "Customer Success revisa la salud de cada cliente uno a uno.",
-    );
-    expect(sinLoQueNoDicen("Soporte recibe casos por WhatsApp y correo (unos 14 al día) sin centralizarlos.", sobra)).toBe("Soporte recibe casos por WhatsApp y correo sin centralizarlos.");
-    expect(sinLoQueNoDicen("Se van 14 clientes al mes y nadie lo ve.", sobra)).toBeNull();
-    expect(sinLoQueNoDicen("Se van 14 al mes. Es mucho.", sobra)).toBeNull();
+  describe("los números", () => {
+    it("⛔ un número se cita de otra intervención solo si habla de lo mismo, en el mismo momento", () => {
+      const otra = (texto: string): ReunionParaElResumen => ({ ...EXTRANET, id: "gmeet_x", clave: "R9", turnos: [{ n: 1, hablante: "Luis Humberto Rodríguez Acevedo", texto }] });
+      const cita = citaVerificada(C("R2", 5, "la extranet no es para nada amigable con sincronizaciones"), CON.reuniones)!;
+      const rescata = (pieza: string, texto: string) => citasDeSusNumeros(pieza, [cita], [EXTRANET, otra(texto)]).length > 0;
+      expect(rescata("500 clientes activos", "tenemos 500 clientes activos en la plataforma hoy en día.")).toBe(true);
+      // Otro momento: un piloto, antes.
+      expect(rescata("500 clientes activos", "tuvimos 500 clientes en el piloto durante dos meses el año pasado.")).toBe(false);
+      // Lo que la pieza agrega dicho de OTRO número de la misma intervención.
+      expect(rescata("500 clientes activos", "tenemos 500 clientes, pero activos son unos 300 nada más ahora.")).toBe(false);
+      // Lo que la pieza agrega y la intervención no nombra es el rótulo del agente: vale.
+      expect(rescata("1.800 tickets de soporte al mes", "nos entran 1800 tickets al mes por todos los canales.")).toBe(true);
+      // Y en una respuesta que retoma («de esos 1800»), basta la cabeza de la unidad.
+      expect(citasDeSusNumeros("~1.800 tickets de soporte al mes", [citaVerificada(T40, CON.reuniones)!], CON.reuniones).map((c) => c.turno)).toEqual([42]);
+    });
+
+    it("⛔ los números chicos valen cerca de la cita del agente, no de la que se encontró para otro número", () => {
+      const conCinco: ReunionParaElResumen = { ...SOPORTE, turnos: [...SOPORTE.turnos, { n: 43, hablante: "Emiley Calvo Jiménez", texto: "y para todo eso somos 5 personas en soporte." }] };
+      const e = leerElResumen(
+        responde({
+          areas: soporte([]),
+          puntos: [{ titulo: "~1.800 tickets al mes", texto: "La extranet no se sincroniza y 5 personas atienden los tickets.", area: "3", citas: [C("R2", 5, "la extranet no es para nada amigable con sincronizaciones")] }],
+        }),
+        { ...CON, reuniones: [conCinco, EXTRANET, RETENCION] },
+        REGLAS,
+      );
+      expect(e.puntos).toEqual([]);
+      expect(e.descartados.join(" ")).toMatch(/números que no están en su cita \(5\)/);
+    });
+
+    it("⛔ un punto con un número sin cita no se recorta: se pide corregido con las citas que se encontraron", () => {
+      const e = leerElResumen(
+        responde({
+          areas: soporte([]),
+          puntos: [{ titulo: "~1.800 tickets al mes sin centralizar", texto: "Los tickets no quedan centralizados. Se pierden unos 2.500 al año.", area: "3", citas: [T40] }],
+        }),
+        CON,
+        REGLAS,
+      );
+      expect(e.puntos).toEqual([]);
+      expect(e.piezasPorArreglar.map((p) => [p.lugar, p.citas.map((c) => c.turno)])).toEqual([["puntos", [40, 42]]]);
+    });
+
+    it("⛔ una cifra declarada toma la cita de su número; lo demás (una nota que acota, un rótulo) lo corrige la IA", () => {
+      const cifra = (estado: string, nota: string | null, texto = "tickets al mes") =>
+        leerElResumen(responde({ areas: soporte([{ cifra: "~1.800", texto, estado, nota, dimension: null, citas: [T40] }]) }), CON, REGLAS);
+      // Sin nada de más, pasa con la cita del número primero.
+      expect(cifra("declarado", null).operativas[0].cifras.map((c) => c.citas.map((x) => x.turno))).toEqual([[42, 40]]);
+      // Con una nota que excluye algo, no se quita la nota: va a corregir, con la cita nueva.
+      const conNota = cifra("declarado", "Excluye los 300 que llegan por WhatsApp.");
+      expect(conNota.operativas[0]?.cifras ?? []).toEqual([]);
+      expect(conNota.porArreglar.map((p) => [p.nota, p.citas.map((c) => c.turno)])).toEqual([["Excluye los 300 que llegan por WhatsApp.", [42, 40]]]);
+      // Una estimada no toma la cita de otro dicho (la subía a «declarado»).
+      expect(cifra("estimado", null).porArreglar.map((p) => p.citas.map((c) => c.turno))).toEqual([[40]]);
+    });
   });
 
-  it("el rótulo de una cifra pierde la cola que trae el número de otro dicho, solo si entra por una palabra que la une", () => {
-    expect(rotuloSinLaCola("churn mensual sobre base de 500", (x) => /500/.test(x), { tasa: true })).toBe("churn mensual");
-    expect(rotuloSinLaCola("reuniones por semana (meta: 50)", (x) => /50/.test(x), { tasa: false })).toBe("reuniones por semana");
-    expect(rotuloSinLaCola("Se van 14 clientes frente a 25", (x) => /14|25/.test(x), { tasa: true })).toBeNull();
-  });
-
-  it("⛔ «~1.800 tickets al mes»: el número se cita de lo que dijo la empresa y la nota con números de más sale", () => {
-    const e = leerElResumen(
-      responde({
-        areas: soporte([
-          {
-            cifra: "~1.800",
-            texto: "tickets al mes (correo y WhatsApp)",
-            estado: "declarado",
-            nota: "De esos, unos 1.300 entran por correo.",
-            dimension: null,
-            citas: [C("R1", 40, "los tickets nos llegan por WhatsApp y por correo y no quedan en ningún lado centralizados")],
-          },
-        ]),
-      }),
-      CON,
-      REGLAS,
-    );
-    const [c] = e.operativas[0].cifras;
-    expect(c).toMatchObject({ cifra: "~1.800", texto: "tickets al mes (correo y WhatsApp)" });
-    expect(c.citas.map((x) => x.turno)).toEqual([42, 40]);
-    expect(c.nota ?? "").not.toContain("1.300");
-    expect(e.descartados.join(" ")).toMatch(/la nota trae números/);
-  });
-
-  it("⛔ el churn: «2,8 %» queda con su rótulo, sin la base que dijo otro", () => {
-    const e = leerElResumen(
-      responde({ areas: soporte([{ cifra: "2,8 %", texto: "churn mensual sobre base de 500", estado: "declarado", nota: null, dimension: null, citas: [C("R1", 60, "el churn lo tenemos en un 2,8% mensual más o menos")] }]) }),
-      CON,
-      REGLAS,
-    );
-    expect(e.operativas[0].cifras.map((c) => [c.cifra, c.texto])).toEqual([["2,8 %", "churn mensual"]]);
-  });
-
-  it("⛔ una cuenta con una moneda que nadie dijo queda sin moneda; con otra moneda dicha, no entra", () => {
-    const cuenta = (pregunta?: string) => {
-      const r = pregunta ? { ...RETENCION, turnos: RETENCION.turnos.map((t) => (t.n === 266 ? { ...t, texto: pregunta } : t)) } : RETENCION;
+  describe("una cuenta", () => {
+    const cuenta = (o: { texto?: string; pregunta?: string; rotulo14?: string } = {}) => {
+      const r = o.pregunta ? { ...RETENCION, turnos: [...RETENCION.turnos, { n: 267, hablante: "Marco Salas", texto: o.pregunta }] } : RETENCION;
       return calculadaConSusCitas(
         {
           estado: "calculado",
-          texto: "al mes en clientes que se van",
+          texto: o.texto ?? "al mes en clientes que se van",
           cuenta: [
-            { valor: "14", rotulo: "clientes que se van al mes", cita: C("R3", 300, "se nos van unos 14 clientes al mes, más o menos") },
+            { valor: "14", rotulo: o.rotulo14 ?? "clientes que se van al mes", cita: C("R3", 300, "se nos van unos 14 clientes al mes, más o menos") },
             { valor: "US$ 85", rotulo: "de cuota al mes", cita: C("R3", 268, "85 más o menos ese promedio.") },
           ],
         },
@@ -590,231 +616,113 @@ describe("⛔ antes de descartar, se repara (24 nov, segunda vuelta: la corrida 
         REGLAS,
       );
     };
-    const sin = cuenta();
-    expect(sin).toMatchObject({ ok: true, cifra: { cifra: "1.190", estado: "calculado" } });
-    if (sin.ok) expect(sin.cifra.cuenta?.factores.map((f) => f.valor)).toEqual(["14", "85"]);
-    // La moneda vale solo si la dice su cita, como en la página: dicha solo en la pregunta, se quita (revisión de la segunda vuelta).
-    expect(cuenta("¿Tienen algún ticket promedio actual en dólares?")).toMatchObject({ ok: true, cifra: { cifra: "1.190" } });
-    expect(cuenta("¿Tienen algún ticket promedio actual en colones?")).toMatchObject({ ok: false, motivo: expect.stringMatching(/moneda/) });
+    it("⛔ vale solo la moneda que dice su cita (la regla de la página): si no, se quita, también del texto; otra dicha, no entra", () => {
+      const sin = cuenta();
+      expect(sin).toMatchObject({ ok: true, cifra: { cifra: "1.190", estado: "calculado" } });
+      if (sin.ok) expect(sin.cifra.cuenta?.factores.map((f) => f.valor)).toEqual(["14", "85"]);
+      if (sin.ok) expect(problemasDelCalculado(sin.cifra)).toEqual([]);
+      expect(cuenta({ pregunta: "¿Tienen algún ticket promedio actual en dólares?" })).toMatchObject({ ok: true, cifra: { cifra: "1.190" } });
+      expect(cuenta({ pregunta: "¿Tienen algún ticket promedio actual en colones?" })).toMatchObject({ ok: false, motivo: expect.stringMatching(/moneda/) });
+      const conTexto = cuenta({ texto: "de pérdida mensual en dólares por clientes que se van" });
+      expect(conTexto).toMatchObject({ ok: true, cifra: { texto: "de pérdida mensual por clientes que se van" } });
+    });
+    it("⛔ un texto de pérdida pide números de lo que se pierde, y uno de ganancia no lleva números de pérdida", () => {
+      for (const texto of ["al mes en clientes que se van", "al mes que perdemos en clientes", "al mes en clientes que no renuevan", "al mes en clientes que se retiran"])
+        expect(cuenta({ texto, rotulo14: "cierres al mes" }), texto).toMatchObject({ ok: false, motivo: expect.stringMatching(/pérdida/) });
+      expect(cuenta({ texto: "al mes en ingresos que se pierden" })).toMatchObject({ ok: true });
+      expect(cuenta({ texto: "al mes en ventas nuevas" })).toMatchObject({ ok: false, motivo: expect.stringMatching(/ganancia/) });
+    });
   });
 
-  it("⛔ el texto de una cuenta que dice una pérdida pide un número de lo que se pierde: «25 cierres × 85» no es «clientes que se van»", () => {
-    const cuenta = (texto: string, rotulo: string) =>
-      calculadaConSusCitas(
-        {
-          estado: "calculado",
-          texto,
-          cuenta: [
-            { valor: "14", rotulo, cita: C("R3", 300, "se nos van unos 14 clientes al mes, más o menos") },
-            { valor: "85", rotulo: "ticket promedio", cita: C("R3", 268, "85 más o menos ese promedio.") },
-          ],
-        },
-        { reuniones: [RETENCION] },
+  describe("un punto clave y una cifra corregidos por la IA", () => {
+    it("⛔ el título de un punto clave se corrige junto con su texto; uno largo sin corregir no vuelve", () => {
+      const cita = citaVerificada(C("R1", 60, "el churn lo tenemos en un 2,8% mensual más o menos"), CON.reuniones)!;
+      const caido = { lugar: "puntos", indice: 0, texto: "El churn consume la mitad de lo que cierra Ventas.", citas: [cita], problema: "números que no están en su cita (mitad)", titulo: "El churn se come la mitad", areaId: "3" };
+      const r = leerLasPiezas(responde({ piezas: [{ i: 0, titulo: "Churn mensual del 2,8 %", texto: "El churn mensual ronda el 2,8 % y eso preocupa a Customer Success." }] }), [caido], CON, REGLAS);
+      expect(r.piezas.map((p) => [p.titulo, p.texto])).toEqual([["Churn mensual del 2,8 %", "El churn mensual ronda el 2,8 % y eso preocupa a Customer Success."]]);
+      expect(leerLasPiezas(responde({ piezas: [{ i: 0, texto: "El churn mensual ronda el 2,8 %." }] }), [caido], CON, REGLAS).piezas).toEqual([]);
+      const largo = { ...caido, titulo: "Un título de punto clave tan largo que pasa de los ochenta caracteres permitidos aquí" };
+      const sinCorregir = leerLasPiezas(responde({ piezas: [{ i: 0, texto: "El churn mensual ronda el 2,8 %." }] }), [largo], CON, REGLAS);
+      expect(sinCorregir.piezas).toEqual([]);
+      expect(sinCorregir.descartados.join(" ")).toMatch(/título/);
+    });
+
+    it("⛔ una cifra corregida que cambia diez veces de magnitud no es la misma (el «~15» de una transcripción cortada)", () => {
+      expect(cambiaDeMagnitud("~1.400–1.500", "~15")).toBe(true);
+      expect(cambiaDeMagnitud("120–150", "~15")).toBe(true);
+      expect(cambiaDeMagnitud("~180 de 200", "~18 de 200")).toBe(true);
+      expect(cambiaDeMagnitud("~23 mil", "~23.000")).toBe(false);
+      expect(cambiaDeMagnitud("US$ 1,2 millones", "US$ 1.200.000")).toBe(false);
+      expect(cambiaDeMagnitud("₡ 12 M", "12.000.000")).toBe(false);
+      expect(cambiaDeMagnitud("1.800", "1.008")).toBe(false);
+      expect(cambiaDeMagnitud("2,8 %", "28")).toBe(false);
+      const cita = citaVerificada(T40, CON.reuniones)!;
+      const r = leerElArreglo(
+        responde({ cifras: [{ i: 0, cifra: "~15", texto: "tickets al mes", nota: null }] }),
+        [{ operativa: "o1", cifra: "~1.400–1.500", texto: "tickets al mes", estado: "declarado", nota: null, dimensionId: null, citas: [{ ...cita, texto: "y no quedan en ningún lado, unos 15 por día" }], sobran: ["1400·"] }],
         REGLAS,
       );
-    expect(cuenta("al mes en clientes que se van", "clientes que se van al mes")).toMatchObject({ ok: true });
-    expect(cuenta("al mes en clientes que se van", "cierres al mes")).toMatchObject({ ok: false, motivo: expect.stringMatching(/pérdida/) });
-    // Una pérdida dicha con otras palabras que sus factores también vale («ingresos que se pierden» con «clientes que se van»).
-    expect(cuenta("al mes en ingresos que se pierden", "clientes que se van al mes")).toMatchObject({ ok: true });
-  });
-
-  it("⛔ el título de un punto clave se corrige junto con su texto; uno largo sin corregir no vuelve", () => {
-    const cita = citaVerificada(C("R1", 60, "el churn lo tenemos en un 2,8% mensual más o menos"), CON.reuniones)!;
-    const caido = { lugar: "puntos", indice: 0, texto: "El churn consume la mitad de lo que cierra Ventas.", citas: [cita], problema: "números que no están en su cita (mitad)", titulo: "El churn se come la mitad", areaId: "3" };
-    const r = leerLasPiezas(responde({ piezas: [{ i: 0, titulo: "Churn mensual del 2,8 %", texto: "El churn mensual ronda el 2,8 % y eso preocupa a Customer Success." }] }), [caido], CON, REGLAS);
-    expect(r.piezas.map((p) => [p.titulo, p.texto])).toEqual([["Churn mensual del 2,8 %", "El churn mensual ronda el 2,8 % y eso preocupa a Customer Success."]]);
-    // Sin título nuevo, el de antes se vuelve a medir con el texto: con su «mitad», no pasa.
-    expect(leerLasPiezas(responde({ piezas: [{ i: 0, texto: "El churn mensual ronda el 2,8 %." }] }), [caido], CON, REGLAS).piezas).toEqual([]);
-    const largo = { ...caido, titulo: "Un título de punto clave tan largo que pasa de los ochenta caracteres permitidos aquí" };
-    const sinCorregir = leerLasPiezas(responde({ piezas: [{ i: 0, texto: "El churn mensual ronda el 2,8 %." }] }), [largo], CON, REGLAS);
-    expect(sinCorregir.piezas).toEqual([]);
-    expect(sinCorregir.descartados.join(" ")).toMatch(/título/);
-  });
-
-  it("⛔ una cifra corregida que cambia de magnitud no es la misma («~1.400–1.500» → «~15» por una transcripción cortada)", () => {
-    expect(cambiaDeMagnitud("~1.400–1.500", "~15")).toBe(true);
-    expect(cambiaDeMagnitud("1.800", "1.008")).toBe(false);
-    expect(cambiaDeMagnitud("2,8 %", "28")).toBe(false);
-  });
-
-  it("⛔ «Quién es quién»: se quita la palabra que sobra y se busca la presentación de quien lidera", () => {
-    const linea = (texto: string, citas: unknown[]) => lineaDelMapa({ texto, citas }, CON, REGLAS, []);
-    const deLuis = [C("R1", 60, "el churn lo tenemos en un 2,8% mensual más o menos")];
-    expect(linea("Customer Success: Luis Humberto Rodríguez Acevedo, único en el área", deLuis)?.texto).toBe("Customer Success: Luis Humberto Rodríguez Acevedo");
-    // La cita era de Marco: se busca dónde la empresa dice quién es Fernando.
-    const lidera = linea("Lidera: Fernando Segura, gerente general y quien toma las decisiones", [C("R3", 113, "esta jefatura le reporta directamente a dirección hoy día")]);
-    expect(lidera?.texto).toBe("Lidera: Fernando Segura, gerente general");
-    expect(lidera?.citas.map((c) => [c.turno, c.hablante])).toEqual([[75, "Luis Humberto Rodríguez Acevedo"]]);
-    // Sin nada de la empresa que lo diga, no hay cita y la línea no pasa.
-    expect(linea("Lidera: Catalina, directora de marketing", [C("R3", 113, "esta jefatura le reporta directamente a dirección hoy día")])).toBeNull();
-    expect(genteSinLoDeMas("Luis Humberto Rodríguez Acevedo, único en el área", (w) => w === "unico")).toBe("Luis Humberto Rodríguez Acevedo");
-    expect(genteSinLoDeMas("Emiley (supervisora que atiende todo)", (w) => w === "que")).toBe("Emiley (supervisora)");
-  });
-
-  it("⛔ un punto pierde la frase del número que nadie dijo y se queda con la que sí, con la cita del número", () => {
-    const e = leerElResumen(
-      responde({
-        areas: soporte([]),
-        puntos: [
-          {
-            titulo: "~1.800 tickets al mes sin centralizar",
-            texto: "Los tickets llegan por WhatsApp y por correo y no quedan centralizados. Se pierden unos 2.500 al año.",
-            area: "3",
-            citas: [C("R1", 40, "los tickets nos llegan por WhatsApp y por correo y no quedan en ningún lado centralizados")],
-          },
-        ],
-      }),
-      CON,
-      REGLAS,
-    );
-    expect(e.puntos.map((p) => [p.titulo, p.texto])).toEqual([["~1.800 tickets al mes sin centralizar", "Los tickets llegan por WhatsApp y por correo y no quedan centralizados."]]);
-    expect(e.puntos[0].citas.map((c) => c.turno)).toEqual([40, 42]);
-  });
-});
-
-describe("⛔ lo que encontró la revisión de la segunda vuelta (24 nov): una reparación no cambia lo que dijo la empresa", () => {
-  const PERSONAS: ReunionParaElResumen = {
-    id: "gmeet_personas",
-    clave: "R5",
-    fecha: "2026-11-12T20:00:00.000Z",
-    equipo: null,
-    delCliente: ["Emiley Calvo Jiménez", "Luis Humberto Rodríguez Acevedo", "Fernando Segura"],
-    deSmarteam: ["Marco Salas"],
-    turnos: [
-      { n: 1, hablante: "Emiley Calvo Jiménez", texto: "La verdad no estoy segura, creo que eso lo decide el gerente general cuando vuelve de viaje." },
-      { n: 2, hablante: "Luis Humberto Rodríguez Acevedo", texto: "Mi jefe es el gerente general y yo solo llevo Customer Success en la empresa." },
-      { n: 3, hablante: "Emiley Calvo Jiménez", texto: "Fernando no está en ventas, él ve toda la operación desde arriba." },
-      { n: 4, hablante: "Luis Humberto Rodríguez Acevedo", texto: "tuvimos 500 clientes en el piloto durante dos meses el año pasado." },
-    ],
-  };
-  const CON: ContextoDelResumen = { ...CTX, reuniones: [SOPORTE, EXTRANET, PERSONAS] };
-  const deMarco = [C("R2", 30, "Lo que podemos hacer es exportar un Excel diario desde la extranet")];
-  const linea = (texto: string, citas: unknown[] = deMarco) => lineaDelMapa({ texto, citas }, CON, REGLAS, []);
-
-  it("«Quién es quién» no toma un apellido que es una palabra, ni el «mi» de quien habla, ni una negación", () => {
-    // «no estoy segura» no es Segura; «Mi jefe es el gerente general» no dice que Luis lo sea; «Fernando no está en ventas».
-    expect(linea("Lidera: Fernando Segura, gerente general")).toBeNull();
-    expect(linea("Lidera: Luis Humberto, gerente general")).toBeNull();
-    expect(linea("Ventas: Fernando")).toBeNull();
-    // Un nombre de pila que también es una palabra cuenta solo escrito como nombre: «el logo rosa» no es Rosa.
-    const conRosa = (texto: string): ContextoDelResumen => ({
-      ...CON,
-      gente: [...(CON.gente ?? []), "Rosa Mora"],
-      reuniones: [{ ...PERSONAS, id: "gmeet_rosa", clave: "R8", delCliente: [...PERSONAS.delCliente, "Rosa Mora"], turnos: [{ n: 1, hablante: "Emiley Calvo Jiménez", texto }] }],
+      expect(r.cifras).toEqual([]);
+      expect(r.descartados.join(" ")).toMatch(/cambia la magnitud/);
     });
-    const deRosa = (texto: string) => lineaDelMapa({ texto: "Lidera: Rosa Mora, gerente general", citas: deMarco }, conRosa(texto), REGLAS, []);
-    expect(deRosa("el logo rosa lo eligió el gerente general la semana pasada")).toBeNull();
-    expect(deRosa("Rosa es nuestra gerente general desde hace tres años")?.texto).toBe("Lidera: Rosa Mora, gerente general");
-    // Quien se presenta sí cuenta, con el rol o el equipo después del verbo (Catalina, 11 nov).
-    const conCatalina: ContextoDelResumen = {
+
+    it("los dos arreglos le piden a la IA conservar una excepción o un límite sin su número", () => {
+      expect(pedidoDeLasPiezas([]).system).toContain("conserva la excepción o el límite sin el número");
+      expect(pedidoDelArreglo([]).system).toContain("conserva eso sin el número que la cita no dice");
+    });
+  });
+
+  describe("⛔ «Quién es quién»", () => {
+    const deMarco = [C("R3", 113, "esta jefatura le reporta directamente a dirección hoy día")];
+    const linea = (texto: string, ctx: ContextoDelResumen = CON, citas: unknown[] = deMarco) => lineaDelMapa({ texto, citas }, ctx, REGLAS, []);
+    const con = (...turnos: { hablante: string; texto: string }[]): ContextoDelResumen => ({
       ...CON,
-      reuniones: [{ ...PERSONAS, id: "gmeet_cata", clave: "R9", delCliente: ["Catalina Calvo"], turnos: [{ n: 55, hablante: "Catalina Calvo", texto: "Nosotros este yo digamos lidero el equipo de comunicación y marketing y Vero se encarga del contenido." }] }],
-    };
-    expect(lineaDelMapa({ texto: "Marketing: Catalina", citas: deMarco }, conCatalina, REGLAS, [])?.citas.map((c) => c.turno)).toEqual([55]);
-    // «Mi jefe es el gerente general y yo solo llevo Customer Success»: Luis lleva Customer Success, no es el gerente general.
-    expect(lineaDelMapa({ texto: "Customer Success: Luis Humberto", citas: deMarco }, CON, REGLAS, [])?.citas.map((c) => c.turno)).toEqual([2]);
-  });
+      gente: [...(CON.gente ?? []), "Rosa Mora", "Carolina Vicente", "Vicente Mora"],
+      reuniones: [{ ...RETENCION, id: "gmeet_q", clave: "R8", delCliente: [...RETENCION.delCliente, "Fernando Segura", "Rosa Mora", "Carolina Vicente", "Vicente Mora"], turnos: turnos.map((t, i) => ({ n: i + 1, ...t })) }],
+    });
+    const EMI = "Emiley Calvo Jiménez";
 
-  it("«Quién es quién» se cae entera si lo que sobra niega o pone en pasado a alguien", () => {
-    const deLuis = [C("R1", 60, "el churn lo tenemos en un 2,8% mensual más o menos")];
-    for (const mala of ["Ventas: Emiley, ya no trabaja aquí; hoy la jefatura es de Luis", "Lidera: Fernando Segura, ex gerente general", "Ventas: Emiley (ya no está), Luis", "Soporte: Emiley, que no registra los tickets"])
-      expect(linea(mala, deLuis), mala).toBeNull();
-    expect(genteSinLoDeMas("Emiley (ya no está), Luis", (w) => ["ya", "no", "esta"].includes(w))).toBeNull();
-  });
+    it("sin cita, se busca dónde la empresa dice quién es: el nombre pegado a su rol, o la persona que se presenta", () => {
+      const lidera = linea("Lidera: Fernando Segura, gerente general");
+      expect(lidera?.citas.map((c) => [c.turno, c.hablante])).toEqual([[75, "Luis Humberto Rodríguez Acevedo"]]);
+      expect(linea("Marketing: Catalina")?.citas.map((c) => c.turno)).toEqual([55]);
+      expect(linea("Customer Success: Luis Humberto")?.citas.map((c) => c.turno)).toEqual([76]);
+      expect(linea("Lidera: Rosa Mora, gerente general", con({ hablante: EMI, texto: "Rosa es nuestra gerente general desde hace tres años" }))?.texto).toBe("Lidera: Rosa Mora, gerente general");
+    });
 
-  it("un número se cita de otra intervención solo si habla de lo mismo, con toda su unidad", () => {
-    const cita = citaVerificada(C("R2", 5, "la extranet no es para nada amigable con sincronizaciones"), CON.reuniones)!;
-    // «500 clientes en el piloto» no sostiene «500 clientes activos».
-    expect(citasDeSusNumeros("~500 clientes activos hoy", [cita], CON.reuniones)).toEqual([]);
-    // Una cifra que el agente dio como estimada no toma la cita de otro dicho (subía a «declarado»).
-    const e = leerElResumen(
-      responde({ areas: [{ nombre: "Soporte", area: "3", organizacion: [], bien: [], frena: [], retos: [], cifras: [{ cifra: "~1.800", texto: "tickets al mes", estado: "estimado", nota: null, dimension: null, citas: [C("R1", 40, "los tickets nos llegan por WhatsApp y por correo y no quedan en ningún lado centralizados")] }], falta: null }] }),
-      CON,
-      REGLAS,
-    );
-    expect(e.operativas[0]?.cifras ?? []).toEqual([]);
-  });
+    it("⛔ nunca el cargo de otra persona, uno en pasado o negado, un apellido que es una palabra ni el nombre de pila de otro", () => {
+      const casos: [string, { hablante: string; texto: string }][] = [
+        ["Lidera: Fernando Segura, gerente general", { hablante: EMI, texto: "La verdad no estoy segura, creo que eso lo decide el gerente general cuando vuelve." }],
+        ["Lidera: Emiley, gerente general", { hablante: EMI, texto: "Yo soy la asistente del gerente general desde hace dos años." }],
+        ["Lidera: Emiley, gerente general", { hablante: EMI, texto: "Eso yo tengo que preguntárselo al gerente general mañana." }],
+        ["Dirección: Emiley, director", { hablante: EMI, texto: "yo llevo dos años con el director de la región." }],
+        ["Lidera: Fernando Segura, gerente general", { hablante: EMI, texto: "Fernando era el gerente general, ahora está otra persona en ese cargo." }],
+        ["Dirección: Fernando Segura, director", { hablante: EMI, texto: "Fernando le reporta todo al director de la región cada semana." }],
+        ["Ventas: Fernando", { hablante: EMI, texto: "Fernando no está en ventas, él ve toda la operación desde arriba." }],
+        ["Lidera: Rosa Mora, gerente general", { hablante: EMI, texto: "el logo rosa lo eligió el gerente general la semana pasada" }],
+        ["Lidera: Rosa Mora, gerente general", { hablante: EMI, texto: "la camisa rosa, nuestra gerente general la eligió para el evento" }],
+        ["Lidera: Fernando Segura, gerente general", { hablante: EMI, texto: "Fernando, nuestro gerente general, ya no trabaja aquí desde marzo." }],
+        ["Lidera: Carolina Vicente, gerente general", { hablante: EMI, texto: "Vicente es nuestro gerente general desde hace un año." }],
+        ["Marketing: Vicente", { hablante: "Carolina Vicente", texto: "yo llevo marketing desde que entré a la empresa." }],
+        ["Marketing: Catalina", { hablante: "Catalina Calvo", texto: "yo no lidero marketing, eso lo ve otra persona." }],
+      ];
+      for (const [texto, turno] of casos) expect(linea(texto, con(turno)), `${texto} ← ${turno.texto}`).toBeNull();
+    });
 
-  it("no se quita una excepción, una frase con un «eso» que remite a la quitada, ni se parte en una abreviatura", () => {
-    const sobra = (x: string) => /300|1\.800/.test(x);
-    expect(sinLoQueNoDicen("Soporte registra todos los tickets en la extranet (salvo los 300 que llegan por WhatsApp).", sobra)).toBeNull();
-    expect(sinLoQueNoDicen("Soporte debe responder en un día los 1.800 tickets del mes. Eso no se cumple en la práctica hoy.", sobra)).toBeNull();
-    expect(sinLoQueNoDicen("Reciben aprox. 1.800 tickets al mes por correo. Soporte los atiende sin un sistema que los centralice.", sobra)).toBe(
-      "Soporte los atiende sin un sistema que los centralice.",
-    );
-  });
-
-  it("el rótulo de una cifra no pierde lo que la acota ni queda colgando; una tasa sí pierde su base", () => {
-    const sobra = (x: string) => /300|500|\b2\b|\b5\b|40|50/.test(x);
-    expect(rotuloSinLaCola("tickets al mes, sin contar los 300 de WhatsApp", sobra, { tasa: false })).toBeNull();
-    expect(rotuloSinLaCola("tickets al mes en 2 de las 5 sucursales", sobra, { tasa: false })).toBeNull();
-    expect(rotuloSinLaCola("clientes nuevos al mes, menos que los 40 del año pasado", sobra, { tasa: true })).toBeNull();
-    expect(rotuloSinLaCola("reuniones por semana (meta: 50)", sobra, { tasa: false })).toBe("reuniones por semana");
-    expect(rotuloSinLaCola("churn mensual sobre base de 500", sobra, { tasa: true })).toBe("churn mensual");
-    expect(rotuloSinLaCola("churn mensual sobre base de 500", sobra, { tasa: false })).toBeNull();
-  });
-
-  it("una cuenta sin moneda tampoco la trae en su texto", () => {
-    const RET: ReunionParaElResumen = {
-      ...PERSONAS,
-      id: "gmeet_ret",
-      clave: "R6",
-      turnos: [
-        { n: 1, hablante: "Luis Humberto Rodríguez Acevedo", texto: "se nos van unos 14 clientes al mes, más o menos, eso lo vemos en la extranet." },
-        { n: 2, hablante: "Marco Salas", texto: "¿Tienen algún ticket promedio actual?" },
-        { n: 3, hablante: "Luis Humberto Rodríguez Acevedo", texto: "85 más o menos ese promedio." },
-      ],
-    };
-    const k = calculadaConSusCitas(
-      {
-        estado: "calculado",
-        texto: "dólares al mes en clientes que se van",
-        cuenta: [
-          { valor: "14", rotulo: "clientes que se van al mes", cita: C("R6", 1, "se nos van unos 14 clientes al mes, más o menos") },
-          { valor: "US$ 85", rotulo: "de cuota al mes", cita: C("R6", 3, "85 más o menos ese promedio.") },
-        ],
-      },
-      { reuniones: [RET] },
-      REGLAS,
-    );
-    expect(k).toMatchObject({ ok: true, cifra: { cifra: "1.190" } });
-    if (k.ok) expect(k.cifra.texto.toLowerCase()).not.toContain("dólar");
-  });
-
-  it("el freno de magnitud lee rangos, «mil» y «millones», y frena el arreglo que devuelve el número cortado", () => {
-    expect(cambiaDeMagnitud("120–150", "~15")).toBe(true);
-    expect(cambiaDeMagnitud("~23 mil", "~23.000")).toBe(false);
-    expect(cambiaDeMagnitud("US$ 1,2 millones", "US$ 1.200.000")).toBe(false);
-    expect(cambiaDeMagnitud("₡ 12 M", "12.000.000")).toBe(false);
-    const cita = citaVerificada(C("R1", 40, "los tickets nos llegan por WhatsApp y por correo y no quedan en ningún lado centralizados"), CON.reuniones)!;
-    const r = leerElArreglo(
-      responde({ cifras: [{ i: 0, cifra: "~15", texto: "tickets al mes", nota: null }] }),
-      [{ operativa: "o1", cifra: "~1.400–1.500", texto: "tickets al mes", estado: "declarado", nota: null, dimensionId: null, citas: [{ ...cita, texto: "y no quedan en ningún lado, unos 15 por día" }], sobran: ["1400·"] }],
-      REGLAS,
-    );
-    expect(r.cifras).toEqual([]);
-    expect(r.descartados.join(" ")).toMatch(/cambia la magnitud/);
-  });
-
-  it("el tope de tres citas guarda por lo menos un pedazo de cada cita del agente", () => {
-    const RETENCION: ReunionParaElResumen = {
-      ...PERSONAS,
-      id: "gmeet_retencion2",
-      clave: "R7",
-      turnos: [
-        { n: 419, hablante: "Luis Humberto Rodríguez Acevedo", texto: "desde marzo estamos mejorando la retención. Entonces sí creo que ahorita estamos eh 70 30." },
-        { n: 420, hablante: "Marco Salas", texto: "Mejoro." },
-        { n: 421, hablante: "Luis Humberto Rodríguez Acevedo", texto: "Sí, sí, sí, estamos mejor," },
-        { n: 422, hablante: "Marco Salas", texto: "Okay." },
-        { n: 423, hablante: "Luis Humberto Rodríguez Acevedo", texto: "pero pero creo que estamos como un 70 30, o sea, un 70 reactivo y 30 proactivo," },
-        { n: 500, hablante: "Emiley Calvo Jiménez", texto: "en soporte todo es reactivo, no tenemos nada proactivo todavía en el equipo." },
-      ],
-    };
-    const de = citasVerificadas(
-      [C("R7", 423, "ahorita estamos eh 70 30. Sí, sí, sí, estamos mejor, pero pero creo que estamos como un 70"), C("R7", 500, "en soporte todo es reactivo, no tenemos nada proactivo")],
-      [RETENCION],
-    );
-    expect(de).toHaveLength(3);
-    expect(de.map((c) => c.turno)).toContain(500);
+    it("lo que sobra con la gente no se recorta: se pide corregido, y lo corregido pasa la misma vara", () => {
+      const deLuis = [C("R1", 60, "el churn lo tenemos en un 2,8% mensual más o menos")];
+      for (const conDeMas of ["Customer Success: Luis Humberto Rodríguez Acevedo, único en el área", "Soporte: Emiley, que se fue en marzo", "Soporte: Emiley (era la jefa)"]) {
+        const pedidas: string[] = [];
+        expect(lineaDelMapa({ texto: conDeMas, citas: deLuis }, CON, REGLAS, [], (x) => pedidas.push(x.texto)), conDeMas).toBeNull();
+        expect(pedidas, conDeMas).toEqual([conDeMas]);
+      }
+      const cita = citaVerificada(C("R1", 60, "el churn lo tenemos en un 2,8% mensual más o menos"), CON.reuniones)!;
+      const caida = { lugar: "negocio:quienes", texto: "Customer Success: Luis Humberto Rodríguez Acevedo, único en el área", citas: [cita], problema: "dice algo más que quién está («unico»)" };
+      expect(leerLasPiezas(responde({ piezas: [{ i: 0, texto: "Customer Success: Luis Humberto Rodríguez Acevedo" }] }), [caida], CON, REGLAS).piezas.map((p) => p.texto)).toEqual([
+        "Customer Success: Luis Humberto Rodríguez Acevedo",
+      ]);
+      expect(leerLasPiezas(responde({ piezas: [{ i: 0, texto: "Customer Success: Luis, que lo atiende todo" }] }), [caida], CON, REGLAS).piezas).toEqual([]);
+      expect(formaDelLugar({ lugar: "negocio:quienes" })).toContain("AQUÍ SÍ van los nombres");
+    });
   });
 });
