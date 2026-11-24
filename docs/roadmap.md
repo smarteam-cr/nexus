@@ -118,7 +118,7 @@
    ],
    "sigue": [
     "Revisar con Marco el Resumen de Centauro y confirmar sus cifras.",
-    "Servicio al cliente como un área con dos equipos.",
+    "Servicio con dos equipos, cada uno con su nivel.",
     "Probar la escala con 5 a 8 empresas de tres industrias."
    ],
    "teToca": "Revisar con Marco el borrador de Centauro y arrancar la tarea de Servicio con dos equipos.",
@@ -1956,8 +1956,8 @@
   },
   {
    "iniciativa": "escala",
-   "titulo": "Servicio al cliente como un área con dos equipos",
-   "que": "Customer Success y Soporte quedan como dos equipos de un área, Servicio al cliente. La tarea ya está propuesta y espera que la arranques.",
+   "titulo": "Servicio con dos equipos, cada uno con su nivel",
+   "que": "Servicio al cliente sigue siendo un área, pero Soporte y Customer Success tienen cada uno su nivel en el radar. El Resumen ya los separa; la tarea está propuesta y espera que la arranques.",
    "paraQuien": "Ventas y Customer Success",
    "estado": "te-toca",
    "tema": 5,
@@ -2505,7 +2505,7 @@
      "texto": "La escala única, arreglada: una cuenta medida solo en un proyecto ya se ve medida."
     }
    ],
-   "sigue": "Revisar con Marco el Resumen de Centauro y confirmar sus cifras; Servicio al cliente como un área con dos equipos. Después, probar con 5 a 8 empresas de 3 industrias.",
+   "sigue": "Revisar con Marco el Resumen de Centauro y confirmar sus cifras; Servicio con dos equipos, cada uno con su nivel. Después, probar con 5 a 8 empresas de 3 industrias.",
    "teToca": "Crear «Telecomunicaciones» en «Industria (Smarteam)» de HubSpot. Después, las 52 decisiones provisionales de la 9.0.",
    "decisiones": [
     8,
