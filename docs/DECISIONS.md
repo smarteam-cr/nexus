@@ -14711,8 +14711,9 @@ error»); para un prospecto, esa regla sigue igual.
     «áreas con las que trabajamos» en vez de «áreas exploradas» (`LoQueHicimos.deTrabajo`, la marca `SesionHecha.deTrabajo`
     en lo guardado). Sin reuniones de trabajo, todo sigue igual («sesiones de exploración»). Si después de armar el Resumen
     cambia la clase de una reunión, la línea de arriba pide rehacerlo (`marcasQueCambiaron`): publicarlo así diría la
-    cuenta de antes. *Lo que queda igual, a propósito:* el título «Diagnóstico de … en HubSpot» nombra los equipos con
-    reuniones (el entregable es un diagnóstico, aunque salga de reuniones de trabajo).
+    cuenta de antes. **Una escala ya publicada no cambia sola** (Elías, 24 nov): la foto publicada guarda «Lo que hicimos»
+    ya armado (`AccesoALaEscala.publicada`, escala-publicada.ts) y una foto de antes no trae `deTrabajo`, así que se dibuja
+    igual que siempre; lo de D4 llega al cliente solo cuando alguien vuelve a apretar «Publicar».
 - **Al sumar sesiones de diagnóstico se mejora sin perder nada**: «Ubicar» de nuevo nunca pisa lo confirmado
   (`fusionarPropuestas`); entre las reuniones que lee «Ubicar» y el Resumen, las sesiones de diagnóstico van primero aunque
   haya capacitaciones más nuevas (`reunionesParaUbicar` con `deTrabajo`), y la línea de arriba usa el mismo orden: una

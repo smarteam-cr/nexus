@@ -10,6 +10,7 @@ import { rotuloDeLasReunionesDeTrabajo } from "@/lib/external/pagina-del-resumen
 import { pedidoDePosicionar, reglaDeLoQueYaSabemos, REUNION_DE_TRABAJO, type ContextoDelPedido } from "./agente-pedido";
 import { ESCALA_DE_PRUEBA, estadoDePrueba } from "./escala-de-prueba.test-helpers";
 import { clavesDeTrabajo, type PestanaDeSesion, type ReunionDeLaExploracion, type SesionPlaneada } from "./guia";
+import { FORMATO_DE_LA_FOTO, paginaDeLaFoto } from "./escala-publicada";
 import { lineaDeLaEscala, marcasQueCambiaron } from "./linea-de-la-escala";
 import {
   bloqueDelPeso,
@@ -326,5 +327,18 @@ describe("lo que cazó la revisión del 24 nov", () => {
     const texto = String((pedidoDelResumen({ empresa: "TEC · AE", areas: [], reuniones: [r], instrucciones: "" }).messages[0] as { content: string }).content);
     expect(texto).toContain("Las reuniones con la empresa (cada línea");
     expect(texto).not.toContain("Las reuniones de diagnóstico (cada línea");
+  });
+});
+
+describe("una escala ya publicada no cambia sola con el deploy (Elías, 24 nov)", () => {
+  it("la foto guarda «Lo que hicimos» armado: una de antes no trae la marca y se dibuja como siempre", () => {
+    const vieja = { formato: FORMATO_DE_LA_FOTO, pagina: { empresa: "TEC · AE", areas: [], resultados: [], resumen: { hicimos: { sesiones: 4, minutos: 240, sinDuracion: 0, equipos: [], personas: 3, texto: "Nos dedicaste 4 h en 4 sesiones.", mano: false, areas: [] } } } };
+    const pagina = paginaDeLaFoto(vieja);
+    const h = (pagina?.resumen as { hicimos?: { deTrabajo?: number; texto: string } } | undefined)?.hicimos;
+    expect(h?.deTrabajo).toBeUndefined();
+    expect(h?.texto).toBe("Nos dedicaste 4 h en 4 sesiones.");
+    // La vista solo cambia con la marca: sin ella, la cifra y el rótulo de siempre.
+    const vista = fs.readFileSync(path.join(process.cwd(), "components", "external", "test", "ResumenDeLaEscalaVista.tsx"), "utf8").replace(/\r\n/g, "\n");
+    expect(vista).toMatch(/\{h\.deTrabajo \? \([\s\S]{0,700}\) : \(\s*<div>\s*<b>\{fijo\("hicimos\.sesiones", String\(h\.sesiones\)/);
   });
 });
