@@ -20,16 +20,33 @@ const LISTO = {
   hechos: [{ tipo: "cuenta", frase: "La empresa pierde plata por su cartera vencida", cita: "pierden unos 40 mil dólares al mes en cartera vencida" }],
 };
 let siguiente: unknown = LISTO;
+/** La mano de la cuenta (24 nov, una sola conversación): la tarea (o las tareas) que propone, o nada (solo contesta). */
+let tareaQuePropone: string | string[] | null = "Llamar a Ana";
+/** Con esto, la mano de la cuenta pide una nota de la cuenta (que en la preventa no se ofrece) en vez de una tarea. */
+let pideUnaNota = false;
+/** El contexto de cada llamada medida (a quién se carga el gasto). */
+const contextos: Array<{ agentSlug?: string; origen?: string; triggeredByEmail?: string; agentRunId?: string | null }> = [];
+/** Lo que la mano de la cuenta recibió en cada llamada: sus mensajes y sus herramientas. */
+const pedidosALaCuenta: Array<{ mensajes: string; herramientas: string[] }> = [];
 /** La llamada que responde una pregunta falla (la IA no contesta). */
 let fallaLaRespuesta = false;
 const pedidos: string[] = [];
 vi.mock("@/lib/anthropic", () => ({
   getAnthropic: () => ({
     messages: {
-      create: async (p: { system: string; messages: { content: unknown }[] }) => {
+      create: async (p: { system: unknown; messages: { content: unknown }[]; tools?: { name: string }[] }) => {
         const todo = JSON.stringify(p.messages);
+        // La mano de la cuenta: llega con sus herramientas (el chat de la cuenta), y propone una tarea en una sola vuelta.
+        if (Array.isArray(p.tools) && p.tools.some((t) => t.name === "tarea_crear")) {
+          pedidosALaCuenta.push({ mensajes: todo, herramientas: p.tools.map((t) => t.name) });
+          const titulos = tareaQuePropone === null ? [] : Array.isArray(tareaQuePropone) ? tareaQuePropone : [tareaQuePropone];
+          const usos = pideUnaNota
+            ? [{ type: "tool_use", id: `n${pedidosALaCuenta.length}`, name: "nota_crear", input: { texto: "Llamaron por WhatsApp" } }]
+            : titulos.map((titulo, k) => ({ type: "tool_use", id: `u${pedidosALaCuenta.length}-${k}`, name: "tarea_crear", input: { titulo } }));
+          return { content: [{ type: "text", text: usos.length ? "Te dejo la tarea en la lista." : "No veo nada que cambiar." }, ...usos], stop_reason: usos.length ? "tool_use" : "end_turn", usage: { input_tokens: 1, output_tokens: 1 } };
+        }
         pedidos.push(todo);
-        const esRespuesta = p.system.includes("te pregunta algo sobre UNA cuenta");
+        const esRespuesta = typeof p.system === "string" && p.system.includes("te pregunta algo sobre UNA cuenta");
         if (esRespuesta && fallaLaRespuesta) throw new Error("la IA no respondió");
         if (esRespuesta) {
           // La respuesta sale por la herramienta obligatoria «responder», como en producción.
@@ -42,13 +59,26 @@ vi.mock("@/lib/anthropic", () => ({
   }),
 }));
 
+vi.mock("@/lib/ai/contexto-de-corrida", async (original) => {
+  const real = await original<typeof import("@/lib/ai/contexto-de-corrida")>();
+  return {
+    ...real,
+    conContextoDeIA: <T,>(ctx: (typeof contextos)[number], fn: () => T): T => {
+      contextos.push(ctx);
+      return real.conContextoDeIA(ctx as Parameters<typeof real.conContextoDeIA>[0], fn);
+    },
+  };
+});
+
 import { prisma } from "@/lib/db/prisma";
+import { esDeNexusConversando } from "@/lib/ai/tope-de-nexus";
+import { tomarHilo } from "@/lib/nexus-chat/candado-server";
 import { hechosFueraDeSuCliente } from "@/lib/invariantes/hechos";
 import { olvidarHechosMirado } from "@/lib/seguimiento/hechos-server";
 import { MODO_DEL_CHAT } from "@/lib/chat-de-nexus/conversacion-server";
 import { TOPES } from "@/lib/chat-de-nexus/conversacion";
 import { PREGUNTAS_POR_DIA } from "@/lib/chat-de-nexus/respuesta";
-import { alGuardarLaNota, cerrarEnLaPreventa, conversacionEnLaPreventa, estadosEnLaPreventa, vueltaEnLaPreventa } from "./nexus-en-la-preventa-server";
+import { alGuardarLaNota, aplicarEnLaPreventa, cerrarEnLaPreventa, conversacionEnLaPreventa, estadosEnLaPreventa, vueltaEnLaPreventa } from "./nexus-en-la-preventa-server";
 import { hechosDeLasNotas } from "./hechos-de-las-notas-server";
 import { RESPUESTA_SIN_ACCESO } from "@/lib/chat-de-nexus/guardada";
 import { leerArchivoDeLaEscala } from "@/lib/escala/documento/archivos";
@@ -74,6 +104,10 @@ afterAll(() => {
 beforeEach(() => {
   _olvidarElGastoDeNexus();
   siguiente = LISTO;
+  tareaQuePropone = "Llamar a Ana";
+  pideUnaNota = false;
+  pedidosALaCuenta.length = 0;
+  contextos.length = 0;
   fallaLaRespuesta = false;
   pedidos.length = 0;
 });
@@ -522,7 +556,7 @@ describe("lo seguro lo decide el código, lo dudoso el modelo, y nada se guarda 
     const v = await vueltaEnLaPreventa(id, CONVERSACION, [...RESPONDIO, { de: "persona", texto: "y el segundo" }], EMAIL, CON_ACCESO);
     if (!v.ok || v.turno.tipo !== "respuesta") throw new Error("esperaba una respuesta");
     expect(pedidos).toHaveLength(2);
-    expect(pedidos[0]).toContain("PUEDE SER ALGO QUE CUENTA O UN PEDIDO");
+    expect(pedidos[0]).toContain("PUEDE SER ALGO QUE CUENTA, UNA PREGUNTA O UN PEDIDO");
     expect(pedidos[1]).toContain("=== LA PREGUNTA ===\\ny el segundo");
     expect(pedidos[1]).not.toContain("¿Cuál es el segundo dolor");
   });
@@ -572,5 +606,222 @@ describe("lo seguro lo decide el código, lo dudoso el modelo, y nada se guarda 
     const v = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: NOTA }], EMAIL, CON_ACCESO, { contar: true });
     if (!v.ok || v.turno.tipo !== "listo") throw new Error("esperaba listo");
     expect((await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO))?.listo).toMatchObject({ contado: true });
+  });
+});
+
+describe("una sola conversación: lo que se pide de la cuenta vive en el mismo hilo (24 nov)", () => {
+  const PEDIDO = "Crea una tarea para llamar a Ana el viernes";
+  const SA = "sa@smarteam.test";
+
+  /** Una persona que ve la cuenta (super admin: ve todas) y la regla del chat de la cuenta que deja pedir. */
+  async function conQuienPide() {
+    const s = await sembrar();
+    const persona = await prisma.teamMember.create({ data: { name: "Sofía Admin", email: SA, roleEnum: "SUPER_ADMIN" } });
+    return { ...s, quien: async () => ({ persona, veMontos: false }) };
+  }
+
+  it("un pedido seguro va a la mano de la cuenta (sin clasificar), deja su lista y la conversación la trae", async () => {
+    const { id, clientId, quien } = await conQuienPide();
+    const v = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: PEDIDO }], SA, CON_ACCESO, { quienPideLaCuenta: quien });
+    if (!v.ok || v.turno.tipo !== "lista") throw new Error(`esperaba una lista: ${JSON.stringify(v)}`);
+    expect(v.turno.lista).toMatchObject({ texto: "Te dejo la tarea en la lista.", estado: "viva" });
+    expect(v.turno.lista.lineas).toEqual([expect.stringContaining("Llamar a Ana")]);
+    // Sin la llamada que clasifica, y sin las notas de la cuenta (van a HubSpot).
+    expect(pedidos).toHaveLength(0);
+    expect(pedidosALaCuenta).toHaveLength(1);
+    expect(pedidosALaCuenta[0].herramientas).not.toContain("nota_crear");
+    // La lista queda en la vuelta, acotada a ESTA cuenta, aunque el modelo no la nombró.
+    const run = await prisma.agentRun.findUniqueOrThrow({ where: { id: v.turno.lista.id }, select: { status: true, filters: true, output: true } });
+    expect(run).toMatchObject({ status: "DONE", filters: { modo: "chat-de-nexus", conversacion: CONVERSACION, exploracion: id } });
+    expect(JSON.parse(run.output!).operaciones).toEqual([{ nombre: "tarea.crear", entrada: { titulo: "Llamar a Ana", clientId } }]);
+    // Al volver: lo pedido y la lista, en el mismo hilo, sin las operaciones.
+    const c = await conversacionEnLaPreventa(id, SA, CON_ACCESO);
+    expect(c?.mensajes.map((m) => [m.de, m.es ?? null])).toEqual([
+      ["persona", "pedido"],
+      ["nexus", "lista"],
+    ]);
+    expect(c?.mensajes[1].lista?.estado).toBe("viva");
+    expect(JSON.stringify(c)).not.toContain("tarea.crear");
+  });
+
+  it("«Aplicar» crea la tarea por la capa de operaciones, una sola vez; la lista queda aplicada", async () => {
+    const { id, clientId, quien } = await conQuienPide();
+    const v = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: PEDIDO }], SA, CON_ACCESO, { quienPideLaCuenta: quien });
+    if (!v.ok || v.turno.tipo !== "lista") throw new Error("esperaba una lista");
+    const vuelta = v.turno.lista.id;
+    // Otra persona no aplica la lista de Sofía.
+    expect(await aplicarEnLaPreventa(id, CONVERSACION, vuelta, [], EMAIL, quien)).toMatchObject({ ok: false, status: 404 });
+    const a = await aplicarEnLaPreventa(id, CONVERSACION, vuelta, [], SA, quien);
+    if (!a.ok) throw new Error(a.error);
+    expect(a).toMatchObject({ yaEstaba: false, resultado: { aplicadas: 1 }, lista: { estado: "aplicada" } });
+    const tareas = await prisma.tarea.findMany({ select: { titulo: true, clientId: true, origenId: true } });
+    expect(tareas).toEqual([{ titulo: "Llamar a Ana", clientId, origenId: `p:${vuelta}:0` }]);
+    // El segundo clic: «ya estaba», y no hay otra tarea.
+    expect(await aplicarEnLaPreventa(id, CONVERSACION, vuelta, [], SA, quien)).toMatchObject({ ok: true, yaEstaba: true });
+    expect(await prisma.tarea.count()).toBe(1);
+    const c = await conversacionEnLaPreventa(id, SA, CON_ACCESO);
+    expect(c?.mensajes[1].lista).toMatchObject({ estado: "aplicada", desenlace: expect.stringContaining("tarea") });
+  });
+
+  it("la misma memoria: la mano de la cuenta ve lo contado antes, y lo pendiente se arrastra a la lista nueva", async () => {
+    const { id, quien } = await conQuienPide();
+    const contado = { de: "persona" as const, texto: NOTA, es: "guardado" as const };
+    const v1 = await vueltaEnLaPreventa(id, CONVERSACION, [contado, { de: "persona", texto: PEDIDO }], SA, CON_ACCESO, { quienPideLaCuenta: quien });
+    if (!v1.ok || v1.turno.tipo !== "lista") throw new Error("esperaba una lista");
+    expect(pedidosALaCuenta[0].mensajes).toContain("cartera vencida");
+    // Sin aplicar, pide otra cosa: la primera viaja en la lista nueva (P1) y la vieja ya no se aplica.
+    tareaQuePropone = "Escribirle a Juan";
+    const v2 = await vueltaEnLaPreventa(
+      id,
+      CONVERSACION,
+      [contado, { de: "persona", texto: PEDIDO, es: "pedido" }, { de: "nexus", texto: v1.turno.lista.texto, es: "lista" }, { de: "persona", texto: "Crea otra tarea para escribirle a Juan" }],
+      SA,
+      CON_ACCESO,
+      { quienPideLaCuenta: quien },
+    );
+    if (!v2.ok || v2.turno.tipo !== "lista") throw new Error("esperaba otra lista");
+    expect(pedidosALaCuenta[1].mensajes).toContain("P1.");
+    expect(pedidosALaCuenta[1].mensajes).toContain("[La lista que propuse:");
+    expect(v2.turno.lista.lineas).toHaveLength(2);
+    expect(v2.turno.lista.arrastradas).toEqual([0]);
+    expect(await aplicarEnLaPreventa(id, CONVERSACION, v1.turno.lista.id, [], SA, quien)).toMatchObject({ ok: false, status: 409 });
+    const a = await aplicarEnLaPreventa(id, CONVERSACION, v2.turno.lista.id, [], SA, quien);
+    expect(a).toMatchObject({ ok: true, resultado: { aplicadas: 2 } });
+  });
+
+  it("sin el permiso del chat de la cuenta no hay mano de la cuenta: el pedido se lee como antes, sin chocar con «sin acceso»", async () => {
+    const { id } = await conQuienPide();
+    const v = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: PEDIDO }], SA, CON_ACCESO, { quienPideLaCuenta: async () => null });
+    if (!v.ok) throw new Error(v.error);
+    // Lo leyó el modelo que clasifica (acá dice «listo»): se puede guardar como nota, como antes de juntar las conversaciones.
+    expect(v.turno.tipo).toBe("listo");
+    expect(pedidosALaCuenta).toHaveLength(0);
+    expect(pedidos).toHaveLength(1);
+  });
+
+  it("sin la mano de la cuenta (otra superficie), lo que parece un pedido lo decide el modelo, como antes", async () => {
+    const { id } = await conQuienPide();
+    siguiente = { tipo: "pedido" };
+    const v = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: PEDIDO }], SA, CON_ACCESO);
+    if (!v.ok) throw new Error(v.error);
+    // El modelo dijo «pedido» y no hay mano: se responde como una pregunta.
+    expect(v.turno.tipo).toBe("respuesta");
+    expect(pedidosALaCuenta).toHaveLength(0);
+  });
+});
+
+describe("una sola conversación: topes, medidor, candado y lo que encontró la revisión (24 nov)", () => {
+  const PEDIDO = "Crea una tarea para llamar a Ana el viernes";
+  const SA = "sa@smarteam.test";
+
+  async function conQuienPide() {
+    const s = await sembrar();
+    const persona = await prisma.teamMember.create({ data: { name: "Sofía Admin", email: SA, roleEnum: "SUPER_ADMIN" } });
+    return { ...s, quien: async () => ({ persona, veMontos: false }) };
+  }
+  const pedir = (id: string, quien: () => Promise<{ persona: Awaited<ReturnType<typeof prisma.teamMember.create>>; veMontos: boolean }>, mensajes = [{ de: "persona" as const, texto: PEDIDO }], o: { contar?: boolean; soltar?: string } = {}) =>
+    vueltaEnLaPreventa(id, CONVERSACION, mensajes, SA, CON_ACCESO, { quienPideLaCuenta: quien, ...o });
+
+  it("el gasto del pedido va al agente del chat de la cuenta y entra al tope del mes de Nexus conversando", async () => {
+    const { id, clientId, quien } = await conQuienPide();
+    const v = await pedir(id, quien);
+    if (!v.ok || v.turno.tipo !== "lista") throw new Error("esperaba una lista");
+    const delPedido = contextos.filter((c) => c.origen === "chat:preventa:cuenta");
+    expect(delPedido.length).toBeGreaterThan(0);
+    expect(delPedido[0]).toMatchObject({ agentSlug: "nexus-chat", triggeredByEmail: SA, agentRunId: v.turno.lista.id, clientId });
+    expect(esDeNexusConversando(delPedido[0].origen)).toBe(true);
+  });
+
+  it("con US$ 3 gastados hoy en el chat de la cuenta, el pedido no llama al modelo", async () => {
+    const { id, quien } = await conQuienPide();
+    await prisma.llmCall.create({ data: { model: "claude-sonnet-4-6", agentSlug: "nexus-chat", triggeredByEmail: SA, costUsd: 3 } });
+    const v = await pedir(id, quien);
+    expect(v).toMatchObject({ ok: false, status: 429 });
+    expect(pedidosALaCuenta).toHaveLength(0);
+    // Un pedido frenado no se come una vuelta de la conversación ni del día.
+    expect(await prisma.agentRun.count({ where: { triggeredByEmail: SA } })).toBe(0);
+  });
+
+  it("con el candado de la conversación tomado, pedir y aplicar dicen «ocupado» y no escriben nada", async () => {
+    const { id, quien } = await conQuienPide();
+    const v = await pedir(id, quien);
+    if (!v.ok || v.turno.tipo !== "lista") throw new Error("esperaba una lista");
+    const soltar = tomarHilo(`chat-de-nexus:${SA}:${CONVERSACION}`);
+    try {
+      pedidosALaCuenta.length = 0;
+      expect(await pedir(id, quien, [{ de: "persona", texto: "Crea otra tarea para escribirle a Juan" }])).toMatchObject({ ok: false, status: 409 });
+      expect(pedidosALaCuenta).toHaveLength(0);
+      expect(await aplicarEnLaPreventa(id, CONVERSACION, v.turno.lista.id, [], SA, quien)).toMatchObject({ ok: false, status: 409 });
+      expect(await prisma.tarea.count()).toBe(0);
+    } finally {
+      soltar?.();
+    }
+  });
+
+  it("una nota de la cuenta no entra: el modelo no la puede preparar, y una lista guardada que la traiga no se aplica", async () => {
+    const { id, clientId, quien } = await conQuienPide();
+    pideUnaNota = true;
+    const v = await pedir(id, quien);
+    if (!v.ok || v.turno.tipo !== "lista") throw new Error("esperaba una lista");
+    expect(v.turno.lista.lineas).toEqual([]);
+    expect(v.turno.lista.texto).toContain("Lo que sabes del cliente");
+    // Aunque una vuelta la trajera guardada: «Aplicar» no la escribe.
+    pideUnaNota = false;
+    const v2 = await pedir(id, quien);
+    if (!v2.ok || v2.turno.tipo !== "lista") throw new Error("esperaba una lista");
+    const run = await prisma.agentRun.findUniqueOrThrow({ where: { id: v2.turno.lista.id }, select: { output: true } });
+    const salida = JSON.parse(run.output!);
+    salida.operaciones = [{ nombre: "nota.crear", entrada: { clientId, texto: "x" } }];
+    await prisma.agentRun.update({ where: { id: v2.turno.lista.id }, data: { output: JSON.stringify(salida) } });
+    expect(await aplicarEnLaPreventa(id, CONVERSACION, v2.turno.lista.id, [], SA, quien)).toMatchObject({ ok: false, status: 422 });
+  });
+
+  it("aplicar a medias guarda qué renglones entraron; lo desmarcado no se crea", async () => {
+    const { id, quien } = await conQuienPide();
+    tareaQuePropone = ["Llamar a Ana", "Escribirle a Juan"];
+    const v = await pedir(id, quien);
+    if (!v.ok || v.turno.tipo !== "lista") throw new Error("esperaba una lista");
+    expect(v.turno.lista.lineas).toHaveLength(2);
+    const a = await aplicarEnLaPreventa(id, CONVERSACION, v.turno.lista.id, [1], SA, quien);
+    expect(a).toMatchObject({ ok: true, lista: { estado: "aplicada", aplicados: [0] } });
+    expect((await prisma.tarea.findMany({ select: { titulo: true } })).map((t) => t.titulo)).toEqual(["Llamar a Ana"]);
+  });
+
+  it("«Guardarlo como nota» debajo de una lista viva: la lista queda soltada y no se arrastra al pedido siguiente", async () => {
+    const { id, quien } = await conQuienPide();
+    const lista = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: PEDIDO }], SA, CON_ACCESO, { quienPideLaCuenta: quien, pedir: true });
+    if (!lista.ok || lista.turno.tipo !== "lista") throw new Error("esperaba una lista");
+    // La persona elige contarlo: sale el par y se cuenta, soltando la lista.
+    const contada = await pedir(id, quien, [{ de: "persona", texto: PEDIDO }], { contar: true, soltar: lista.turno.lista.id });
+    expect(contada.ok && contada.turno.tipo).toBe("listo");
+    const run = await prisma.agentRun.findUniqueOrThrow({ where: { id: lista.turno.lista.id }, select: { output: true } });
+    expect(JSON.parse(run.output!).soltada).toBe(true);
+    // Lo soltado no se aplica ni viaja como pendiente.
+    expect(await aplicarEnLaPreventa(id, CONVERSACION, lista.turno.lista.id, [], SA, quien)).toMatchObject({ ok: false, status: 409 });
+    pedidosALaCuenta.length = 0;
+    tareaQuePropone = "Escribirle a Juan";
+    await pedir(id, quien, [{ de: "persona", texto: "Crea una tarea para escribirle a Juan" }]);
+    expect(pedidosALaCuenta[0].mensajes).not.toContain("P1.");
+  });
+});
+
+describe("«Guardarlo como nota» debajo de una lista, si la IA falla al leerlo", () => {
+  it("la lista sigue viva: se puede aplicar igual", async () => {
+    const SA = "sa@smarteam.test";
+    const s = await sembrar();
+    const persona = await prisma.teamMember.create({ data: { name: "Sofía Admin", email: SA, roleEnum: "SUPER_ADMIN" } });
+    const quien = async () => ({ persona, veMontos: false });
+    const v = await vueltaEnLaPreventa(s.id, CONVERSACION, [{ de: "persona", texto: "Crea una tarea para llamar a Ana" }], SA, CON_ACCESO, { quienPideLaCuenta: quien });
+    if (!v.ok || v.turno.tipo !== "lista") throw new Error("esperaba una lista");
+    siguiente = "esto no es un JSON";
+    const contada = await vueltaEnLaPreventa(s.id, CONVERSACION, [{ de: "persona", texto: "Crea una tarea para llamar a Ana" }], SA, CON_ACCESO, {
+      quienPideLaCuenta: quien,
+      contar: true,
+      soltar: v.turno.lista.id,
+    });
+    expect(contada.ok && contada.turno.tipo === "listo" && contada.turno.sinLeer).toBe(true);
+    const run = await prisma.agentRun.findUniqueOrThrow({ where: { id: v.turno.lista.id }, select: { output: true } });
+    expect(JSON.parse(run.output!).soltada).toBeUndefined();
+    expect(await aplicarEnLaPreventa(s.id, CONVERSACION, v.turno.lista.id, [], SA, quien)).toMatchObject({ ok: true, resultado: { aplicadas: 1 } });
   });
 });

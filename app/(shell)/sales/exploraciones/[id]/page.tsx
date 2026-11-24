@@ -129,8 +129,9 @@ export default async function ExploracionPage({
               </span>
             </span>
             {/* Una sola puerta (23 nov, etapa 2 del plan maestro de «Hablar con Nexus»): «Nexus» abre el cajón de «Hablar
-                con Nexus». El chat de la cuenta queda montado SIN botón: lo abren la guía («Mejorar con el asistente») y
-                «Tareas, siguiente paso o la guía», dentro del cajón. En la preventa no ofrece las notas de la cuenta. */}
+                con Nexus». El chat de la cuenta queda montado SIN botón: lo abre la guía («Mejorar con IA»). Tareas, el
+                siguiente paso y la guía se piden también en el cajón (una sola conversación, 24 nov). En la preventa no
+                ofrece las notas de la cuenta. */}
             {/* El cajón solo se abre a quien puede cambiar la preventa: a quien no, le queda el chat de la cuenta con su botón. */}
             {conCajon && <BotonDeNexus exploracionId={exp.id} />}
             {puedeChat && (

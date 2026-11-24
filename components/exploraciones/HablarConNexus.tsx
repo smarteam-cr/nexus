@@ -5,8 +5,10 @@
  *
  * UNA SOLA PUERTA (23 nov, etapa 2 del plan maestro, aprobada por la coordinadora): el cajón lo abre el botón «Nexus» de
  * arriba (BotonDeNexus.tsx; el botón del riel se quitó) con `abrirNexusEnLaPreventa` (lib/exploraciones/abrir-nexus.ts).
- * Adentro, «Tareas, siguiente paso o la guía» abre el chat de la cuenta con el chip de la preventa (sin las notas de la
- * cuenta, que van a HubSpot). Y «✨ Mejorar con IA» de La escala lo abre con el lugar puesto como chip (el Resumen, un área
+ * Adentro, desde el 24 nov (una sola conversación), tareas, el siguiente paso y la guía se piden en la MISMA caja: los
+ * prepara el chat de la cuenta con esta conversación como historia y vuelven al hilo como una lista con «Aplicar»
+ * (PanelDeNexus.tsx; sin las notas de la cuenta, que van a HubSpot). El enlace «Tareas, siguiente paso o la guía», que abría
+ * otro chat, se quitó (Elías: «Quitarlo»). Y «✨ Mejorar con IA» de La escala lo abre con el lugar puesto como chip (el Resumen, un área
  * o, desde el 24 nov, una sección): con el chip, lo que se escribe es un pedido de cambio a la página y la propuesta por pieza se ve adentro
  * (PedirleANexus.tsx); quitar el chip vuelve a la conversación. En la escala de la cuenta (sin conversación) el cajón abre
  * solo con el chip.
@@ -38,9 +40,10 @@
  * Convive con «Agregar algo que sabes» (components/exploraciones/LoQueSabes.tsx): es otra puerta a las mismas notas.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Alert, Button } from "@/components/ui";
+import { Alert } from "@/components/ui";
 import { BotonAzul, BotonBlanco, BotonTexto } from "@/components/ui/sistema";
 import PanelDeNexus, { conversacionNueva, type ConversacionEnPantalla, type TurnoListo } from "@/components/chat-de-nexus/PanelDeNexus";
+import { useRouter } from "next/navigation";
 import AvisoDeImpacto from "@/components/impacto/AvisoDeImpacto";
 import { OMITIDO_POR_EL_TOPE } from "@/lib/ai/tope-de-nexus";
 import { diaConAnio } from "@/lib/exploraciones/fechas";
@@ -65,7 +68,6 @@ import { useLienzo } from "./contexto";
 import { CORRIENDO_LA_ESCALA, useRehacerLaEscala } from "./rehacer-la-escala";
 import PedirleANexus from "./PedirleANexus";
 import { avisarQueNexusCambioLaEscala, EVENTO_ABRIR_NEXUS, type LugarDeLaEscalaEnElCajon, type PedidoDeAbrirNexus } from "@/lib/exploraciones/abrir-nexus";
-import { abrirElChatDeNexus } from "@/lib/nexus-chat/constantes";
 
 /** Lo que responde …/nexus/guardado (los tipos del servidor, sin importarlo). */
 interface Guardado {
@@ -443,8 +445,19 @@ const VACIO_DE_LA_PREVENTA = {
   cierre: "Si le cuentas algo, te pregunta lo que falte y te muestra qué cambia antes de guardarlo: lo guardas tú.",
 } as const;
 
+/**
+ * El mismo chat vacío para quien puede pedirle a Nexus lo de la cuenta (el permiso del chat de la cuenta): una sola
+ * conversación (24 nov), así que también se le piden tareas, el siguiente paso o cambios a la guía, con su ejemplo.
+ */
+const VACIO_CON_PEDIDOS = {
+  intro: "Cuéntale lo que sabes del cliente, pregúntale lo que se habló o pídele una tarea, el siguiente paso o un cambio a la guía. Por ejemplo:",
+  ejemplos: [...VACIO_DE_LA_PREVENTA.ejemplos, "Crea una tarea para llamar al gerente el viernes."],
+  cierre: "Nada se guarda ni se aplica sin tu clic: lo que cuentas lo guardas tú, y lo que pides queda en una lista que apruebas.",
+} as const;
+
 export default function HablarConNexus() {
   const { exp, puedeEditar, cambiar, lugar, conAsistente, recargar } = useLienzo();
+  const router = useRouter();
   const [abierto, setAbierto] = useState(false);
   // El ancho del chat, como en los demás: «Más ancho» para leer una propuesta larga.
   const [ancho, setAncho] = useState<"normal" | "amplio">("normal");
@@ -661,34 +674,26 @@ export default function HablarConNexus() {
         <PanelDeNexus
           abierto={abierto && !escala}
           onClose={cerrar}
-          subtitulo="Preventa · cuéntale o pregúntale lo del cliente"
+          subtitulo={conAsistente ? "Preventa · cuéntale, pregúntale o pídele lo del cliente" : "Preventa · cuéntale o pregúntale lo del cliente"}
           ancho={ancho}
           onAncho={alternarAncho}
           pedidoDeFoco={pedidoDeFoco}
-          vacio={VACIO_DE_LA_PREVENTA}
-          arriba={
-            conAsistente ? (
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
-                <span>¿Una tarea, el siguiente paso o un cambio a la guía?</span>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    cerrar();
-                    abrirElChatDeNexus({ chip: { tipo: "preventa", id: exp.id, etiqueta: "Preventa" } });
-                  }}
-                >
-                  Tareas, siguiente paso o la guía
-                </Button>
-              </div>
-            ) : undefined
-          }
+          // Sin el enlace «Tareas, siguiente paso o la guía» (Elías, 24 nov: «Quitarlo»): se pide en la misma caja, y el chat
+          // vacío lo muestra con un ejemplo.
+          vacio={conAsistente ? VACIO_CON_PEDIDOS : VACIO_DE_LA_PREVENTA}
           // Lleno, solo al empezar: a media conversación el aviso va junto al «Guardar» y la conversación sigue a la vista.
           aviso={
             llenaAlEmpezar ? <Alert variant="warning">«Lo que sabes del cliente» ya tiene {MAX_LO_QUE_SABES} notas: quita una en la Preparación antes de contar otra.</Alert> : null
           }
           apagado={llenaAlEmpezar ? "«Lo que sabes del cliente» está lleno: quita una nota en la Preparación." : null}
           urlDelTurno={`/api/sales/exploraciones/${exp.id}/nexus`}
+          // Una sola conversación (24 nov): con el permiso del chat de la cuenta, tareas, siguiente paso y la guía se piden
+          // en este mismo hilo; al aplicar, el lienzo vuelve a leer la guía y la página lo demás.
+          pedidosDeLaCuenta={conAsistente}
+          alAplicar={() => {
+            void recargar();
+            router.refresh();
+          }}
           alQuedarListo={alQuedarListo}
           terminado={listo !== null}
           conversacion={conversacion}

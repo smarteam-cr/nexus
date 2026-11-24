@@ -11,7 +11,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { TeamMember } from "@prisma/client";
 import { contextoDeOperacion } from "@/lib/operaciones/contexto-server";
 import { OPERACIONES } from "@/lib/operaciones/registro-server";
-import { herramientaDe } from "@/lib/operaciones/herramientas";
+import { herramientaDe, nombreDeHerramienta } from "@/lib/operaciones/herramientas";
 import type { Operacion } from "@/lib/operaciones/tipos";
 import { tareaVisiblePorNumero } from "@/lib/tareas/para-operaciones";
 import { resolverObjeto } from "@/lib/siguiente-paso/escritura-server";
@@ -68,6 +68,18 @@ export function prepararParaLaCuenta(ctx: ContextoDelChat, clientId: string, nom
   return prepararCambio(piezas(ctx, clientId), nombre, entrada);
 }
 
-export function ejecutorDelChat(ctx: ContextoDelChat, clientId: string): EjecutorDelChat {
-  return crearEjecutor(piezas(ctx, clientId));
+/**
+ * Quién ejecuta las herramientas. `sinNotasDeLaCuenta` (la preventa): una nota de la cuenta no se prepara aunque el modelo
+ * nombre la herramienta (no se le ofrece; esto cierra el caso de que la nombre igual).
+ */
+export function ejecutorDelChat(ctx: ContextoDelChat, clientId: string, o: { sinNotasDeLaCuenta?: boolean } = {}): EjecutorDelChat {
+  const e = crearEjecutor(piezas(ctx, clientId));
+  if (!o.sinNotasDeLaCuenta) return e;
+  const nota = nombreDeHerramienta(NOTA_DE_LA_CUENTA);
+  return {
+    esLectura: (h) => e.esLectura(h),
+    leer: (h, i) => e.leer(h, i),
+    preparar: async (h, i) =>
+      h === nota ? { ok: false, motivo: "en la preventa no se guardan notas de la cuenta: lo que te cuentan va a «Lo que sabes del cliente»" } : e.preparar(h, i),
+  };
 }

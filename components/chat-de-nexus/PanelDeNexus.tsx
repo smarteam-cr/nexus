@@ -17,15 +17,22 @@
  * `alCambiar`): cerrar el chat y volver a abrirlo no pierde lo hablado ni lo propuesto, y al volver a la página el lugar la
  * trae del servidor (lib/chat-de-nexus/guardada.ts). Si Nexus no pudo leer lo que contaste, el texto vuelve a la caja y no se
  * guarda nada. Hoy lo usa la preventa (components/exploraciones/HablarConNexus.tsx).
+ *
+ * UNA SOLA CONVERSACIÓN (24 nov): si la persona PIDE algo de la cuenta (una tarea, el siguiente paso, la guía), lo prepara
+ * en el servidor la parte de Nexus que trabaja la cuenta y vuelve al MISMO hilo como una lista (lib/chat-de-nexus/lista.ts)
+ * con sus casillas y «Aplicar» (`POST <urlDelTurno>/aplicar`): el servidor la lee de la vuelta, nunca de acá. Una lista
+ * que la siguiente lleva (o suelta) se apaga; la aplicada dice lo que dejó.
  */
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert } from "@/components/ui";
 import { BotonEnlace } from "@/components/ui/sistema";
-import CajonDeNexus, { Burbuja, CajaDeNexus, ChatVacio, Pensando } from "@/components/asistente/CajonDeNexus";
+import CajonDeNexus, { Burbuja, CajaDeNexus, ChatVacio, Pensando, PropuestaEnElHilo } from "@/components/asistente/CajonDeNexus";
 import { devolverALaCaja } from "@/lib/asistente/caja";
 import { notaDeLaConversacion, paraContarComoNota, paraPreguntar, paraSeguirDespuesDeGuardar, TOPES, type ResultadoDelTurno } from "@/lib/chat-de-nexus/conversacion";
 import type { MensajeGuardado } from "@/lib/chat-de-nexus/guardada";
+import { conLaListaAplicada, conLaListaNueva, seGuardaComoNota, type ListaEnLaConversacion } from "@/lib/chat-de-nexus/lista";
 import type { CitaDeLaRespuesta, RespuestaDeNexus } from "@/lib/chat-de-nexus/respuesta";
+import { textoDelBoton, tituloDeLaLista } from "@/lib/nexus-chat/textos";
 import TextoConFormato from "./TextoConFormato";
 
 export type TurnoListo = Extract<ResultadoDelTurno, { tipo: "listo" }>;
@@ -79,6 +86,84 @@ function LaRespuesta({ r }: { r: RespuestaDeNexus }) {
   );
 }
 
+/** El título de la caja de una lista, según en qué quedó. */
+function tituloDeLaListaEnPantalla(l: ListaEnLaConversacion): string {
+  if (l.estado === "soltada") return "Ya no va";
+  if (l.estado !== "aplicada") return tituloDeLaLista(l.lineas.length);
+  const n = l.aplicados?.length;
+  return n !== undefined && n < l.lineas.length ? `${n} de ${l.lineas.length} aplicados` : "Aplicado";
+}
+
+/**
+ * Lo que contestó la parte de Nexus que trabaja la cuenta, con su lista: cada renglón es UNA operación (lo que se lee es lo
+ * que se aplica), con su casilla mientras la lista está viva, y «Aplicar» a todo el ancho. Igual que la lista del chat de la
+ * cuenta (components/asistente/ChatDelAsistente.tsx): lo arrastrado y lo que ya no va se dicen.
+ */
+function LaLista({ l, aplicando, apagado, onAplicar }: { l: ListaEnLaConversacion; aplicando: boolean; apagado: boolean; onAplicar: (desmarcadas: number[]) => void }) {
+  const [fuera, setFuera] = useState<ReadonlySet<number>>(new Set());
+  const viva = l.estado === "viva";
+  const marcados = l.lineas.length - fuera.size;
+  const alternar = (i: number) =>
+    setFuera((f) => {
+      const n = new Set(f);
+      if (n.has(i)) n.delete(i);
+      else n.add(i);
+      return n;
+    });
+  const largas = l.lineas.length > 6;
+  return (
+    <div className="space-y-2">
+      <Burbuja de="nexus">
+        <TextoConFormato>{l.texto}</TextoConFormato>
+      </Burbuja>
+      {/* Lo que salió de la lista de antes: en la vigente, y en la que solo la soltó (un cierre, sin renglones). */}
+      {(viva || l.cierre) && l.descartadas?.length ? (
+        <ul className="mr-2 space-y-0.5 rounded-lg border border-warn-line bg-warn-surface px-2 py-1.5 text-xs text-warn-ink">
+          {l.descartadas.map((d, i) => (
+            <li key={i}>⚠ Ya no va: {d}</li>
+          ))}
+        </ul>
+      ) : null}
+      {l.lineas.length > 0 && (
+        <PropuestaEnElHilo
+          titulo={tituloDeLaListaEnPantalla(l)}
+          subtitulo={
+            l.estado === "reemplazada"
+              ? "Sigue en la lista de abajo."
+              : viva && l.arrastradas?.length
+                ? l.arrastradas.length === l.lineas.length
+                  ? "Estos cambios ya los habías acordado y no se aplicaron."
+                  : `${l.arrastradas.length} de estos ${l.lineas.length} cambios ya los habías acordado y no se aplicaron.`
+                : null
+          }
+          apagada={!viva}
+          aplicar={viva ? { rotulo: textoDelBoton(marcados), alHacer: () => onAplicar([...fuera]), apagado: apagado || marcados === 0, ocupado: aplicando } : null}
+        >
+          <ol
+            {...(largas ? { tabIndex: 0, role: "region" as const, "aria-label": `${l.lineas.length} cambios propuestos` } : {})}
+            className={`list-decimal space-y-1 pl-4 text-sm text-fg marker:text-fg-muted${largas ? " max-h-56 overflow-y-auto overscroll-contain pr-1" : ""}`}
+          >
+            {l.lineas.map((linea, i) => (
+              <li key={i} className="leading-relaxed">
+                {viva ? (
+                  <label className={`flex cursor-pointer items-start gap-2${fuera.has(i) ? " line-through opacity-50" : ""}`}>
+                    <input type="checkbox" checked={!fuera.has(i)} onChange={() => alternar(i)} disabled={aplicando || apagado} className="mt-1 shrink-0 accent-primary" />
+                    <span>{linea}</span>
+                  </label>
+                ) : (
+                  // Aplicada: lo que no se aplicó (desmarcado, o no llegó) va tachado.
+                  <span className={l.estado === "aplicada" && l.aplicados && !l.aplicados.includes(i) ? "line-through opacity-50" : undefined}>{linea}</span>
+                )}
+              </li>
+            ))}
+          </ol>
+        </PropuestaEnElHilo>
+      )}
+      {l.desenlace ? <p className="mr-2 whitespace-pre-wrap text-xs text-fg-secondary">{l.desenlace}</p> : null}
+    </div>
+  );
+}
+
 export interface PanelDeNexusProps {
   /** El chat abierto o cerrado, y cómo se cierra (la ✕ de la cabecera o Escape). */
   abierto: boolean;
@@ -120,6 +205,15 @@ export interface PanelDeNexusProps {
   alSeguir?: () => void;
   /** La caja apagada, con el porqué (lo dice adentro de la caja). */
   apagado?: string | null;
+  /**
+   * Quien conversa puede pedirle a Nexus algo de la cuenta (el permiso del chat de la cuenta): el servidor prepara la lista
+   * de un pedido. Sin esto, un pedido se lee como antes (contar o preguntar).
+   */
+  pedidosDeLaCuenta?: boolean;
+  /** Desde dónde se abrió: «guia», la guía de la próxima sesión (la parte de Nexus que trabaja la cuenta la tiene a la vista). */
+  lugar?: "guia";
+  /** Se aplicó una lista de la cuenta: el lugar vuelve a leer lo que cambió (la guía, las tareas). */
+  alAplicar?: () => void;
 }
 
 export default function PanelDeNexus({
@@ -143,6 +237,9 @@ export default function PanelDeNexus({
   alVolverAConversar,
   alSeguir,
   apagado = null,
+  pedidosDeLaCuenta = false,
+  lugar,
+  alAplicar,
 }: PanelDeNexusProps) {
   const { id: conversacion, mensajes } = c;
   const setMensajes = (m: MensajeEnPantalla[]) => alCambiar({ id: conversacion, mensajes: m });
@@ -155,6 +252,14 @@ export default function PanelDeNexus({
   // vuelta entre los dos botones).
   const [contadoAMano, setContadoAMano] = useState(false);
   const cajaRef = useRef<HTMLTextAreaElement | null>(null);
+  /** La lista que se está aplicando (su vuelta): mientras tanto la caja y «Nueva conversación» esperan. */
+  const [aplicando, setAplicando] = useState<string | null>(null);
+  /** La conversación de AHORA: lo que vuelve de «Aplicar» va sobre ella, nunca sobre la del momento del clic. */
+  const conversacionDeAhora = useRef(c);
+  useEffect(() => {
+    conversacionDeAhora.current = c;
+  }, [c]);
+  const ocupado = pensando || !!aplicando;
 
   /**
    * Una vuelta: `t` va al final de `base`. `modo`: «contar», lo último se cuenta aunque tenga forma de pregunta («Guardarlo
@@ -162,19 +267,26 @@ export default function PanelDeNexus({
    * envío normal, lo escrito vuelve a la caja. `antes`: a qué vuelve si falla (al seguir después de guardar, con lo
    * guardado ya marcado: el lugar ya lo olvidó).
    */
-  const mandar = async (t: string, base: MensajeEnPantalla[], modo: "normal" | "contar" | "preguntar", antes: MensajeEnPantalla[] = mensajes) => {
-    if (!t || pensando) return;
+  const mandar = async (t: string, base: MensajeEnPantalla[], modo: "normal" | "contar" | "preguntar", antes: MensajeEnPantalla[] = mensajes, soltar?: string) => {
+    if (!t || pensando || aplicando) return;
     const conLaPersona: MensajeEnPantalla[] = [...base, { de: "persona", texto: t }];
     setMensajes(conLaPersona);
     if (modo === "normal") setTexto("");
     setPensando(true);
     setError(null);
     try {
-      const paraMandar = conLaPersona.map(({ de, texto: x, es }) => ({ de, texto: x, ...(es ? { es } : {}) }));
+      // La vuelta de cada lista viaja con su mensaje: con ella el servidor reconoce su lista (nunca por el texto).
+      const paraMandar = conLaPersona.map(({ de, texto: x, es, vuelta }) => ({ de, texto: x, ...(es ? { es } : {}), ...(vuelta ? { vuelta } : {}) }));
       const r = await fetch(urlDelTurno, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversacion, mensajes: paraMandar, ...(modo === "contar" ? { contar: true } : modo === "preguntar" ? { preguntar: true } : {}) }),
+        // `listas`: este cajón sabe mostrar la lista de un pedido de la cuenta (sin eso, el servidor no la prepara).
+        body: JSON.stringify({
+          conversacion,
+          mensajes: paraMandar,
+          ...(pedidosDeLaCuenta ? { listas: true, ...(lugar ? { lugar } : {}), ...(soltar ? { soltar } : {}) } : {}),
+          ...(modo === "contar" ? { contar: true } : modo === "preguntar" ? { preguntar: true } : {}),
+        }),
       });
       const j = (await r.json().catch(() => null)) as { turno?: ResultadoDelTurno; error?: string; aviso?: string } | null;
       if (!r.ok || !j?.turno) throw new Error(j?.error ?? "Nexus no pudo responder. Inténtalo de nuevo.");
@@ -193,6 +305,9 @@ export default function PanelDeNexus({
         // Lo que preguntó no va a la nota; la respuesta no cuenta como una ronda de preguntas.
         const conLaConsulta = conLaPersona.map((m, i) => (i === conLaPersona.length - 1 ? { ...m, es: "consulta" as const } : m));
         setMensajes([...conLaConsulta, { de: "nexus", es: "respuesta", texto: turno.respuesta.texto, respuesta: turno.respuesta }]);
+      } else if (turno.tipo === "lista") {
+        // Un pedido de la cuenta: lo pedido no va a la nota, y la lista queda en el hilo con su «Aplicar».
+        setMensajes(conLaListaNueva(conLaPersona, turno.lista));
       } else if (turno.tipo === "listo") {
         // No leyó: nada se guarda como nota (podía ser una pregunta), y el texto vuelve a la caja.
         if (turno.sinLeer) throw new Error("Nexus no pudo leerlo esta vez. Vuelve a intentarlo: no se guardó nada.");
@@ -212,7 +327,7 @@ export default function PanelDeNexus({
 
   const enviar = () => {
     const t = texto.trim();
-    if (apagado) return;
+    if (apagado || aplicando) return;
     if (!terminado) return mandar(t, mensajes, "normal");
     if (!alSeguir || !t || pensando) return;
     // Seguir después de guardar: lo guardado queda marcado y el lugar lo olvida.
@@ -222,10 +337,14 @@ export default function PanelDeNexus({
     return mandar(t, base, "normal", base);
   };
 
-  /** «Guardarlo como nota»: lo que la persona escribió se cuenta, y la respuesta sale de la conversación. */
+  /**
+   * «Guardarlo como nota»: lo que la persona escribió se cuenta, y la respuesta sale de la conversación. Debajo de una lista
+   * viva de la cuenta, esa lista ya no va (`soltar`): no se arrastra al pedido siguiente.
+   */
   const contarComoNota = (i: number) => {
     const c = paraContarComoNota(mensajes, i);
-    if (c) void mandar(c.texto, c.base, "contar");
+    const l = mensajes[i]?.lista;
+    if (c) void mandar(c.texto, c.base, "contar", mensajes, l?.estado === "viva" ? l.id : undefined);
   };
 
   /**
@@ -238,6 +357,33 @@ export default function PanelDeNexus({
   };
   const conPreguntar = terminado && sePuedePreguntar && !contadoAMano && !!alVolverAConversar && paraPreguntar(mensajes) !== null;
 
+  /**
+   * «Aplicar» una lista de la cuenta: manda solo cuál (`vuelta`) y lo desmarcado; el servidor la lee de la vuelta, la vuelve
+   * a preparar contra hoy y la aplica. Lo que respondió reemplaza la lista en el hilo (aplicada, con lo que dejó).
+   */
+  const aplicarLista = async (l: ListaEnLaConversacion, desmarcadas: number[]) => {
+    if (ocupado) return;
+    setAplicando(l.id);
+    setError(null);
+    try {
+      const r = await fetch(`${urlDelTurno}/aplicar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversacion, vuelta: l.id, desmarcadas }),
+      });
+      const j = (await r.json().catch(() => null)) as { lista?: ListaEnLaConversacion; error?: string } | null;
+      if (!r.ok || !j?.lista) throw new Error(j?.error ?? "No se pudo aplicar. Inténtalo de nuevo en un momento.");
+      // Sobre la conversación de ahora (si sigue siendo esta): nada de lo que pasó mientras tanto se pierde.
+      const ahora = conversacionDeAhora.current;
+      if (ahora.id === conversacion) alCambiar({ id: ahora.id, mensajes: conLaListaAplicada(ahora.mensajes, j.lista) });
+      if (j.lista.estado === "aplicada") alAplicar?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo aplicar.");
+    } finally {
+      setAplicando(null);
+    }
+  };
+
   const reiniciar = () => {
     setTexto("");
     setError(null);
@@ -248,7 +394,8 @@ export default function PanelDeNexus({
   /* Con lo de arriba sin terminar («Guardar» o «No guardar», un «Aplicar», la cuenta de La escala o su revisión), la caja
      espera: mandar algo nuevo lo borraría. El texto no nombra «Guardar»: puede que ya esté guardado y falte otra cosa. */
   const esperando = terminado && !alSeguir ? "Termina lo de arriba para seguir conversando." : null;
-  const cajaApagada = apagado ?? esperando;
+  // Mientras se aplica una lista, la caja espera: lo que llegara entretanto quedaría debajo de un «Aplicar» a medias.
+  const cajaApagada = apagado ?? esperando ?? (aplicando ? "Nexus está aplicando la lista…" : null);
 
   return (
     <CajonDeNexus
@@ -262,11 +409,12 @@ export default function PanelDeNexus({
       onAncho={onAncho}
       nuevaConversacion={{
         alHacer: reiniciar,
-        apagada: (!terminado && mensajes.length === 0) || pensando,
+        apagada: (!terminado && mensajes.length === 0) || ocupado,
         titulo: "Empezar una conversación nueva (lo que no guardaste no queda)",
       }}
       pedidoDeFoco={pedidoDeFoco}
-      alFinal={`${mensajes.length}·${pensando}·${terminado}·${error ?? ""}`}
+      // El estado de cada lista también: aplicar no suma un mensaje, pero el hilo baja a lo que dejó.
+      alFinal={`${mensajes.length}·${pensando}·${terminado}·${error ?? ""}·${mensajes.map((m) => m.lista?.estado ?? "").join("")}`}
       pie={
         <CajaDeNexus
           cajaRef={cajaRef}
@@ -290,13 +438,27 @@ export default function PanelDeNexus({
         <ol className="flex flex-col gap-3" aria-label="La conversación">
           {mensajes.map((m, i) => (
             <li key={i}>
-              {/* Lo que tiene formato (una respuesta) no conserva los saltos crudos: los pone el Markdown. */}
+              {m.lista ? (
+                <>
+                  <LaLista l={m.lista} aplicando={aplicando === m.lista.id} apagado={ocupado || !!apagado} onAplicar={(d) => void aplicarLista(m.lista!, d)} />
+                  {/* Lo que se leyó como pedido y se quería contar: un clic lo cuenta (y la lista, si está viva, ya no va). */}
+                  {!terminado && seGuardaComoNota(m.lista) && paraContarComoNota(mensajes, i) && (
+                    <p className="mr-2 mt-2 flex flex-wrap items-center gap-x-1.5 text-2xs text-fg-muted">
+                      ¿Era algo que querías contar?
+                      <BotonEnlace className="py-0 text-2xs" disabled={!!apagado || ocupado} onClick={() => contarComoNota(i)}>
+                        Guardarlo como nota
+                      </BotonEnlace>
+                    </p>
+                  )}
+                </>
+              ) : (
+              /* Lo que tiene formato (una respuesta) no conserva los saltos crudos: los pone el Markdown. */
               <Burbuja de={m.de === "persona" ? "persona" : "nexus"} className={m.de === "nexus" && !m.respuesta ? "whitespace-pre-wrap" : undefined}>
                 {m.respuesta ? <LaRespuesta r={m.respuesta} /> : m.texto}
                 {!terminado && paraContarComoNota(mensajes, i) && (
                   <p className="mt-2 flex flex-wrap items-center gap-x-1.5 border-t border-line pt-1.5 text-2xs text-fg-muted">
                     ¿Era algo que querías contar?
-                    <BotonEnlace className="py-0 text-2xs" disabled={!!apagado || pensando} onClick={() => contarComoNota(i)}>
+                    <BotonEnlace className="py-0 text-2xs" disabled={!!apagado || ocupado} onClick={() => contarComoNota(i)}>
                       Guardarlo como nota
                     </BotonEnlace>
                   </p>
@@ -304,12 +466,13 @@ export default function PanelDeNexus({
                 {conPreguntar && i === mensajes.length - 1 && (
                   <p className="mt-2 flex flex-wrap items-center gap-x-1.5 border-t border-line pt-1.5 text-2xs text-fg-muted">
                     ¿Era una pregunta?
-                    <BotonEnlace className="py-0 text-2xs" disabled={!!apagado || pensando} onClick={preguntarEnVezDeGuardar}>
+                    <BotonEnlace className="py-0 text-2xs" disabled={!!apagado || ocupado} onClick={preguntarEnVezDeGuardar}>
                       Respóndela
                     </BotonEnlace>
                   </p>
                 )}
               </Burbuja>
+              )}
             </li>
           ))}
         </ol>

@@ -27,3 +27,16 @@ describe("las herramientas del chat de la cuenta", () => {
     expect(sin).toEqual(todas.filter((n) => n !== NOTA_DE_LA_CUENTA));
   });
 });
+
+describe("aunque el modelo la nombre igual", () => {
+  it("en la preventa, el ejecutor no prepara una nota de la cuenta; en la ficha sí la busca", async () => {
+    const { contextoDelChat, ejecutorDelChat } = await import("./herramientas-server");
+    const persona = { id: "tm1", email: "liz@smarteam.test", name: "Liz" } as unknown as Parameters<typeof contextoDelChat>[0];
+    const ctx = contextoDelChat(persona, false, new Date("2026-11-24T15:00:00Z"));
+    const enLaPreventa = ejecutorDelChat(ctx, "c1", { sinNotasDeLaCuenta: true });
+    const r = await enLaPreventa.preparar(NOTA_DE_LA_CUENTA, { texto: "Llamaron por WhatsApp" });
+    expect(r).toMatchObject({ ok: false, motivo: expect.stringContaining("Lo que sabes del cliente") });
+    // En la ficha la herramienta existe (no dice «no existe»): el ejecutor sigue al camino de siempre.
+    expect(ejecutorDelChat(ctx, "c1").esLectura(NOTA_DE_LA_CUENTA)).toBe(false);
+  });
+});

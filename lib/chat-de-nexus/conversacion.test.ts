@@ -277,7 +277,7 @@ describe("si es una pregunta: el código decide lo seguro y el modelo lo dudoso 
     expect(pedido).toContain("Te escribe alguien del equipo de Smarteam.");
     expect(pedido).toContain("NO ES UNA PREGUNTA");
     const duda = String(pedidoDelTurno(ctx, [...RESPONDIO, persona("y el segundo")], "duda").messages[0].content);
-    expect(duda).toContain("PUEDE SER ALGO QUE CUENTA O UN PEDIDO");
+    expect(duda).toContain("PUEDE SER ALGO QUE CUENTA, UNA PREGUNTA O UN PEDIDO");
     expect(duda).toContain("NEXUS (respondió)");
   });
 

@@ -42,6 +42,17 @@ describe("el filtro de canceladas está donde la regla dice", () => {
     expect(bloque("enrichAttempts: { gte: 1, lt: MAX_ENRICH_ATTEMPTS },"), "los reintentos").toContain("...SE_LEE_SI_CANCELADA_TIENE_SU_DOC");
   });
 
+  it("el chat de Nexus sobre la cuenta: la lista de reuniones y leer una (24 nov, como el conector de Claude)", () => {
+    /* La edición que la pone en rojo: sacar el filtro de cualquiera de las dos lecturas, o volver a juntarlo con el del
+       cliente por un spread (si ese filtro un día trae su propio AND, el de canceladas lo pisaría: invariante 1). */
+    const src = fuente("lib/nexus-chat/lecturas-server.ts");
+    expect(src.match(/AND: \[whereBelongsToClient\(e\.clientId\), NO_ES_CANCELADA_SIN_TEXTO\]/g)?.length, "las dos lecturas de reuniones").toBe(2);
+    expect(src).not.toContain("...whereBelongsToClient(");
+    // El día, en Costa Rica: una reunión de las 7 p. m. no cae en el día siguiente.
+    expect(src).toMatch(/dia: diaDeLaReunion\(f\.date\)/);
+    expect(src).toMatch(/fmtDia\(diaDeLaReunion\(f\.date\)/);
+  });
+
   it("el rescate y la vigilancia de reintentos usan la MISMA regla de la cola (no una copia a mano)", () => {
     expect(fuente("scripts/recuperar-transcripts-meet.ts")).toContain("SE_LEE_SI_CANCELADA_TIENE_SU_DOC");
     expect(fuente("scripts/check-invariants.ts")).toContain("SE_LEE_SI_CANCELADA_TIENE_SU_DOC");

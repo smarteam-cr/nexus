@@ -137,7 +137,8 @@ function conTiempos(e: EjecutorDelChat, anotar: TiemposDelTurno["herramientas"])
 
 /**
  * EL TURNO SIN ESCRIBIR NADA: revalida lo pendiente, arma el contexto, corre el bucle y compone la lista. Lo usan
- * `correrTurno` (que después guarda los turnos y cierra la corrida) y scripts/medir-turno-de-la-guia.ts.
+ * `correrTurno` (que después guarda los turnos y cierra la corrida) y scripts/medir-turno-de-la-guia.ts. La historia y lo
+ * pendiente salen del hilo de la cuenta; el gasto va al agente «nexus-chat» con el origen del hilo.
  */
 export async function pensarElTurno(o: {
   hilo: HiloDelTurno;
@@ -147,8 +148,47 @@ export async function pensarElTurno(o: {
   foco?: FocoDelChat;
   agentRunId: string | null;
 }): Promise<TurnoPensado> {
+  return pensarConLaCuenta({
+    ventana: ventanaDelHilo(o.hilo.turnos, TOPES_DEL_CHAT.turnosALaVista),
+    pendientes: pendientesDeNexus(o.hilo.turnos),
+    mensaje: o.mensaje,
+    quien: o.quien,
+    ahora: o.ahora,
+    foco: o.foco,
+    agentRunId: o.agentRunId,
+    medidor: { agentSlug: SLUG_DEL_CHAT_DE_NEXUS, origen: origenDelHilo(o.hilo.id), triggeredByEmail: o.hilo.usuarioEmail },
+    modelo: o.hilo.modelo,
+  });
+}
+
+/**
+ * Lo que necesita UN turno del chat de la cuenta, venga de donde venga la conversación: el hilo de la cuenta (la ficha,
+ * `pensarElTurno`) o la conversación de la preventa (24 nov, «una sola conversación»: lib/exploraciones/
+ * nexus-en-la-preventa-server.ts › `pedirALaCuentaEnLaPreventa`). Lo pendiente se revalida acá; el mensaje de la persona
+ * ya viene sin marcadores.
+ */
+export interface PedidoALaCuenta {
+  /** La conversación ANTES del mensaje, como la ve el modelo (empieza por la persona). */
+  ventana: ReadonlyArray<{ rol: "user" | "assistant"; texto: string }>;
+  /** Lo propuesto en la conversación que no se aplicó, con sus líneas (se revalida contra hoy). */
+  pendientes: ReadonlyArray<{ nombre: string; entrada: unknown; linea: string }>;
+  mensaje: string;
+  quien: { persona: TeamMember; clientId: string; veMontos: boolean };
+  ahora: Date;
+  foco?: FocoDelChat;
+  agentRunId: string | null;
+  /** A quién se carga el gasto de cada llamada (`LlmCall`). */
+  medidor: { agentSlug: string; origen: string; triggeredByEmail: string };
+  modelo?: string;
+}
+
+/** En la preventa no se ofrecen las notas de la cuenta: el modelo lo sabe en el mensaje, no solo por la herramienta que falta. */
+export const AVISO_SIN_NOTAS_DE_LA_CUENTA =
+  "[EN LA PREVENTA — lo escribe Nexus, no la persona] Lo que te cuenten de la empresa lo guarda otra parte de Nexus en «Lo que sabes del cliente»: acá no propones notas de la cuenta.\n\n";
+
+export async function pensarConLaCuenta(o: PedidoALaCuenta): Promise<TurnoPensado> {
   const t0 = Date.now();
-  const { hilo, mensaje, quien, ahora, foco } = o;
+  const { mensaje, quien, ahora, foco } = o;
   const { persona, clientId } = quien;
   const ctx = contextoDelChat(persona, quien.veMontos, ahora);
   const tiempos: TiemposDelTurno = { pendientesMs: 0, contextoMs: 0, focoMs: 0, llamadas: [], herramientas: [], totalMs: 0 };
@@ -156,7 +196,7 @@ export async function pensarElTurno(o: {
   // 1. Lo pendiente, revalidado contra hoy: lo que ya no se puede se cae con su motivo.
   const vivas: CambioPropuesto[] = [];
   const caidas: Array<{ linea: string; motivo: string }> = [];
-  for (const p of pendientesDeNexus(hilo.turnos)) {
+  for (const p of o.pendientes) {
     // En la preventa no se guardan notas de la cuenta (van a HubSpot): una que quedó pendiente en la ficha sale de la lista.
     if (foco?.sinNotasDeLaCuenta && p.nombre === NOTA_DE_LA_CUENTA) {
       caidas.push({ linea: p.linea, motivo: "en la preventa no se guardan notas de la cuenta: cuéntaselo a Nexus y va a «Lo que sabes del cliente»" });
@@ -192,18 +232,19 @@ export async function pensarElTurno(o: {
   });
   const sha = huellaDeContexto(contexto);
 
-  // 3. El pedido: la ventana del hilo (con su breakpoint), y lo pendiente + el mensaje de la persona.
-  const ventana = ventanaDelHilo(hilo.turnos, TOPES_DEL_CHAT.turnosALaVista);
+  // 3. El pedido: la ventana de la conversación (con su breakpoint), y lo pendiente + el mensaje de la persona.
+  const ventana = o.ventana;
   const historia: Anthropic.Messages.MessageParam[] = ventana.map((t, i) =>
     i === ventana.length - 1 ? { role: t.rol, content: [{ type: "text" as const, text: t.texto, cache_control: { type: "ephemeral" as const } }] } : { role: t.rol, content: t.texto },
   );
-  const messages: Anthropic.Messages.MessageParam[] = [...historia, { role: "user", content: `${bloqueDeLoPendiente(vivas.map((v) => v.linea))}${guia.mensaje}${mensaje}` }];
+  const avisoDelLugar = foco?.sinNotasDeLaCuenta ? AVISO_SIN_NOTAS_DE_LA_CUENTA : "";
+  const messages: Anthropic.Messages.MessageParam[] = [...historia, { role: "user", content: `${bloqueDeLoPendiente(vivas.map((v) => v.linea))}${avisoDelLugar}${guia.mensaje}${mensaje}` }];
   const tools = herramientasDelChat({ sinNotasDeLaCuenta: foco?.sinNotasDeLaCuenta });
   const llamar = async (msgs: Anthropic.Messages.MessageParam[], op: { sinHerramientas: boolean }) => {
     const tl = Date.now();
-    const m = await conContextoDeIA({ agentSlug: SLUG_DEL_CHAT_DE_NEXUS, agentRunId: o.agentRunId, clientId, triggeredByEmail: hilo.usuarioEmail, origen: origenDelHilo(hilo.id) }, () =>
+    const m = await conContextoDeIA({ agentSlug: o.medidor.agentSlug, agentRunId: o.agentRunId, clientId, triggeredByEmail: o.medidor.triggeredByEmail, origen: o.medidor.origen }, () =>
       getAnthropic().messages.create({
-        model: hilo.modelo ?? MODELO_DEL_ASISTENTE,
+        model: o.modelo ?? MODELO_DEL_ASISTENTE,
         max_tokens: MAX_TOKENS_DE_RESPUESTA,
         // Un chat, no un documento: pensar poco y contestar rápido (validación 106; ver ./constantes.ts).
         output_config: { effort: ESFUERZO_DEL_CHAT },
@@ -231,7 +272,7 @@ export async function pensarElTurno(o: {
 
   const b = await correrBucle({
     llamar,
-    ejecutor: conTiempos(ejecutorDelChat(ctx, clientId), tiempos.herramientas),
+    ejecutor: conTiempos(ejecutorDelChat(ctx, clientId, { sinNotasDeLaCuenta: foco?.sinNotasDeLaCuenta }), tiempos.herramientas),
     mensajes: messages,
     maxVueltas: TOPES_DEL_CHAT.vueltasPorTurno,
     maxCambios: TOPES_DEL_CHAT.cambiosPorLista,

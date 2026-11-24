@@ -17,6 +17,7 @@ import { escaleraParaElAgente } from "@/lib/impacto/escalera";
 import { citaEstaEnLasFuentes, normalizarParaCita } from "@/lib/timeline/limites";
 import { voseoEnProsa } from "@/lib/ui/voseo-formas";
 import type { RespuestaDeNexus } from "./respuesta";
+import type { ListaEnLaConversacion } from "./lista";
 
 /** Sonnet 4.6, el modelo por defecto de Nexus: entender qué quiso decir y a qué tarjeta va pide más que Haiku. */
 export const MODELO_DEL_CHAT = "claude-sonnet-4-6";
@@ -24,8 +25,11 @@ const MAX_TOKENS_DEL_TURNO = 2_500;
 
 /** Los topes de una conversación. El servidor los hace cumplir; el panel los usa para avisar antes. */
 export const TOPES = {
-  /** Las vueltas de Claude en una conversación (cada «Enviar» es una). */
-  turnosPorConversacion: 6,
+  /**
+   * Las vueltas de Claude en una conversación (cada «Enviar» es una). 12 desde el 24 nov (Elías: «12 vueltas»): la
+   * conversación junta contar, preguntar y pedir lo de la cuenta. Eran 6.
+   */
+  turnosPorConversacion: 12,
   /** Las vueltas de Claude por persona y por día (en Costa Rica), sumando todas sus conversaciones. */
   turnosPorDia: 60,
   /** Cuántas veces puede preguntar antes de tener que decir adónde va. */
@@ -34,8 +38,8 @@ export const TOPES = {
   preguntasPorRonda: 2,
   /** El largo de lo que escribe o dicta la persona en un mensaje. */
   largoDelMensaje: 4_000,
-  /** Cuántos mensajes viajan (la persona y Nexus). */
-  mensajes: 14,
+  /** Cuántos mensajes viajan (la persona y Nexus): dos por vuelta, con las 12 vueltas (eran 14 con 6). */
+  mensajes: 28,
   /** Cuántos cambios propone como mucho. */
   cambios: 8,
   /** Cuántos hechos deja como mucho. */
@@ -52,12 +56,20 @@ export interface MensajeDeLaConversacion {
    * Desde el 22 nov (etapa 0 del plan maestro): «cortesia», un «gracias» o un «ok» de la persona y lo que Nexus le
    * contesta (ninguno va a la nota ni es una ronda de preguntas); «guardado», lo que la persona ya guardó como nota en
    * esta conversación: sigue a la vista, pero no vuelve a la nota siguiente ni respalda sus cambios.
+   * Desde el 24 nov (una sola conversación): «pedido», la persona le pidió algo de la cuenta (una tarea, el siguiente paso,
+   * la guía, un documento: no va a la nota); «lista», lo que le contestó la parte de Nexus que trabaja la cuenta, con la
+   * lista de cambios si la hubo (no es una ronda de preguntas).
    */
   es?: MarcaDelMensaje;
+  /**
+   * La vuelta que dejó este mensaje de Nexus, cuando es una lista de la cuenta («lista»): con ella se reconoce su lista al
+   * volver (./lista.ts › `emparejarListas`). La pone el servidor; la pantalla la devuelve tal cual.
+   */
+  vuelta?: string;
 }
 
 /** Las marcas de un mensaje (`MensajeDeLaConversacion.es`). Las valida la ruta y las lee la conversación guardada. */
-export const MARCAS_DEL_MENSAJE = ["consulta", "respuesta", "cortesia", "guardado"] as const;
+export const MARCAS_DEL_MENSAJE = ["consulta", "respuesta", "cortesia", "guardado", "pedido", "lista"] as const;
 export type MarcaDelMensaje = (typeof MARCAS_DEL_MENSAJE)[number];
 export const esMarcaDelMensaje = (v: unknown): v is MarcaDelMensaje => typeof v === "string" && (MARCAS_DEL_MENSAJE as readonly string[]).includes(v);
 
@@ -115,7 +127,15 @@ export type ResultadoDelTurno =
   /** Un «gracias» o un «ok» (`esCortesia`): Nexus contesta corto, sin llamar a la IA y sin proponer guardar nada. */
   | { tipo: "cortesia"; texto: string }
   /** `sinLeer`: la IA no respondió o no se entendió. La nota se guarda igual, y la pantalla lo dice. */
-  | { tipo: "listo"; cambios: CambioPropuesto[]; hechos: HechoPropuesto[]; descartados: number; sinLeer?: true };
+  | { tipo: "listo"; cambios: CambioPropuesto[]; hechos: HechoPropuesto[]; descartados: number; sinLeer?: true }
+  /**
+   * La persona le pidió algo de la cuenta (24 nov, una sola conversación): lo prepara la parte de Nexus que trabaja la
+   * cuenta (lib/nexus-chat), con esta conversación como historia. Es un paso del servidor, como «consulta»: a la pantalla
+   * llega la «lista».
+   */
+  | { tipo: "pedido"; pedido: string }
+  /** Lo que contestó la parte de Nexus que trabaja la cuenta, con su lista de cambios (vacía si solo contestó). */
+  | { tipo: "lista"; lista: ListaEnLaConversacion };
 
 /** Lo que el modelo no pudo leer: «listo, sin cambios», marcado como no leído (la nota se guarda igual). */
 export const NO_SE_PUDO_LEER: ResultadoDelTurno = { tipo: "listo", cambios: [], hechos: [], descartados: 0, sinLeer: true };
@@ -127,7 +147,12 @@ export const LISTO_SIN_CAMBIOS: ResultadoDelTurno = { tipo: "listo", cambios: []
 /** Los mensajes, limpios y dentro del tope; el último es de la persona. null si no hay nada que mandar. */
 export function mensajesValidos(m: readonly MensajeDeLaConversacion[]): MensajeDeLaConversacion[] | null {
   const limpios = m
-    .map((x) => ({ de: x.de, texto: x.texto.trim().slice(0, TOPES.largoDelMensaje), ...(x.es ? { es: x.es } : {}) }))
+    .map((x) => ({
+      de: x.de,
+      texto: x.texto.trim().slice(0, TOPES.largoDelMensaje),
+      ...(x.es ? { es: x.es } : {}),
+      ...(x.de === "nexus" && x.es === "lista" && typeof x.vuelta === "string" && x.vuelta ? { vuelta: x.vuelta.slice(0, 60) } : {}),
+    }))
     .filter((x) => (x.de === "persona" || x.de === "nexus") && x.texto)
     .slice(-TOPES.mensajes);
   if (!limpios.length || limpios[limpios.length - 1].de !== "persona") return null;
@@ -262,6 +287,55 @@ export function empiezaContando(texto: string): boolean {
 }
 
 /**
+ * Lo que va antes de la orden en un pedido amable: «¿Me puedes…», «Por favor…», «Quiero que…», «Ayúdame a…». Sin tildes.
+ */
+const ANTES_DEL_PEDIDO = /^(¿\s*)?(por favor[,\s]+)?((me|nos)\s+)?(puedes|podrias|podes|pudieras|quiero que|necesito que|te pido que|ayudame a)?\s*/;
+/**
+ * Las órdenes de un pedido de la cuenta, en imperativo, infinitivo, subjuntivo («quiero que crees») o presente amable
+ * («¿me agregas…?»). Sin tildes. «Anota» y «apunta» no: arrancan contando («Anota que…»).
+ */
+const ORDEN_DEL_PEDIDO =
+  /^((me|nos|le)\s+)?(crea|creame|crear|crearle|crees|creas|agrega|agregame|agregale|agregar|agregarle|agregues|agregas|anade|anademe|anadele|anadir|anadas|pon|ponme|ponle|poner|ponerle|pongas|pones|programa|programame|programar|programes|programas|agenda|agendame|agendar|agendes|agendas|mueve|muevela|mover|muevas|mueves|pasa|pasala|pasar|pases|pasas|cierra|cierrala|cerrar|cierres|cierras|marca|marcala|marcar|marques|marcas|cambia|cambiale|cambiala|cambiar|cambiarle|cambies|cambias|fija|fijale|fijar|fijes|fijas|define|definir|definas|defines|actualiza|actualizale|actualizar|actualices|actualizas|quita|quitale|quitar|quitarle|quites|quitas|saca|sacale|sacar|saques|sacas|borra|borrale|borrar|borres|borras|elimina|eliminar|elimines|eliminas|genera|generame|generar|generarme|generes|generas|arma|armame|armar|armes|armas|prepara|preparame|preparar|prepares|preparas)(?=[\s,.:;!?]|$)/;
+/**
+ * Sobre QUÉ de la cuenta: una tarea (o la T-12), el siguiente paso, la guía de la próxima sesión o un documento, CON su
+ * artículo o su número («una tarea», «el siguiente paso», «dos preguntas a la guía»). Sin el artículo no es seguro: «Crea
+ * tareas a mano en HubSpot» cuenta cómo trabaja el cliente (en español la orden y el presente se escriben igual). Sin tildes.
+ */
+const OBJETO_DEL_PEDIDO =
+  /(^|\s)((un|una|el|la|los|las|esa|esta|esas|estas|otra|otras|otro|mi|su|sus|mis|\d+|dos|tres|cuatro|cinco)\s+(nuevas?\s+|nuevos?\s+)?(tareas?|recordatorios?|siguientes? pasos?|proximos? pasos?|preguntas? (a|de|en|para) la guia|repreguntas?|kickoff|handoff|diagnostico)|t-?\d+|(a|de|en|para) la guia)(?=[\s,.:;!?]|$)/;
+/** «Recuérdame llamar a Ana el viernes» es una tarea; «Recuérdame qué dijo Ana» es una pregunta. Sin tildes. */
+const RECUERDAME_HACER =
+  /^recuerdame (que )?(llamar|llamarle|escribir|escribirle|mandar|mandarle|enviar|enviarle|revisar|agendar|preparar|pedir|pedirle|confirmar|hacer|dar|darle|seguir|contactar|buscar|preguntar|preguntarle)(?=[\s,.:;!?]|$)/;
+/** Cuántas palabras después de la orden se mira el objeto («Crea para el lunes una tarea…»). */
+const PALABRAS_HASTA_EL_OBJETO = 12;
+/**
+ * Al contestar una pregunta de Nexus, el objeto tiene que venir pegado a la orden («Crea una tarea…»): lo que contesta
+ * casi siempre cuenta, y una orden lejos de su objeto es más bien parte del relato.
+ */
+const PALABRAS_HASTA_EL_OBJETO_AL_CONTESTAR = 3;
+
+/**
+ * ¿Lo que escribió la persona es SEGURO un pedido de la cuenta? (24 nov, una sola conversación) Una orden («crea»,
+ * «agrega», «cambia», «mueve», «genera»…, también dicha con amabilidad: «¿Me puedes crear…?», «Quiero que agregues…») sobre
+ * una tarea, el siguiente paso, la guía o un documento, con su artículo; o «Recuérdame llamar…». Lo dudoso lo decide el
+ * modelo con la conversación a la vista (`comoSeLee` › «duda»).
+ */
+export function esPedidoDeLaCuenta(texto: string, o: { estricto?: boolean } = {}): boolean {
+  const inicio = sinTildes(inicioDe(texto));
+  if (!inicio) return false;
+  if (RECUERDAME_HACER.test(inicio)) return true;
+  const sinAmabilidad = inicio.replace(ANTES_DEL_PEDIDO, "");
+  const orden = ORDEN_DEL_PEDIDO.exec(sinAmabilidad);
+  if (!orden) return false;
+  // «Pasa que…», «Cambia que…», «Marca que…»: cuenta lo que pasa, no pide. Y «Programa de referidos», «Agenda del
+  // gerente», «Marca de la casa»: es el sustantivo, no la orden (revisión del 24 nov).
+  if (/^\s*(que|de|del)(?=[\s,.:;!?]|$)/.test(sinAmabilidad.slice(orden[0].length))) return false;
+  const tope = o.estricto ? PALABRAS_HASTA_EL_OBJETO_AL_CONTESTAR : PALABRAS_HASTA_EL_OBJETO;
+  const despues = sinAmabilidad.slice(orden[0].length).replace(/[¿?¡!]/g, " ").trim().split(/\s+/).slice(0, tope).join(" ");
+  return OBJETO_DEL_PEDIDO.test(` ${despues}`);
+}
+
+/**
  * Cómo se lee lo último que escribió la persona (Elías, 21 nov):
  *   - «contar»: SEGURO algo que cuenta: contesta una pregunta de Nexus, o arranca contando («Es importante…») sin
  *     preguntar nada. Aunque el modelo diga que es una consulta, no se responde.
@@ -272,19 +346,34 @@ export function empiezaContando(texto: string): boolean {
  * como nota» debajo de una respuesta, «¿Era una pregunta?» debajo de lo que iba a guardarse). `contar` y `preguntar`: lo
  * que eligió la persona con esos botones.
  */
-export type ComoSeLee = "pregunta" | "contar" | "duda" | "cortesia";
-export function comoSeLee(m: readonly MensajeDeLaConversacion[], o: { contar?: boolean; preguntar?: boolean } = {}): ComoSeLee {
+/*
+ * Desde el 24 nov (una sola conversación) también «pedido»: SEGURO un pedido de la cuenta (`esPedidoDeLaCuenta`: «Crea una
+ * tarea…», «Cambia el siguiente paso…», «Agrega a la guía…»), o la persona eligió `pedir`. Lo prepara la parte de Nexus que
+ * trabaja la cuenta, sin la llamada que clasifica. Después de una lista de Nexus, lo que sigue («para Ana», «y otra el
+ * viernes», «¿y la de Juan?») puede seguir con el pedido: lo decide el modelo, salvo lo que arranca contando o es otro
+ * pedido seguro.
+ */
+export type ComoSeLee = "pregunta" | "contar" | "duda" | "cortesia" | "pedido";
+export function comoSeLee(m: readonly MensajeDeLaConversacion[], o: { contar?: boolean; preguntar?: boolean; pedir?: boolean } = {}): ComoSeLee {
   if (o.contar) return "contar";
   if (o.preguntar) return "pregunta";
+  if (o.pedir) return "pedido";
   const ultimo = m[m.length - 1];
   const antes = m[m.length - 2];
   if (!ultimo || ultimo.de !== "persona") return "contar";
+  // Un pedido seguro gana aunque Nexus le haya preguntado algo de lo que contaba: «Crea una tarea para revisarlo» no
+  // contesta «¿De qué período?» (revisión del 24 nov: iba a la nota y no había botón para decir «hazlo»).
+  const contesta = !!antes && antes.de === "nexus" && !antes.es;
+  if (esPedidoDeLaCuenta(ultimo.texto, { estricto: contesta })) return "pedido";
   // Contesta lo que Nexus le preguntó («¿De qué período?» → «¿Mensual, creo?»): eso es contar. Si en vez de contestar
   // preguntó otra cosa, la salida es «¿Era una pregunta?».
   if (antes && antes.de === "nexus" && !antes.es) return "contar";
   // Un «gracias» o un «ok» solos no se cuentan ni se responden: Nexus contesta corto (22 nov).
   if (esCortesia(ultimo.texto)) return "cortesia";
-  if (empiezaContando(ultimo.texto)) return conSignoDePregunta(ultimo.texto.trim().toLowerCase()) ? "duda" : "contar";
+  const conSigno = conSignoDePregunta(ultimo.texto.trim().toLowerCase());
+  if (empiezaContando(ultimo.texto)) return conSigno ? "duda" : "contar";
+  // Sigue con lo que Nexus le propuso para la cuenta (o con lo que le preguntó sobre eso): lo decide el modelo.
+  if (antes && antes.de === "nexus" && antes.es === "lista") return "duda";
   if (pareceUnaPregunta(ultimo.texto)) return "pregunta";
   return "duda";
 }
@@ -310,7 +399,8 @@ export function paraContarComoNota<M extends MensajeDeLaConversacion>(m: readonl
   if (i !== m.length - 1) return null;
   const respuesta = m[i];
   const consulta = m[i - 1];
-  if (!respuesta || !consulta || respuesta.de !== "nexus" || respuesta.es !== "respuesta" || consulta.de !== "persona" || !consulta.texto.trim()) return null;
+  // También debajo de lo que contestó la mano de la cuenta (24 nov): «Pasa que…» leído como pedido se cuenta con un clic.
+  if (!respuesta || !consulta || respuesta.de !== "nexus" || (respuesta.es !== "respuesta" && respuesta.es !== "lista") || consulta.de !== "persona" || !consulta.texto.trim()) return null;
   return { base: m.filter((_, k) => k !== i && k !== i - 1), texto: consulta.texto.trim() };
 }
 
@@ -338,6 +428,7 @@ CÓMO CONVERSAS
 - Cuando el pedido dice «YA NO PREGUNTES», respondes «listo» con lo que tengas.
 - Casi siempre te CUENTAN algo, aunque empiece por «Es importante…», «Ojo con…» o «Esto de que…»: eso es contar, y va a la nota. Ante la duda, es contar.
 - Cuando la persona te PIDE algo sobre la cuenta en vez de contarlo (pregunta algo, o te pide que resumas, expliques, compares o sigas con lo que ya le respondiste: «y el segundo», «más corto», «resúmelos»), no lo respondes tú: devuelves {"tipo":"consulta"}. Otra parte de Nexus la responde, con las palabras de la persona, leyendo todo lo de la cuenta. El pedido de la vuelta te dice cuándo el código ya sabe que es algo que cuenta: ahí no devuelvas «consulta».
+- Cuando la persona te pide HACER algo en la cuenta (crear, cambiar o mover una tarea; fijar el siguiente paso; agregar, cambiar o quitar preguntas de la guía de la próxima sesión; generar un documento), o sigue con una lista que Nexus le propuso para la cuenta (contesta lo que Nexus le preguntó sobre ella, le suma o le cambia algo: «para Ana», «y otra para el viernes», «sin la segunda»), devuelves {"tipo":"pedido"}. Otra parte de Nexus lo prepara. Lo mismo que en «consulta»: si el pedido de la vuelta dice que es algo que cuenta, no devuelvas «pedido».
 
 ADÓNDE VA CADA COSA
 - Solo a los destinos de la lista, con la forma que dice cada uno. Si nada calza, no propones cambios: la nota se guarda igual en «Lo que sabes del cliente».
@@ -352,9 +443,10 @@ Además, deja los hechos de lo que contó, como los de una reunión: cada uno un
 LO QUE PESA MÁS
 ${escaleraParaElAgente()}
 
-RESPONDE SOLO UN OBJETO JSON, sin texto alrededor, con una de estas tres formas:
+RESPONDE SOLO UN OBJETO JSON, sin texto alrededor, con una de estas cuatro formas:
 {"tipo":"pregunta","preguntas":["…"]}
 {"tipo":"consulta"}
+{"tipo":"pedido"}
 {"tipo":"listo","cambios":[{"destino":"<clave>","valor":<según su forma>,"porque":"<una frase>","cita":"<palabras exactas>"}],"hechos":[{"tipo":"cuenta","frase":"…","cita":"…"}]}`;
 
 function bloqueDeLosDestinos(destinos: readonly DestinoDisponible[]): string {
@@ -375,12 +467,16 @@ function bloqueDeLaConversacion(m: readonly MensajeDeLaConversacion[]): string {
           ? "PERSONA (ya guardado como nota: no lo propongas de nuevo)"
           : x.es === "cortesia"
             ? "PERSONA (agradeció)"
-            : "PERSONA"
+            : x.es === "pedido"
+              ? "PERSONA (pidió algo de la cuenta)"
+              : "PERSONA"
       : x.es === "respuesta"
         ? "NEXUS (respondió)"
         : x.es === "cortesia"
           ? "NEXUS (contestó)"
-          : "NEXUS";
+          : x.es === "lista"
+            ? "NEXUS (sobre la cuenta)"
+            : "NEXUS";
   return m.map((x) => `${quien(x)}: ${x.texto}`).join("\n\n");
 }
 
@@ -389,7 +485,7 @@ function bloqueDeLaConversacion(m: readonly MensajeDeLaConversacion[]): string {
  * nombre de quien escribe, a propósito: con él, el modelo armaba preguntas sobre esa persona («¿qué dijo Elías…?»).
  * Quién y cuándo los pone el servidor en la nota.
  */
-export function pedidoDelTurno(ctx: ContextoParaNexus, m: readonly MensajeDeLaConversacion[], lectura: Exclude<ComoSeLee, "pregunta" | "cortesia">): Anthropic.Messages.MessageCreateParamsNonStreaming {
+export function pedidoDelTurno(ctx: ContextoParaNexus, m: readonly MensajeDeLaConversacion[], lectura: Exclude<ComoSeLee, "pregunta" | "cortesia" | "pedido">): Anthropic.Messages.MessageCreateParamsNonStreaming {
   const pregunta = puedePreguntar(m);
   const texto = [
     `Estás en ${ctx.donde}. La empresa: ${ctx.empresa}. Te escribe alguien del equipo de Smarteam.`,
@@ -398,8 +494,8 @@ export function pedidoDelTurno(ctx: ContextoParaNexus, m: readonly MensajeDeLaCo
     `=== LA CONVERSACIÓN ===\n${bloqueDeLaConversacion(m)}`,
     pregunta ? "" : "YA NO PREGUNTES: responde «listo» con lo que tengas.",
     lectura === "duda"
-      ? "LO ÚLTIMO QUE ESCRIBIÓ PUEDE SER ALGO QUE CUENTA O UN PEDIDO: decídelo mirando la conversación. Si te pide algo sobre la cuenta (o sigue con lo que le respondiste), devuelve {\"tipo\":\"consulta\"}; si te cuenta algo, sigue como siempre."
-      : "LO ÚLTIMO QUE ESCRIBIÓ NO ES UNA PREGUNTA: te está contando algo. No devuelvas «consulta».",
+      ? "LO ÚLTIMO QUE ESCRIBIÓ PUEDE SER ALGO QUE CUENTA, UNA PREGUNTA O UN PEDIDO: decídelo mirando la conversación. Si te pregunta algo sobre la cuenta (o sigue con lo que le respondiste), devuelve {\"tipo\":\"consulta\"}; si te pide hacer algo en la cuenta (o sigue con la lista que Nexus le propuso), devuelve {\"tipo\":\"pedido\"}; si te cuenta algo, sigue como siempre."
+      : "LO ÚLTIMO QUE ESCRIBIÓ NO ES UNA PREGUNTA NI UN PEDIDO: te está contando algo. No devuelvas «consulta» ni «pedido».",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -423,8 +519,8 @@ export interface OpcionesDeLaLectura {
   /** Si todavía puede preguntar: si no, una pregunta se toma como «listo, sin cambios». */
   puedePreguntar: boolean;
   /**
-   * Lo último de la persona, con sus palabras, si PUEDE ser una pregunta (`comoSeLee` dio «duda»); null o sin dar si el
-   * código sabe que cuenta algo. Sin ella, una «consulta» del modelo se toma como «listo, sin cambios». Con ella, lo que se
+   * Lo último de la persona, con sus palabras, si PUEDE ser una pregunta o un pedido (`comoSeLee` dio «duda»); null o sin
+   * dar si el código sabe que cuenta algo. Sin ella, una «consulta» del modelo se toma como «listo, sin cambios». Con ella, lo que se
    * responde son esas palabras, nunca una reescritura del modelo.
    */
   laPregunta?: string | null;
@@ -495,6 +591,10 @@ export function leerElTurno(respuesta: Pick<Anthropic.Messages.Message, "content
   if (crudo.tipo === "consulta") {
     // Si el código sabe que contó algo, no se responde: queda para guardar como nota (si la persona quiere).
     return o.laPregunta ? { tipo: "consulta", pregunta: o.laPregunta.slice(0, TOPES.largoDelMensaje) } : LISTO_SIN_CAMBIOS;
+  }
+  if (crudo.tipo === "pedido") {
+    // Igual que una consulta: solo si lo último PUEDE ser un pedido, y con las palabras de la persona.
+    return o.laPregunta ? { tipo: "pedido", pedido: o.laPregunta.slice(0, TOPES.largoDelMensaje) } : LISTO_SIN_CAMBIOS;
   }
 
   if (crudo.tipo === "pregunta") {
