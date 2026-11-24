@@ -16484,6 +16484,8 @@ todavía: cada etapa arranca cuando él lo dice.
     equipo escribió al anotarlo. Lo que confirmó el equipo gana sobre una hipótesis o una reunión. Sus cifras valen para
     el validador de cifras. La huella que avisa «cambió lo que se sabe» no cambia: una nota nueva no avisa todavía.
   - El chat «Nexus» de la cuenta la ve sin tocar nada: lee la misma memoria, en el alcance interno.
+  - **Elías confirmó la enmienda el 23 nov** («Sí, con ese filtro»): los hechos de una nota del equipo llegan a lo
+    que ve el cliente solo por `paraElAlcance`. Queda revisar con él, con notas reales de Cemaco · Ecuador, qué hechos pasan.
 
 ## Las lecturas de reuniones que no miraban el cliente se cierran (2026-11-23)
 
@@ -16531,6 +16533,10 @@ con consultas de solo lectura.
 - **Lo que sigue abierto, a propósito:** /sessions sigue listando título y participantes de todas las reuniones a
   cualquier interno (`lib/sessions/cargar-sesiones-categorizadas.ts`), y por eso una reunión sin dueño la abre
   cualquiera. Es una decisión aparte (la evaluación lo anota en §3.1); cambiarla cambia esta regla en un solo lugar.
+- **La propuesta comercial no pide acceso al cliente, y se deja así por ahora (Elías, 23 nov).** Sus rutas piden solo
+  el permiso de Ventas, y todo rol con ese permiso ve todos los clientes: hoy no hay fuga. *Regla:* si algún día una CSE
+  (o cualquier rol con cartera) recibe el permiso de Ventas, ANTES se exige `guardAccessToClient` en las rutas de
+  `app/api/business-cases/**` (unas 25).
 
 ## Nexus como conector de Claude: se revierte «el agente vive dentro de Nexus», con un piloto de dos semanas (2026-11-23)
 
