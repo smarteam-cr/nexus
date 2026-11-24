@@ -190,7 +190,7 @@ const literal = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
  * ¿Qué archivos de `scripts/sql/` CREAN esto que falta? Es una pista para quien va a desplegar,
- * no una prueba: no hay registro de qué SQL ya corrió (ARCHITECTURE Parte 0 · cap. D). Se busca
+ * no una prueba de que corrió o no (eso lo dice el registro, `SqlAplicado`: lib/db/registro-de-sql.ts). Se busca
  * la SENTENCIA que lo crea —la tabla y la columna en el mismo `ALTER TABLE`, el enum y el valor en
  * el mismo `ALTER TYPE`—, no dos menciones sueltas en el archivo. Mira también las líneas
  * comentadas: un `ALTER TYPE … ADD VALUE` no corre dentro de una transacción y varios archivos lo

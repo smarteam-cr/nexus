@@ -215,13 +215,16 @@ portada "Ejemplo: un SQL y su deploy"
 
 # ── Ejemplo: reemplázalo por los pasos reales ─────────────────────────────
 etapa "Qué le falta a la base"
-decir "Primero miramos qué SQL le falta a producción (solo lee)."
-correr "npm run check:esquema"
+decir "Primero miramos qué SQL le falta a producción (solo lee). Antes de aplicar, en rojo es lo esperado;"
+decir "solo frena si no pudo comparar (salida 2: la base no responde o el cliente de Prisma está viejo)."
+correr 'npx tsx scripts/check-esquema.ts || [ $? -ne 2 ]'
 pausa
 
 etapa "Aplicar el SQL, antes del deploy"
 decir "El SQL va ANTES del código que lo usa; si no, el deploy se revierte solo."
-correr_en_prod "npx prisma db execute --file scripts/sql/AAAA-MM-DD-ejemplo.sql"
+correr "npx tsx scripts/aplicar-sql.ts scripts/sql/AAAA-MM-DD-ejemplo.sql"
+pausa
+correr_en_prod "npx tsx scripts/aplicar-sql.ts scripts/sql/AAAA-MM-DD-ejemplo.sql --apply"
 correr "npm run check:esquema"
 pausa
 

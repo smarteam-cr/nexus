@@ -18,30 +18,40 @@
  * aplica ninguno de los que quedan, se aborta: una base a medio migrar produce fallos que parecen bugs del código.
  * El arreglo es hacer idempotente el `.sql`, no saltearlo.
  *
- * ⛔ Solo bases LOCALES (`esBaseLocal`): contra cualquier otro host lanza antes de conectar. Producción sigue
- * siendo a mano, con `ALLOW_PROD_WRITE`.
+ * Cada archivo que corre queda ANOTADO en el registro de esa base (`SqlAplicado`, lib/db/registro-de-sql.ts), con su
+ * huella y `desde` = la máquina y el comando (`db:local bootstrap`, `test:int`): la base local también dice qué tiene.
+ * En una base que todavía no tiene la tabla, los que corren antes de `2026-11-23-registro-de-sql.sql` se anotan al
+ * final, cuando ya existe. Con un `.sql` que falla, se anotan los que sí corrieron.
+ *
+ * ⛔ Solo bases LOCALES (`esBaseLocal`): contra cualquier otro host lanza antes de conectar. Producción va por
+ * `npm run db:sql` (scripts/aplicar-sql.ts), con `ALLOW_PROD_WRITE`.
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "pg";
 import { describirDestino, esBaseLocal } from "./guard";
 import { aplicarEnPasadas, ErrorDeSqlEnPasadas } from "../../lib/db/sql-en-pasadas";
+import { FECHA_DEL_BASELINE, esPosteriorAlBaseline, huellaDeSql } from "../../lib/db/registro-de-sql";
+import { anotar, desdeEstaMaquina, existeElRegistro } from "../../lib/db/registro-de-sql-base";
 
-/** La fecha de `prisma/migrations/0_init`: lo de esa fecha o antes ya está en el baseline. */
-export const FECHA_DEL_BASELINE = "2026-08-01";
+/** La fecha de `prisma/migrations/0_init` (vive en lib/db/registro-de-sql.ts, con la regla de qué es posterior). */
+export { FECHA_DEL_BASELINE };
 
 /** Rutas relativas a la raíz (`scripts/sql/…`), en el orden en que se aplican. */
 export function sqlPosterioresAlBaseline(raiz: string): string[] {
   const dir = join(raiz, "scripts", "sql");
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
-    .filter((f) => f.endsWith(".sql") && /^\d{4}-\d{2}-\d{2}/.test(f) && f.slice(0, 10) > FECHA_DEL_BASELINE)
+    .filter(esPosteriorAlBaseline)
     .sort()
     .map((f) => `scripts/sql/${f}`);
 }
 
-/** Aplica los `.sql` posteriores al baseline a la base LOCAL de `url`. Devuelve los que corrió. */
-export async function aplicarSqlPosteriores(url: string, raiz: string): Promise<string[]> {
+/**
+ * Aplica los `.sql` posteriores al baseline a la base LOCAL de `url` y los anota en su registro. Devuelve los que
+ * corrió. `comando` va a la columna `desde` (con el nombre de la máquina).
+ */
+export async function aplicarSqlPosteriores(url: string, raiz: string, comando = "scripts/sql posteriores"): Promise<string[]> {
   if (!esBaseLocal(url)) {
     throw new Error(`Los scripts/sql solo se aplican solos a una base LOCAL; el destino es ${describirDestino(url)}.`);
   }
@@ -49,11 +59,21 @@ export async function aplicarSqlPosteriores(url: string, raiz: string): Promise<
   if (archivos.length === 0) return [];
   const c = new Client({ connectionString: url });
   await c.connect();
+  /** Lo que corrió, con el texto que corrió: se anota al final, haya fallado otro o no. */
+  const corridos: Array<{ archivo: string; huella: string }> = [];
+  /** Si la base no tiene la tabla (el `.sql` del registro no corrió o falló), no hay dónde anotar: es una base vieja. */
+  const anotarLoCorrido = async () => {
+    if (corridos.length > 0 && (await existeElRegistro(c))) {
+      await anotar(c, corridos, { desde: desdeEstaMaquina(comando), como: "aplicado", pisar: true });
+    }
+  };
   try {
     // En pasadas: el orden de nombre no siempre respeta las dependencias (lib/db/sql-en-pasadas.ts).
     const { aplicados } = await aplicarEnPasadas(archivos, async (f) => {
+      const texto = readFileSync(join(raiz, f), "utf8");
       try {
-        await c.query(readFileSync(join(raiz, f), "utf8"));
+        await c.query(texto);
+        corridos.push({ archivo: f.replace(/^scripts\/sql\//, ""), huella: huellaDeSql(texto) });
       } catch (e) {
         // Un archivo con su propio BEGIN que falla deja la conexión en una transacción abortada, y todo lo que sigue
         // fallaría con «current transaction is aborted» en vez de su error real. Sin transacción abierta, el ROLLBACK
@@ -62,8 +82,11 @@ export async function aplicarSqlPosteriores(url: string, raiz: string): Promise<
         throw e;
       }
     });
+    await anotarLoCorrido();
     return aplicados;
   } catch (e) {
+    // Con un `.sql` que falló igual se anota lo que sí corrió. Si anotar también falla, manda el error de antes.
+    await anotarLoCorrido().catch(() => {});
     if (!(e instanceof ErrorDeSqlEnPasadas)) throw e;
     throw new Error(
       `Los scripts/sql posteriores no se pudieron aplicar sobre ${describirDestino(url)}. Cada uno con su error:\n` +

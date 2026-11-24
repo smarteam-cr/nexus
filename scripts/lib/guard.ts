@@ -19,9 +19,10 @@
  * acá sería una dependencia circular con el propio CLI. La carga de .env es responsabilidad
  * del caller (prisma.config.ts y scripts/lib/db.ts ya hacen `import "dotenv/config"`).
  *
- * Los one-liners `npx tsx -e` (el camino de los .sql con ALTER TYPE ... ADD VALUE) no pasan
- * por ningún archivo del repo: ahí el ritual es llamar `assertProdWriteAllowed()` A MANO al
- * principio del one-liner. Está escrito en ARCHITECTURE (Parte 0 · cap. D).
+ * Los `scripts/sql/` se aplican con `npm run db:sql` (scripts/aplicar-sql.ts), que llama a
+ * `assertProdWriteAllowed()` antes de escribir, también para un `ALTER TYPE ... ADD VALUE`
+ * (`--sin-transaccion`). Un one-liner `npx tsx -e` que escriba no pasa por ningún archivo del repo:
+ * ahí el ritual sigue siendo llamar `assertProdWriteAllowed()` A MANO al principio.
  *
  * INV12 (check-invariants) exige que todo script con `--apply` importe este módulo.
  */

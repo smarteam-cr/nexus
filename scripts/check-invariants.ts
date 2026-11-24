@@ -252,7 +252,7 @@ async function main(): Promise<number> {
     violations++;
     console.error(`✗ INV7 VIOLADO: el schema declara ${colsFaltantes.length} columna(s) que la DB NO tiene — CUALQUIER lectura de ese modelo revienta:`);
     for (const c of colsFaltantes.slice(0, 15)) console.error(`    - ${c}`);
-    console.error("  Aplicá el SQL pendiente de scripts/sql/ (`npx prisma db execute --file <archivo>`) y `npx prisma generate`. NUNCA `db push`.");
+    console.error("  Aplicá el SQL pendiente de scripts/sql/ (`npx tsx scripts/aplicar-sql.ts <archivo> --apply`, que lo anota en el registro) y `npx prisma generate`. NUNCA `db push`.");
   } else {
     console.log(`✓ INV7: las columnas de los ${esperadas.size} modelos del schema existen todas en la DB.`);
   }
@@ -376,6 +376,10 @@ async function main(): Promise<number> {
   const ALLOWLIST_INV12 = new Set([
     "scripts/check-invariants.ts", // este archivo: menciona --apply solo en mensajes
     "scripts/verify-rls-anon.ts", // read-only: imprime la remediación con --apply
+    // Solo lectura (la conexión nace con default_transaction_read_only): el «--apply» que contiene es el de los
+    // comandos que IMPRIME para aplicar un .sql o anotarlo en el registro (2026-11-23). Lo que escribe son
+    // scripts/aplicar-sql.ts y scripts/registro-de-sql.ts, que sí llaman al guard.
+    "scripts/check-esquema.ts",
     "scripts/lib/guard.ts", // el guard mismo
     // Manager de la base LOCAL: el "--apply" que contiene es el argv que le PASA a los
     // seeds del catálogo (F3), y toda URL que construye es urlDe() = localhost:5433 —

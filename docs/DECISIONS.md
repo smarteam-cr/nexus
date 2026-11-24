@@ -16733,3 +16733,52 @@ ya dijo, entraba lo que la empresa ya resolvió y texto genérico de la escala.
   que la cuenta tenga sentido de negocio (el código verifica cada número, no que multiplicarlos sea la pregunta correcta:
   por eso se confirma con un clic). Al publicar después del deploy, las escalas dirán «Hay cambios que el cliente no ve»
   si cambian sus riesgos o sus detalles. Sin SQL.
+
+## Registro de los SQL aplicados (2026-11-23)
+
+Pedido de Elías (decisión 103 del roadmap), tomado de `docs/evaluacion-de-nexus-2026-11.md` › 3.4: los `.sql` de
+`scripts/sql/` los corren dos PCs y varias sesiones contra la misma producción, y no había dónde mirar cuáles corrieron.
+El flujo vive en ARCHITECTURE Parte 0 · cap. D y en RUNBOOK › «Registro de los SQL aplicados»; acá, el porqué.
+
+- **Una tabla en cada base (`SqlAplicado`), no un archivo en el repo.** *Por qué:* la pregunta es «¿qué corrió en ESTA
+  base?», y hay tres (producción, `nexus_local`, `nexus_test`) que van a ritmos distintos. Un archivo versionado diría lo
+  mismo para las tres.
+- **Una fila por archivo, que se pisa al reaplicar; no un historial.** *Por qué:* el bootstrap y el setup de `test:int`
+  reaplican todos los `.sql` en cada corrida: un historial crecería cientos de filas por corrida sin decir nada nuevo. La
+  fila guarda la última aplicación: huella, hora, máquina y comando.
+- **La huella es sha256 del texto con LF y sin BOM.** *Por qué:* con `core.autocrlf` el mismo archivo llega con CRLF a
+  Windows y con LF al resto; sin normalizar, la misma versión daría dos huellas y todo saldría «cambiado».
+- **Se aplica con `npm run db:sql` (`pg` directo), no envolviendo `prisma db execute`.** *Por qué:* con una sola conexión
+  el `.sql` y su fila van en la MISMA transacción, y no puede quedar un cambio aplicado sin anotar; y el modo
+  `--sin-transaccion` (sentencia por sentencia) reemplaza al one-liner `npx tsx -e` del `ALTER TYPE … ADD VALUE`, que
+  aplicaba sin guard en el archivo y sin anotar. El guard es el mismo (`assertProdWriteAllowed`). `prisma db execute`
+  queda para lo que no es de `scripts/sql/`.
+- **El modelo `SqlAplicado` está en `schema.prisma`, aunque la app no lo lea.** *Por qué:* el schema es la fuente única
+  (§2); fuera de él, `migrate diff` lo mostraría como drift en cada corrida, y `/api/health` no avisaría si falta. El
+  costo: su `.sql` va antes del deploy, como cualquier otro.
+- **El backfill anota solo lo que el esquema demuestra.** *Por qué:* anotar todo de una vez escondía justo lo que el
+  registro existe para mostrar. El primer simulacro contra producción (23 nov) encontró dos `.sql` que nunca corrieron
+  ahí: los cinco índices de `2026-09-04-indices-agentrun-contextcard.sql` y el índice único de
+  `2026-09-05-liberacion-unica.sql` (una liberación abierta por cobro). Las reglas de la prueba: todo lo que el archivo
+  crea está en el catálogo y lo que borra no está; lo que un archivo posterior borra no cuenta; al menos una prueba es
+  solo de ese archivo (ni otro archivo, ni el baseline, ni `policies.sql` hacen lo mismo); que algo no exista prueba que
+  corrió solo si antes existía; el RLS y la política `deny_all_non_superuser` nunca son prueba propia, porque
+  `policies.sql` los pone en un bucle que no se lee; las columnas de un `CREATE TABLE` cuentan como creadas ahí. Lo que
+  no deja rastro en el esquema (un UPDATE de datos) lo anota una persona con `--marcar`, y queda dicho
+  (`como = marcado`). `--marcar` se niega con un archivo al que le falta algo: el esquema dice que no corrió, y marcarlo
+  lo sacaría de `check:esquema` para siempre. «Demostrado» prueba el DDL de un archivo, no su parte de datos: el
+  simulacro marca los que cambian datos para que alguien los lea antes del `--apply`.
+- **`check:esquema` sale con 3 si hay `.sql` sin anotar o cambiados, y con 1 si falta algo que el código usa.**
+  *Por qué:* la comparación con el cliente Prisma solo ve tablas, columnas y enums que el código usa; un `.sql` de
+  índices, políticas o datos que no corrió pasaba en verde (así quedaron los dos de arriba). Un código aparte porque
+  antes de aplicar el `.sql` nuevo de un deploy el registro siempre está pendiente. El wizard, antes de aplicar, solo
+  frena con el 2 (no pudo comparar: seguir sería aplicar a ciegas) y, después de aplicar, exige el 0.
+- **En PowerShell se aplica con `npx tsx scripts/aplicar-sql.ts`, no con `npm run db:sql --`.** *Por qué:* PowerShell
+  se come el `--` al llamar a `npm.ps1` y npm se queda con `--apply`: el script corría un simulacro y decía «No se
+  aplicó nada» en una línea fácil de pasar por alto. npm 10.9 no deja rastro de un `--apply` que se quedó (sí de
+  `--sin-transaccion` y `--marcar`, que los scripts detectan para frenar): por eso la regla va en los documentos y en las
+  cabeceras, y el simulacro lanzado por npm lo avisa al final.
+- **`db:sql` no respalda.** *Por qué:* los `.sql` son DDL aditivo e idempotente; el respaldo del guard (B-06) es de
+  datos por tabla. Un `.sql` que cambia datos se mira en el simulacro antes del `--apply`.
+- **Queda para después:** que el deploy no arranque si a la base le falta un `.sql` del registro (la otra mitad de la
+  oportunidad 4 de la evaluación). Hoy el registro informa y `/api/health` sigue siendo la red.

@@ -8,7 +8,8 @@
  *   2. FAIL-CLOSED: si el host resultante es Supabase o la URL falta → ABORTA. Estos tests
  *      TRUNCAN todas las tablas antes de cada caso; correr eso contra prod sería el
  *      incidente terminal. La verificación usa el mismo `esHostProduccion` del guard.
- *   3. `beforeEach`: TRUNCATE de todas las tablas de `public` (menos `_prisma_migrations`),
+ *   3. `beforeEach`: TRUNCATE de todas las tablas de `public` (menos `_prisma_migrations` y el registro de
+ *      los SQL aplicados, `SqlAplicado`: son de la base, no de la prueba),
  *      RESTART IDENTITY CASCADE → cada test arranca con la base VACÍA y siembra lo suyo.
  *      Por eso `fileParallelism: false`: los archivos comparten la base.
  *
@@ -50,7 +51,7 @@ beforeEach(async () => {
   await conectado;
   if (!tablas) {
     const { rows } = await cliente.query<{ tablename: string }>(
-      `SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`,
+      `SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT IN ('_prisma_migrations', 'SqlAplicado')`,
     );
     tablas = rows.map((r) => `"${r.tablename}"`);
   }
