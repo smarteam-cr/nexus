@@ -3,7 +3,7 @@
  * piezas son las de la página (con la clave que usa la edición a mano), y cada cambio se escribe con la MISMA operación.
  */
 import { describe, expect, it } from "vitest";
-import { claveAtadaDelResumen, tituloDeLoQueHicimos, type ResumenDeLaPagina } from "@/lib/external/pagina-del-resumen";
+import { claveAtadaDelResumen, type ResumenDeLaPagina, type TarjetaDeLaPagina } from "@/lib/external/pagina-del-resumen";
 import { CLAVES } from "@/lib/external/textos-de-la-pagina";
 import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import { SECCIONES_DEL_AREA, SECCIONES_DEL_RESUMEN, seccionDelEquipo } from "@/lib/external/secciones-de-la-escala";
@@ -40,16 +40,36 @@ const resumen = (o: Partial<ResumenDeLaPagina> = {}): ResumenDeLaPagina =>
   }) as ResumenDeLaPagina;
 
 describe("las piezas del Resumen", () => {
-  it("el titular es la misma pieza que edita la página: su clave atada a los números del sistema", () => {
+  it("el título es la misma pieza que edita la página: «Diagnóstico de rendimiento», y Nexus lo puede cambiar (24 nov)", () => {
     const piezas = piezasDelResumen(resumen(), {});
-    const titular = piezas.find((p) => p.nombre.startsWith("El titular"))!;
-    expect(titular.clave).toBe(`t/${claveAtadaDelResumen("titular.hicimos", tituloDeLoQueHicimos(hicimos)!)}`);
-    expect(titular.valor).toBe("3 sesiones y 2 h 30 min de conversación con 2 personas de tu equipo.");
-    expect(titular.aMano).toBe(false);
-    // Cambiado para esta empresa: se ve lo escrito y cuenta como escrito por el equipo.
+    const titular = piezas.find((p) => p.nombre.startsWith("El título"))!;
+    expect(titular.clave).toBe(`t/${claveAtadaDelResumen("titular.diagnostico", "Diagnóstico de rendimiento")}`);
+    expect(titular).toMatchObject({ valor: "Diagnóstico de rendimiento", aMano: false, seccion: SECCIONES_DEL_RESUMEN.arriba });
+    // Cambiado para esta empresa: se ve lo escrito y cuenta como escrito por el equipo; se escribe con la operación de siempre.
     const clave = titular.clave.slice(2);
-    const cambiado = piezasDelResumen(resumen(), { [clave]: "Escuchamos a tu equipo de ventas." }).find((p) => p.clave === titular.clave)!;
-    expect(cambiado).toMatchObject({ valor: "Escuchamos a tu equipo de ventas.", aMano: true });
+    const cambiado = piezasDelResumen(resumen(), { [clave]: "Diagnóstico comercial de tu equipo." }).find((p) => p.clave === titular.clave)!;
+    expect(cambiado).toMatchObject({ valor: "Diagnóstico comercial de tu equipo.", aMano: true });
+    expect(operacionDelCambio(titular, "Diagnóstico de tu operación")).toMatchObject({ op: "textoDeLaPagina", clave, texto: "Diagnóstico de tu operación" });
+    // Sin Resumen armado no hay título que pedirle.
+    expect(piezasDelResumen(resumen({ hicimos: null }), {}).some((p) => p.nombre.startsWith("El título"))).toBe(false);
+  });
+
+  it("el resumen debajo del título y quién es quién son piezas de su sección; sin resumen, la bajada (24 nov)", () => {
+    const conPortada = resumen({
+      tarjetas: [{ areaId: "1", nombre: "Ventas", porExplorar: false, subequipos: [] }] as unknown as TarjetaDeLaPagina[],
+      negocio: [
+        { tipo: "portada", titulo: "El resumen", lista: { piezas: [{ id: "n2", texto: "La empresa invierte en 3 tiendas.", clave: "negocio:portada:n2", citas: [CITA] }], nueva: "negocio:portada:nuevo" } },
+        { tipo: "quienes", titulo: "Quién es quién", lista: { piezas: [{ id: "n3", texto: "Ventas: Diego y 4 asesores", clave: "negocio:quienes:n3", citas: [CITA] }], nueva: "negocio:quienes:nuevo" } },
+      ],
+    });
+    const piezas = piezasDelResumen(conPortada, {});
+    expect(piezas.find((p) => p.clave === "r/negocio:portada:n2")?.seccion).toBe(SECCIONES_DEL_RESUMEN.arriba);
+    expect(piezas.find((p) => p.clave === "r/negocio:quienes:n3")?.seccion).toBe(SECCIONES_DEL_RESUMEN.equipos);
+    expect(piezas.some((p) => p.nombre.startsWith("La bajada"))).toBe(false);
+    // Sin resumen: la bajada de siempre, y el lugar para escribirlo.
+    const sin = piezasDelResumen(resumen({ negocio: [{ tipo: "portada", titulo: "El resumen", lista: { piezas: [], nueva: "negocio:portada:nuevo" } }] }), {});
+    expect(sin.some((p) => p.nombre.startsWith("La bajada"))).toBe(true);
+    expect(sin.find((p) => p.clave === "r/negocio:portada:nuevo")?.agregar).toBe(true);
   });
 
   it("cada lista que acepta una pieza nueva tiene su lugar para agregar", () => {

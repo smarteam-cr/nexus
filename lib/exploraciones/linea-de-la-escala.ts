@@ -10,8 +10,9 @@
  *   1. Nexus la está ubicando ahora (otro trabajo del agente en la preventa no cambia la frase: el botón espera).
  *   2. Nunca se ubicó: con reuniones que leer, que falta hacerlo; sin ninguna, que no hay qué leer todavía.
  *   3. Hay reuniones de después de la última vez que se ubicó: cuántas, y el botón dice «Actualizar».
- *   4. La escala está al día pero el Resumen se armó antes de alguna reunión: se rehace con «Rehacer con IA», en el Resumen
- *      (el botón de esta línea no lo arma: no se le suma un segundo botón).
+ *   4. La escala está al día pero el Resumen se armó antes de alguna reunión, o leyó cortadas reuniones largas antes de que
+ *      se leyeran enteras (24 nov, `cortadasQueSeLeenEnteras`): se rehace con «Rehacer con IA», en el Resumen (el botón de
+ *      esta línea no lo arma: no se le suma un segundo botón).
  *   5. Al día: cuándo se ubicó y con cuántas reuniones.
  * Cuenta solo las reuniones que «Ubicar» lee (`sirveParaUbicar`: de Meet, con texto, ni cortadas ni de puertas adentro), y
  * de esas, las que leería hoy (las más nuevas, `REUNIONES_QUE_LEE_UBICAR`).
@@ -22,6 +23,7 @@
  * reuniones) se mira por la fecha. Una leída solo con las notas de Gemini vuelve a ser nueva cuando llega su transcripción.
  * Si alguien cambia el título de una reunión ya leída, cuenta como nueva hasta volver a ubicar.
  */
+import type { ReunionMalLeida } from "@/lib/external/pagina-del-resumen";
 import { diaConAnio, diaCorto } from "./fechas";
 import { REUNIONES_QUE_LEE_UBICAR, sirveParaUbicar } from "./posicionar";
 
@@ -51,6 +53,28 @@ const ROTULO = "Reunión del ";
 const LARGO_DEL_ROTULO = 200;
 const reuniones = (n: number) => (n === 1 ? "1 reunión" : `${n} reuniones`);
 
+/**
+ * Cuántas reuniones leyó cortadas un Resumen armado antes de que se leyeran enteras (24 nov, Elías: «que se lean enteras»):
+ * rehacerlo las lee enteras. Uno armado ya con la regla nueva no cuenta: si alguna quedó cortada, era tan larga que no
+ * entró ni con el tope nuevo, y rehacerlo no la cambia.
+ */
+export function cortadasQueSeLeenEnteras(g: { leidasEnteras?: true; malLeidas?: readonly { motivos: readonly string[] }[] } | null | undefined): number {
+  if (!g || g.leidasEnteras) return 0;
+  return (g.malLeidas ?? []).filter((m) => m.motivos.includes("recortada")).length;
+}
+
+/**
+ * Las reuniones mal leídas que salen en la nota de La escala y de su sesión (components/exploraciones/ReunionesMalLeidas.tsx):
+ * sin lo cortado que rehacer el Resumen lee entero (eso lo dice esta línea). `enteras`: el Resumen ya se armó leyéndolas
+ * enteras, y una cortada era más larga que el tope.
+ */
+export function malLeidasParaMostrar(reuniones: readonly ReunionMalLeida[], enteras: boolean): ReunionMalLeida[] {
+  return reuniones.flatMap((m) => {
+    const motivos = enteras ? m.motivos : m.motivos.filter((x) => x !== "recortada");
+    return motivos.length ? [{ ...m, motivos }] : [];
+  });
+}
+
 export function lineaDeLaEscala(o: {
   reuniones: readonly ReunionDeLaLinea[];
   /** Cuándo corrió por última vez «Ubicar con las reuniones» (la corrida `posicionar`). */
@@ -59,6 +83,8 @@ export function lineaDeLaEscala(o: {
   leyo?: readonly string[];
   /** Cuándo se armó el Resumen (`resumenDeLaEscala.at`). */
   resumenEn: string | null;
+  /** Las reuniones que ese Resumen leyó cortadas y rehacerlo lee enteras (`cortadasQueSeLeenEnteras`). */
+  cortadas?: number;
   /** Corre «Ubicar con las reuniones» (la corrida `posicionar`). Otro trabajo del agente no cambia la frase. */
   ubicando: boolean;
 }): LineaDeLaEscala {
@@ -102,11 +128,15 @@ export function lineaDeLaEscala(o: {
   const leidas = leidasEntonces.length || Math.min(conTexto.length, REUNIONES_QUE_LEE_UBICAR);
   const resumen = o.resumenEn;
   const despuesDelResumen = resumen ? conTexto.filter((r) => despuesDe(r.fecha, resumen)).length : 0;
-  if (despuesDelResumen > 0)
+  const cortadas = resumen ? (o.cortadas ?? 0) : 0;
+  if (despuesDelResumen > 0 || cortadas > 0) {
+    const antes = despuesDelResumen > 0 ? `se armó antes de ${despuesDelResumen === 1 ? "la última reunión" : `las últimas ${despuesDelResumen} reuniones`}` : "";
+    const largas = cortadas > 0 ? `leyó cortada${cortadas === 1 ? " 1 reunión larga" : `s ${cortadas} reuniones largas`}` : "";
     return {
       estado: "resumenAtrasado",
-      texto: `La escala está al día, pero el Resumen se armó antes de ${despuesDelResumen === 1 ? "la última reunión" : `las últimas ${despuesDelResumen} reuniones`}: rehazlo con IA en el Resumen.`,
+      texto: `La escala está al día, pero el Resumen ${[antes, largas].filter(Boolean).join(" y ")}: rehazlo con IA en el Resumen${cortadas > 0 ? ` para que ${cortadas === 1 ? "la lea entera" : "las lea enteras"}` : ""}.`,
       boton: volver,
     };
+  }
   return { estado: "alDia", texto: `Ubicada el ${diaCorto(ubicada)}${leidas ? ` con ${reuniones(leidas)}` : ""} · al día.`, boton: volver };
 }

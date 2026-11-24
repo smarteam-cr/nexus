@@ -159,6 +159,64 @@
   margin: 0 9px;
   color: var(--re-tenue);
 }
+/* El resumen debajo del título (24 nov): uno o dos párrafos, con aire entre los dos. */
+.re-portada {
+  display: grid;
+  gap: 10px;
+}
+/* El dolor de cada equipo en una línea (24 nov): debajo del problema principal. */
+.re-dolores {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14.5px;
+  line-height: 21px;
+  color: var(--re-tinta-2);
+  max-width: 68ch;
+}
+.re-dolores b {
+  font-weight: 700;
+  color: var(--re-tinta);
+}
+/* Quién es quién (24 nov): quién lidera y la gente de cada equipo, arriba de las filas. */
+.re-mapa {
+  display: grid;
+  gap: 10px;
+  padding: 18px 22px;
+  border-radius: 14px;
+  background: var(--re-panel);
+}
+.re-mapa h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--re-apagada);
+}
+.re-mapa ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px 28px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.re-mapa li {
+  display: grid;
+  gap: 2px;
+  font-size: 14.5px;
+  line-height: 20px;
+  color: var(--re-tinta-2);
+  min-width: 0;
+}
+.re-mapa li b {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--re-tinta);
+}
 .re-alcance {
   margin: 0;
   font-size: 13px;

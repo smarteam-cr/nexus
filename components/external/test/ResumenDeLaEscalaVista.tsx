@@ -5,15 +5,20 @@
  * documento (hex literal de resumen-editorial.css: la página no tiene tema, no flipea) y en tuteo.
  *
  * Se lee en un minuto. Blanco, tinta azul marino, un solo azul, titulares cortos en negrita y una cifra grande por bloque:
- *   arriba, LO QUE HICIMOS (21 nov, Elías: «En el H1 no debería estar el problema»): la empresa en la ceja, el titular
- *   con sus números («13 sesiones y 8 h de conversación con 3 personas de tu equipo.», `tituloDeLoQueHicimos`), la
- *   bajada, las cifras de sesiones, tiempo, personas y áreas exploradas, la próxima por explorar y el alcance;
- *   01 «El problema principal»: la TESIS (dos frases, 18 nov; hasta el 21 nov era el H1), las etiquetas del negocio y, a la
- *      derecha, el tamaño del negocio si la empresa lo dijo (sin él, la tesis ocupa todo el ancho);
+ *   arriba, EL NOMBRE DEL ENTREGABLE (24 nov, Elías: «El nombre del entregable con un resumen»; «algo como diagnóstico de
+ *   rendimiento»): la empresa en la ceja, el titular «Diagnóstico de rendimiento» (`titularDelResumen`, se cambia por
+ *   empresa; del 21 al 24 nov decía lo que hicimos, «13 sesiones y 8 h de conversación…», que sigue en las cifras de abajo
+ *   y en una foto publicada antes: `formaDeLaPortada`), el resumen de uno o dos párrafos que escribió el agente con las
+ *   cifras de la empresa (sin él, la bajada de siempre), las cifras de sesiones, tiempo, personas y áreas exploradas, la
+ *   próxima por explorar y el alcance;
+ *   01 «El problema principal»: la TESIS (dos frases, 18 nov; hasta el 21 nov era el H1), las etiquetas del negocio, el
+ *      dolor de cada equipo en una línea (24 nov: el reto principal de su fila, `doloresPorEquipo`) y, a la derecha, el
+ *      tamaño del negocio si la empresa lo dijo (sin él, la tesis ocupa todo el ancho);
  *   02 «Puntos clave» (18 nov): los 5 más críticos de la empresa, en orden de peso (un Resumen de antes no los trae);
  *   03 «Tu operación»: los pasos del cliente con su ícono hasta el resultado (el último, lleno), el bucle de los equipos que
  *      acompañan mientras opera y «Dónde se traba hoy», numerado sobre su paso;
- *   04 «Equipos y hallazgos»: una fila por subequipo (Televentas dice «Parte de Ventas») con el nivel de su equipo: quiénes
+ *   04 «Equipos y hallazgos»: arriba, QUIÉN ES QUIÉN (24 nov: quién lidera y la gente de cada equipo, con nombres; la
+ *      única parte con nombres y nunca pegados a un dolor); después una fila por subequipo (Televentas dice «Parte de Ventas») con el nivel de su equipo: quiénes
  *      son y qué hacen, lo que ya funciona, dos retos y «Ver diagnóstico de …»; a la derecha su cifra grande con su estado,
  *      o «Falta un dato». Un equipo sin sesiones sale apagado, sin cifra ni botón;
  *   la banda oscura con lo que falta validar (sin nada que validar, no sale) y el pie con la fecha.
@@ -28,6 +33,8 @@ import type { ReactNode } from "react";
 import {
   enHoras,
   ETIQUETA_DEL_ESTADO,
+  MAX_LINEAS_DEL_MAPA,
+  MAX_PARRAFOS_DE_LA_PORTADA,
   partirElTamano,
   MAX_ETIQUETAS,
   TOPE_A_MANO,
@@ -46,10 +53,14 @@ import {
   type SubequipoDeLaPagina,
   type TarjetaDeLaPagina,
   conclusionDelSubequipo,
+  doloresPorEquipo,
   etiquetaDeLaCifra,
+  FORMA_DE_LA_PORTADA,
+  partirLaLineaDelMapa,
   sinCosto,
-  tituloDeLoQueHicimos,
   titularDelResumen,
+  titularDeLoQueHicimos,
+  tituloDeLoQueHicimos,
   BAJADA_DEL_RESUMEN,
 } from "@/lib/external/pagina-del-resumen";
 import { CLAVES, huella, quitadaDeLaPagina, textoDeLaPagina, type TextosDeLaPagina } from "@/lib/external/textos-de-la-pagina";
@@ -243,6 +254,9 @@ export default function ResumenDeLaEscalaVista({
   const parte = (tipo: string) => negocio?.find((p) => p.tipo === tipo)?.lista ?? { piezas: [], nueva: null };
   const tesis = parte("tesis");
   const etiquetas = parte("etiquetas");
+  // El resumen debajo del título y quién es quién (24 nov): sin ellos (un Resumen de antes), la portada es la de siempre.
+  const portada = parte("portada");
+  const quienes = parte("quienes");
   const alcance = [...parte("abarca").piezas.map((p) => ({ p, k: "Qué abarca este diagnóstico" })), ...parte("fuera").piezas.map((p) => ({ p, k: "Qué queda fuera" }))];
   // Un Resumen de antes del 15 nov no tiene tesis: el titular dice qué es la página y la bajada, qué vende.
   const vende = parte("vende").piezas;
@@ -551,13 +565,17 @@ export default function ResumenDeLaEscalaVista({
   const Titular = edicion ? "div" : "h1";
   const Tesis = edicion ? "div" : "h2";
   const conTesis = tesis.piezas.length > 0;
-  // El H1 es lo que hicimos (21 nov, Elías), con los mismos números que las cifras de abajo, también si una persona los
-  // cambió (lib/external/pagina-del-resumen.ts: la misma pieza que cambia «Pedirle a Nexus», 23 nov). Atado a los números
-  // del sistema: rehacer el Resumen lo suelta. Sin sesiones (o sin Resumen), el de siempre.
-  const titular = titularDelResumen(h, textos);
+  /* El H1 es el nombre del entregable (24 nov, Elías): «Diagnóstico de rendimiento», la misma pieza que cambia «Pedirle a
+     Nexus». Una foto publicada antes (sin `formaDeLaPortada`) se pinta como se publicó: el titular de lo que hicimos, con
+     los mismos números que las cifras de abajo, y sin el dolor de cada equipo (Elías: «Que esperen a publicar»). Sin
+     Resumen, el de siempre. */
+  const portadaNueva = resumen.formaDeLaPortada === FORMA_DE_LA_PORTADA;
+  const titular = h ? (portadaNueva ? titularDelResumen(textos) : titularDeLoQueHicimos(h, textos)) : null;
+  // El dolor de cada equipo (24 nov): el reto principal de su fila, en una línea. Se corrige en su fila (es la misma pieza).
+  const dolores = portadaNueva ? doloresPorEquipo(resumen) : [];
   // «El problema principal» (21 nov): la tesis, que hasta hoy era el H1, con las etiquetas del negocio y su tamaño. Un
   // Resumen de antes sin tesis trae aquí lo que vende, bajo «Tu negocio» (adentro y afuera, el mismo nombre).
-  const conProblema = conTesis || vende.length > 0 || etiquetas.piezas.length > 0 || !!tamano || (!!edicion && (!!tesis.nueva || !!etiquetas.nueva));
+  const conProblema = conTesis || vende.length > 0 || etiquetas.piezas.length > 0 || !!tamano || dolores.length > 0 || (!!edicion && (!!tesis.nueva || !!etiquetas.nueva));
   // Los 5 puntos clave (18 nov), debajo del problema principal. Un Resumen o una foto de antes no los trae: la parte no sale.
   const puntos = resumen.puntos ?? [];
   const conPuntos = puntos.length > 0 || (!!edicion && !!resumen.puntoNuevo);
@@ -585,12 +603,30 @@ export default function ResumenDeLaEscalaVista({
               {mejorar(SECCION.arriba)}
             </p>
             <Titular className="re-titular rd-entra">
-              {/* Atado a sus números: al rehacer el Resumen cambian, y lo escrito para los de antes no queda pegado. */}
-              {titular && h ? fijo("titular.hicimos", tituloDeLoQueHicimos(h) ?? titular.original, "El titular: lo que hicimos", false, true, titular.original) : "Así entendimos tu negocio."}
+              {/* Atado a los equipos explorados: si cambian, lo escrito para los de antes no queda pegado. */}
+              {titular && h
+                ? portadaNueva
+                  ? fijo("titular.diagnostico", titular.original, "El título: el nombre del diagnóstico", false, true)
+                  : fijo("titular.hicimos", tituloDeLoQueHicimos(h) ?? titular.original, "El titular: lo que hicimos", false, true, titular.original)
+                : "Así entendimos tu negocio."}
             </Titular>
-            <P className="re-bajada rd-entra">
-              {fijo("bajada", BAJADA_DEL_RESUMEN, "La bajada, debajo del titular", false, true)}
-            </P>
+            {/* El resumen del agente (24 nov): uno o dos párrafos con lo que invierte la empresa, dónde se rompe y sus cifras.
+                Sin él, la bajada de siempre. */}
+            {portada.piezas.length > 0 ? (
+              <div className="re-portada rd-entra">
+                {portada.piezas.map((p) => (
+                  <P key={p.id} className="re-bajada">
+                    {pieza(p, "El resumen, debajo del título")}
+                  </P>
+                ))}
+                {portada.piezas.length < MAX_PARRAFOS_DE_LA_PORTADA && agregar(portada, "Otro párrafo del resumen", "+ Otro párrafo")}
+              </div>
+            ) : (
+              <>
+                <P className="re-bajada rd-entra">{fijo("bajada", BAJADA_DEL_RESUMEN, "La bajada, debajo del titular", false, true)}</P>
+                {agregar(portada, "El resumen, debajo del título", "+ Escribir el resumen (uno o dos párrafos cortos)")}
+              </>
+            )}
           </div>
           {h && (
             <div className="re-hicimos rd-entra">
@@ -666,6 +702,18 @@ export default function ResumenDeLaEscalaVista({
                     )}
                   </ul>
                 )}
+                {/* El dolor de cada equipo en una línea (24 nov): el reto principal de su fila de abajo, sin editar aquí (es la
+                    misma pieza; dos editores de lo mismo en la página se pisarían). */}
+                {dolores.length > 0 && (
+                  <ul className="re-dolores">
+                    {dolores.map((d) => (
+                      <li key={d.id}>
+                        <b>{d.equipo}:</b> {d.pieza.texto}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {edicion && dolores.length > 0 && <p className="re-aviso-interno">Cada línea es el reto principal de su equipo: se corrige en su fila, en «Equipos y hallazgos».</p>}
               </div>
               {tamano ? (
                 <div className={`re-cifra-negocio${tamano.noSale ? " re-cifra-fuera" : ""}`}>
@@ -818,10 +866,38 @@ export default function ResumenDeLaEscalaVista({
           <section className="re-parte" data-revela="" aria-labelledby="re-t3">
             <p className="re-ceja">
               {nEquipos} <span>/ Equipos y hallazgos</span>
+              {mejorar(SECCION.equipos)}
             </p>
             <h2 className="re-titulo" id="re-t3">
               {fijo("titulo.equipos", "Cómo trabajan. Qué necesitan mejorar.", "Título de los equipos")}
             </h2>
+            {/* Quién es quién (24 nov, Elías): quién lidera y la gente de cada equipo, con nombres. Afuera, el equipo en
+                negrita y su gente; adentro, la línea entera se edita. Sin ninguna línea, solo el lugar para escribirla (quien
+                no puede editar no ve una caja vacía), y con las siete, ya no se agrega otra. */}
+            {quienes.piezas.length === 0 && agregar(quienes, "Una línea de quién es quién", "+ Quién es quién: agregar una línea («Ventas: Laura y 8 asesores»)")}
+            {quienes.piezas.length > 0 && (
+              <div className="re-mapa">
+                <h3>{fijo("titulo.quienes", "Quién es quién", "Título de quién es quién")}</h3>
+                <ul>
+                  {quienes.piezas.map((p) => {
+                    const l = partirLaLineaDelMapa(p.texto);
+                    return (
+                      <li key={p.id}>
+                        {edicion ? (
+                          pieza(p, "Una línea de quién es quién")
+                        ) : (
+                          <>
+                            {l.equipo && <b>{l.equipo}</b>}
+                            <span>{l.gente}</span>
+                          </>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+                {quienes.piezas.length < MAX_LINEAS_DEL_MAPA && agregar(quienes, "Una línea de quién es quién", "+ Agregar una línea («Ventas: Laura y 8 asesores»)")}
+              </div>
+            )}
             <div className="re-equipos">
               {resumen.tarjetas.flatMap((t) => (t.porExplorar ? [filaPorExplorar(t)] : t.subequipos.length ? t.subequipos.map((x) => filaDelEquipo(t, x)) : [filaSinContenido(t)]))}
             </div>

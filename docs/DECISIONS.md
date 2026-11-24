@@ -14878,7 +14878,8 @@ problemas tenemos que resolver». Es un cambio de presentación: los criterios y
   encontramos por área» (una tarjeta por área OPERATIVA); 5 «Qué falta validar» (cada pendiente con su tipo) y «¿Entendimos
   bien?» como texto con invitación, sin formulario.
 - **Una tarjeta por área operativa, no por equipo de la escala**: Soporte y Customer Success van separadas aunque las dos
-  sean Servicio (`AreaOperativa.areaId`). Cada tarjeta: las cifras arriba, cómo está organizada (por rol, nunca por nombre),
+  sean Servicio (`AreaOperativa.areaId`). Cada tarjeta: las cifras arriba, cómo está organizada (por rol, nunca por nombre;
+  *enmienda del 24 nov: los nombres de la gente de la empresa van solo en «Quién es quién», ver «El Resumen, quinta vuelta»*),
   lo que ya hace bien (con ✓), lo que le impide rendir más, 2 o 3 retos por prioridad y «Ver diagnóstico de Servicio →». El
   nivel de su equipo es una etiqueta discreta; el «por qué este nivel» va en un `<details>`, solo en la primera tarjeta de
   su equipo. Un equipo con sesión o con nivel que el agente no describió sale igual, con su nivel (sin Resumen armado, solo
@@ -15866,11 +15867,16 @@ Elías: «Debe mejorarse cuanto antes».
 - **El texto se reparte justo:** si todas las reuniones caben, no se corta ninguna; si no, las cortas van enteras y el
   resto del tope se reparte entre las largas (`repartirElTope`). El tope sube de 320 mil a 400 mil caracteres: las siete
   reuniones de Cemaco miden unos 360 mil y la de cobranza seguía perdiendo el 10 % (cerca de 0,08 USD más por armado).
+  *Enmienda (24 nov, Elías: «que se lean enteras»): el tope sube a 700 mil, y a 250 mil por reunión. Ver «El Resumen,
+  quinta vuelta».*
 - **«Esta reunión no se pudo leer bien»:** al armar el Resumen, una reunión a la que se le cortó el medio, o donde la
   empresa dijo menos del 28 % de lo dicho (la del 16 nov de Cemaco: 73 % del texto es de Marco presentando la
   arquitectura), queda en `malLeidas` con su motivo. Sale en La escala (arriba del Resumen, con «Volver a leer» por
   reunión) y en su sesión de la exploración. Volver a leerla trae la transcripción de nuevo; si la reunión fue de verdad un
   monólogo nuestro, el aviso sigue y dice por qué.
+  *Enmienda (24 nov): «Volver a leer» NO traía la transcripción de nuevo (el agente relee la guardada), así que el aviso
+  volvía igual al terminar. Ya no es una alerta amarilla ni lleva botón: es una línea gris; lo cortado lo arregla rehacer el
+  Resumen y lo dice la línea de arriba. Ver «El Resumen, quinta vuelta».*
 - ⛔ **Lo que dijo Smarteam, por confirmar** (corrige la veracidad del 11 y 12 nov): una cifra dicha por Smarteam entra si
   en los turnos siguientes la empresa no la corrigió (`sinCorregir`): no dijo que no, no dio otro número, no preguntó.
   Sale «Por confirmar» con «Salió en la reunión y nadie la corrigió: falta confirmarla con tus datos.», y adentro
@@ -16096,6 +16102,9 @@ Elías, al ver la portada: «En el H1 no debería estar el problema. Ahí deber�
 horas de conversaciones, con cuántas personas se ha hablado, la sección de lo que hicimos. Después debería explicar el
 problema principal, y ese debería ser lo que hoy es el H1.»
 
+- *Enmienda (24 nov, Elías: «El nombre del entregable con un resumen»): el H1 es «Diagnóstico de rendimiento», con un
+  resumen de uno o dos párrafos debajo; los números siguen en las cifras. `tituloDeLoQueHicimos` queda para pintar una
+  escala publicada antes, como se publicó. Ver «El Resumen, quinta vuelta».*
 - **Arriba, lo que hicimos:** la empresa en la ceja, el H1 con sus números («13 sesiones y 8 h de conversación con 3
   personas de tu equipo.», `tituloDeLoQueHicimos` en lib/external/pagina-del-resumen.ts), la bajada, las cifras de
   sesiones, tiempo, personas y áreas exploradas, la próxima área por explorar y el alcance («Qué abarca» y «Qué queda
@@ -16767,6 +16776,8 @@ ya dijo, entraba lo que la empresa ya resolvió y texto genérico de la escala.
   un pendiente «sin-dato»; «Confirmar cómo trabaja hoy…» no sale si una pieza con su cita habla de esa parte.
 - **Fuera lo que estorba:** el prompt excluye lo que la empresa ya resolvió o acordó manejar y lo que no cambia el plan
   (Centauro: la extranet sin API se resuelve exportando a Excel). Sin casillas nuevas.
+  *Enmienda (24 nov, tarde): con el prompt solo, «La extranet no tiene API» salió igual. Ahora lo revisa una llamada
+  aparte y se quita con una cita verificada. Ver «El Resumen, quinta vuelta».*
 - **Fuera el texto genérico:** la descripción del área no recibe la oración del nivel de una parte sin nada visto, y usa
   el reto del Resumen antes que «lo que más frena»; en la escala de una empresa, una parte sin nada visto ni escrito no
   lleva detalle (ni tarjeta del radar ni «Ver detalles»); «Conversar con tu equipo de…» se va. Una hipótesis de la que el
@@ -16786,6 +16797,133 @@ ya dijo, entraba lo que la empresa ya resolvió y texto genérico de la escala.
   que la cuenta tenga sentido de negocio (el código verifica cada número, no que multiplicarlos sea la pregunta correcta:
   por eso se confirma con un clic). Al publicar después del deploy, las escalas dirán «Hay cambios que el cliente no ve»
   si cambian sus riesgos o sus detalles. Sin SQL.
+
+## El Resumen, quinta vuelta: el nombre del entregable, las reuniones enteras, quién es quién y lo ya resuelto (2026-11-24)
+
+Elías probó el Resumen de Centauro Solutions y el de Cemaco · Ecuador en producción (a11a192f) y pidió seis cambios. Lo
+que ve el cliente tiene que ser confiable y no perder nada de lo que dijo.
+
+- **El título es el nombre del entregable** (Elías: «El nombre del entregable con un resumen»; después, al ver la
+  primera versión: «Creo que el título debería ser algo como diagnóstico de rendimiento. Y que se pueda editar a mano y
+  cambiar con IA, como todo lo demás»): el H1 dice «Diagnóstico de rendimiento» (`TITULO_DEL_DIAGNOSTICO`,
+  `titularDelResumen`), sin las áreas (están en las tarjetas) y sin «en HubSpot» (la primera versión decía «Diagnóstico de
+  <los equipos explorados> en HubSpot», y para un prospecto con otro CRM se leía como que ya usaba HubSpot). Es un texto
+  fijo de la página: se cambia por empresa a mano o con «✨ Mejorar con IA» (la misma pieza, `titular.diagnostico`). Las
+  sesiones, las horas y las personas siguen en las cifras de abajo. Debajo va el RESUMEN (`negocio.portada`, uno o dos
+  párrafos de hasta 220 caracteres): en qué invierte la empresa, dónde se rompe ese esfuerzo y sus cifras, con la vara de
+  siempre (cada número con su cita de la empresa); también se edita a mano y con «✨ Mejorar con IA» (sección «Arriba»).
+  Sin él (un Resumen de antes), la bajada de siempre. *Medido el 24 nov:* nadie había reescrito el titular ni la bajada
+  en producción.
+  *Por qué una parte del negocio y no un campo nuevo:* trae gratis la edición, «Rehacer con IA» sin pisar lo de una
+  persona, lo quitado que no vuelve, «✨ Mejorar con IA» y la lectura pieza por pieza del Json. Lo mismo «Quién es quién».
+- **Las reuniones se leen enteras** (Elías eligió «Que se lean enteras»): el tope pasa de 400 a 700 mil caracteres, y de
+  120 a 250 mil por reunión. *Medido con Centauro (24 nov, `count_tokens` y dos simulacros):* las siete reuniones enteras
+  miden 454 mil caracteres; la llamada grande pasa de 157 a 178 mil tokens de entrada (unos 0,06 USD más) y ninguna sale
+  cortada (antes tres: al 86, 87 y 72 %).
+  *Por qué no completar lo cortado con la lectura de la reunión* (la idea recomendada): la lectura que queda como memoria
+  de la cuenta son sus hechos, y Centauro tiene de 3 a 10 por reunión; lo cortado eran de 117 a 239 intervenciones. Y el
+  modelo lee hasta 1 millón de tokens (consultado a la API el 24 nov): el tope nuevo queda solo contra lo anormal.
+- **La alerta de las reuniones mal leídas** (Elías: «debería aparecer leyendo o algo así, y cuando finalice, quitarse la
+  alerta. Luego de que terminó apareció otra reunión»). *Lo que se encontró con datos:* el 24 nov Elías volvió a leer la
+  demo del 19 nov de Centauro (15:16 a 15:18) y la arquitectura del 16 nov de Cemaco · Ecuador (15:21 a 15:23); las dos
+  son reuniones que presentamos nosotros (la empresa dijo el 26 y el 27 %). «Volver a leer» no trae de nuevo la
+  transcripción: el agente de la preventa relee la que ya está guardada. Así que, al terminar, la misma reunión volvía a
+  salir en el aviso («apareció otra reunión» era la misma, otra vez). Desde hoy ninguna alerta amarilla se queda sin algo
+  que hacer:
+  - una cortada en un Resumen de antes de leerlas enteras la arregla rehacerlo: lo dice la línea de arriba de La escala
+    («…el Resumen leyó cortadas 3 reuniones largas: rehazlo con IA en el Resumen para que las lea enteras»,
+    `cortadasQueSeLeenEnteras`; el Resumen nuevo lleva `leidasEnteras`);
+  - una que presentamos nosotros se leyó entera: queda como una LÍNEA GRIS, sin botón («La reunión del 19 nov (…) la
+    presentamos nosotros (la empresa dijo el 26 % de lo dicho): lo que dijimos entra solo como cifra por confirmar.»,
+    `lineaDeLaReunion`), en La escala y en la pestaña de su sesión;
+  - una más larga que el tope nuevo también es una línea gris: nada la arregla.
+  *Elías eligió «Una línea gris, sin botón»* (24 nov, por la coordinadora), frente a hacer lo pedido al pie de la letra
+  («Leyendo…» en el botón y, al terminar, la reunión sale del aviso): esos dos minutos de espera no cambiaban nada de lo
+  que lee el Resumen. Con eso, en el Resumen no queda ningún motivo para «Volver a leer», y sale también del aviso de la
+  pestaña de la sesión. El «Volver a leer» de «Qué pasó» en esa pestaña se queda: es de la lectura de la sesión (lo que el
+  agente propone para la preventa; sirve, por ejemplo, cuando la grabación de HubSpot llegó después), no del Resumen.
+- **Lo largo se acorta sin perder el número** (Centauro: «Churn mensual del 2,8 %» y «~1.800 tickets al mes» se perdían).
+  *La causa no era el acortado:* el largo se revisaba ANTES que los números, así que una pieza larga iba a corregirse sin
+  que nadie mirara si su cita traía el número; al acortarla, el número seguía y su cita no lo decía. Ahora un número que
+  distingue (de tres cifras, con decimales o «23 mil»: `numerosDistintivos`) que la cita no trae se busca en lo que dijo la
+  EMPRESA (`citasDeSusNumeros`), y solo en una intervención que hable de LO MISMO (`hablaDeLoMismo`; las dos vueltas de
+  la revisión del 24 nov reprodujeron «pagamos como 1.800 dólares al año» sosteniendo «1.800 tickets», y «Marketing recibe
+  2.000 leads» sostenido por «invertimos 2.000 dólares»): la UNIDAD del número (las palabras que lo siguen hasta el primer
+  signo, la palabra entera en singular o plural: «tiquetes» es «tickets»), no las de antes ni un comienzo parecido. Si la
+  intervención dice su unidad, tiene que ser la de la pieza («dólares» no es «tickets», aunque se hable de tickets justo
+  antes). Un porcentaje, con un porcentaje, y lo que mide («churn») en ella o en las cuatro de antes. Sin unidad, vale una
+  respuesta corta (hasta ocho palabras: «Aproximadamente unos 100») con la unidad en las cuatro de antes; o una que retoma
+  el número con «esos», mirando la vez anterior que se dijo en esa reunión: en Centauro, Emiley dijo «Tiquetes» (978),
+  Marco «1800 al mes» (981) y Emiley «de esos 1800, 100 son de facturas» (1001). En la reunión de su cita, la intervención
+  más cercana; en otra reunión, solo si una sola intervención lo dice. Va como otra cita (hasta tres) y pasa por
+  `citaVerificada`. Lo que dijo solo Smarteam no cuenta. Un año no es una cantidad («en 2025»), «unos 2000» o «2000
+  tickets» sí.
+  El prompt pide piezas que nazcan cortas: ningún texto de más de 240 caracteres, el de un punto clave hasta 220.
+- **Lo ya resuelto sale, con una cita que lo prueba** (Centauro: «La extranet no tiene API y el monitoreo es manual» salió
+  como punto clave, y en esa misma reunión, entre las intervenciones 84 y 140, se acordó exportar un Excel que HubSpot toma
+  y «armar el caso de negocio bajo lo que es posible hoy»). Una llamada chica al final (`pedidoDeLoResuelto`, sin las
+  transcripciones): cada problema que vería el cliente (punto clave, reto principal de un equipo, lo que se traba en un
+  paso, pendiente) con lo que se dijo en las 120 intervenciones siguientes de su reunión. Resuelto es lo que la empresa
+  dijo que ya resolvió, o una LIMITACIÓN con la que aceptó convivir; lo que el proyecto va a resolver no (la primera
+  medición quitó «los WhatsApp no quedan registrados» porque Marco propuso sincronizarlos: ese es justo el problema que la
+  empresa tiene que ver). Lo marcado se quita solo si su cita está en esa reunión, después del problema y dentro de esas
+  120, y es de la EMPRESA, y su intervención ENTERA no objeta, duda ni aplaza («No…», «nos complica», «puede ser, habría
+  que ver», «déjame consultarlo», «lo vemos después», «pasemos al otro tema», una pregunta; una cita que corta la objeción
+  no alcanza). Si el modelo cita a Smarteam, vale solo si la empresa lo confirmó o si su PRIMERA respuesta, en las dos
+  intervenciones siguientes, acepta con palabras («sí», «perfecto», «nos basta», «me parece»…) y no objeta; y si lo de
+  Smarteam terminó en una pregunta, la respuesta es a esa pregunta y no vale. Las dos vueltas de la revisión del 24 nov
+  reprodujeron «No, eso no nos sirve» partido en dos intervenciones, la respuesta a otra pregunta y un cambio de tema
+  tomados como un sí. La prueba que se guarda es lo que dijo la empresa (`leerLoResuelto`).
+  De un paso del recorrido se va solo lo que se traba. Lo quitado queda en los descartados, con la cita. El agente da 7
+  candidatos a punto clave y la página se queda con los 5 primeros DESPUÉS de esta revisión (`MAX_CANDIDATOS_A_PUNTO`):
+  si sale uno, entra el siguiente. Los retos de cada equipo no se revisan (son lo que hay que mejorar, y con ellos el
+  pedido se triplicaba). *Medido con Centauro:* unos 40 mil tokens de entrada, 0,12 USD; quitó el punto de la extranet
+  (prueba: Luis Humberto, intervención 103, «una vez a la semana exportar el reporte, pasarlo al CRM y entonces ahí tener
+  ya los disparadores») y dejó el reto principal de Customer Success (el modelo citó otra reunión). La corrida entera pasa
+  de 0,65 a 0,82 USD por armado.
+  *Qué se garantiza con código y qué no:* que nada se quite sin una cita real de la empresa de después del problema; que
+  una persona que quitó algo no lo vea volver al rehacer (`quitados`, de antes); y que lo escrito a mano no se toque. *No
+  se garantiza* que el modelo vea todo lo resuelto (lo juzga él: si la solución se acordó en OTRA reunión, o más de 120
+  intervenciones después, no la ve), ni que lo que marca esté de verdad resuelto (la cita prueba que la empresa habló de
+  eso, no que lo cerró): por eso queda a la vista en los descartados. Si saca el reto principal de un equipo, nada lo
+  repone (el piso corre antes): queda el aviso interno de un equipo bajo el piso.
+- **El dolor de cada equipo en una línea** (del business case de Marco para Centauro): debajo del problema principal,
+  «Marketing: <su reto principal>», con el reto principal de cada subequipo explorado (`doloresPorEquipo`). No es una
+  pieza aparte: es la misma de su fila en «Equipos y hallazgos» y se corrige ahí (dos editores de lo mismo en la página
+  se pisarían).
+- **Quién es quién, con nombres** (Elías, del mismo business case): arriba de las filas de «Equipos y hallazgos», quién
+  lidera y una línea por equipo con su gente («Marketing: Catalina, Verónica y Fabián»; `negocio.quienes`). Es la única
+  parte con nombres. La regla vieja («nunca un nombre», 10 nov) no tenía una razón de privacidad escrita: salía de
+  describir la organización por rol y de no decir quién contó qué. Lo que se cuida (`lineaDelMapa`): solo la gente de la
+  EMPRESA (quien habló de su lado en las reuniones y quien decide; nunca de Smarteam ni de otra empresa); cada nombre de
+  alguien que habló o que su cita nombra (también su diminutivo, y los nombres compuestos: «Luis Humberto»), pero nunca
+  el nombre de pila de alguien de Smarteam aunque sea el apellido de alguien de la empresa («Ana Marco» no deja pasar a
+  Marco), también antes de los dos puntos («Lidera Eduardo Mora: Ventas» no pasa); la forma «<equipo o quién lidera>:
+  <gente>», con el equipo en las primeras 40 letras («También mencionado: Eduardo» no pasa); ningún dolor en toda la
+  línea («Soporte que olvida los tickets: Emiley» tampoco); y con la gente, solo nombres, roles y cantidades («y 3 personas
+  más», «jefatura y 5 asesores»): «que está saturada», «sobrecargada» o «(solo ella atiende todo)» la hacen caer. Una empresa sin dominios de correo registrados (2 de 49 el 24
+  nov) no tiene gente de la empresa: no se sabe quién es de afuera (Centauro, 10 nov: «Michael, de HubSpot»), y no sale
+  ningún nombre. Alguien de Smarteam escrito de otra forma no es de la empresa, y eso se decide en UN lugar (`deOtraEn` en
+  el servidor, con `esDeSmarteamPorElNombre`): una sala de Meet con su nombre entero («Presentación de Marco Salas», quien
+  comparte pantalla) o su nombre acortado («María Vargas» por «María José Vargas»), por palabras enteras («Juliana
+  Morales» no es «Ana Mora»). Vale para las citas, los números que se rescatan, lo resuelto, las personas de «Qué hicimos»
+  y este mapa. *Límite:* alguien de la empresa con el nombre acortado de alguien de Smarteam (un «Luis Rojas» frente a un
+  «Luis Pablo Rojas» del equipo, también de los que ya no están) deja de contar como de la empresa. *No se revisa* lo que se escribe a mano o con «✨ Mejorar con IA»
+  (lo aplica quien lo lee). *Medido con
+  Centauro:* salieron Marketing, Soporte y onboarding, Customer Success y Ventas; «Lidera: Fernando Segura» se cayó las dos
+  veces porque su cita no estaba en la reunión (se agrega a mano, como cualquier pieza).
+- **Lo que no eligió Elías** del business case de Marco (las tres cifras del negocio arriba y los casos con resultado
+  verificable) no se hizo.
+- **Después del deploy, lo publicado no cambia solo** (Elías: «Que esperen a publicar»). La foto publicada guarda los
+  datos, no el dibujo: sin más, las 8 escalas publicadas habrían cambiado su H1 y sumado el dolor de cada equipo sin que
+  nadie publicara. Por eso la página lleva su forma (`formaDeLaPortada`, `FORMA_DE_LA_PORTADA`): una foto de antes no la
+  trae y se pinta como se publicó, con el titular de lo que hicimos (`titularDeLoQueHicimos`, lo escrito sobre él incluido)
+  y sin el dolor de cada equipo. La forma NO cuenta como cambio al comparar con lo publicado (`mismaPagina`): el deploy
+  solo no hace decir «Hay cambios que el cliente no ve». El resumen y quién es quién tampoco: afuera, esas dos partes solo
+  van si tienen algo (`NACIDAS_EL_24_NOV`). *La consecuencia, a sabiendas:* una escala publicada antes sigue con su
+  portada de antes hasta que se publique por otro cambio (rehacer el Resumen, corregir un texto), aunque arriba diga
+  «Publicado: el cliente ve esta versión». El historial de versiones pinta las versiones viejas con la forma de hoy si la
+  traen. Sin SQL.
 
 ## Registro de los SQL aplicados (2026-11-23)
 

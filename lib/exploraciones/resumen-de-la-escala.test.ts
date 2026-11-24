@@ -492,10 +492,11 @@ describe("2 · el cliente nunca ve las citas", () => {
       }),
     );
     // La forma editorial (15 nov): las partes numeradas, lo que hicimos con sus cifras y la banda de lo que falta validar.
-    // Lo que hicimos es la portada desde el 21 nov (Elías): el H1 con sus números, sin ceja numerada.
+    // Lo que hicimos es la portada desde el 21 nov (Elías), sin ceja numerada; desde el 24 nov el H1 es el nombre del
+    // entregable, y los números van en las cifras.
     for (const parte of ["/ Tu operación", "/ Equipos y hallazgos", "Tu mirada completa el diagnóstico", "sesiones de exploración", "personas de tu equipo", "áreas exploradas"])
       expect(html).toContain(parte);
-    expect(html).toMatch(/<h1 class="re-titular rd-entra">\d+ sesiones y [^<]+ de conversación con \d+ personas de tu equipo\.<\/h1>/);
+    expect(html).toContain('<h1 class="re-titular rd-entra">Diagnóstico de rendimiento</h1>');
     for (const fuera of ["¿Entendimos bien?", "provisional", "más de", "Confirmar o corregir"]) expect(html).not.toContain(fuera);
     // Lo que queda fuera va en la línea del alcance, debajo de la tesis.
     expect(html).toContain("re-alcance");
@@ -898,11 +899,13 @@ describe("7 · lo que encontraron las revisiones del 9 nov (la verificación de 
 
     it("si se corta, se pide otra vez; la cifra caída por un número de más se arregla en una llamada chica", async () => {
       const pedidos: string[] = [];
-      const respuestas = [resp({}, "max_tokens"), resp(bueno), resp({ cifras: [{ i: 0, cifra: "14 de 25", texto: "De 25 que captas, se van 14.", nota: null }] })];
+      const respuestas = [resp({}, "max_tokens"), resp(bueno), resp({ cifras: [{ i: 0, cifra: "14 de 25", texto: "De 25 que captas, se van 14.", nota: null }] }), resp({ resueltos: [] })];
       const e = await escribirElResumen(LE, async (p) => {
-        pedidos.push(p.max_tokens === 800 ? "arreglo" : "resumen");
+        pedidos.push(p.max_tokens === 800 ? "arreglo" : p.max_tokens === 1500 ? "lo resuelto" : "resumen");
         return respuestas.shift()!;
       });
+      // Sin un problema que pueda estar resuelto (un punto clave, un reto principal, una traba, un pendiente), no hay
+      // revisión de lo resuelto (24 nov).
       expect(pedidos).toEqual(["resumen", "resumen", "arreglo"]);
       expect(e.cortado).toBe(false);
       expect(e.operativas[0].cifras.map((c) => c.cifra)).toEqual(["14 de 25"]);

@@ -53,6 +53,7 @@ import {
   conIdsDeLaCorrida,
   delClienteDe,
   esDeOtraEmpresa,
+  esDeSmarteamPorElNombre,
   guiaDelEquipo,
   NO_ES_UNA_PERSONA,
   escribirElResumen,
@@ -81,10 +82,14 @@ import { bloquearFila, escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFil
 const MAX_REUNIONES = 8;
 /** Cuántas reuniones se le guardan a cada equipo antes de llenar con las más nuevas (24 nov: todo se inclinaba a Ventas). */
 const REUNIONES_POR_EQUIPO = 2;
-// 18 nov: de 320 a 400 mil. Las siete reuniones de Cemaco (unos 360 mil con los nombres de quien habla) no cabían y se cortaba
-// la de cobranza, la más importante. Unos 25 mil tokens más de entrada: cerca de 0,08 USD por armado.
-const TOPE_DE_TODAS = 400_000;
-const TOPE_DE_UNA = 120_000;
+/* 24 nov (Elías: «que se lean enteras»): de 400 a 700 mil, y de 120 a 250 mil por reunión. Con 400 mil, tres de las siete
+   reuniones de Centauro se leían sin un pedazo del medio (86, 87 y 72 %). Enteras miden 454 mil: 177 mil tokens de entrada
+   en vez de 157 mil, unos 0,06 USD más por armado (medido con count_tokens el 24 nov). El modelo lee hasta 1 millón de
+   tokens; el tope queda solo contra lo anormal (una reunión de cinco horas): 700 mil son unos 250 mil tokens. Se eligió
+   esto y no completar lo cortado con la lectura de la reunión (sus hechos): esa lectura trae de 3 a 10 hechos por reunión
+   y lo cortado eran de 117 a 239 intervenciones. */
+const TOPE_DE_TODAS = 700_000;
+const TOPE_DE_UNA = 250_000;
 /** Una corrida del Resumen tarda unos 3 a 4 minutos: con más de esto en RUNNING, se cayó y no frena otra. */
 const MINUTOS_DE_UNA_CORRIDA = 10;
 /** Quien dijo menos que esto en una reunión no cuenta como «persona de tu equipo» (un saludo, un «sí»). */
@@ -211,7 +216,11 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
      empresa: se reconoce por los correos de los invitados de cada reunión. */
   const correosDe = new Map(filas.map((f) => [f.id, f.participants ?? []]));
   const noCuentan = new Set([...casa, ...DOMINIOS_GENERICOS]);
-  const deOtraEn = (id: string) => (nombre: string) => esDeOtraEmpresa(nombre, correosDe.get(id) ?? [], cliente?.emailDomains ?? [], noCuentan);
+  /* Una sala de Meet con el nombre de alguien de Smarteam («Presentación de Marco Salas», Centauro 19 nov: Meet pone así a
+     quien comparte pantalla) tampoco es de la empresa. En UN lugar (revisión del 24 nov): con esto decide quién es de la
+     empresa en las citas, en los números que se rescatan, en lo ya resuelto y en «Quién es quién». */
+  const salaDeSmarteam = (nombre: string) => esDeSmarteamPorElNombre(nombre, equipo);
+  const deOtraEn = (id: string) => (nombre: string) => salaDeSmarteam(nombre) || esDeOtraEmpresa(nombre, correosDe.get(id) ?? [], cliente?.emailDomains ?? [], noCuentan);
   /* Solo se cita una TRANSCRIPCIÓN: las notas de Gemini no dicen quién habló, y sus títulos («Pérdida de clientes: …») se
      leían como si fueran una persona de la empresa (revisión del 9 nov). */
   const conTranscripcion = new Set(filas.filter((f) => !!f.transcript?.trim()).map((f) => f.id));
@@ -296,13 +305,22 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
   reuniones.push(...notasComoFuentes(estado.contenido.notas, autores, (c) => nombres.get(c) || null));
 
   const delCliente = new Set(sesiones.flatMap((x) => x.quienes ?? []));
-  // Ningún nombre puede salir; salvo el de la empresa («Centauro» no es una persona aunque sea el nombre de la sala).
+  /* Ningún nombre puede salir; salvo el de la empresa («Centauro» no es una persona aunque sea el nombre de la sala), y los
+     de su gente en «Quién es quién» (24 nov, Elías: el mapa de los equipos con nombres; nunca pegados a un dolor). */
   const deLaEmpresa = new Set(paraComparar(fila.client.name).split(/\s+/));
   // También quienes deciden (la casilla «Quién decide»): el agente los conoce por nombre y no pueden salir aunque no hablaran.
   const casillas = estado.contenido.casillas as Record<string, unknown>;
   const personas = [...new Set([...equipo, ...[...quien.values()].flatMap((q) => q.personas.map((p) => p.nombre)), ...nombresDeQuienesDeciden(casillas)])].filter(
     (n) => !deLaEmpresa.has(paraComparar(n.split(/\s+/)[0] ?? "")),
   );
+  // La gente de la empresa: la que habló de su lado en las reuniones que se leen (sin el grabador ni otra empresa) y quien decide.
+  /* Sin los dominios de correo de la empresa no se sabe quién es de afuera (Centauro, 10 nov: «Michael, de HubSpot» contaba
+     como de Centauro): ahí no hay gente de la empresa y «Quién es quién» no lleva ningún nombre (revisión del 24 nov). */
+  const gente = (cliente?.emailDomains ?? []).length
+    ? [...new Set([...reuniones.filter((r) => !r.delEquipo).flatMap((r) => r.delCliente), ...nombresDeQuienesDeciden(casillas)])].filter(
+        (n) => !NO_ES_UNA_PERSONA.test(n) && !deLaEmpresa.has(paraComparar(n.split(/\s+/)[0] ?? "")) && !salaDeSmarteam(n),
+      )
+    : [];
 
   // El peso de cada sesión (18 nov): su título y sus minutos, también las que no tienen texto (pesan: se habló de eso).
   const peso = pesoDeLasSesiones(
@@ -320,6 +338,7 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
     // 20 nov (vender por resultados): de quién pesan más los dolores y la pérdida que la empresa validó en la preventa.
     deciden: quienesDecidenDe(casillas),
     perdida: perdidaParaElAgente(perdidaDeLaEscala(fila.contenido)),
+    gente,
   };
   const entorno = entornoDe(fila, escala);
   const firmas = Object.fromEntries(l.deLasAreas.map((x) => [x.resultado.areaId, firmaDelArea(estado.contenido.chequeo, x.resultado.areaId, entorno)]));
@@ -424,6 +443,7 @@ export async function generarElResumenDeLaEscala(o: { exploracionId: string; ema
       avisos: escrito.avisos,
       puntos: escrito.puntos,
       malLeidas: le.malLeidas,
+      leidasEnteras: true,
     };
     const { guardado, antes } = await guardar(o.exploracionId, nuevo, le.ctx.reuniones);
     // El historial de versiones (21 nov): el de antes y el nuevo, después de soltar la fila. Nunca lanza.
