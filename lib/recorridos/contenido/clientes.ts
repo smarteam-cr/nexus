@@ -168,7 +168,7 @@ export const FICHA_CRONOGRAMA: Recorrido = {
   pasos: [
     {
       ancla: "cronograma.asistente",
-      titulo: "Pídele cambios al asistente",
+      titulo: "Pídele cambios a Nexus",
       texto: "Escríbele lo que quieres cambiar: te dice qué fecha mueve cada cambio, y nada se aplica hasta que lo aceptas.",
       lado: "bottom-end",
     },

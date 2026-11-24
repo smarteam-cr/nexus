@@ -180,7 +180,7 @@ export const PREVENTA: Recorrido = {
     },
     {
       ancla: "preventa.sesion.asistente",
-      titulo: "Mejorar con el asistente",
+      titulo: "Mejorar con IA",
       texto: "Pídele «más preguntas de presupuesto» o «profundiza en sistemas»: propone cambios a la guía y sus repreguntas, y los aplicas con un clic.",
       lado: "bottom-end",
       accion: momento("antes"),

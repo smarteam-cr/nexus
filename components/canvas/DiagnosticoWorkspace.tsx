@@ -399,7 +399,7 @@ export default function DiagnosticoWorkspace({
           </button>
           <span>
             {cabos.length
-              ? " — conviene corregirlo antes de presentar (no es obligatorio): a mano o con el 💬 Asistente."
+              ? " — conviene corregirlo antes de presentar (no es obligatorio): a mano o con 💬 Nexus."
               : " — se puede presentar; los avisos conviene mirarlos."}
           </span>
           {verCabos && (

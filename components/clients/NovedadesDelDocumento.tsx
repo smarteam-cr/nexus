@@ -196,7 +196,7 @@ export default function NovedadesDelDocumento({
                       )}
                       {!varias && chat.disponible && (
                         <BotonUsar onClick={() => cambiarConElChat(g.items[0])} disabled={ocupado !== null}>
-                          Cambiar con el chat
+                          Mejorar con IA
                         </BotonUsar>
                       )}
                     </>
@@ -213,7 +213,7 @@ export default function NovedadesDelDocumento({
                           <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
                             {chat.disponible && (
                               <BotonEnlace onClick={() => cambiarConElChat(n)} disabled={ocupado !== null}>
-                                Cambiar con el chat
+                                Mejorar con IA
                               </BotonEnlace>
                             )}
                             {puedeDecidir && (

@@ -2106,7 +2106,7 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
     // El 💬: anota su pointerdown y no cierra un cajón que se abrió solo después de él.
     /* El fin del tramo es el `title` del botón: desde el 2026-10-04 su rótulo es una burbuja SVG +
        «Asistente», sin el emoji. */
-    const boton = tramo(CANVAS, "{canEdit && phases.length > 0 && (", "Conversa el cambio con el asistente: te dice qué se puede y qué fecha mueve.");
+    const boton = tramo(CANVAS, "{canEdit && phases.length > 0 && (", "Conversa el cambio con Nexus: te dice qué se puede y qué fecha mueve.");
     expect(contiene(boton, "onPointerDown={() => { apretadoDelChatRef.current = Date.now(); }}"), "el 💬 dejó de anotar su pointerdown").toBe(true);
     expect(contiene(boton, "const apretadoEn = e.detail > 0 ? apretadoDelChatRef.current : null;")).toBe(true);
     expect(contiene(boton, "const abiertoSoloEn = abiertoSoloEnRef.current;")).toBe(true);

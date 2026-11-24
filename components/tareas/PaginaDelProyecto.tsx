@@ -210,7 +210,7 @@ export default function PaginaDelProyecto({ inicial }: { inicial: { proyecto: Pr
           <div className="flex flex-wrap items-center gap-2 rounded-xl border border-info-line bg-info-surface px-4 py-3">
             <p className="min-w-0 flex-1 text-[13px] text-brand">
               {p.origen === "chat"
-                ? "Es el borrador de un plan armado con el asistente. Revisa sus tareas: al activarlo se reparten, y nadie recibe nada antes."
+                ? "Es el borrador de un plan armado con Nexus. Revisa sus tareas: al activarlo se reparten, y nadie recibe nada antes."
                 : "Nexus sugiere este proyecto. Revisa sus tareas: al activarlo, cada persona decide la suya. Nada entra solo."}
             </p>
             <BotonTexto disabled={ocupado} onClick={() => void decidir("descartar")}>

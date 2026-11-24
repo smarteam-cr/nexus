@@ -13,7 +13,10 @@ import type { Choque, DeshacerDeNexus, PropuestaDeNexus } from "./contrato";
 export type EstadoDelCambio = "pendiente" | "aplicado" | "descartado";
 
 export interface PedidoRecordado {
+  /** Lo que se está escribiendo en la caja del chat. */
   pedido: string;
+  /** Lo último que se le mandó a Nexus (24 nov: se ve en el hilo como el mensaje de la persona, y la caja queda vacía). */
+  enviado: string | null;
   pidiendo: boolean;
   error: string | null;
   propuesta: PropuestaDeNexus | null;
@@ -24,7 +27,7 @@ export interface PedidoRecordado {
   hecho: { aviso: string; deshacer: DeshacerDeNexus | null; claves: string[] } | null;
 }
 
-export const SIN_PEDIDO: PedidoRecordado = { pedido: "", pidiendo: false, error: null, propuesta: null, estados: {}, aplicando: false, choques: [], hecho: null };
+export const SIN_PEDIDO: PedidoRecordado = { pedido: "", enviado: null, pidiendo: false, error: null, propuesta: null, estados: {}, aplicando: false, choques: [], hecho: null };
 
 const PEDIDOS = new Map<string, PedidoRecordado>();
 export const AL_RECORDAR = "nexus:pedido-recordado";
@@ -42,4 +45,13 @@ export function recordar(clave: string, cambio: Partial<PedidoRecordado> | ((e: 
 export function suscribirAlRecordado(avisar: () => void): () => void {
   window.addEventListener(AL_RECORDAR, avisar);
   return () => window.removeEventListener(AL_RECORDAR, avisar);
+}
+
+/**
+ * Lo que muestra el hilo del pedido (components/exploraciones/PedirleANexus.tsx): el último pedido como mensaje de la
+ * persona y, si no está pensando, la propuesta. ⛔ Mientras Nexus piensa se ve lo RECIÉN pedido y la propuesta de antes se
+ * esconde; si el pedido falla (`enviado` vuelve a null), la propuesta de antes vuelve con su pedido.
+ */
+export function loQueSeVeEnElHilo(e: Pick<PedidoRecordado, "enviado" | "pidiendo" | "propuesta">): { pedido: string | null; conPropuesta: boolean } {
+  return { pedido: e.enviado ?? e.propuesta?.pedido ?? null, conPropuesta: !!e.propuesta && !e.pidiendo };
 }

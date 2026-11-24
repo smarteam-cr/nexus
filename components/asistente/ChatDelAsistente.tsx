@@ -1,22 +1,12 @@
 "use client";
 /**
- * components/asistente/ChatDelAsistente.tsx — EL PANEL QUE CONVIVE CON EL DOCUMENTO.
+ * components/asistente/ChatDelAsistente.tsx — EL CHAT «NEXUS» DE UN DOCUMENTO, DEL CRONOGRAMA, DE LA CUENTA Y DE TAREAS.
  *
- * ── EL ÚNICO TRABAJO ESTRUCTURAL DE INTERFAZ DEL CHAT ────────────────────────────────────────
- * Los cuatro paneles deslizantes del repo son MODALES: fondo oscuro, `aria-modal`, y candado
- * sobre `body.overflow`. Ninguno sirve acá, porque la conversación es SOBRE el documento: el CSE
- * tiene que poder mirar el cronograma mientras habla de él, y scrollearlo sin cerrar nada.
- *
- * Así que esto es un cajón NO modal:
- *  · sin fondo oscuro y sin candado de scroll — la página sigue viva debajo;
- *  · `z-[45]`, por DEBAJO de los modales de verdad (z-55/60), así un `ConfirmDialog` lo tapa
- *    como corresponde en vez de pelearse con él;
- *  · por PORTAL a `document.body`, porque el rail del cliente es `sticky` y una capa flotante
- *    adentro de un contenedor con `sticky` se recorta contra él (ya mordido antes).
- *
- * ⚠ El cajón TAPA los ~400 px derechos del documento. Es el canje aceptado: empujar el layout
- * obligaría a tocar el contenedor de todas las piezas, y el cajón se cierra con un clic o con
- * Escape. Si molesta en el Gantt, ahí sí conviene el empuje.
+ * ── EL MARCO ES EL DE TODOS (24 nov) ─────────────────────────────────────────────────────────
+ * El cajón —no modal, por portal, debajo de los modales, con la cabecera «Nexus», «Nueva conversación»
+ * arriba, la caja fija abajo, Escape, el foco que entra y vuelve— vive en `CajonDeNexus.tsx`, y es el
+ * MISMO que usa la preventa (Elías, 24 nov: «todo debe abrir el mismo chat con la misma interfaz»).
+ * Acá queda la conversación de los acuerdos: el hilo, la lista con casillas, «Aplicar» y el desenlace.
  *
  * ⛔ ESTE COMPONENTE NO ESCRIBE EL DOCUMENTO. Cuando hay acuerdo, pinta la instrucción —EDITABLE—
  * y el botón de aplicar la manda al editor de siempre, con su vista previa y su aceptación por
@@ -37,8 +27,9 @@ import {
   useChatDeSeccion,
 } from "@/components/asistente/chat-de-seccion";
 import { PIEZA_CRONOGRAMA } from "@/lib/asistente/piezas";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import CajonDeNexus, { Burbuja, CajaDeNexus, ChatVacio, ChipDeNexus, Pensando } from "./CajonDeNexus";
+import { devolverALaCaja } from "@/lib/asistente/caja";
 import { arrastreAlDesmarcar } from "@/lib/timeline/dependencias-de-operaciones";
 import { arrastreDeDesmarcadas } from "@/lib/asistente/arrastre";
 import type { CambioAcordado } from "@/lib/asistente/turno";
@@ -57,10 +48,6 @@ import { novedadesPorAplicar, type NovedadEnElTurno } from "@/lib/asistente/alca
 import type { EstadoDeAcuerdo } from "@/lib/asistente/acuerdo-vivo";
 import type { Operacion } from "@/lib/timeline/operaciones";
 import ReactMarkdown from "react-markdown";
-import { useHydrated } from "@/lib/hooks/useHydrated";
-
-/** Lo dispara un chat al abrirse: los demás se cierran (ver el efecto de abajo). */
-const EVENTO_CHAT_ABIERTO = "nexus:chat-abierto";
 /* Puro (sin Prisma): la misma fuente de conteos que la línea cerrada del «Contexto del cronograma». */
 import { lineaDeLectura, type LecturaDelMaterial } from "@/lib/contexto/material-cronograma";
 /* L1: qué dice el cajón con una propuesta (puro, con su tabla). */
@@ -180,6 +167,11 @@ interface Props {
   pieza: string;
   /** Rótulo visible del documento, para el encabezado. */
   piezaLabel: string;
+  /**
+   * De qué se habla, al principio del subtítulo («Diagnóstico · …»). Por defecto, `piezaLabel`. `null` cuando el aviso
+   * ya lo dice (la cuenta: «Sobre Cemaco · …»; Tareas: «Tus tareas, desde cualquier pantalla»).
+   */
+  lugar?: string | null;
   abierto: boolean;
   onClose: () => void;
   /**
@@ -246,16 +238,24 @@ interface Props {
   onNovedadesAplicadas?: (novedades: NovedadEnElTurno[]) => void;
 }
 
-/** El id del cajón. Lo apunta el `aria-controls` del botón que lo abre, en el otro componente. */
-export const ID_DEL_CAJON = "cajon-del-asistente";
+/** El id del cajón (vive en el marco). Lo apunta el `aria-controls` del botón que lo abre, en el otro componente. */
+export { ID_DEL_CAJON } from "./CajonDeNexus";
 
 /** Un solo `Set` vacío compartido: crear uno nuevo por render rompería cualquier memo. */
 const EMPTY: ReadonlySet<number> = new Set<number>();
+
+/** Los ejemplos del chat vacío de un documento, cuando su aviso no trae los suyos. */
+const EJEMPLOS_DE_SIEMPRE = [
+  "¿Qué pasa si alargo una fase dos semanas?",
+  "Hay fases duplicadas, ¿se pueden unir?",
+  "Quiero mover una tarea de fase — ¿pierdo algo?",
+] as const;
 
 export default function ChatDelAsistente({
   base,
   pieza,
   piezaLabel,
+  lugar,
   abierto,
   onClose,
   onAplicar,
@@ -273,7 +273,6 @@ export default function ChatDelAsistente({
   sugerencias,
   onNovedadesAplicadas,
 }: Props) {
-  const hydrated = useHydrated();
   /** Por qué no se aplica ESTE acuerdo ahora (E3 P5: puede depender del acuerdo). */
   const motivoPara = (a: AcuerdoDelChat): string | null =>
     typeof motivoParaNoAplicar === "function" ? motivoParaNoAplicar(a) : (motivoParaNoAplicar ?? null);
@@ -303,7 +302,6 @@ export default function ChatDelAsistente({
    * GET no la trae (abrir el cajón no lee reuniones), así que aparece después de preguntar.
    */
   const [lectura, setLectura] = useState<LecturaDelMaterial | null>(null);
-  const finRef = useRef<HTMLDivElement | null>(null);
   const { seccion: seccionReferida, soltar: soltarSeccion } = useChatDeSeccion();
   /* ⚠ El rótulo sale de la PIEZA, no está cableado. El chat nació sobre el cronograma y los tres
      carteles decían «al cronograma»; desde que atiende diez documentos, un acuerdo sobre una
@@ -313,9 +311,8 @@ export default function ChatDelAsistente({
   const alDestino = rotulos?.alDestino ?? `al ${nombreDeLaPieza}`;
   /* 1B: lo que se ofrece debajo de un acuerdo aplicado, por turno (vive en la pantalla: se pierde al recargar). */
   const [accionesDe, setAccionesDe] = useState<Record<string, AccionDelChat[]>>({});
+  /* La caja de escribir: el marco le pone el foco al abrir y lo devuelve al cerrar (CajonDeNexus). */
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
-  /** Alto máximo del composer antes de scrollear adentro — ~10 líneas, para no comerse la caja de mensajes. */
-  const ALTO_MAXIMO_COMPOSER = 200;
 
   /**
    * ⭐ EL BOTÓN SIGUE AL ESTADO, NO A LA POSICIÓN — y ese cambio es todo el arreglo del
@@ -364,86 +361,8 @@ export default function ChatDelAsistente({
     if (abierto) void cargar();
   }, [abierto, cargar]);
 
-  /* Escape cierra. No hay trampa de foco a propósito: el cajón no es modal y el CSE tiene que
-     poder tabular al documento. */
-  useEffect(() => {
-    if (!abierto) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      /* ⛔ NO si hay un modal encima. `Modal` escucha en `document` y esto en `window`; el evento
-         burbujea a los dos y ninguno corta, así que UN Escape cerraba el modal Y el chat de una:
-         el CSE quería descartar una propuesta y encima perdía el hilo. Es el mismo criterio del
-         z-index —el cajón vive DEBAJO de los modales— llevado al teclado. */
-      if (document.querySelector('[aria-modal="true"]')) return;
-      /* E3 P5: ni si viene de un campo editable FUERA del cajón (el nombre de una fase, una fecha): ese
-         Escape es de ese campo. Con el chat abierto solo, alguien que estaba escribiendo en el Gantt
-         perdía el chat que se le acababa de abrir. */
-      const origen = e.target instanceof HTMLElement ? e.target : null;
-      if (
-        origen &&
-        !cajonRef.current?.contains(origen) &&
-        (/^(INPUT|TEXTAREA|SELECT)$/.test(origen.tagName) || origen.isContentEditable)
-      ) {
-        return;
-      }
-      onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [abierto, onClose]);
-
-  /* 1B: un solo chat a la vez. El de tareas (en todas las pantallas) y el de un documento ocupan el mismo lado y se
-     tapaban. El que se abre avisa; el otro, si estaba abierto, se cierra (lo escrito y el hilo quedan guardados). */
-  const idDelCajon = useId();
-  useEffect(() => {
-    if (abierto) window.dispatchEvent(new CustomEvent(EVENTO_CHAT_ABIERTO, { detail: idDelCajon }));
-  }, [abierto, idDelCajon]);
-  useEffect(() => {
-    if (!abierto) return;
-    const onOtro = (e: Event) => {
-      if ((e as CustomEvent<string>).detail !== idDelCajon) onClose();
-    };
-    window.addEventListener(EVENTO_CHAT_ABIERTO, onOtro);
-    return () => window.removeEventListener(EVENTO_CHAT_ABIERTO, onOtro);
-  }, [abierto, onClose, idDelCajon]);
-
-  /**
-   * ⭐ EL FOCO ENTRA AL CAJÓN Y VUELVE DE DONDE VINO.
-   *
-   * El panel se portaliza al FINAL de `body`, y su disparador vive en el header del documento —
-   * arriba de todo. Sin esto, quien abre el chat con teclado tiene que tabular por TODO el
-   * cronograma (cada input de cada tarea de cada fase) para llegar al campo de escribir: en la
-   * práctica, el chat era inalcanzable sin mouse. Y al cerrar, el portal se desmonta y el foco
-   * cae a `body`, así que la persona vuelve al principio del documento.
-   *
-   * ⚠ NO es una trampa de foco: el cajón no es modal y tabular al documento tiene que seguir
-   * funcionando. Solo se pone el foco al abrir y se devuelve al cerrar.
-   *
-   * E3 P5: cuando se abre SOLO (llegó una propuesta), el foco no se toca (`enfocarAlAbrir` en false):
-   * la persona estaba en otra cosa, y robarle el foco le haría tipear en el chat.
-   */
-  useEffect(() => {
-    if (!abierto || !enfocarAlAbrir) return;
-    const previo = document.activeElement as HTMLElement | null;
-    const t = window.setTimeout(() => composerRef.current?.focus(), 0);
-    return () => {
-      window.clearTimeout(t);
-      previo?.focus?.();
-    };
-    // Solo al abrir: si deja de ser una apertura automática con el cajón abierto, no se le roba el foco.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [abierto]);
-
-  /* Revisión de E4 (#10): con el cajón YA abierto, el «IA» de otra fase no cambia `abierto` y el efecto de
-     arriba no vuelve a correr: el cursor se quedaba en el Gantt. Este escucha SOLO el pedido de foco (no
-     `abierto`: con un pedido viejo, una apertura automática tomaría el foco). Devolverlo al cerrar sigue
-     siendo del de arriba. */
-  useEffect(() => {
-    if (!abierto || !pedidoDeFoco) return;
-    const t = window.setTimeout(() => composerRef.current?.focus(), 0);
-    return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pedidoDeFoco]);
+  /* Escape, un solo chat a la vez, el foco que entra y vuelve, el pedido de foco y el hilo que baja solo: el marco
+     (CajonDeNexus.tsx), igual para todos los chats. */
 
   /* 1B: «o pídeselo al asistente» llena el campo con lo que ya se escribió, sin mandarlo. */
   useEffect(() => {
@@ -453,25 +372,6 @@ export default function ChatDelAsistente({
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [borrador?.n]);
-
-  useEffect(() => {
-    finRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [turnos, pensando]);
-
-  /**
-   * ⭐ EL COMPOSER CRECE CON LO QUE SE ESCRIBE O SE PEGA (Elías, 2026-08-21).
-   *
-   * Con `rows={2}` fijo, pegar un párrafo largo dejaba casi todo el texto tapado detrás de un
-   * scroll interno de dos líneas de alto — la persona no podía ver lo que acababa de escribir sin
-   * scrollear a ciegas. Mismo patrón que `TaskDetailDrawer` (auto-grow por `scrollHeight`), con un
-   * techo: pasado `ALTO_MAXIMO_COMPOSER` scrollea adentro en vez de devorarse toda la conversación.
-   */
-  useEffect(() => {
-    const el = composerRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, ALTO_MAXIMO_COMPOSER)}px`;
-  }, [texto]);
 
   async function enviar() {
     const mensaje = texto.trim();
@@ -507,14 +407,15 @@ export default function ChatDelAsistente({
         }),
       });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.error ?? "el asistente no pudo contestar");
+      if (!r.ok) throw new Error(j.error ?? "Nexus no pudo contestar");
       setTurnos(j.hilo?.turnos ?? []);
       setLectura(j.lectura ?? null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "el asistente no pudo contestar");
+      setError(e instanceof Error ? e.message : "Nexus no pudo contestar");
       /* Se saca el turno optimista: dejarlo mentiría diciendo que la pregunta quedó guardada. */
       setTurnos((t) => t.filter((x) => !x.id.startsWith("optimista-")));
-      setTexto(mensaje);
+      /* Lo mandado vuelve a la caja sin pisar lo que se escribió (o dictó) mientras Nexus pensaba. */
+      setTexto((x) => devolverALaCaja(mensaje, x));
     } finally {
       setPensando(false);
     }
@@ -747,90 +648,127 @@ export default function ChatDelAsistente({
   /* El estado vacío de siempre: sin aviso (los documentos) o sin propuesta. */
   const conEstadoVacio = !aviso || aviso.variante === "sin-propuesta";
 
-  if (!hydrated || !abierto) return null;
+  /* De qué se habla, debajo de «Nexus»: el documento y lo que pasa con lo que se pide (L1: la propuesta y de dónde
+     viene, o el cronograma vigente). */
+  const queSeHabla = lugar === undefined ? piezaLabel : lugar;
+  const subtitulo = [queSeHabla, aviso?.subtitulo ?? "Conversa el cambio antes de generarlo"].filter(Boolean).join(" · ");
+  /* L1: sin propuesta, los ejemplos del aviso (los de siempre, sin «Aplica la propuesta»). Lo que se le pide a una
+     propuesta va en la bienvenida, con sus números y sus fases de verdad. Con pedidos listos, no se repiten. */
+  const ejemplos = sugerencias?.length ? undefined : aviso?.ejemplos.length ? aviso.ejemplos : EJEMPLOS_DE_SIEMPRE;
 
-  return createPortal(
-    <aside
-      ref={cajonRef}
-      id={ID_DEL_CAJON}
-      className={`fixed right-0 top-0 h-full z-[45] ${ancho === "amplio" ? "w-[560px]" : "w-[400px]"} max-w-[92vw] bg-surface border-l border-line shadow-2xl flex flex-col`}
-      aria-label={`Asistente sobre ${piezaLabel}`}
-    >
-      <header className="px-4 py-3 border-b border-line flex items-center justify-between shrink-0">
-        <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-fg truncate">Asistente · {piezaLabel}</h2>
-          {/* L1: de qué se habla (la propuesta y de dónde viene, o el cronograma vigente). */}
-          <p className="text-xs text-fg-muted truncate">{aviso?.subtitulo ?? "Conversa el cambio antes de generarlo"}</p>
-          {pieza === PIEZA_CRONOGRAMA && lectura ? (
-            <p className={`text-[11px] ${lectura.error ? "text-warn-ink" : "text-fg-muted"}`}>
-              {lineaDeLectura(lectura)}
-            </p>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          {onAncho ? (
-            <button
-              onClick={onAncho}
-              className="hidden sm:inline-flex px-2 py-1 rounded-lg text-xs text-fg-muted hover:text-fg hover:bg-surface-hover transition-colors"
-              title={ancho === "amplio" ? "Volver al ancho de siempre" : "Más ancho, para leer un plan largo"}
-            >
-              {ancho === "amplio" ? "Más angosto" : "Más ancho"}
-            </button>
-          ) : null}
-          {turnos.length > 0 && (
-            <button
-              onClick={() => void empezarDeCero()}
-              /* ⚠ `aplicando` también: abrir un hilo nuevo a mitad del apply hace que el
-                 desenlace se escriba sobre el hilo RECIÉN CREADO —`hiloVivo` devuelve el más
-                 reciente— y el «⛔ No se pudo aplicar» queda como primer turno de una
-                 conversación vacía, mientras el acuerdo real se pierde de vista. */
-              disabled={pensando || aplicando}
-              className="px-2 py-1 rounded-lg text-xs text-fg-muted hover:text-fg hover:bg-surface-hover disabled:opacity-60 transition-colors"
-              title="Empezar una conversación nueva (la anterior queda guardada)"
-            >
-              Nueva
-            </button>
-          )}
-          <button
-            onClick={onClose}
-            className="px-2 py-1 rounded-lg text-fg-muted hover:text-fg hover:bg-surface-hover transition-colors"
-            aria-label="Cerrar el asistente"
+  /* Lo que va fijo abajo: el aviso de qué pasa con lo que se pide, el alcance (chip) y la caja. */
+  const pieDelChat = (
+    <>
+        {/* L1: el aviso FIJO, arriba del campo y con o sin historial: qué pasa con lo que se pide. Con una
+            conversación vieja arriba, nada más lo decía. */}
+        {aviso?.aviso ? (
+          <p
+            role="note"
+            className={
+              "mb-2 rounded-lg border px-2 py-1.5 text-xs " +
+              (aviso.tono === "info"
+                ? "border-info-line bg-info-surface text-info-ink"
+                : aviso.tono === "warn"
+                  ? "border-warn-line bg-warn-surface text-warn-ink"
+                  : "border-line bg-surface-muted text-fg-secondary")
+            }
           >
-            ✕
-          </button>
-        </div>
-      </header>
+            {aviso.aviso}
+          </p>
+        ) : null}
+        {/* ⭐ El alcance, visible y revocable. Se queda después de enviar —encadenar dos ajustes
+            sobre la misma sección es el caso normal— y otro botón «Cambiar» lo reemplaza en vez de
+            abrir otro hilo: el alcance es por MENSAJE, no por conversación. */}
+        {seccionReferida && (
+          <ChipDeNexus
+            onQuitar={soltarSeccion}
+            quitarLabel={seccionReferida.tipo === "fase" ? "Dejar de hablar solo de esta fase" : "Dejar de hablar solo de esta sección"}
+          >
+            {/* E4 P1: el «IA» de una fase del Gantt fija una FASE, no una sección. L1: con una propuesta
+                editable, la fase es la de la propuesta. */}
+            {seccionReferida.tipo === "fase"
+              ? aviso?.variante === "editable"
+                ? `Sobre «${seccionReferida.label}» de la propuesta`
+                : `Sobre la fase «${seccionReferida.label}»`
+              : seccionReferida.novedad
+                ? `Sobre «${seccionReferida.label}» · con lo que dejó «${seccionReferida.novedad.reunion}»`
+                : `Sobre «${seccionReferida.label}»`}
+          </ChipDeNexus>
+        )}
+        {chip ? <ChipDeNexus onQuitar={onSoltarChip}>Sobre {chip.etiqueta}</ChipDeNexus> : null}
+        {sugerencias?.length && !texto.trim() && !pensando ? (
+          <div className="mb-2 flex flex-wrap gap-1.5" aria-label="Pedidos para empezar">
+            {sugerencias.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => {
+                  setTexto(s);
+                  composerRef.current?.focus();
+                }}
+                className="rounded-full border border-info-line bg-info-surface px-2.5 py-1 text-left text-xs text-brand hover:bg-surface-hover"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <CajaDeNexus
+          cajaRef={composerRef}
+          texto={texto}
+          setTexto={setTexto}
+          onEnviar={() => void enviar()}
+          enviarApagado={pensando || aplicando || !texto.trim()}
+          placeholder={aviso?.placeholder ?? "Escribe qué quieres cambiar…"}
+          conDictado
+          onErrorDeDictado={setError}
+        />
+    </>
+  );
 
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+  return (
+    <CajonDeNexus
+      abierto={abierto}
+      onClose={onClose}
+      cajonRef={cajonRef}
+      cajaRef={composerRef}
+      ariaLabel={`Nexus · ${piezaLabel}`}
+      subtitulo={subtitulo}
+      debajoDelSubtitulo={
+        pieza === PIEZA_CRONOGRAMA && lectura ? (
+          <p className={`text-[11px] ${lectura.error ? "text-warn-ink" : "text-fg-muted"}`}>{lineaDeLectura(lectura)}</p>
+        ) : null
+      }
+      nuevaConversacion={{
+        alHacer: () => void empezarDeCero(),
+        /* ⚠ `aplicando` también: abrir un hilo nuevo a mitad del apply hace que el desenlace se escriba sobre el hilo
+           RECIÉN CREADO —`hiloVivo` devuelve el más reciente— y el «⛔ No se pudo aplicar» queda como primer turno de una
+           conversación vacía, mientras el acuerdo real se pierde de vista. */
+        apagada: turnos.length === 0 || pensando || aplicando,
+        titulo: "Empezar una conversación nueva (la anterior queda guardada)",
+      }}
+      ancho={ancho}
+      onAncho={onAncho}
+      enfocarAlAbrir={enfocarAlAbrir}
+      pedidoDeFoco={pedidoDeFoco}
+      alFinal={`${turnos.length}·${pensando}·${aplicando}·${error ?? ""}`}
+      pie={pieDelChat}
+    >
         {cargando && <p className="text-xs text-fg-muted">Cargando la conversación…</p>}
 
         {!cargando && turnos.length === 0 && conEstadoVacio && (
-          <div className="text-sm text-fg-secondary space-y-2">
-            <p>{rotulos?.vacio?.intro ?? "Pregúntale qué se puede cambiar y qué va a costar. Por ejemplo:"}</p>
-            {/* L1: sin propuesta, los ejemplos del aviso (los de siempre, sin «Aplica la propuesta»). Lo que se le
-                pide a una propuesta va en la bienvenida, con sus números y sus fases de verdad. */}
-            {sugerencias?.length ? null : aviso?.ejemplos.length ? (
-              <ol className="text-xs text-fg-muted space-y-1 list-decimal pl-4">
-                {aviso.ejemplos.map((e) => (
-                  <li key={e}>«{e}»</li>
-                ))}
-              </ol>
-            ) : (
-              <ol className="text-xs text-fg-muted space-y-1 list-decimal pl-4">
-                <li>«¿Qué pasa si alargo una fase dos semanas?»</li>
-                <li>«Hay fases duplicadas, ¿se pueden unir?»</li>
-                <li>«Quiero mover una tarea de fase — ¿pierdo algo?»</li>
-              </ol>
-            )}
-            <p className="text-xs text-fg-muted">
-              {rotulos?.vacio?.cierre ?? "Cuando estén de acuerdo, te deja la instrucción lista para revisar y aplicar."}
-            </p>
-            {pieza === PIEZA_CRONOGRAMA ? (
-              <p className="text-xs text-fg-muted">
-                Si elegiste reuniones o pegaste notas en «Contexto del cronograma», también las lee.
-              </p>
-            ) : null}
-          </div>
+          <ChatVacio
+            intro={rotulos?.vacio?.intro ?? "Pregúntale qué se puede cambiar y qué va a costar. Por ejemplo:"}
+            ejemplos={ejemplos}
+            cierre={
+              <>
+                <p>{rotulos?.vacio?.cierre ?? "Cuando estén de acuerdo, te deja la instrucción lista para revisar y aplicar."}</p>
+                {pieza === PIEZA_CRONOGRAMA ? (
+                  <p>Si elegiste reuniones o pegaste notas en «Contexto del cronograma», también las lee.</p>
+                ) : null}
+              </>
+            }
+          />
         )}
         {!cargando && bienvenidaSinDivisoria ? inicio : null}
 
@@ -845,19 +783,13 @@ export default function ChatDelAsistente({
                 asistente ENTRA a la caja, y la enumeración vive en un solo lugar — el que sale de
                 las operaciones, que es el que no puede mentir. */}
             {!t.acuerdo && (
-              <div
-                className={
-                  t.rol === "CSE"
-                    ? "ml-8 rounded-xl px-3 py-2 bg-surface-active text-sm text-fg whitespace-pre-wrap"
-                    : "mr-2 rounded-xl px-3 py-2 bg-surface-muted text-sm text-fg-secondary"
-                }
-              >
+              <Burbuja de={t.rol === "CSE" ? "persona" : "nexus"}>
                 {/* ⚠ El marcador de alcance se SACA al pintar: es una instrucción para el
                     modelo, no algo que la persona escribió. Verlo entero arriba de su propia
                     frase —repitiendo lo que el chip ya dice al lado— se lee como ruido del
                     sistema metido en su mensaje. */}
                 {t.rol === "CSE" ? mensajeSinAlcance(t.texto) : <Markdown>{t.texto}</Markdown>}
-              </div>
+              </Burbuja>
             )}
 
             {t.acuerdo && (
@@ -1209,7 +1141,7 @@ export default function ChatDelAsistente({
           {cargando
             ? "Cargando la conversación"
             : pensando
-              ? "El asistente está pensando"
+              ? "Nexus está pensando"
               : aplicando
                 ? "Aplicando los cambios"
                 : ""}
@@ -1217,7 +1149,7 @@ export default function ChatDelAsistente({
         <p role="alert" className="sr-only">
           {error ?? ""}
         </p>
-        {pensando && <p className="text-xs text-fg-muted">Pensando…</p>}
+        {pensando && <Pensando />}
         {/* ⚠ DOS CARRILES, DOS ESPERAS. El de operaciones aplica en ~1 ms; el de una instrucción en
             prosa —la de un documento, que su editor relee con un modelo— puede tardar minutos.
             Mostrar el cartel de los minutos sobre un cambio instantáneo no es solo impreciso:
@@ -1238,123 +1170,7 @@ export default function ChatDelAsistente({
             {error}
           </div>
         )}
-        <div ref={finRef} />
-      </div>
-
-      <div className="px-3 py-3 border-t border-line shrink-0">
-        {/* L1: el aviso FIJO, arriba del campo y con o sin historial: qué pasa con lo que se pide. Con una
-            conversación vieja arriba, nada más lo decía. */}
-        {aviso?.aviso ? (
-          <p
-            role="note"
-            className={
-              "mb-2 rounded-lg border px-2 py-1.5 text-xs " +
-              (aviso.tono === "info"
-                ? "border-info-line bg-info-surface text-info-ink"
-                : aviso.tono === "warn"
-                  ? "border-warn-line bg-warn-surface text-warn-ink"
-                  : "border-line bg-surface-muted text-fg-secondary")
-            }
-          >
-            {aviso.aviso}
-          </p>
-        ) : null}
-        {/* ⭐ El alcance, visible y revocable. Se queda después de enviar —encadenar dos ajustes
-            sobre la misma sección es el caso normal— y otro botón «Cambiar» lo reemplaza en vez de
-            abrir otro hilo: el alcance es por MENSAJE, no por conversación. */}
-        {seccionReferida && (
-          <div className="mb-2 flex items-center gap-1.5 text-xs">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-info-line bg-info-surface px-2 py-1 text-info-ink">
-              {/* E4 P1: el «IA» de una fase del Gantt fija una FASE, no una sección. L1: con una propuesta
-                  editable, la fase es la de la propuesta. */}
-              {seccionReferida.tipo === "fase"
-                ? aviso?.variante === "editable"
-                  ? `Sobre «${seccionReferida.label}» de la propuesta`
-                  : `Sobre la fase «${seccionReferida.label}»`
-                : seccionReferida.novedad
-                  ? `Sobre «${seccionReferida.label}» · con lo que dejó «${seccionReferida.novedad.reunion}»`
-                  : `Sobre «${seccionReferida.label}»`}
-              <button
-                type="button"
-                onClick={soltarSeccion}
-                aria-label={
-                  seccionReferida.tipo === "fase"
-                    ? "Dejar de hablar solo de esta fase"
-                    : "Dejar de hablar solo de esta sección"
-                }
-                title={
-                  seccionReferida.tipo === "fase"
-                    ? "Dejar de hablar solo de esta fase"
-                    : "Dejar de hablar solo de esta sección"
-                }
-                className="text-info-ink/70 hover:text-info-ink"
-              >
-                ✕
-              </button>
-            </span>
-          </div>
-        )}
-        {chip ? (
-          <div className="mb-2 flex items-center gap-1.5 text-xs">
-            <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-info-line bg-info-surface px-2 py-1 text-info-ink">
-              <span className="truncate">Sobre {chip.etiqueta}</span>
-              {onSoltarChip ? (
-                <button
-                  type="button"
-                  onClick={onSoltarChip}
-                  aria-label="Dejar de hablar solo de esto"
-                  title="Dejar de hablar solo de esto"
-                  className="text-info-ink/70 hover:text-info-ink"
-                >
-                  ✕
-                </button>
-              ) : null}
-            </span>
-          </div>
-        ) : null}
-        {sugerencias?.length && !texto.trim() && !pensando ? (
-          <div className="mb-2 flex flex-wrap gap-1.5" aria-label="Pedidos para empezar">
-            {sugerencias.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => {
-                  setTexto(s);
-                  composerRef.current?.focus();
-                }}
-                className="rounded-full border border-info-line bg-info-surface px-2.5 py-1 text-left text-xs text-brand hover:bg-surface-hover"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        <textarea
-          ref={composerRef}
-          value={texto}
-          onChange={(e) => setTexto(e.target.value)}
-          onKeyDown={(e) => {
-            /* Enter envía, Shift+Enter hace salto de línea — la convención de un chat. */
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              void enviar();
-            }
-          }}
-          rows={2}
-          placeholder={aviso?.placeholder ?? "Escribe qué quieres cambiar…"}
-          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted resize-none overflow-y-auto"
-          style={{ maxHeight: ALTO_MAXIMO_COMPOSER }}
-        />
-        <button
-          onClick={() => void enviar()}
-          disabled={pensando || aplicando || !texto.trim()}
-          className="mt-2 w-full px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-60 transition-colors"
-        >
-          Enviar
-        </button>
-      </div>
-    </aside>,
-    document.body,
+    </CajonDeNexus>
   );
 }
 

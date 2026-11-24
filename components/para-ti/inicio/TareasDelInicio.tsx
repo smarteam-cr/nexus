@@ -26,7 +26,7 @@ const DE_DONDE: Record<string, string> = {
   hubspot: "HubSpot",
   reunion: "De una reunión",
   notas: "De una reunión",
-  chat: "Del asistente",
+  chat: "De Nexus",
   paso: "Siguiente paso",
   plantilla: "De una plantilla",
 };

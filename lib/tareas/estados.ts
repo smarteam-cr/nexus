@@ -92,7 +92,7 @@ export const NOMBRE_DEL_ORIGEN: Record<OrigenDeTarea, string> = {
   reunion: "De una reunión",
   notas: "De unas notas",
   correo: "De un correo",
-  chat: "Del asistente",
+  chat: "De Nexus",
   plantilla: "De una plantilla",
   hubspot: "De HubSpot",
   paso: "Siguiente paso",

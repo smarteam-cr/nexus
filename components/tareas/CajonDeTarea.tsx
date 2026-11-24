@@ -365,7 +365,7 @@ export function CajonDeTarea({
                   cerrarCajon();
                 }}
               >
-                Preguntarle al asistente
+                Preguntarle a Nexus
               </BotonTexto>
             )}
           </>

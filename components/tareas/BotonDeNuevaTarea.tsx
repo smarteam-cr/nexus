@@ -142,7 +142,7 @@ export default function BotonDeNuevaTarea({ isOpen }: { isOpen: boolean }) {
                   }}
                   className="font-medium text-brand hover:underline"
                 >
-                  o pídeselo al asistente
+                  o pídeselo a Nexus
                 </button>
               </>
             ) : null}

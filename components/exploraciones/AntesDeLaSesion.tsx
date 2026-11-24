@@ -1082,7 +1082,8 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
             className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-medium text-fg hover:bg-surface-hover"
           >
             <IconoDeSugerencia className="h-3.5 w-3.5 text-brand" />
-            Mejorar con el asistente
+            {/* Un solo nombre para pedirle un cambio a Nexus (24 nov): abre el chat «Nexus» con la guía como chip. */}
+            Mejorar con IA
           </button>
         )}
         <Segmentos

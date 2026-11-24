@@ -22,8 +22,9 @@ import { IconCheck } from "@/components/ui";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo } from "@/components/ui/UndoProvider";
-import AssistDialog from "@/components/ai/AssistDialog";
-import { AgentProposal } from "@/components/ai/AgentProposal";
+import ChatDeUnPedido, { PuntoDePropuesta, useAvisoDePropuestaLista } from "@/components/asistente/ChatDeUnPedido";
+import { Burbuja } from "@/components/asistente/CajonDeNexus";
+import PropuestaDeSecciones from "@/components/ai/PropuestaDeSecciones";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import { useEjecutarOperacionesDelChatDeRol } from "@/components/asistente/ejecutar-operaciones-de-rol";
 import { ChatDeSeccionDisponible } from "@/components/asistente/chat-de-seccion";
@@ -204,18 +205,30 @@ export default function RoleWorkspace({
   };
 
   // ── Assist de documento ("✨ Mejorar con IA"): instrucción → propuesta →
-  // revisar en <AgentProposal> → aplicar (merge local + el autosave de siempre)
-  // o descartar (la propuesta nunca tocó el server). Doctrina: DECISIONS §Roles.
+  // revisar → aplicar (merge local + el autosave de siempre) o descartar (la
+  // propuesta nunca tocó el server). Doctrina: DECISIONS §Roles. Desde el 24 nov
+  // va en el chat «Nexus» de todos (ChatDeUnPedido), no en una ventana modal.
   const [assistOpen, setAssistOpen] = useState(false);
   const [assistLoading, setAssistLoading] = useState(false);
   const [assist, setAssist] = useState<AssistResult | null>(null);
   const [assistSelected, setAssistSelected] = useState<Set<string>>(new Set());
+  const [assistEnviado, setAssistEnviado] = useState<string | null>(null);
+  const [assistError, setAssistError] = useState<string | null>(null);
+  /** Lo que quedó al aplicar o descartar, en el hilo del chat. */
+  const [assistHecho, setAssistHecho] = useState<string | null>(null);
 
   const assistLabel = (key: string) =>
     key === "hero" ? "Título, área y resumen" : SECTION_LABELS[key] ?? key;
 
-  const submitAssist = async (instruction: string) => {
+  const avisarSiEstaCerrado = useAvisoDePropuestaLista(assistOpen);
+
+  // ⚠ La propuesta de antes no se borra al pedir otra: se esconde mientras Nexus piensa y vuelve si el pedido falla.
+  const submitAssist = async (instruction: string): Promise<boolean> => {
+    const antes = { enviado: assistEnviado, hecho: assistHecho };
     setAssistLoading(true);
+    setAssistEnviado(instruction);
+    setAssistError(null);
+    setAssistHecho(null);
     try {
       const result = await fetchJson<AssistResult>(`/api/roles/${role.id}/assist`, {
         method: "POST",
@@ -224,9 +237,14 @@ export default function RoleWorkspace({
       });
       setAssist(result);
       setAssistSelected(new Set(Object.keys(result.proposal)));
-      setAssistOpen(false);
+      // Llegó con el chat cerrado: se avisa, y el botón lleva su punto.
+      avisarSiEstaCerrado();
+      return true;
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "El assist falló. Prueba de nuevo.");
+      setAssistError(e instanceof ApiError ? e.message : "Nexus no pudo proponer. Prueba de nuevo.");
+      setAssistEnviado(antes.enviado);
+      setAssistHecho(antes.hecho);
+      return false;
     } finally {
       setAssistLoading(false);
     }
@@ -268,6 +286,7 @@ export default function RoleWorkspace({
 
     schedule();
     setAssist(null);
+    setAssistHecho("Listo: aplicado en el puesto. Ctrl+Z lo deshace.");
     toast.success("Propuesta aplicada. Ctrl+Z para deshacer.");
   };
 
@@ -311,10 +330,11 @@ export default function RoleWorkspace({
             <button
               type="button"
               onClick={() => setAssistOpen(true)}
-              disabled={assistLoading}
-              className="px-3 py-1.5 text-sm font-medium rounded-lg border border-line text-fg-secondary hover:border-brand hover:text-brand transition-colors disabled:opacity-50"
+              aria-expanded={assistOpen}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-line text-fg-secondary hover:border-brand hover:text-brand transition-colors disabled:opacity-50"
             >
               ✨ Mejorar con IA
+              {assist && !assistOpen && <PuntoDePropuesta />}
             </button>
           )}
           <button
@@ -331,71 +351,53 @@ export default function RoleWorkspace({
         </div>
       </div>
 
-      <AssistDialog
-        open={assistOpen}
+      <ChatDeUnPedido
+        abierto={assistOpen}
         onClose={() => setAssistOpen(false)}
-        title="Mejorar este puesto con IA"
-        chips={ASSIST_CHIPS}
-        placeholder='Ej: "documenta mejor este puesto respecto a 4DX"'
-        loading={assistLoading}
-        onSubmit={submitAssist}
-      />
-
-      {assist && (
-        <AgentProposal
-          title="Propuesta de la IA"
-          subtitle="Revisa las secciones propuestas y elige cuáles aplicar. Nada se guarda hasta que apliques."
-          summary={assist.summary}
-          reasoning={assist.reasoning}
-          warnings={assist.warnings}
-          onApply={applyAssist}
-          onDiscard={() => setAssist(null)}
-          applyDisabled={assistSelected.size === 0}
-          className="mb-4"
-        >
-          <div className="space-y-1.5">
-            {Object.keys(assist.proposal).map((key) => (
-              <label key={key} className="flex items-center gap-2 text-sm text-fg-secondary cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={assistSelected.has(key)}
-                  onChange={(e) =>
-                    setAssistSelected((prev) => {
-                      const next = new Set(prev);
-                      if (e.target.checked) next.add(key);
-                      else next.delete(key);
-                      return next;
-                    })
-                  }
-                  className="accent-brand"
-                />
-                {assistLabel(key)}
-              </label>
-            ))}
-          </div>
-          {assist.citations.length > 0 && (
-            <div className="pt-1">
-              <p className="text-[10px] font-semibold text-fg-muted uppercase tracking-wider mb-1">
-                Fuentes consultadas
-              </p>
-              <ul className="space-y-0.5">
-                {assist.citations.map((c) => (
-                  <li key={c.url}>
-                    <a
-                      href={c.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[11px] text-brand hover:underline break-all"
-                    >
-                      {c.title}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </AgentProposal>
-      )}
+        subtitulo="Mejorar este puesto con IA"
+        vacio={{
+          intro: "Describe la mejora; Nexus propone y tú revisas antes de aplicar. Por ejemplo:",
+          ejemplos: ASSIST_CHIPS,
+          cierre: "Puede investigar en línea si hace falta.",
+        }}
+        placeholder="Por ejemplo: «documenta mejor este puesto respecto a 4DX»"
+        minimo={4}
+        enviado={assistEnviado}
+        pidiendo={assistLoading}
+        textoPensando="Nexus está preparando la propuesta… (puede investigar en línea)"
+        error={assistError}
+        onPedir={submitAssist}
+        onNueva={() => {
+          setAssistEnviado(null);
+          setAssistError(null);
+          setAssist(null);
+          setAssistHecho(null);
+        }}
+      >
+        {assist && !assistLoading ? (
+          <PropuestaDeSecciones
+            propuesta={assist}
+            elegidas={assistSelected}
+            alElegir={(key, va) =>
+              setAssistSelected((prev) => {
+                const next = new Set(prev);
+                if (va) next.add(key);
+                else next.delete(key);
+                return next;
+              })
+            }
+            nombreDe={assistLabel}
+            onAplicar={applyAssist}
+            onDescartar={() => {
+              setAssist(null);
+              setAssistHecho("Descartaste la propuesta: no cambió nada.");
+            }}
+            aplicando={false}
+          />
+        ) : assistHecho && !assistLoading ? (
+          <Burbuja de="nexus">{assistHecho}</Burbuja>
+        ) : null}
+      </ChatDeUnPedido>
 
       <div
         className={[escalaForDocType(docType), "overflow-hidden rounded-2xl border border-line"]
