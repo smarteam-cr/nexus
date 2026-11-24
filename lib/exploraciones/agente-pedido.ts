@@ -171,7 +171,7 @@ export function reglaDeLoQueYaSabemos(loQueYaSabemos: ContextoDelPedido["loQueYa
 - Cada hipótesis y cada tarjeta habla de lo que se sabe hoy: lo que falta confirmar se pregunta en una sesión de diagnóstico.`;
   if (loQueYaSabemos === "ademas")
     return `
-- Esta empresa ya es cliente: además de las sesiones de diagnóstico (las reuniones con su transcripción entera que no dicen «reunión de trabajo»), lees lo que ya sabemos de ella: sus reuniones de trabajo con Smarteam (las marcadas así y las S «en resumen»), el handoff (V0) y los cuestionarios (Q0). Las sesiones de diagnóstico pesan más: si se contradicen con una reunión de trabajo, vale lo que el cliente dijo en la sesión. Lo que Smarteam explicó o configuró en una reunión de trabajo no es un nivel de la empresa.`;
+- Esta empresa ya es cliente: además de las sesiones de diagnóstico (las reuniones con su transcripción entera que no dicen «reunión de trabajo»), lees lo que ya sabemos de ella: sus reuniones de trabajo con Smarteam (las marcadas así y las S «en resumen»), el handoff (V0) y los cuestionarios (Q0). Las sesiones de diagnóstico pesan más: si se contradicen con una reunión de trabajo, vale lo que el cliente dijo en la sesión, salvo que la reunión de trabajo sea más nueva y cuente que algo cambió desde entonces (ahí vale la más nueva, como con cualquier fuente: dilo en porQue). Lo que Smarteam explicó o configuró en una reunión de trabajo no es un nivel de la empresa.`;
   return "";
 }
 

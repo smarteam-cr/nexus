@@ -3,11 +3,14 @@
  * de una ficha que no es prospecto parte de lo que ya sabemos, y sus reuniones de trabajo se nombran aparte de las sesiones
  * de diagnóstico.
  */
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { rotuloDeLasReunionesDeTrabajo } from "@/lib/external/pagina-del-resumen";
 import { pedidoDePosicionar, reglaDeLoQueYaSabemos, REUNION_DE_TRABAJO, type ContextoDelPedido } from "./agente-pedido";
 import { ESCALA_DE_PRUEBA, estadoDePrueba } from "./escala-de-prueba.test-helpers";
 import { clavesDeTrabajo, type PestanaDeSesion, type ReunionDeLaExploracion, type SesionPlaneada } from "./guia";
-import { lineaDeLaEscala } from "./linea-de-la-escala";
+import { lineaDeLaEscala, marcasQueCambiaron } from "./linea-de-la-escala";
 import {
   bloqueDelPeso,
   cuantasSesiones,
@@ -256,5 +259,72 @@ describe("«Lo que hicimos» y el Resumen con reuniones de trabajo (D4)", () => 
     expect(peso[0].deTrabajo).toBe(true);
     expect(peso[1].deTrabajo).toBeUndefined();
     expect(bloqueDelPeso(peso)).toContain("«Capacitación» · 90 min (60 %) · reunión de trabajo (lo que ya sabemos)");
+  });
+});
+
+describe("lo que cazó la revisión del 24 nov", () => {
+  const leer = (...partes: string[]) => fs.readFileSync(path.join(process.cwd(), ...partes), "utf8").replace(/\r\n/g, "\n");
+
+  it("solo un CLIENTE parte de lo que ya sabemos: un aliado o una ficha interna no", () => {
+    expect(partirDeLoQueYaSabemos("ALIADO")).toBe(false);
+    expect(partirDeLoQueYaSabemos("INTERNO")).toBe(false);
+  });
+
+  it("⛔ el selector del contexto no se pierde al primer cambio: vive aparte de `exp`", () => {
+    const paso = leer("components", "exploraciones", "PasoEscala.tsx");
+    expect(paso).toMatch(/const \{ exp, puedeEditar, proyectosDeLaEmpresa \} = useLienzo\(\)/);
+    expect(paso).not.toMatch(/exp\.proyectosDeLaEmpresa/);
+    const lienzo = leer("components", "exploraciones", "LienzoDeExploracion.tsx");
+    expect(lienzo).toMatch(/if \(data\.exploracion\.proyectosDeLaEmpresa\) setProyectosDeLaEmpresa\(data\.exploracion\.proyectosDeLaEmpresa\)/);
+  });
+
+  it("⛔ leer la cuenta pide acceso a la empresa: «Ubicar» de un cliente y las reuniones sugeridas", () => {
+    const agente = leer("app", "api", "sales", "exploraciones", "[id]", "agente", "route.ts");
+    expect(agente).toMatch(/if \(modo === "posicionar"\) \{[\s\S]{0,400}partirDeLoQueYaSabemos\(lectura\.fila\.client\.kind\)[\s\S]{0,200}guardAccessToClient\(lectura\.fila\.clientId\)/);
+    const sugeridas = leer("app", "api", "sales", "exploraciones", "[id]", "reuniones-de-trabajo", "route.ts");
+    expect(sugeridas.indexOf("guardAccessToClient(fila.clientId)")).toBeGreaterThan(-1);
+    expect(sugeridas.indexOf("guardAccessToClient(fila.clientId)")).toBeLessThan(sugeridas.indexOf("reunionesDeLaEmpresaParaElegir("));
+  });
+
+  it("⛔ la marca de reunión de trabajo se pone solo en la preventa de un cliente y en una que ya pasó, y solo ahí se lee", () => {
+    const ruta = leer("app", "api", "sales", "exploraciones", "[id]", "sesiones", "route.ts");
+    expect(ruta).toMatch(/const deTrabajo = !!c\.deLoQueYaSabemos && c\.tipo === "pasada" && !lectura\.fila\.projectId && partirDeLoQueYaSabemos\(lectura\.fila\.client\.kind\)/);
+    const fuentes = leer("lib", "exploraciones", "fuentes.ts");
+    expect(fuentes).toMatch(/const deTrabajo = !opts\.projectId && armadas\.corte\.esCliente \? clavesDeTrabajo\(pestanas\) : new Set<string>\(\)/);
+    const resumen = leer("lib", "exploraciones", "resumen-de-la-escala-server.ts");
+    expect(resumen).toMatch(/const conMarcas = !fila\.projectId && partirDeLoQueYaSabemos\(fila\.client\.kind\)/);
+  });
+
+  it("⛔ la página del cliente nombra las reuniones de trabajo aparte (D4), en una celda, y las áreas sin «exploradas»", () => {
+    const vista = leer("components", "external", "test", "ResumenDeLaEscalaVista.tsx");
+    expect(vista).toMatch(/\{h\.deTrabajo \? \([\s\S]{0,300}rotuloDeLasReunionesDeTrabajo\(h\.deTrabajo, h\.sesiones - h\.deTrabajo\)/);
+    expect(vista).toMatch(/h\.deTrabajo \? \(exploradas\.length === 1 \? "área con la que trabajamos" : "áreas con las que trabajamos"\)/);
+    expect(rotuloDeLasReunionesDeTrabajo(4, 2)).toBe("reuniones de trabajo juntos y 2 sesiones de diagnóstico");
+    expect(rotuloDeLasReunionesDeTrabajo(1, 0)).toBe("reunión de trabajo juntos");
+  });
+
+  it("si cambia la clase de una reunión después de armar el Resumen, la línea pide rehacerlo", () => {
+    const fecha = "2026-10-22T15:00:00.000Z";
+    expect(marcasQueCambiaron([{ fecha }], [{ fecha, deTrabajo: true }])).toBe(1);
+    expect(marcasQueCambiaron([{ fecha, deTrabajo: true }], [{ fecha, deTrabajo: true }])).toBe(0);
+    expect(marcasQueCambiaron(undefined, [{ fecha, deTrabajo: true }])).toBe(0);
+    const l = lineaDeLaEscala({
+      reuniones: [{ fecha, titulo: "AE | Reportes", origen: "meet", texto: "transcripcion", deTrabajo: true }],
+      ubicadaEn: "2026-11-24T18:00:00.000Z",
+      leyo: ["Reunión del 22 oct 2026: AE | Reportes"],
+      resumenEn: "2026-11-24T19:00:00.000Z",
+      ubicando: false,
+      conLoQueYaSabemos: true,
+      marcasCambiadas: 1,
+    });
+    expect(l.estado).toBe("resumenAtrasado");
+    expect(l.texto).toContain("cuenta 1 reunión con otra clase");
+  });
+
+  it("el pedido del Resumen no titula «de diagnóstico» un bloque con reuniones de trabajo", () => {
+    const r: ReunionParaElResumen = { id: "a", clave: "R1", fecha: "2026-11-10T15:00:00Z", equipo: null, turnos: [{ n: 1, hablante: "Ana", texto: "x" }], delCliente: ["Ana"], deTrabajo: true };
+    const texto = String((pedidoDelResumen({ empresa: "TEC · AE", areas: [], reuniones: [r], instrucciones: "" }).messages[0] as { content: string }).content);
+    expect(texto).toContain("Las reuniones con la empresa (cada línea");
+    expect(texto).not.toContain("Las reuniones de diagnóstico (cada línea");
   });
 });

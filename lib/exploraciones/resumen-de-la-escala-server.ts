@@ -243,7 +243,9 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
   /* Una reunión de trabajo (24 nov, la preventa de un cliente): la que la exploración marcó así al leerla, o la de una sesión
      marcada. Cuenta, pesa menos y «Lo que hicimos» la nombra aparte (D4). */
   const deTrabajoDeLaFuente = new Map(conTexto.reuniones.map((r, i) => [conTexto.sesiones[i], !!r.deTrabajo]));
-  const esDeTrabajo = (r: (typeof hechas)[number]): boolean => deTrabajoDeLaFuente.get(r.id) ?? !!sesionDe(r)?.deLoQueYaSabemos;
+  // La marca vale solo en la preventa de un cliente (posicionar.ts › `partirDeLoQueYaSabemos`); en otro lado se ignora.
+  const conMarcas = !fila.projectId && partirDeLoQueYaSabemos(fila.client.kind);
+  const esDeTrabajo = (r: (typeof hechas)[number]): boolean => conMarcas && (deTrabajoDeLaFuente.get(r.id) ?? !!sesionDe(r)?.deLoQueYaSabemos);
   const duracion = new Map(filas.map((f) => [f.id, minutosDeLaReunion(f)]));
   const sesiones: SesionHecha[] = hechas
     .map((r) => {

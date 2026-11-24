@@ -166,7 +166,7 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
   // Cada respuesta se guarda con la clave que la pidió: una vieja nunca se pinta debajo de una búsqueda nueva.
   const [datos, setDatos] = useState<{ clave: string; r: RespuestaDeReuniones | null; error?: boolean } | null>(null);
   const [agendadas, setAgendadas] = useState<{ r: RespuestaDeAgendadas | null; error?: boolean } | null>(null);
-  const [deTrabajo, setDeTrabajo] = useState<{ sugeridas: ReunionDeTrabajoSugerida[] | null; error?: boolean } | null>(null);
+  const [deTrabajo, setDeTrabajo] = useState<{ sugeridas: ReunionDeTrabajoSugerida[] | null; error?: string } | null>(null);
   const q = busqueda.trim();
   const clave = conPasadas ? (q.length >= MIN_BUSQUEDA_CALENDARIO ? q : "") : null;
   const pendientes = clave !== null && datos?.clave !== clave;
@@ -215,13 +215,15 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
     if (!conLoQueYaSabemos) return;
     const ctrl = new AbortController();
     fetch(`/api/sales/exploraciones/${exp.id}/reuniones-de-trabajo`, { signal: ctrl.signal })
-      .then((r) => {
-        if (!r.ok) throw new Error(String(r.status));
-        return r.json() as Promise<{ sugeridas: ReunionDeTrabajoSugerida[] }>;
+      .then(async (r) => {
+        const j = (await r.json().catch(() => ({}))) as { sugeridas?: ReunionDeTrabajoSugerida[]; error?: string };
+        // Sin acceso a la empresa (403) el servidor dice por qué: se muestra tal cual.
+        if (!r.ok) throw new Error(j.error ?? "No se pudieron sugerir las reuniones de trabajo. Prueba de nuevo en un momento.");
+        return j.sugeridas ?? [];
       })
-      .then((r) => setDeTrabajo({ sugeridas: r.sugeridas }))
-      .catch(() => {
-        if (!ctrl.signal.aborted) setDeTrabajo({ sugeridas: null, error: true });
+      .then((sugeridas) => setDeTrabajo({ sugeridas }))
+      .catch((e: unknown) => {
+        if (!ctrl.signal.aborted) setDeTrabajo({ sugeridas: null, error: e instanceof Error ? e.message : "No se pudieron sugerir las reuniones de trabajo." });
       });
     return () => ctrl.abort();
   }, [conLoQueYaSabemos, exp.id]);
@@ -429,14 +431,14 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
             {!deTrabajo ? (
               <li className="h-12 rounded-[10px] skeleton-shimmer" aria-label="Buscando las reuniones de trabajo" />
             ) : deTrabajo.error ? (
-              <li className="text-xs text-warn-ink">No se pudieron sugerir las reuniones de trabajo. Prueba de nuevo en un momento.</li>
+              <li className="text-xs text-warn-ink">{deTrabajo.error}</li>
             ) : !deTrabajo.sugeridas?.length ? (
               <li className="text-xs text-fg-muted">Todavía no hay reuniones con transcripción donde haya hablado la empresa.</li>
             ) : (
               <>
                 <li className="text-xs leading-[18px] text-fg-muted">
                   Las reuniones con la empresa donde más habló el cliente. Súmalas como reunión de trabajo: cuentan para ubicar la escala y para el Resumen, y el cliente
-                  no las ve como sesiones de diagnóstico.
+                  no las ve como sesiones de diagnóstico. No se leen al sumarlas: «Ubicar con lo que ya sabemos» las lee enteras.
                 </li>
                 {deTrabajo.sugeridas.map((s) => {
                   const n = yaEs(s.sessionId, s.fecha, false);
@@ -444,7 +446,9 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
                   return (
                     <Fila
                       key={`trabajo-${s.sessionId}`}
-                      icono={n === null ? casilla(`trabajo-${s.sessionId}`, { cuerpo, fecha: s.fecha, leer: s.sessionId }, s.titulo) : undefined}
+                      /* La misma clave que en «De la empresa»: una reunión se marca una sola vez. Sin lectura: el lector de una
+                         sesión la tomaría como de diagnóstico (revisión del 24 nov). */
+                      icono={n === null ? casilla(s.sessionId, { cuerpo, fecha: s.fecha, leer: null }, s.titulo) : undefined}
                       titulo={s.titulo}
                       fecha={diaConAnio(s.fecha)}
                       pildora={<Pildora tono={s.pocoDelCliente ? "atencion" : "bien"}>habló el cliente {s.delCliente} %</Pildora>}

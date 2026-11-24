@@ -86,7 +86,7 @@ import {
   type ReunionSinLeer,
 } from "./lectura";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
-import { REUNIONES_QUE_LEE_UBICAR, reunionesParaUbicar } from "./posicionar";
+import { partirDeLoQueYaSabemos, REUNIONES_QUE_LEE_UBICAR, reunionesParaUbicar } from "./posicionar";
 import { REUNIONES } from "./sesion";
 import { leerSitioWeb } from "./sitio-web";
 import { hostDelSitio } from "./sitio-web-reglas";
@@ -502,7 +502,7 @@ export async function corteDeLaExploracion(o: { clientId: string; creadaEn: Date
     prisma.client.findUnique({ where: { id: o.clientId }, select: { kind: true } }),
     salesPresenceEmails().catch(() => new Set<string>()),
   ]);
-  return { desde: desdeCuando(o), esProspecto: cliente?.kind === "PROSPECTO", ventas };
+  return { desde: desdeCuando(o), esProspecto: cliente?.kind === "PROSPECTO", esCliente: partirDeLoQueYaSabemos(cliente?.kind), ventas };
 }
 
 /** ¿La empresa ya no es prospecto (un cliente, una empresa con historia)? Si no se puede leer, no: sin memoria. */
@@ -867,11 +867,15 @@ export async function reunionesDeLasSesionesDeLaPreventa(clientId: string, candi
 
   const filas = await prisma.exploracionDeVenta.findMany({
     where: { clientId, archivadaEn: null, ...DE_LA_PREVENTA },
-    select: { id: true, clientId: true, projectId: true, createdAt: true, contenido: true, propuesta: true, test: true },
+    select: { id: true, clientId: true, projectId: true, createdAt: true, contenido: true, propuesta: true, test: true, client: { select: { kind: true } } },
   });
   const deMeet = new Set<string>();
+  // Una reunión de trabajo (24 nov, la preventa de un cliente) no es una reunión de venta: el análisis no la toma.
+  const deTrabajo = new Set<string>();
   for (const f of filas) {
     const c = leerContenido(f.contenido);
+    if (!f.projectId && partirDeLoQueYaSabemos(f.client.kind))
+      for (const s of c.sesiones) if (s.deLoQueYaSabemos && s.reunion?.origen === "meet") deTrabajo.add(s.reunion.id);
     const { deSesiones } = await armarReuniones(
       {
         exploracionId: f.id,
@@ -889,6 +893,7 @@ export async function reunionesDeLasSesionesDeLaPreventa(clientId: string, candi
     );
     for (const k of deSesiones) if (k.startsWith("meet:")) deMeet.add(k.slice(5));
   }
+  for (const id of deTrabajo) deMeet.delete(id);
   const ids = new Set(candidatas.filter((id) => deMeet.has(id)));
   memoriaDeLasSesiones.set(clientId, { firma, ids, en: +ahora });
   return new Set(ids);
@@ -1106,8 +1111,9 @@ export async function transcripcionesDeLaExploracion(
   const equipoDeCadaUna = o.porEquipo
     ? equiposDeLasReuniones(armadas.todas.map((r) => ({ fuente: r.id, clave: `${r.origen}:${r.id}`, origen: r.origen, fecha: r.fecha })), pestanas)
     : {};
-  // Las reuniones de trabajo (24 nov): cuentan, pero después de las sesiones de diagnóstico.
-  const deTrabajo = clavesDeTrabajo(pestanas);
+  /* Las reuniones de trabajo (24 nov): cuentan, pero después de las sesiones de diagnóstico. La marca vale solo en la preventa
+     de un cliente: en un prospecto o en un proyecto se ignora (la pantalla no la muestra ni deja quitarla). */
+  const deTrabajo = !opts.projectId && armadas.corte.esCliente ? clavesDeTrabajo(pestanas) : new Set<string>();
   const candidatas = reunionesParaUbicar(
     armadas.todas,
     armadas.deSesiones,

@@ -79,11 +79,19 @@ async function sembrar(kind: "CLIENTE" | "PROSPECTO") {
     ],
   });
   const proyectoDeTae = await prisma.project.create({ data: { name: "TAE | SMARTLOOP (test)", clientId: tae.id }, select: { id: true } });
+  const proyectoDeAe = await prisma.project.create({ data: { name: "AE | SMARTLOOP (test)", clientId: ae.id }, select: { id: true } });
+  // Un cronograma en cada uno: el de TAE es contenido de verdad que NUNCA puede entrar a la preventa de AE.
+  for (const [projectId, fase] of [[proyectoDeTae.id, "Fase de TAE"], [proyectoDeAe.id, "Fase de AE"]] as const) {
+    await prisma.projectTimeline.create({ data: { projectId, phases: { create: [{ name: fase, order: 0, durationWeeks: 2 }] } } });
+  }
   const e = await prisma.exploracionDeVenta.create({ data: { clientId: ae.id, creadaPor: "cse@smarteamcr.com" }, select: { id: true } });
-  return { aeId: ae.id, taeId: tae.id, proyectoDeTae: proyectoDeTae.id, exploracionId: e.id };
+  return { aeId: ae.id, taeId: tae.id, proyectoDeTae: proyectoDeTae.id, proyectoDeAe: proyectoDeAe.id, exploracionId: e.id };
 }
 
-async function leer(exploracionId: string, o: { proyectoDeContexto?: string | null; sesiones?: { id: string; reunion: string; deLoQueYaSabemos?: boolean }[] } = {}) {
+async function leer(
+  exploracionId: string,
+  o: { proyectoDeContexto?: string | null; sesiones?: { id: string; reunion: string; deLoQueYaSabemos?: boolean }[]; fuera?: string[] } = {},
+) {
   const escalaVig = await escalaParaExplorar();
   if (escalaVig.estado !== "ok") throw new Error("sin escala");
   const lectura = await leerExploracion(exploracionId);
@@ -98,6 +106,7 @@ async function leer(exploracionId: string, o: { proyectoDeContexto?: string | nu
       ...(s.deLoQueYaSabemos ? { deLoQueYaSabemos: true } : {}),
     }));
   }
+  if (o.fuera) estado.contenido.fuera = o.fuera;
   const escala = escalaDeLaExploracion(escalaVig.general, estado);
   return loQueLeeUbicar(exploracionId, { fila: lectura.fila, estado, escala }, { proyectoDeContexto: o.proyectoDeContexto ?? null });
 }
@@ -114,6 +123,10 @@ describe("«Ubicar con lo que ya sabemos» — DB real", { timeout: 30_000 }, ()
     expect(todo).not.toContain("TAE");
     // El proyecto de otra empresa no entra como contexto: ni su handoff, ni su cronograma, ni su memoria.
     expect(r.leido.fuentes.some((f) => /^(V0|Q0|R0|K0|A1)$/.test(f.id))).toBe(false);
+    expect(todo).not.toContain("Fase de TAE");
+    // El de la propia empresa sí: su cronograma entra como contexto.
+    const conElSuyo = await leer(s.exploracionId, { proyectoDeContexto: s.proyectoDeAe });
+    expect(conElSuyo.leido.fuentes.find((f) => f.id === "R0")?.texto).toContain("Fase de AE");
     expect(r.ctx.objetivo).toBe("la preventa de un cliente, con lo que ya sabemos de la empresa");
   });
 
@@ -149,5 +162,33 @@ describe("el motivo de un Resumen sin reuniones, dicho donde se está", () => {
     expect(sinReunionesParaElResumen({ projectId: null, client: { kind: "CLIENTE" } })).toContain("suma reuniones de trabajo");
     expect(sinReunionesParaElResumen({ projectId: "p1", client: { kind: "CLIENTE" } })).not.toContain("preventa");
     expect(sinReunionesParaElResumen({ projectId: null, client: { kind: "PROSPECTO" } })).toContain("de esta preventa");
+  });
+});
+
+describe("«Fuera de la exploración» y el análisis de venta — DB real", { timeout: 30_000 }, () => {
+  it("lo que alguien sacó con «Fuera de la exploración» no vuelve por la base en resumen", async () => {
+    const s = await sembrar("CLIENTE");
+    const r = await leer(s.exploracionId, { fuera: ["meet:ae-limpieza"] });
+    expect(r.leido.sesionesUsadas).toEqual(["ae-reportes"]);
+  });
+
+  it("una reunión de trabajo de la preventa de un cliente no la toma el análisis de venta; una de diagnóstico, sí", async () => {
+    const s = await sembrar("CLIENTE");
+    const { aplicarCambios } = await import("./servidor");
+    const lectura = await leerExploracion(s.exploracionId);
+    if (lectura.estado !== "ok") throw new Error("sin exploración");
+    const r = await aplicarCambios(
+      s.exploracionId,
+      lectura.fila.version,
+      [
+        { op: "agregarSesion", sesion: { id: "s-trabajo", fecha: "2026-11-01", reunion: { id: "ae-reportes", origen: "meet" }, deLoQueYaSabemos: true } },
+        { op: "agregarSesion", sesion: { id: "s-diagnostico", fecha: "2026-11-02", reunion: { id: "ae-limpieza", origen: "meet" } } },
+      ],
+      general,
+    );
+    expect(r.estado).toBe("ok");
+    const { reunionesDeLasSesionesDeLaPreventa } = await import("./fuentes");
+    const tomadas = await reunionesDeLasSesionesDeLaPreventa(s.aeId, ["ae-reportes", "ae-limpieza"]);
+    expect([...tomadas]).toEqual(["ae-limpieza"]);
   });
 });

@@ -15,7 +15,7 @@ import "server-only";
  * Lo que falla se omite: el agente lee lo demás.
  */
 import { prisma } from "@/lib/db/prisma";
-import { proyectoClasificableWhere } from "@/lib/projects/scope";
+import { NO_ES_CONTENEDOR_WHERE } from "@/lib/projects/scope";
 import { loadSelectedUseCases } from "@/lib/business-cases/use-cases";
 import { inversionDelDocumento } from "@/lib/landing/forma-de-pago";
 import { memoriaDeLaCuenta, memoriaDelProyecto } from "@/lib/memoria";
@@ -98,18 +98,21 @@ async function cronogramaDelProyecto(projectId: string): Promise<string> {
 
 /**
  * Los proyectos de la empresa que «Ubicar con lo que ya sabemos» puede leer como contexto (24 nov, la preventa de un
- * cliente): los que ve un agente como contexto del cliente (`proyectoClasificableWhere`: activos, sin el contenedor
- * «Información del cliente» ni los de prueba), el más nuevo primero. Solo de esta empresa: el agente igual lo vuelve a
- * comprobar (`proyectoDeContextoDeLaEmpresa`).
+ * cliente): todos menos el contenedor «Información del cliente» y los de prueba, como el selector de la ficha, los activos
+ * primero y entre ellos el más nuevo (el sugerido). Un proyecto terminado entra: el handoff de la implementación que ya
+ * cerró es justo lo que sirve para el diagnóstico de la renovación (revisión del 24 nov). Solo de esta empresa: el agente
+ * igual lo vuelve a comprobar (`proyectoDeContextoDeLaEmpresa`).
  */
 export async function proyectosParaElContexto(clientId: string): Promise<{ id: string; nombre: string }[]> {
   const filas = await prisma.project.findMany({
-    where: proyectoClasificableWhere({ clientId }),
-    select: { id: true, name: true },
+    where: { AND: [{ clientId }, NO_ES_CONTENEDOR_WHERE, { esPrueba: false }] },
+    select: { id: true, name: true, status: true },
     orderBy: { createdAt: "desc" },
     take: 20,
   });
-  return filas.map((p) => ({ id: p.id, nombre: p.name }));
+  return filas
+    .sort((a, b) => Number(b.status === "active") - Number(a.status === "active"))
+    .map((p) => ({ id: p.id, nombre: p.status === "active" ? p.name : `${p.name} (cerrado)` }));
 }
 
 export interface LoQueLeePosicionar {
@@ -140,6 +143,8 @@ export async function fuentesParaPosicionar(o: {
    * (S5, S6…). Sin `reuniones`, es lo mismo que la cuenta.
    */
   conLaBase?: boolean;
+  /** Las claves (`meet:<id>`) que alguien sacó con «Fuera de la exploración»: la base en resumen no las vuelve a traer. */
+  fuera?: readonly string[];
 }): Promise<LoQueLeePosicionar> {
   const real = o.projectId && !o.esContenedor ? o.projectId : null;
   const [hubspot, delProyecto, cuenta, proyecto, ventas, propuestas, tareas, cronograma, reuniones] = await Promise.all([
@@ -156,7 +161,11 @@ export async function fuentesParaPosicionar(o: {
       ? Promise.resolve(o.reuniones)
       : seguro(
           reunionesElegidasDeLaEmpresa(o.clientId).then((elegidas) =>
-            reunionesEnResumen(o.clientId, { elegidas, excepto: o.reuniones?.sesiones, desde: (o.reuniones?.fuentes.length ?? 0) + 1 }),
+            reunionesEnResumen(o.clientId, {
+              elegidas,
+              excepto: [...(o.reuniones?.sesiones ?? []), ...(o.fuera ?? []).filter((k) => k.startsWith("meet:")).map((k) => k.slice(5))],
+              desde: (o.reuniones?.fuentes.length ?? 0) + 1,
+            }),
           ),
           { fuentes: [] as Fuente[], sesiones: [] as string[] },
           "las reuniones",

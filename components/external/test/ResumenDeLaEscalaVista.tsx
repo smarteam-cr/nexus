@@ -55,6 +55,7 @@ import {
   doloresPorEquipo,
   etiquetaDeLaCifra,
   partirLaLineaDelMapa,
+  rotuloDeLasReunionesDeTrabajo,
   sinCosto,
   titularDelResumen,
   BAJADA_DEL_RESUMEN,
@@ -620,22 +621,13 @@ export default function ResumenDeLaEscalaVista({
           </div>
           {h && (
             <div className="re-hicimos rd-entra">
-              {/* Las reuniones de trabajo nunca se presentan como exploración (24 nov, D4): van en su cifra. */}
+              {/* Las reuniones de trabajo nunca se presentan como exploración (24 nov, D4): su cifra, y en la misma celda las
+                  sesiones de diagnóstico, si hay (las cuatro columnas de siempre). */}
               {h.deTrabajo ? (
-                <>
-                  <div>
-                    <b>{fijo("hicimos.trabajo", String(h.deTrabajo), "Cuántas reuniones de trabajo", false, true)}</b>
-                    <span>{fijo("hicimos.trabajo.rotulo", h.deTrabajo === 1 ? "reunión de trabajo juntos" : "reuniones de trabajo juntos", "Rótulo de las reuniones de trabajo", false, true)}</span>
-                  </div>
-                  {h.sesiones > h.deTrabajo && (
-                    <div>
-                      <b>{fijo("hicimos.diagnostico", String(h.sesiones - h.deTrabajo), "Cuántas sesiones de diagnóstico", false, true)}</b>
-                      <span>
-                        {fijo("hicimos.diagnostico.rotulo", h.sesiones - h.deTrabajo === 1 ? "sesión de diagnóstico" : "sesiones de diagnóstico", "Rótulo de las sesiones de diagnóstico", false, true)}
-                      </span>
-                    </div>
-                  )}
-                </>
+                <div>
+                  <b>{fijo("hicimos.trabajo", String(h.deTrabajo), "Cuántas reuniones de trabajo", false, true)}</b>
+                  <span>{fijo("hicimos.trabajo.rotulo", rotuloDeLasReunionesDeTrabajo(h.deTrabajo, h.sesiones - h.deTrabajo), "Rótulo de las reuniones de trabajo", false, true)}</span>
+                </div>
               ) : (
                 <div>
                   <b>{fijo("hicimos.sesiones", String(h.sesiones), "Cuántas sesiones", false, true)}</b>
@@ -657,7 +649,16 @@ export default function ResumenDeLaEscalaVista({
               {exploradas.length > 0 && (
                 <div>
                   <b className="re-hicimos-texto">{fijo("hicimos.areas", exploradas.join(" · "), "Las áreas exploradas", false, true)}</b>
-                  <span>{fijo("hicimos.areas.rotulo", exploradas.length === 1 ? "área explorada" : "áreas exploradas", "Rótulo de las áreas", false, true)}</span>
+                  <span>
+                    {fijo(
+                      "hicimos.areas.rotulo",
+                      // Con reuniones de trabajo (D4) un área no se dice «explorada»: se trabajó con ella.
+                      h.deTrabajo ? (exploradas.length === 1 ? "área con la que trabajamos" : "áreas con las que trabajamos") : exploradas.length === 1 ? "área explorada" : "áreas exploradas",
+                      "Rótulo de las áreas",
+                      false,
+                      true,
+                    )}
+                  </span>
                 </div>
               )}
             </div>

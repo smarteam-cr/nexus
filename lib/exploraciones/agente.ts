@@ -759,7 +759,7 @@ export async function loQueLeeUbicar(
     escala,
     // Un prospecto: solo sus sesiones. Un cliente: sus sesiones primero (si hay) y la base de la empresa en resumen.
     ...(transcripciones && (conSesiones || !conLoQueYaSabemos) ? { reuniones: transcripciones } : {}),
-    ...(conLoQueYaSabemos ? { conLaBase: true } : {}),
+    ...(conLoQueYaSabemos ? { conLaBase: true, fuera: estado.contenido.fuera } : {}),
   });
   const objetivo =
     opts.objetivo ??

@@ -329,11 +329,12 @@ describe("⛔ «Ubicar con las reuniones» lee las transcripciones de las sesion
 
   it("la preventa de un cliente parte de lo que ya sabemos: la base en resumen y el proyecto de contexto de la empresa (24 nov)", () => {
     expect(posicionar).toMatch(/const conLoQueYaSabemos = esPreventa && partirDeLoQueYaSabemos\(fila\.client\.kind\)/);
-    expect(posicionar).toMatch(/\.\.\.\(conLoQueYaSabemos \? \{ conLaBase: true \} : \{\}\)/);
+    expect(posicionar).toMatch(/\.\.\.\(conLoQueYaSabemos \? \{ conLaBase: true, fuera: estado\.contenido\.fuera \} : \{\}\)/);
     // El proyecto de contexto solo si es de esta empresa (invariante #1).
     expect(posicionar).toMatch(/esContenedor \|\| conLoQueYaSabemos \? await proyectoDeContextoDeLaEmpresa\(fila\.clientId, opts\.proyectoDeContexto\)/);
     const fuentes = fs.readFileSync(path.join(RAIZ, "lib", "exploraciones", "posicionar-fuentes.ts"), "utf8");
-    expect(fuentes).toMatch(/reunionesEnResumen\(o\.clientId, \{ elegidas, excepto: o\.reuniones\?\.sesiones/);
+    // La base no repite las sesiones ni trae lo que se sacó con «Fuera de la exploración».
+    expect(fuentes).toMatch(/reunionesEnResumen\(o\.clientId, \{\s*elegidas,\s*excepto: \[\.\.\.\(o\.reuniones\?\.sesiones \?\? \[\]\), \.\.\.\(o\.fuera \?\? \[\]\)/);
   });
 
   it("las transcripciones salen por el chokepoint de sesiones (invariante #1)", () => {

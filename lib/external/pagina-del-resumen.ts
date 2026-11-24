@@ -147,6 +147,16 @@ export interface LoQueHicimos {
   areas: AreaExplorada[];
 }
 
+/**
+ * El rótulo de la cifra de las reuniones de trabajo en «Lo que hicimos» (24 nov, D4): la cifra es cuántas reuniones de
+ * trabajo, y en la misma celda las sesiones de diagnóstico si hubo («reuniones de trabajo juntos y 2 sesiones de
+ * diagnóstico»). Nunca «sesiones de exploración».
+ */
+export function rotuloDeLasReunionesDeTrabajo(trabajo: number, diagnostico: number): string {
+  const deTrabajo = trabajo === 1 ? "reunión de trabajo juntos" : "reuniones de trabajo juntos";
+  return diagnostico > 0 ? `${deTrabajo} y ${diagnostico} ${diagnostico === 1 ? "sesión de diagnóstico" : "sesiones de diagnóstico"}` : deTrabajo;
+}
+
 /** Una afirmación del Resumen tal como sale: su texto, cómo se edita y, solo adentro, de dónde sale. */
 export interface PiezaDeLaPagina {
   id: string;

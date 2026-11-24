@@ -211,6 +211,9 @@ export default function LienzoDeExploracion({
   const [escalaAnterior, setEscalaAnterior] = useState(inicial.escalaAnterior ?? null);
   // Sexta vuelta: las preguntas para el demo del último análisis (al abrir y al recargar).
   const [paraElDemo, setParaElDemo] = useState(inicial.paraElDemo ?? null);
+  /* 24 nov: los proyectos de la empresa para «Con el contexto de» (la preventa de un cliente). Llegan solo al abrir y al
+     recargar: la respuesta de un cambio no los trae, y sin guardarlos aparte el selector desaparecía al primer cambio. */
+  const [proyectosDeLaEmpresa, setProyectosDeLaEmpresa] = useState(inicial.proyectosDeLaEmpresa ?? []);
   const corridaAnterior = (e: Pick<ExploracionParaLaPantalla, "posicionamientoAnterior" | "estado">) =>
     e.posicionamientoAnterior ? (e.estado.propuesta.posicionamiento?.corridaId ?? null) : null;
   const [posicionamientoAnterior, setPosicionamientoAnterior] = useState<string | null>(corridaAnterior(inicial));
@@ -299,6 +302,7 @@ export default function LienzoDeExploracion({
     if (inicial.reuniones) setReuniones(inicial.reuniones);
     if (inicial.escalaAnterior !== undefined) setEscalaAnterior(inicial.escalaAnterior);
     if (inicial.paraElDemo !== undefined) setParaElDemo(inicial.paraElDemo);
+    if (inicial.proyectosDeLaEmpresa) setProyectosDeLaEmpresa(inicial.proyectosDeLaEmpresa);
     if (inicial.posicionamientoAnterior !== undefined) setPosicionamientoAnterior(corridaAnterior(inicial));
   }
 
@@ -485,6 +489,7 @@ export default function LienzoDeExploracion({
           if (data.exploracion.reuniones) setReuniones(data.exploracion.reuniones);
           if (data.exploracion.escalaAnterior !== undefined) setEscalaAnterior(data.exploracion.escalaAnterior);
           if (data.exploracion.paraElDemo !== undefined) setParaElDemo(data.exploracion.paraElDemo);
+          if (data.exploracion.proyectosDeLaEmpresa) setProyectosDeLaEmpresa(data.exploracion.proyectosDeLaEmpresa);
           if (data.exploracion.posicionamientoAnterior !== undefined) setPosicionamientoAnterior(corridaAnterior(data.exploracion));
           /* La preparación eligió la industria o el perfil: la escala del lienzo es otra (la arma el
              servidor con esos dos), así que se vuelve a pedir la página. */
@@ -544,6 +549,7 @@ export default function LienzoDeExploracion({
     escalaAnterior,
     posicionamientoAnterior,
     paraElDemo,
+    proyectosDeLaEmpresa,
     puedeEditar,
     puedeProponer: puedeEditar && puedeProponer,
     conAsistente: puedeEditar && conAsistente,

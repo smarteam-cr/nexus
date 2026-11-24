@@ -86,6 +86,20 @@ export function malLeidasParaMostrar(reuniones: readonly ReunionMalLeida[], ente
   });
 }
 
+/**
+ * Cuántas reuniones cambiaron de clase (de trabajo o de diagnóstico) después de armar el Resumen (24 nov, D4): «Lo que
+ * hicimos» guarda la clase de cada una al armarse, y si se publica sin rehacerlo, el cliente leería la cuenta de antes.
+ * Se comparan por su fecha (la misma de la reunión en las dos listas).
+ */
+export function marcasQueCambiaron(
+  delResumen: readonly { fecha: string; deTrabajo?: true }[] | null | undefined,
+  reuniones: readonly Pick<ReunionDeLaLinea, "fecha" | "deTrabajo">[],
+): number {
+  if (!delResumen?.length) return 0;
+  const enElResumen = new Map(delResumen.map((x) => [x.fecha, !!x.deTrabajo]));
+  return reuniones.filter((r) => enElResumen.has(r.fecha) && enElResumen.get(r.fecha) !== !!r.deTrabajo).length;
+}
+
 export function lineaDeLaEscala(o: {
   reuniones: readonly ReunionDeLaLinea[];
   /** Cuándo corrió por última vez «Ubicar con las reuniones» (la corrida `posicionar`). */
@@ -100,6 +114,8 @@ export function lineaDeLaEscala(o: {
   ubicando: boolean;
   /** La preventa de un cliente (24 nov, posicionar.ts › `partirDeLoQueYaSabemos`): ubica también con lo que ya sabemos. */
   conLoQueYaSabemos?: boolean;
+  /** Las reuniones que cambiaron de clase después de armar el Resumen (`marcasQueCambiaron`). */
+  marcasCambiadas?: number;
 }): LineaDeLaEscala {
   const conTexto = o.reuniones.filter((r) => sirveParaUbicar(r) && !Number.isNaN(Date.parse(r.fecha)));
   // Sin ninguna sesión de diagnóstico, la preventa de un cliente se ubica con lo que ya sabemos (la base de la empresa).
@@ -163,12 +179,14 @@ export function lineaDeLaEscala(o: {
   const resumen = o.resumenEn;
   const despuesDelResumen = resumen ? conTexto.filter((r) => despuesDe(r.fecha, resumen)).length : 0;
   const cortadas = resumen ? (o.cortadas ?? 0) : 0;
-  if (despuesDelResumen > 0 || cortadas > 0) {
+  const marcas = resumen ? (o.marcasCambiadas ?? 0) : 0;
+  if (despuesDelResumen > 0 || cortadas > 0 || marcas > 0) {
     const antes = despuesDelResumen > 0 ? `se armó antes de ${despuesDelResumen === 1 ? "la última reunión" : `las últimas ${despuesDelResumen} reuniones`}` : "";
     const largas = cortadas > 0 ? `leyó cortada${cortadas === 1 ? " 1 reunión larga" : `s ${cortadas} reuniones largas`}` : "";
+    const clase = marcas > 0 ? `cuenta ${marcas === 1 ? "1 reunión" : `${marcas} reuniones`} con otra clase (de trabajo o de diagnóstico)` : "";
     return {
       estado: "resumenAtrasado",
-      texto: `La escala está al día, pero el Resumen ${[antes, largas].filter(Boolean).join(" y ")}: rehazlo con IA en el Resumen${cortadas > 0 ? ` para que ${cortadas === 1 ? "la lea entera" : "las lea enteras"}` : ""}.`,
+      texto: `La escala está al día, pero el Resumen ${[antes, largas, clase].filter(Boolean).join(" y ")}: rehazlo con IA en el Resumen${cortadas > 0 ? ` para que ${cortadas === 1 ? "la lea entera" : "las lea enteras"}` : ""}.`,
       boton: volver,
     };
   }

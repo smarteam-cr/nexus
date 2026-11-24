@@ -66,7 +66,7 @@ import { esHipotesisDeNivel, type DestinoDePropuesta, type ItemPropuesto } from 
 import type { AreaDelLienzo, DimensionDelLienzo, EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { fraseDelFreno, ordenParaExplorar, partesParaExplorar } from "@/lib/exploraciones/equipos-de-la-escala";
 import { chequeoDelMapa, cuentaDelArea, fraseDeLaCuenta, loQueLaFrena, type PosicionEnElMapa } from "@/lib/exploraciones/mapa";
-import { cortadasQueSeLeenEnteras, lineaDeLaEscala } from "@/lib/exploraciones/linea-de-la-escala";
+import { cortadasQueSeLeenEnteras, lineaDeLaEscala, marcasQueCambiaron } from "@/lib/exploraciones/linea-de-la-escala";
 import { partirDeLoQueYaSabemos } from "@/lib/exploraciones/posicionar";
 import AccesoALaEscala from "./AccesoALaEscala";
 import PublicarLaEscala from "./PublicarLaEscala";
@@ -147,19 +147,21 @@ function AreaFuera({ area, onSumar }: { area: AreaDelLienzo; onSumar: () => void
  * Reemplaza la fila «1 Ubicar con las reuniones · 2 Confirmar en el mapa · 3 Armar el Resumen» y lo de «Dónde está hoy».
  */
 function LineaDeArriba() {
-  const { exp, puedeEditar } = useLienzo();
+  const { exp, puedeEditar, proyectosDeLaEmpresa } = useLienzo();
   const { pestanas } = useSesiones();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
   const ultima = [...exp.estado.propuesta.corridas].reverse().find((c) => c.modo === "posicionar");
   /* La preventa de un cliente (24 nov) parte de lo que ya sabemos: el botón lo dice mientras no haya sesiones de
      diagnóstico, y se elige el proyecto que se lee como contexto (su handoff, cuestionarios y cronograma). */
   const conLoQueYaSabemos = !exp.projectId && partirDeLoQueYaSabemos(exp.empresa.kind);
-  const proyectos = conLoQueYaSabemos ? (exp.proyectosDeLaEmpresa ?? []) : [];
+  // De `useLienzo` y no de `exp`: la respuesta de un cambio no trae la lista (revisión del 24 nov).
+  const proyectos = conLoQueYaSabemos ? proyectosDeLaEmpresa : [];
   const [proyectoId, setProyectoId] = useState<string | null | undefined>(undefined);
   // Sugerido: el proyecto activo más nuevo de la empresa (el primero de la lista).
   const contexto = proyectoId === undefined ? (proyectos[0]?.id ?? null) : proyectoId;
+  const reunionesDeLaLinea = pestanas.flatMap((p) => (p.reunion && !p.noSeHizo ? [{ ...p.reunion, ...(conLoQueYaSabemos && p.sesion?.deLoQueYaSabemos ? { deTrabajo: true as const } : {}) }] : []));
   const linea = lineaDeLaEscala({
-    reuniones: pestanas.flatMap((p) => (p.reunion && !p.noSeHizo ? [{ ...p.reunion, ...(p.sesion?.deLoQueYaSabemos ? { deTrabajo: true as const } : {}) }] : [])),
+    reuniones: reunionesDeLaLinea,
     ubicadaEn: ultima?.en ?? null,
     leyo: ultima?.leyo,
     resumenEn: exp.estado.contenido.resumenDeLaEscala?.at ?? null,
@@ -168,6 +170,8 @@ function LineaDeArriba() {
     // Otro trabajo del agente (leer una reunión, la guía) no ubica la escala: la frase no cambia, solo el botón espera.
     ubicando: corriendo && corrida?.modo === "posicionar",
     conLoQueYaSabemos,
+    // D4: si cambió la clase de una reunión después de armar el Resumen, «Lo que hicimos» dice la cuenta de antes.
+    marcasCambiadas: marcasQueCambiaron(exp.estado.contenido.resumenDeLaEscala?.hicimos.sesiones, reunionesDeLaLinea),
   });
   return (
     <div role="status" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-secondary">

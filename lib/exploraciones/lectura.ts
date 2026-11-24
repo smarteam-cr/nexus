@@ -53,6 +53,8 @@ export interface CorteDeLaPreventa {
   /** Un mes antes del alta (ms). */
   desde: number;
   esProspecto: boolean;
+  /** 24 nov: la ficha es un cliente (posicionar.ts › `partirDeLoQueYaSabemos`): solo ahí vale la marca de reunión de trabajo. */
+  esCliente?: boolean;
   /** Los correos que cuentan como Ventas (lib/handoff/sales-presence.ts), en minúscula. */
   ventas: ReadonlySet<string>;
 }

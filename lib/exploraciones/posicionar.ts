@@ -384,11 +384,13 @@ export const REUNIONES_QUE_LEE_UBICAR = 4;
 
 /**
  * ¿La preventa de esta ficha parte de lo que ya sabemos de la empresa? (24 nov, el TEC: «Ubicar con lo que ya sabemos».)
- * Sí, si la ficha no es un prospecto: un cliente ya tiene reuniones de trabajo, handoff y memoria. Un prospecto, no: lo
- * único suyo son las reuniones de la preventa. Lo usan el agente (agente.ts › `loQueLeeUbicar`) y la pantalla.
+ * Solo si la ficha es un CLIENTE: ya tiene reuniones de trabajo, handoff y memoria. Un prospecto no (lo único suyo son las
+ * reuniones de la preventa), y un aliado o una ficha interna tampoco: el pedido diría «esta empresa ya es cliente», y no lo
+ * es (revisión del 24 nov). Lo usan el agente (agente.ts › `loQueLeeUbicar`), las rutas, la pantalla y quien lee la marca de
+ * reunión de trabajo.
  */
 export function partirDeLoQueYaSabemos(kind: string | null | undefined): boolean {
-  return !!kind && kind !== "PROSPECTO";
+  return kind === "CLIENTE";
 }
 
 /**

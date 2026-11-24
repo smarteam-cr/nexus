@@ -14659,24 +14659,33 @@ error»); para un prospecto, esa regla sigue igual.
 - **Dónde vive (D1): en la preventa de cada ficha.** Tiene Resumen, hipótesis, tarjetas, Acceso y Publicar; solo le faltaba
   leer lo que ya sabemos. *Se descartó* darle sesiones y Resumen a la escala de la cuenta: contradice «la cuenta no tiene
   sesiones» (Una sola escala, 28 oct). AE y TAE son dos fichas y dos preventas: nunca se mezclan (sección de arriba).
-- **«Ubicar con lo que ya sabemos».** En la preventa de una ficha que NO es prospecto (`partirDeLoQueYaSabemos`,
-  lib/exploraciones/posicionar.ts: `Client.kind` distinto de PROSPECTO), «Ubicar» (`posicionarLaEscala`, ahora sobre
+- **«Ubicar con lo que ya sabemos».** En la preventa de un CLIENTE (`partirDeLoQueYaSabemos`, lib/exploraciones/posicionar.ts:
+  `Client.kind` CLIENTE; un aliado o una ficha interna no, porque el pedido diría «ya es cliente»), «Ubicar» (`posicionarLaEscala`, ahora sobre
   `loQueLeeUbicar`) ya no falla sin sesiones: lee como la cuenta (las 8 reuniones más recientes de la empresa en resumen,
   por el chokepoint, la memoria, las tareas, las ventas y, si se elige, el proyecto de contexto con su handoff, kickoff,
   cuestionarios y cronograma). Con sesiones, lee las dos cosas: primero sus transcripciones enteras y después la base en
   resumen, sin repetir ninguna y con los ids que siguen (`reunionesEnResumen` con `excepto` y `desde`). Siguen las
   hipótesis y las tarjetas, y las tres áreas; la regla «sin una pista del cliente no hay nivel» no cambia. El pedido dice
   qué es una reunión de trabajo y que lo que Smarteam explicó o configuró ahí no es un nivel (`reglaDeLoQueYaSabemos`:
-  `solo` sin sesiones de diagnóstico, `ademas` con alguna, y entonces ellas pesan más).
-  - **El proyecto de contexto se elige** con «Con el contexto de», el mismo selector de la ficha, con sugerido el proyecto
-    vivo más nuevo (`proyectosParaElContexto`). Solo uno de esta empresa: el agente lo vuelve a comprobar
-    (`proyectoDeContextoDeLaEmpresa`, invariante #1). Medido con AE: sin el proyecto no lee el handoff, que es lo que más
-    aporta.
+  `solo` sin sesiones de diagnóstico, `ademas` con alguna, y entonces ellas pesan más, salvo que una reunión de trabajo más
+  nueva cuente que algo cambió). Lo que alguien sacó con «Fuera de la exploración» no vuelve por la base.
+  - **Pide acceso a la empresa** (`guardAccessToClient`), además del permiso de la preventa: lee las reuniones y el proyecto
+    de la cuenta, y el permiso de preventa no las da (la misma regla del chat de la preventa, 21 nov). Sin acceso, responde
+    403 con el motivo; la sugerencia de reuniones de trabajo, igual.
+  - **El proyecto de contexto se elige** con «Con el contexto de»: como en la ficha, todos los proyectos de la empresa menos
+    el contenedor y los de prueba, los activos primero y sugerido el activo más nuevo (`proyectosParaElContexto`); uno
+    cerrado entra, marcado «(cerrado)»: el handoff de la implementación que cerró es lo que sirve para la renovación. Solo uno
+    de esta empresa: el agente lo vuelve a comprobar (`proyectoDeContextoDeLaEmpresa`, invariante #1). La lista vive en el
+    lienzo aparte de la exploración (llega al abrir y al recargar, como «Para el demo»). Medido con AE: sin el proyecto no
+    lee el handoff, que es lo que más aporta.
   - **El botón dice «Ubicar con lo que ya sabemos»** mientras no haya sesiones de diagnóstico; con alguna, el de siempre.
   - *Por qué la base va en resumen y no con las transcripciones de la empresa:* es lo que ya lee la cuenta, y medido con AE
     (simulacro, 24 nov) leer cuatro reuniones de entrega enteras como sesiones dio 1 nivel con cita y 14 por explorar
     (US$ 0,29), y la base en resumen con el handoff dio 2 con cita y 8 por explorar (US$ 0,18). En una reunión de entrega
-    el cliente casi nunca dice algo que fije un nivel: lo que entra enteras son las reuniones que una persona elige.
+    el cliente casi nunca dice algo que fije un nivel: lo que entra enteras son las reuniones que una persona elige. Lo
+    mejor fue juntarlo: las mismas cuatro como reuniones de trabajo, más la base en resumen y el handoff, dieron 6 con cita
+    y 12 por explorar (US$ 0,35). Por eso el camino que se recomienda es sumar las reuniones de trabajo sugeridas y ubicar
+    con el proyecto de contexto.
   - *Lo que se acepta:* la cita de un nivel puede salir del resumen de una reunión (su minuta), como en la cuenta, no de la
     voz del cliente palabra por palabra. Para una cita de su voz, la reunión se suma entera (abajo).
 - **Las reuniones de entrega entran como REUNIÓN DE TRABAJO, no como sesión (D4).** Una sesión de la preventa de un cliente
@@ -14689,27 +14698,40 @@ error»); para un prospecto, esa regla sigue igual.
     (`sugerirReunionesDeTrabajo`, lib/exploraciones/reuniones-de-trabajo.ts, y GET …/reuniones-de-trabajo): las de la
     empresa con transcripción, por cuánto habló el cliente (quien-hablo.ts, la misma medida que marca «mal leída» bajo el
     28 %), primero la mejor de cada equipo y a igual parte la más nueva. Las de menos del 28 % van al final, marcadas. Se
-    suman con un clic o en bloque, y se pueden leer de paso. Las de la lista de siempre entran como sesión de diagnóstico.
+    suman con un clic o en bloque, sin leerlas de paso: el lector de una sesión la tomaría como de diagnóstico; «Ubicar» las
+    lee enteras. Una reunión se marca una sola vez aunque salga en las dos listas. Las de la lista de siempre entran como
+    sesión de diagnóstico. Lo medido se recuerda 10 minutos por empresa. El análisis automático de reuniones de venta no
+    toma una reunión de trabajo (`reunionesDeLasSesionesDeLaPreventa`). La marca vale solo en la preventa de un cliente: en
+    otro lado se ignora al leer.
     *Por qué por cuánto habló el cliente:* en AE las capacitaciones de ventas dan 11 a 14 % (el Resumen las leería mal) y
     las revisiones de avance, 40 a 59 %.
   - **«Lo que hicimos» (D4):** el texto dice «Nos dedicaste … en 4 reuniones de trabajo juntos y 2 sesiones de
-    diagnóstico» (`cuantasSesiones`, sin la parte que es cero), y las cifras de arriba separan «reuniones de trabajo
-    juntos» de «sesiones de diagnóstico» (`LoQueHicimos.deTrabajo`, la marca `SesionHecha.deTrabajo` en lo guardado). Sin
-    reuniones de trabajo, todo sigue igual («sesiones de exploración»).
+    diagnóstico» (`cuantasSesiones`, sin la parte que es cero); la cifra de arriba es la de las reuniones de trabajo, con las
+    de diagnóstico en la misma celda (`rotuloDeLasReunionesDeTrabajo`: las cuatro columnas de siempre), y las áreas dicen
+    «áreas con las que trabajamos» en vez de «áreas exploradas» (`LoQueHicimos.deTrabajo`, la marca `SesionHecha.deTrabajo`
+    en lo guardado). Sin reuniones de trabajo, todo sigue igual («sesiones de exploración»). Si después de armar el Resumen
+    cambia la clase de una reunión, la línea de arriba pide rehacerlo (`marcasQueCambiaron`): publicarlo así diría la
+    cuenta de antes. *Lo que queda igual, a propósito:* el título «Diagnóstico de … en HubSpot» nombra los equipos con
+    reuniones (el entregable es un diagnóstico, aunque salga de reuniones de trabajo).
 - **Al sumar sesiones de diagnóstico se mejora sin perder nada**: «Ubicar» de nuevo nunca pisa lo confirmado
   (`fusionarPropuestas`); entre las reuniones que lee «Ubicar» y el Resumen, las sesiones de diagnóstico van primero aunque
   haya capacitaciones más nuevas (`reunionesParaUbicar` con `deTrabajo`), y la línea de arriba usa el mismo orden: una
   sesión de diagnóstico sumada sobre una base de trabajo se avisa como «Hay 1 sesión de diagnóstico nueva». El Resumen, al
   rehacerse, recibe cada reunión de trabajo marcada como tal y la regla de que pesa menos
-  (`REGLA_DE_LAS_REUNIONES_DE_TRABAJO`, también en «El peso de cada sesión»), y «Rehacer con IA» sigue respetando lo
+  (`REGLA_DE_LAS_REUNIONES_DE_TRABAJO`, también en «El peso de cada sesión»; con alguna, el bloque se titula «Las reuniones
+  con la empresa» y no «de diagnóstico»), y «Rehacer con IA» sigue respetando lo
   escrito a mano (`juntarConLoEditado`). La prueba de punta a punta (sin IA): `con-lo-que-ya-sabemos-de-punta-a-punta.test.ts`.
 - **Sin reuniones con texto, el Resumen dice qué hacer donde se está** (`sinReunionesParaElResumen`): en la preventa de un
   cliente, sumar reuniones de trabajo; en la cuenta, ya no habla de «esta preventa».
 - **TI no entra (D3)**, como dice la decisión del 19 nov. **La preventa vieja de AE se usa (D2)**, revisando lo que propuso
   (la armaron con reuniones de TAE antes de separar el TEC).
 - **Simulacro:** `scripts/simular-ubicar-la-escala.ts` (solo lectura): qué lee «Ubicar», con `--llamar` qué propondría, con
-  `--sesiones` reuniones sumadas en memoria, con `--como-prospecto` lo de antes y con `--reuniones` cuánto habló el cliente
-  en cada reunión de la empresa.
+  `--sesiones` reuniones sumadas en memoria (`--de-trabajo` las marca), con `--como-prospecto` lo de antes y con
+  `--reuniones` cuánto habló el cliente en cada reunión de la empresa. **El borrador en producción:**
+  `scripts/escala-con-lo-que-sabemos.ts` (simulacro por defecto; `--apply` con ALLOW_PROD_WRITE=1 y respaldo): sugiere,
+  suma reuniones de trabajo y ubica. Usar lo propuesto, elegir los equipos y publicar los decide una persona.
+- **Vuelta atrás:** el código de antes del 24 nov descarta en silencio la marca de reunión de trabajo al guardar (su
+  esquema no la conoce). Si se vuelve atrás un deploy, revisar las marcas de las preventas de clientes antes de publicar.
 
 ## Una empresa con varias unidades: cada unidad es una ficha (2026-11-07)
 

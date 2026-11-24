@@ -593,7 +593,7 @@ export function pedidoDelResumen(ctx: ContextoDelResumen, aviso = ""): Anthropic
     ctx.perdida ?? "",
     bloqueDeLasNotas(notas),
     conDeTrabajo ? REGLA_DE_LAS_REUNIONES_DE_TRABAJO : "",
-    `Las reuniones de diagnóstico (cada línea es un turno: [número] quien habla: lo que dijo):\n\n${reuniones.join("\n\n")}`,
+    `${conDeTrabajo ? "Las reuniones con la empresa" : "Las reuniones de diagnóstico"} (cada línea es un turno: [número] quien habla: lo que dijo):\n\n${reuniones.join("\n\n")}`,
     ctx.noNombrar?.length ? `Nombres que NUNCA van en lo que escribes (di su rol), salvo los de la gente de la empresa en «quienes»: ${ctx.noNombrar.join(", ")}.` : "",
     ctx.gente?.length ? `La gente de la EMPRESA (los únicos nombres de «quienes»): ${ctx.gente.join(", ")}.` : "",
     ctx.instrucciones,
