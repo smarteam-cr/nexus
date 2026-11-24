@@ -7,7 +7,7 @@
  * arriba (BotonDeNexus.tsx; el botón del riel se quitó) con `abrirNexusEnLaPreventa` (lib/exploraciones/abrir-nexus.ts).
  * Adentro, «Tareas, siguiente paso o la guía» abre el chat de la cuenta con el chip de la preventa (sin las notas de la
  * cuenta, que van a HubSpot). Y «✨ Mejorar con IA» de La escala lo abre con el lugar puesto como chip (el Resumen, un área
- * o una pieza): con el chip, lo que se escribe es un pedido de cambio a la página y la propuesta por pieza se ve adentro
+ * o, desde el 24 nov, una sección): con el chip, lo que se escribe es un pedido de cambio a la página y la propuesta por pieza se ve adentro
  * (PedirleANexus.tsx); quitar el chip vuelve a la conversación. En la escala de la cuenta (sin conversación) el cajón abre
  * solo con el chip.
  *

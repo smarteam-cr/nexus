@@ -5,11 +5,13 @@
  *
  * Tercera vuelta (2026-11-08, Elías con Centauro Solutions): «lo importante es que el vendedor VEA la escala, con los
  * nodos y el puntaje, exactamente como se ve en el diagnóstico de rendimiento». En este orden:
- *   1. Arriba, «Ubicar con las reuniones» (solo la preventa: el agente lee las transcripciones de las sesiones y ubica las
- *      tres áreas con su evidencia, y lo que no tiene evidencia directa como hipótesis por explorar) y «Acceso».
+ *   1. Arriba, una línea que dice si hay algo nuevo que llevar a la escala, con «Ubicar con las reuniones» (solo la
+ *      preventa: el agente lee las transcripciones de las sesiones y ubica las tres áreas con su evidencia, y lo que no
+ *      tiene evidencia directa como hipótesis por explorar; 24 nov, `LineaDeArriba`), «Publicar» y «Acceso».
  *   2. Lo que sugiere el agente, en una franja: cuántas con evidencia y cuántas por explorar, «Pasar las N al mapa» y la
  *      lista solo si se pide. Sin «Usadas hoy» (el aviso de cada uso ya deshace).
- *   3. Dónde está hoy: una frase de lo explorado (equipos-de-la-escala.ts) y las tres áreas como botones que se
+ *   3. Dónde está hoy (desde el 24 nov sin la frase de lo explorado ni el objetivo: Elías, «demasiada información»): las
+ *      tres áreas como botones que se
  *      PRESIONAN (cuarta vuelta, 2026-11-08: «se pueden elegir varias, y se ven en el mismo radar, una sobre otra, cada
  *      una de un color»). Se ven con el RADAR DEL DIAGNÓSTICO (`RadarDeUnaEmpresa`, el mismo de la página del cliente:
  *      nodos, puntaje y nivel en el centro); la principal (la última elegida) lleva los nombres y el detalle, las otras
@@ -62,9 +64,9 @@ import type { AreaDelChequeo } from "@/lib/escala/chequeo";
 import type { ClaveDeCapa } from "@/lib/escala/documento/tipos";
 import { esHipotesisDeNivel, type DestinoDePropuesta, type ItemPropuesto } from "@/lib/exploraciones/contenido";
 import type { AreaDelLienzo, DimensionDelLienzo, EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
-import { fraseDelFreno, ordenParaExplorar, partesParaExplorar, resumenDeLoExplorado } from "@/lib/exploraciones/equipos-de-la-escala";
+import { fraseDelFreno, ordenParaExplorar, partesParaExplorar } from "@/lib/exploraciones/equipos-de-la-escala";
 import { chequeoDelMapa, cuentaDelArea, fraseDeLaCuenta, loQueLaFrena, type PosicionEnElMapa } from "@/lib/exploraciones/mapa";
-import { diaCorto } from "@/lib/exploraciones/fechas";
+import { lineaDeLaEscala } from "@/lib/exploraciones/linea-de-la-escala";
 import AccesoALaEscala from "./AccesoALaEscala";
 import PublicarLaEscala from "./PublicarLaEscala";
 import ListaQueSeAnima from "./ListaQueSeAnima";
@@ -78,6 +80,7 @@ import PreparacionParaEngagement from "./PreparacionParaEngagement";
 import { QueVaPrimero } from "./QueVaPrimero";
 import { useAreasDeLaEscala } from "./useAreasDeLaEscala";
 import { useCorrida } from "./useCorrida";
+import { useSesiones } from "./useSesiones";
 import { ConTarjetas, PreguntaParaLlevar, useLlevarALaSesion, type DimensionDeLaTarjeta } from "./TarjetaDelRadar";
 import { DetalleDeDimension } from "./DetalleDeLaDimension";
 import PaginaDeLaEscala from "./PaginaDeLaEscala";
@@ -133,33 +136,48 @@ function AreaFuera({ area, onSumar }: { area: AreaDelLienzo; onSumar: () => void
   );
 }
 
-// ── 1 · Ubicar con las reuniones (solo la preventa) ─────────────────────────
+// ── 1 · La línea de arriba: si hay algo nuevo que llevar a la escala (solo la preventa) ──
 
 /**
- * El agente que ubica la escala con las TRANSCRIPCIONES de las sesiones (modo «posicionar», el mismo de «Actualizar
- * escala» de la cuenta): lo lanza una persona, nunca corre solo ni en cada visita. Dice cuándo corrió por última vez.
+ * UNA línea (24 nov; Elías: «lo único que hay que entender es si alguna parte tiene que actualizarse»): si hay reuniones
+ * de después de la última vez que se ubicó la escala (o de que se armó el Resumen), y el botón de siempre, el agente que
+ * ubica la escala con las TRANSCRIPCIONES de las sesiones (modo «posicionar», el mismo de «Actualizar escala» de la
+ * cuenta): lo lanza una persona, nunca corre solo ni en cada visita. Lo que dice, en lib/exploraciones/linea-de-la-escala.ts.
+ * Reemplaza la fila «1 Ubicar con las reuniones · 2 Confirmar en el mapa · 3 Armar el Resumen» y lo de «Dónde está hoy».
  */
-function UbicarConLasReuniones() {
+function LineaDeArriba() {
   const { exp, puedeEditar } = useLienzo();
-  const { corriendo, lanzando, lanzar } = useCorrida();
-  if (!puedeEditar) return null;
+  const { pestanas } = useSesiones();
+  const { corrida, corriendo, lanzando, lanzar } = useCorrida();
   const ultima = [...exp.estado.propuesta.corridas].reverse().find((c) => c.modo === "posicionar");
+  const linea = lineaDeLaEscala({
+    reuniones: pestanas.flatMap((p) => (p.reunion && !p.noSeHizo ? [p.reunion] : [])),
+    ubicadaEn: ultima?.en ?? null,
+    leyo: ultima?.leyo,
+    resumenEn: exp.estado.contenido.resumenDeLaEscala?.at ?? null,
+    // Otro trabajo del agente (leer una reunión, la guía) no ubica la escala: la frase no cambia, solo el botón espera.
+    ubicando: corriendo && corrida?.modo === "posicionar",
+  });
   return (
-    <span className="inline-flex flex-wrap items-center gap-2">
-      {/* El orden de los dos botones (Elías, 11 nov): ubicar acá, confirmar en el mapa y armar el Resumen en la página. */}
-      <span className="text-xs text-fg-muted">1 Ubicar con las reuniones · 2 Confirmar en el mapa · 3 Armar el Resumen, en la página del cliente</span>
-      {ultima && <span className="text-xs text-fg-muted">Ubicada el {diaCorto(ultima.en)}</span>}
-      <Button
-        size="sm"
-        variant="primary"
-        loading={lanzando}
-        disabled={corriendo}
-        title="El agente lee las transcripciones de las sesiones y ubica Ventas, Marketing y Servicio: lo que dijo el cliente con su cita, y lo demás como hipótesis por explorar. Nada se confirma solo."
-        onClick={() => void lanzar("posicionar")}
-      >
-        {corriendo ? "Ubicando…" : ultima ? "Volver a ubicar con las reuniones" : "Ubicar con las reuniones"}
-      </Button>
-    </span>
+    <p role="status" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-secondary">
+      <span className={cn("min-w-0", linea.boton.fuerte && "font-medium text-fg")}>{linea.texto}</span>
+      {puedeEditar && (
+        <Button
+          size="sm"
+          variant={linea.boton.fuerte ? "primary" : "ghost"}
+          loading={lanzando}
+          disabled={corriendo}
+          title={
+            corriendo && linea.estado !== "ubicando"
+              ? "Nexus está trabajando en esta preventa: cuando termine, puedes ubicar la escala."
+              : "El agente lee las transcripciones de las sesiones y ubica Ventas, Marketing y Servicio: lo que dijo el cliente con su cita, y lo demás como hipótesis por explorar. Nada se confirma solo."
+          }
+          onClick={() => void lanzar("posicionar")}
+        >
+          {linea.boton.etiqueta}
+        </Button>
+      )}
+    </p>
   );
 }
 
@@ -698,7 +716,7 @@ function ParaExplorarMas() {
 const AREA_DEL_ENGAGEMENT = "2";
 
 function DondeEstaHoy() {
-  const { exp, escala, mapa, cambiar, nombreDeNivel, lugar, puedeEditar, guardando } = useLienzo();
+  const { exp, escala, mapa, cambiar, lugar, puedeEditar, guardando } = useLienzo();
   const enJuego = exp.estado.areas;
   const [vista, setVista] = useState<Vista>("pagina");
   const [abierta, setAbierta] = useState<string | null>(null);
@@ -773,22 +791,18 @@ function DondeEstaHoy() {
 
   return (
     <section aria-label="Dónde está hoy" className="flex flex-col gap-3">
+      {/* Sin «Objetivo de la primera venta» ni la frase de lo explorado (24 nov, Elías: «demasiada información»): si hay
+          algo que actualizar lo dice la línea de arriba; dónde está cada equipo, la página y «Lo que más frena…». */}
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-[15px] font-semibold text-fg">Dónde está hoy</h3>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-fg-muted">
-            {lugar === "preventa" ? "Objetivo de la primera venta" : "El objetivo"}: llevar cada área en juego a {nombreDeNivel("F")}
-          </span>
-          <div role="radiogroup" aria-label="Cómo se ve la escala" className="inline-flex gap-1">
-            {(["pagina", "nodos"] as const).map((v) => (
-              <button key={v} type="button" role="radio" aria-checked={vista === v} onClick={() => setVista(v)} className={vista === v ? BOTON_DE_HERRAMIENTA_ACTIVO : BOTON_DE_HERRAMIENTA}>
-                {NOMBRE_DE_LA_VISTA[v]}
-              </button>
-            ))}
-          </div>
+        <div role="radiogroup" aria-label="Cómo se ve la escala" className="inline-flex gap-1">
+          {(["pagina", "nodos"] as const).map((v) => (
+            <button key={v} type="button" role="radio" aria-checked={vista === v} onClick={() => setVista(v)} className={vista === v ? BOTON_DE_HERRAMIENTA_ACTIVO : BOTON_DE_HERRAMIENTA}>
+              {NOMBRE_DE_LA_VISTA[v]}
+            </button>
+          ))}
         </div>
       </div>
-      <p className="text-[13px] leading-[1.5] text-fg-secondary">{resumenDeLoExplorado(areas)}</p>
       {vista === "pagina" ? (
         <PaginaDeLaEscala />
       ) : (
@@ -854,10 +868,12 @@ export default function PasoEscala({ agente }: { agente?: ReactNode } = {}) {
   return (
     <div className="flex flex-col gap-5">
       {lugar !== "proyecto" && (
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {lugar === "preventa" && <UbicarConLasReuniones />}
-          <PublicarLaEscala />
-          <AccesoALaEscala />
+        <div className={cn("flex flex-wrap items-center gap-x-4 gap-y-2", lugar === "preventa" ? "justify-between" : "justify-end")}>
+          {lugar === "preventa" && <LineaDeArriba />}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <PublicarLaEscala />
+            <AccesoALaEscala />
+          </div>
         </div>
       )}
       <SugerenciasDeLaEscala />

@@ -379,6 +379,17 @@ export function reunionesElegidas(contenidos: readonly Pick<ContenidoDeExploraci
   return [...new Set(ids)];
 }
 
+/** Cuántas reuniones lee «Ubicar con las reuniones», las más nuevas (fuentes.ts › `transcripcionesDeLaExploracion`). */
+export const REUNIONES_QUE_LEE_UBICAR = 4;
+
+/**
+ * Si una reunión tiene algo que «Ubicar con las reuniones» lea: de Meet, con texto, ni cortada ni de puertas adentro. La
+ * misma regla la usa la línea de arriba de La escala (./linea-de-la-escala.ts) para contar las reuniones nuevas.
+ */
+export function sirveParaUbicar(r: { origen: string; texto?: string; corta?: unknown; puertasAdentro?: true }): boolean {
+  return r.origen === "meet" && r.texto !== "nada" && !r.corta && !r.puertasAdentro;
+}
+
 /**
  * Qué reuniones lee «Ubicar con las reuniones» en la preventa (2026-11-08): las de Meet de una sesión (`deSesiones`, las
  * claves `meet:<id>` que liga la pantalla), con texto que leer (ni sin texto, ni cortadas, ni de puertas adentro), la más
@@ -395,7 +406,7 @@ export function reunionesParaUbicar(
 ): string[] {
   // `sinLugar`: los equipos que el cliente no ve. Sus reuniones no se eligen (se leían y se descartaban después: 6 de 8).
   const elegibles = todas
-    .filter((r) => r.origen === "meet" && deSesiones.has(`meet:${r.id}`) && r.texto !== "nada" && !r.corta && !r.puertasAdentro)
+    .filter((r) => sirveParaUbicar(r) && deSesiones.has(`meet:${r.id}`))
     .filter((r) => !cupo?.sinLugar?.size || !cupo.sinLugar.has(cupo.equipoDe(r.id) ?? ""))
     .sort((a, b) => Date.parse(b.fecha) - Date.parse(a.fecha));
   if (!cupo || cupo.porEquipo <= 0) return elegibles.slice(0, cuantas).map((r) => r.id);

@@ -14,6 +14,9 @@
  *
  * Lo que la página no deja editar a mano (los niveles, lo que sale del Resumen en la página del área, la pérdida que validó
  * la empresa) tampoco está acá.
+ *
+ * Cada pieza dice su SECCIÓN con el nombre de lib/external/secciones-de-la-escala.ts, el mismo que manda el botón «✨ Mejorar
+ * con IA» del encabezado de esa sección (24 nov): `piezasDeLaSeccion` da las que se le pasan al modelo.
  */
 import type { PiezaDelDocumento } from "@/lib/pedirle-a-nexus/contrato";
 import type { Letra } from "@/lib/escala/documento/tipos";
@@ -46,6 +49,7 @@ import {
   type TextosDeLaPagina,
 } from "@/lib/external/textos-de-la-pagina";
 import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
+import { esDeLaSeccion, SECCIONES_DEL_AREA as A, SECCIONES_DEL_RESUMEN as R, seccionDelEquipo } from "@/lib/external/secciones-de-la-escala";
 import { MAX_TEXTO_DEL_RADAR, type Operacion, type TextoDelRadar } from "./contenido";
 import { TOPE_DE_LA_DESCRIPCION_A_MANO } from "./descripcion-de-la-escala";
 import { textoVigenteDelRadar } from "./escala-para-el-cliente";
@@ -132,22 +136,22 @@ export function piezasDelResumen(res: ResumenDeLaPagina, textos: TextosDeLaPagin
   const out: PiezaDeLaEscala[] = [];
   const titular = titularDelResumen(res.hicimos, textos);
   if (titular) {
-    const p = fijo(titular.clave, titular.original, "El titular (arriba de todo)", "Arriba", textos);
+    const p = fijo(titular.clave, titular.original, "El titular (arriba de todo)", R.arriba, textos);
     out.push({ ...p, valor: titular.valor });
   }
-  out.push(fijo(claveAtadaDelResumen("bajada", BAJADA_DEL_RESUMEN), BAJADA_DEL_RESUMEN, "La bajada, debajo del titular", "Arriba", textos));
+  out.push(fijo(claveAtadaDelResumen("bajada", BAJADA_DEL_RESUMEN), BAJADA_DEL_RESUMEN, "La bajada, debajo del titular", R.arriba, textos));
 
   const parte = (tipo: string): ListaDeLaPagina => res.negocio?.find((p) => p.tipo === tipo)?.lista ?? { piezas: [], nueva: null };
   const tesis = parte("tesis");
-  const enElProblema = "El problema principal";
+  const enElProblema = R.problema;
   // La tesis es obligatoria para publicar: se cambia, no se quita.
   out.push(...deLaLista({ piezas: tesis.piezas.slice(0, 1), nueva: tesis.piezas.length ? null : tesis.nueva }, "El problema principal (la tesis)", enElProblema, { quitable: false }));
   const etiquetas = parte("etiquetas");
   out.push(...deLaLista(etiquetas, "Una etiqueta del negocio", enElProblema, { nueva: etiquetas.piezas.length < MAX_ETIQUETAS, tope: TOPE_DE_UN_NOMBRE }));
   const abarca = parte("abarca");
   const fuera = parte("fuera");
-  out.push(...deLaLista(abarca, "Qué abarca este diagnóstico", "Arriba", { nueva: !abarca.piezas.length }));
-  out.push(...deLaLista(fuera, "Qué queda fuera", "Arriba", { nueva: !fuera.piezas.length }));
+  out.push(...deLaLista(abarca, "Qué abarca este diagnóstico", R.arriba, { nueva: !abarca.piezas.length }));
+  out.push(...deLaLista(fuera, "Qué queda fuera", R.arriba, { nueva: !fuera.piezas.length }));
   if (res.tamano) {
     out.push(
       delResumen(res.tamano.clave, [res.tamano.valor, res.tamano.rotulo].filter(Boolean).join(" "), "El tamaño del negocio (número y unidad)", enElProblema, { citas: res.tamano.citas }, {
@@ -160,30 +164,30 @@ export function piezasDelResumen(res: ResumenDeLaPagina, textos: TextosDeLaPagin
   }
 
   const puntos = res.puntos ?? [];
-  if (puntos.length || res.puntoNuevo) out.push(fijo(CLAVES.delResumen("titulo.puntos"), "Lo más crítico hoy.", "Título de los puntos clave", "Puntos clave", textos));
+  if (puntos.length || res.puntoNuevo) out.push(fijo(CLAVES.delResumen("titulo.puntos"), "Lo más crítico hoy.", "Título de los puntos clave", R.puntos, textos));
   puntos.forEach((p, i) => {
     // Quitar el título quita el punto entero (como «Quitar este punto» en la página); lo que explica se cambia, no se quita.
-    out.push(delResumen(`${p.clave}:titulo`, p.titulo, `Título del punto clave ${i + 1}`, "Puntos clave", p, { tope: TOPE_DEL_TITULO_DEL_PUNTO, quitable: true }));
-    out.push(delResumen(`${p.clave}:texto`, p.texto || null, `Qué explica el punto clave ${i + 1} («${p.titulo}»)`, "Puntos clave", p));
+    out.push(delResumen(`${p.clave}:titulo`, p.titulo, `Título del punto clave ${i + 1}`, R.puntos, p, { tope: TOPE_DEL_TITULO_DEL_PUNTO, quitable: true }));
+    out.push(delResumen(`${p.clave}:texto`, p.texto || null, `Qué explica el punto clave ${i + 1} («${p.titulo}»)`, R.puntos, p));
   });
-  if (res.puntoNuevo) out.push(delResumen(res.puntoNuevo, null, "Un punto clave nuevo (su título)", "Puntos clave", null, { tope: TOPE_DEL_TITULO_DEL_PUNTO }));
+  if (res.puntoNuevo) out.push(delResumen(res.puntoNuevo, null, "Un punto clave nuevo (su título)", R.puntos, null, { tope: TOPE_DEL_TITULO_DEL_PUNTO }));
 
   if (res.claveDelTituloDelRecorrido)
     out.push(
-      delResumen(res.claveDelTituloDelRecorrido, res.tituloDelRecorrido ?? "Cómo pasa un cliente por tus áreas.", "Título del recorrido", "Tu operación", null, { tope: TOPE_DEL_TITULO_DEL_RECORRIDO }),
+      delResumen(res.claveDelTituloDelRecorrido, res.tituloDelRecorrido ?? "Cómo pasa un cliente por tus áreas.", "Título del recorrido", R.operacion, null, { tope: TOPE_DEL_TITULO_DEL_RECORRIDO }),
     );
   for (const e of res.recorrido ?? []) {
     const que = e.continuo ? "el paso que acompaña" : "el paso";
-    out.push(delResumen(`${e.clave}:nombre`, e.nombre, `Nombre de ${que} «${e.nombre}»`, "Tu operación", e, { tope: TOPE_DE_UN_NOMBRE }));
-    out.push(delResumen(`${e.clave}:texto`, e.texto || null, `El detalle de «${e.nombre}»`, "Tu operación", e));
-    out.push(delResumen(`${e.clave}:friccion`, e.friccion, `Lo que se traba en «${e.nombre}»`, "Tu operación", e, { quitable: true }));
+    out.push(delResumen(`${e.clave}:nombre`, e.nombre, `Nombre de ${que} «${e.nombre}»`, R.operacion, e, { tope: TOPE_DE_UN_NOMBRE }));
+    out.push(delResumen(`${e.clave}:texto`, e.texto || null, `El detalle de «${e.nombre}»`, R.operacion, e));
+    out.push(delResumen(`${e.clave}:friccion`, e.friccion, `Lo que se traba en «${e.nombre}»`, R.operacion, e, { quitable: true }));
   }
-  if (res.etapaNueva) out.push(delResumen(res.etapaNueva, null, "Un paso nuevo (su nombre)", "Tu operación", null, { tope: TOPE_DE_UN_NOMBRE }));
+  if (res.etapaNueva) out.push(delResumen(res.etapaNueva, null, "Un paso nuevo (su nombre)", R.operacion, null, { tope: TOPE_DE_UN_NOMBRE }));
 
   for (const t of res.tarjetas) {
     if (t.porExplorar) continue;
     for (const x of t.subequipos) {
-      const sec = `Equipos y hallazgos · ${x.nombre}`;
+      const sec = seccionDelEquipo(x.nombre);
       const enDinero = x.costo !== undefined;
       if (x.claveDelNombre) out.push(delResumen(x.claveDelNombre, x.nombre, `Nombre del equipo «${x.nombre}»`, sec, null, { tope: TOPE_DE_UN_NOMBRE }));
       if (x.costo && !x.costo.dePerdida) out.push(...deLaCifra(x.costo, sec, `Cuánto le cuesta a ${x.nombre}`));
@@ -197,8 +201,8 @@ export function piezasDelResumen(res: ResumenDeLaPagina, textos: TextosDeLaPagin
     }
   }
 
-  for (const p of res.pendientes) if (p.clave) out.push(delResumen(p.clave, p.texto, "Lo que falta validar", "Lo que falta validar", p, { quitable: true }));
-  if (res.pendienteNuevo) out.push(delResumen(res.pendienteNuevo, null, "Algo nuevo por validar", "Lo que falta validar", null));
+  for (const p of res.pendientes) if (p.clave) out.push(delResumen(p.clave, p.texto, "Lo que falta validar", R.falta, p, { quitable: true }));
+  if (res.pendienteNuevo) out.push(delResumen(res.pendienteNuevo, null, "Algo nuevo por validar", R.falta, null));
   // Lo que no se edita a mano en la página (formato 1: datos rojos y hallazgos sueltos) tampoco se pide acá.
   return out;
 }
@@ -229,7 +233,7 @@ export function piezasDelArea(r: ResultadoDelTest, e: EscritoDelArea): PiezaDeLa
   out.push({
     clave: `desc/${area}`,
     nombre: "Descripción de «Resultado general»",
-    seccion: "Resultado general",
+    seccion: A.resultado,
     valor: r.sintesis || null,
     tope: TOPE_DE_LA_DESCRIPCION_A_MANO,
     agregar: false,
@@ -239,10 +243,9 @@ export function piezasDelArea(r: ResultadoDelTest, e: EscritoDelArea): PiezaDeLa
     escribe: { via: "descripcion", areaId: area },
   });
   const titulo = (k: keyof typeof TITULOS_DEL_AREA, seccion: string) => fijo(CLAVES.delArea(area, k), TITULOS_DEL_AREA[k].texto, TITULOS_DEL_AREA[k].nombre, seccion, e.textos);
-  if (r.preguntadas > 0) {
-    out.push(titulo("titulo.escalera", "Dónde está hoy en la escala"));
-    out.push(titulo("titulo.radar", "Dónde está hoy cada parte"));
-  }
+  // La escalera sale solo con un nivel (como en la página: ResultadoDelTestVista); el radar, con algo medido.
+  if (r.preguntadas > 0 && r.nivel) out.push(titulo("titulo.escalera", A.escalera));
+  if (r.preguntadas > 0) out.push(titulo("titulo.radar", A.radar));
   for (const d of r.dimensiones) {
     if (!d.preguntada || !d.nivel) continue;
     const escrito = textoVigenteDelRadar(e.textosDelRadar ?? undefined, d);
@@ -251,7 +254,7 @@ export function piezasDelArea(r: ResultadoDelTest, e: EscritoDelArea): PiezaDeLa
     out.push({
       clave: `radar/${d.id}`,
       nombre: `Lo que dice la tarjeta de ${d.nombre}`,
-      seccion: "Dónde está hoy cada parte",
+      seccion: A.radar,
       valor,
       tope: MAX_TEXTO_DEL_RADAR,
       agregar: false,
@@ -261,40 +264,48 @@ export function piezasDelArea(r: ResultadoDelTest, e: EscritoDelArea): PiezaDeLa
       escribe: { via: "radar", dimensionId: d.id, nivel: d.nivel },
     });
   }
-  if (e.conLoQueCuesta) out.push(fijo(CLAVES.delArea(area, "ceja.cuesta"), cejaDeLoQueCuesta(r.areaNombre), "Ceja de lo que más le cuesta", "Lo que más le cuesta", e.textos));
+  if (e.conLoQueCuesta) out.push(fijo(CLAVES.delArea(area, "ceja.cuesta"), cejaDeLoQueCuesta(r.areaNombre), "Ceja de lo que más le cuesta", A.cuesta, e.textos));
   const rec = r.recomendacion;
   if (rec) {
     if (rec.tipo === "trabajar") {
       const t = tituloDeEmpezar(rec.dimensionNombre, rec.objetivoNombre);
-      out.push(fijo(CLAVES.calculado(area, "empezar.titulo", t), t, "Título de «Por dónde empezar»", "Por dónde empezar", e.textos));
+      out.push(fijo(CLAVES.calculado(area, "empezar.titulo", t), t, "Título de «Por dónde empezar»", A.empezar, e.textos));
     }
-    out.push(fijo(CLAVES.calculado(area, "empezar.razon", rec.razon), rec.razon, "Por qué empezar por ahí", "Por dónde empezar", e.textos));
+    out.push(fijo(CLAVES.calculado(area, "empezar.razon", rec.razon), rec.razon, "Por qué empezar por ahí", A.empezar, e.textos));
     if (rec.tipo === "trabajar" && rec.costoDeQuedarse)
-      out.push(fijo(CLAVES.calculado(area, "costo", rec.costoDeQuedarse), rec.costoDeQuedarse, "Lo que cuesta quedarse así", "Por dónde empezar", e.textos));
+      out.push(fijo(CLAVES.calculado(area, "costo", rec.costoDeQuedarse), rec.costoDeQuedarse, "Lo que cuesta quedarse así", A.empezar, e.textos));
   }
-  if (r.casos.some((x) => !quitadaDeLaPagina(e.textos, CLAVES.caso(area, x.id)))) out.push(titulo("titulo.casos", "Lo que haríamos contigo"));
+  if (r.casos.some((x) => !quitadaDeLaPagina(e.textos, CLAVES.caso(area, x.id)))) out.push(titulo("titulo.casos", A.casos));
   // Un caso quitado para el cliente no sale en su página: tampoco se le pide a Nexus (se vuelve a mostrar a mano).
   for (const c of r.casos.filter((x) => !quitadaDeLaPagina(e.textos, CLAVES.caso(area, x.id)))) {
-    out.push(fijo(CLAVES.caso(area, c.id, "titulo"), c.titulo, `Título del caso «${c.titulo}»`, "Lo que haríamos contigo", e.textos));
-    out.push(fijo(CLAVES.caso(area, c.id, "promesa"), c.promesa, `Qué logra el caso «${c.titulo}»`, "Lo que haríamos contigo", e.textos));
-    if (c.razon) out.push(fijo(CLAVES.calculado(area, `caso.${c.id}.razon`, c.razon), c.razon, `Qué parte sube con «${c.titulo}»`, "Lo que haríamos contigo", e.textos));
+    out.push(fijo(CLAVES.caso(area, c.id, "titulo"), c.titulo, `Título del caso «${c.titulo}»`, A.casos, e.textos));
+    out.push(fijo(CLAVES.caso(area, c.id, "promesa"), c.promesa, `Qué logra el caso «${c.titulo}»`, A.casos, e.textos));
+    if (c.razon) out.push(fijo(CLAVES.calculado(area, `caso.${c.id}.razon`, c.razon), c.razon, `Qué parte sube con «${c.titulo}»`, A.casos, e.textos));
   }
-  if (r.nivel && r.riesgos.length) out.push(titulo("titulo.riesgos", "Lo que suele poner en riesgo"));
+  if (r.nivel && r.riesgos.length) out.push(titulo("titulo.riesgos", A.riesgos));
   if (r.nivel)
     for (const x of r.riesgos)
-      out.push(fijo(CLAVES.calculado(area, "riesgo", x), x, "Un riesgo", "Lo que suele poner en riesgo", e.textos, { quitable: true }));
+      out.push(fijo(CLAVES.calculado(area, "riesgo", x), x, "Un riesgo", A.riesgos, e.textos, { quitable: true }));
   if (r.preguntadas > 0) {
-    out.push(titulo("titulo.partes", "Cómo está cada parte"));
+    out.push(titulo("titulo.partes", A.partes));
     for (const d of r.dimensiones) {
       const det = d.preguntada && d.nivel ? e.detalle(d.id) : null;
       if (!det) continue;
       const original = textoDeLaPrioridad(det).texto;
-      out.push(fijo(CLAVES.detalle(d.id, original), original, `Qué priorizar en ${d.nombre}`, "Cómo está cada parte", e.textos));
+      out.push(fijo(CLAVES.detalle(d.id, original), original, `Qué priorizar en ${d.nombre}`, A.partes, e.textos));
     }
   }
   const pie = pieDelArea(e.fecha);
-  out.push(fijo(CLAVES.calculado(area, "pie", pie), pie, "El pie de la página", "Abajo", e.textos));
+  out.push(fijo(CLAVES.calculado(area, "pie", pie), pie, "El pie de la página", A.abajo, e.textos));
   return out;
+}
+
+/**
+ * Las piezas de una sección (24 nov: «✨ Mejorar con IA» va por sección, el botón de su encabezado). La sección es la de
+ * lib/external/secciones-de-la-escala.ts; «Equipos y hallazgos» abarca la de cada equipo.
+ */
+export function piezasDeLaSeccion<P extends Pick<PiezaDeLaEscala, "seccion">>(piezas: readonly P[], seccion: string): P[] {
+  return piezas.filter((p) => esDeLaSeccion(p.seccion, seccion));
 }
 
 /** La operación que escribe un cambio en una pieza: la MISMA de la edición a mano. `despues` null: quitarla. */

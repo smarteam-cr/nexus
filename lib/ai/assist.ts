@@ -65,7 +65,8 @@ export interface DocumentAssistInput {
   maxWebSearches?: number;
   /**
    * Una propuesta sin cambios es una respuesta válida si el modelo explica por qué en `__reasoning` («✨ Pedirle a Nexus»,
-   * 23 nov: lo interno no se mete aunque se pida, y Nexus lo dice). Sin esto, sin cambios es un error.
+   * 23 nov: lo que no se puede hacer, como lo interno que el pedido no nombra, y Nexus lo dice). Sin esto, sin cambios es un
+   * error.
    */
   permitirVacia?: boolean;
 }

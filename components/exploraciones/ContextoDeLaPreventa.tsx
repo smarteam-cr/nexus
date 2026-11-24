@@ -14,7 +14,8 @@
  *     llega con este bloque desplegado y el formulario abierto.
  *   · `casos` — los casos de uso salen del lienzo. Desde el 2026-11-09 sus instrucciones son «Tu lectura del cliente»,
  *     arriba de la lista del paso (LecturaDelConsultor.tsx); aquí queda dónde encontrarla.
- *   · `sinAgente` — La escala no tiene agente propio: solo la explicación.
+ * La escala no lo lleva desde el 24 nov (Elías: decía «sin agente propio» y no hacía nada): ubicarla con las reuniones,
+ * rehacer su Resumen y «✨ Mejorar con IA» están en su propia página.
  * Las instrucciones son de cada pieza (`instrucciones:<pieza>` en `contenido.notas`, sin SQL) y no son
  * evidencia.
  */
@@ -28,8 +29,8 @@ import SumarAMano from "./SumarAMano";
 import { useLienzo } from "./contexto";
 import { useSesiones } from "./useSesiones";
 
-/** Qué pieza muestra el bloque: Preparación, Casos de uso o una sin agente propio (La escala). */
-export type ModoDelContexto = "preparacion" | "casos" | "sinAgente";
+/** Qué pieza muestra el bloque: Preparación o Casos de uso. */
+export type ModoDelContexto = "preparacion" | "casos";
 
 /** Qué agente lee las instrucciones de cada pieza (lo dice el bloque). */
 const QUIEN_LAS_LEE: Record<Exclude<PiezaConInstrucciones, "exploracion">, string> = {
@@ -59,27 +60,19 @@ export default function ContextoDeLaPreventa({ modo }: { modo: ModoDelContexto }
     irA("exploracion");
     sesion.irAlInicio();
   };
-  const pieza: Exclude<PiezaConInstrucciones, "exploracion"> | null = modo === "sinAgente" ? null : modo;
-  const instrucciones = pieza ? (exp.estado.contenido.notas[claveDeInstrucciones(pieza)] ?? "") : "";
+  const pieza: Exclude<PiezaConInstrucciones, "exploracion"> = modo;
+  const instrucciones = exp.estado.contenido.notas[claveDeInstrucciones(pieza)] ?? "";
   const activas = instrucciones.trim() ? " · instrucciones activas" : "";
 
   const resumen =
     modo === "preparacion"
       ? `lee las 3 sesiones más recientes · ${documentos.length} ${documentos.length === 1 ? "fuente manual" : "fuentes manuales"}${activas}`
-      : modo === "casos"
-        ? `lee el lienzo · ${leidas} ${leidas === 1 ? "sesión leída" : "sesiones leídas"}${instrucciones.trim() ? " · con tu lectura" : ""}`
-        : "sin agente propio";
+      : `lee el lienzo · ${leidas} ${leidas === 1 ? "sesión leída" : "sesiones leídas"}${instrucciones.trim() ? " · con tu lectura" : ""}`;
 
   return (
     <div data-recorrido="preventa.contexto">
       <ContextoAdicional abierto={abierto} onAlternar={() => setAbierto((v) => !v)} resumen={resumen}>
-        {modo === "sinAgente" ? (
-          <p className="rounded-xl border border-dashed border-line px-3.5 py-3 text-[13px] leading-[19px] text-fg-secondary">
-            Esta pieza no lee reuniones ni tiene agente propio: muestra los niveles que propusieron Preparación y la lectura de las sesiones. Las instrucciones para la IA
-            van en Preparación, Exploración o Casos de uso.
-          </p>
-        ) : (
-          <>
+        <>
             <div className="flex flex-wrap items-start gap-3 rounded-xl border border-line bg-surface-muted px-3.5 py-3">
               <IconoDeInformacion />
               <p className="min-w-0 flex-[1_1_420px] text-[13px] leading-[19px] text-fg-secondary">
@@ -104,7 +97,7 @@ export default function ContextoDeLaPreventa({ modo }: { modo: ModoDelContexto }
                 cliente. Lo que habías escrito como instrucciones está ahí.
               </p>
             )}
-            {pieza && pieza !== "casos" && (
+            {pieza !== "casos" && (
               <InstruccionesAdicionales
                 key={pieza}
                 guardadas={instrucciones}
@@ -119,8 +112,7 @@ export default function ContextoDeLaPreventa({ modo }: { modo: ModoDelContexto }
                 onGuardar={(texto) => cambiar([{ op: "nota", paso: claveDeInstrucciones(pieza), texto }])}
               />
             )}
-          </>
-        )}
+        </>
       </ContextoAdicional>
     </div>
   );

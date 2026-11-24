@@ -38,6 +38,7 @@
 import type { ReactNode } from "react";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { conclusionDelSubequipo, etiquetaDeLaCifra, sinCosto, type TarjetaDeLaPagina } from "@/lib/external/pagina-del-resumen";
+import { SECCIONES_DEL_AREA as SECCION } from "@/lib/external/secciones-de-la-escala";
 import {
   cejaDeLoQueCuesta,
   CLAVES,
@@ -385,6 +386,11 @@ export interface EdicionDeLaPagina {
    * de siempre); `quitar`: la pieza se puede quitar para el cliente (su clave, y si ya está quitada).
    */
   fijo?: (o: EdicionDeUnTextoFijo) => ReactNode;
+  /**
+   * «✨ Mejorar con IA» de una sección (24 nov), en su encabezado: abre el chat «Nexus» con la sección como chip. La sección
+   * va por su nombre de lib/external/secciones-de-la-escala.ts; sin nada que Nexus pueda cambiar ahí, no devuelve nada.
+   */
+  mejorar?: (seccion: string) => ReactNode;
 }
 
 /** Lo que recibe la pantalla interna para editar un texto fijo de la página (el Resumen también lo usa). */
@@ -457,6 +463,8 @@ function AreaDeLaEscala({
   };
   /** Si una pieza que se puede quitar sale: afuera, no si se quitó; adentro sale siempre (marcada). */
   const sale = (clave: string) => editable || !quitadaDeLaPagina(textos, clave);
+  /** «✨ Mejorar con IA» en el encabezado de una sección (solo adentro). */
+  const mejorar = (seccion: string) => edicion?.mejorar?.(seccion) ?? null;
   const area = r.areaId;
   /** Un párrafo con un texto fijo: adentro es un editor (un bloque), que no puede ir dentro de un <p>. */
   const P = editable ? "div" : "p";
@@ -531,6 +539,7 @@ function AreaDeLaEscala({
           <div className="ed-hero-texto">
             <p className="ed-ceja">
               {empresa || "Escala de rendimiento"} <span>/ {r.areaNombre}</span>
+              {mejorar(SECCION.resultado)}
             </p>
             <Titular className="rd-nivel" data-nivel={r.nivel ?? undefined}>
               <span className="rd-punto" aria-hidden="true" />
@@ -567,7 +576,10 @@ function AreaDeLaEscala({
 
         {r.nivel && (
         <section className="ed-parte ed-envoltura ed-escalera" aria-labelledby="ed-t-escalera">
-          <p className="ed-ceja">La escala de rendimiento</p>
+          <p className="ed-ceja">
+            La escala de rendimiento
+            {mejorar(SECCION.escalera)}
+          </p>
           <h2 className="ed-titulo" id="ed-t-escalera">
             {fijo(CLAVES.delArea(area, "titulo.escalera"), TITULOS_DEL_AREA["titulo.escalera"].texto, TITULOS_DEL_AREA["titulo.escalera"].nombre)}
           </h2>
@@ -580,6 +592,7 @@ function AreaDeLaEscala({
             <div className="ed-titulos">
               <p className="ed-ceja">
                 Las {r.total} partes de {r.areaNombre}
+                {mejorar(SECCION.radar)}
               </p>
               <h2 className="ed-titulo" id="ed-t-radar">
                 {fijo(CLAVES.delArea(area, "titulo.radar"), TITULOS_DEL_AREA["titulo.radar"].texto, TITULOS_DEL_AREA["titulo.radar"].nombre)}
@@ -635,6 +648,7 @@ function AreaDeLaEscala({
           <section className="ed-parte ed-envoltura ed-cuesta" aria-labelledby="ed-t-cuesta" data-revela="">
             <p className="ed-ceja" id="ed-t-cuesta">
               {fijo(CLAVES.delArea(area, "ceja.cuesta"), cejaDeLoQueCuesta(r.areaNombre), "Ceja de lo que más le cuesta")}
+              {mejorar(SECCION.cuesta)}
             </p>
             <div className="ed-cuesta-lista">
               {conclusiones.map(({ id, nombre, falta, c }) => (
@@ -681,7 +695,10 @@ function AreaDeLaEscala({
 
         {rec && (
           <section className="ed-parte ed-envoltura" aria-labelledby="ed-t-empezar" data-revela="">
-            <p className="ed-ceja">Por dónde empezar</p>
+            <p className="ed-ceja">
+              Por dónde empezar
+              {mejorar(SECCION.empezar)}
+            </p>
             <div className={`ed-empezar${rec.tipo === "trabajar" && rec.costoDeQuedarse ? " con-costo" : ""}`}>
               <div className="ed-empezar-texto">
                 {rec.tipo === "trabajar" ? (
@@ -712,7 +729,10 @@ function AreaDeLaEscala({
 
         {casos.length > 0 && (
           <section className="ed-parte ed-envoltura" aria-labelledby="ed-t-casos" data-revela="">
-            <p className="ed-ceja">Lo que lo mueve</p>
+            <p className="ed-ceja">
+              Lo que lo mueve
+              {mejorar(SECCION.casos)}
+            </p>
             <h2 className="ed-titulo" id="ed-t-casos">
               {fijo(CLAVES.delArea(area, "titulo.casos"), TITULOS_DEL_AREA["titulo.casos"].texto, TITULOS_DEL_AREA["titulo.casos"].nombre)}
             </h2>
@@ -735,7 +755,10 @@ function AreaDeLaEscala({
           // Son los riesgos TÍPICOS del nivel, no algo que la empresa contó (10 nov, regla 4): el título lo dice. Sin nivel
           // («En medición») no hay «este nivel» del que hablar (16 nov).
           <section className="ed-parte ed-envoltura" aria-labelledby="ed-t-riesgos" data-revela="">
-            <p className="ed-ceja">Lo que suele poner en riesgo a un área en este nivel</p>
+            <p className="ed-ceja">
+              Lo que suele poner en riesgo a un área en este nivel
+              {mejorar(SECCION.riesgos)}
+            </p>
             <h2 className="ed-titulo" id="ed-t-riesgos">
               {fijo(CLAVES.delArea(area, "titulo.riesgos"), TITULOS_DEL_AREA["titulo.riesgos"].texto, TITULOS_DEL_AREA["titulo.riesgos"].nombre)}
             </h2>
@@ -756,7 +779,10 @@ function AreaDeLaEscala({
         {/* Un equipo «En medición» (nada ubicado, 8 nov) no lleva «Cómo está cada parte»: saldría vacía. */}
         {r.preguntadas > 0 && (
           <section className="ed-parte ed-envoltura" aria-labelledby="ed-t-partes" data-revela="">
-            <p className="ed-ceja">Cómo está cada parte</p>
+            <p className="ed-ceja">
+              Cómo está cada parte
+              {mejorar(SECCION.partes)}
+            </p>
             <h2 className="ed-titulo" id="ed-t-partes">
               {fijo(CLAVES.delArea(area, "titulo.partes"), TITULOS_DEL_AREA["titulo.partes"].texto, TITULOS_DEL_AREA["titulo.partes"].nombre)}
             </h2>

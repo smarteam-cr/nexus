@@ -424,11 +424,15 @@
 .dr .rd-editable-vacio { color: var(--v3-marca); font-size: 14px; font-weight: 600; }
 .dr .rd-editable-lapiz { position: absolute; top: 4px; right: 6px; font-size: 11px; font-weight: 600; color: var(--v3-marca); opacity: 0; transition: opacity .15s; }
 .dr .rd-editable-texto:hover .rd-editable-lapiz, .dr .rd-editable-texto:focus-visible .rd-editable-lapiz { opacity: 1; }
-/* «✨ Pedirle a Nexus» al pasar por una pieza (23 nov): un botón hermano del texto, a la izquierda de «Editar». */
-.dr .rd-editable-caja { position: relative; }
-.dr .rd-editable-pedir { position: absolute; top: 0; right: 52px; z-index: 2; border: 0; background: #fff; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 600; color: var(--v3-marca); box-shadow: 0 0 0 1px var(--v3-borde-fuerte); opacity: 0; transition: opacity .15s; cursor: pointer; }
-.dr .rd-editable-caja:hover .rd-editable-pedir, .dr .rd-editable-pedir:focus-visible { opacity: 1; }
-@media (hover: none) { .dr .rd-editable-pedir { opacity: 1; position: static; margin-bottom: 4px; } }
+/* «✨ Mejorar con IA» de una SECCIÓN (24 nov; antes era un botón por pieza, al pasar el cursor): la píldora va en el
+   encabezado de cada sección, como la de cada sección de los documentos del cliente (app/landing-engine.css ›
+   `.stl-chat-seccion`). Solo adentro: la pasa `edicion.mejorar` (components/exploraciones/PaginaDeLaEscala.tsx). */
+.dr .rd-mejorar { display: inline-flex; align-items: center; gap: 5px; vertical-align: middle; margin-left: 10px; padding: 2px 9px; border-radius: 6px; border: 1px solid #e5e7eb; background: #ffffff; color: #374151; font: 500 12px/1.3 "Segoe UI", system-ui, -apple-system, sans-serif; letter-spacing: 0; text-transform: none; white-space: nowrap; cursor: pointer; }
+.dr .rd-mejorar svg { width: 13px; height: 13px; flex-shrink: 0; color: #3b82f6; }
+.dr .rd-mejorar:hover { background: #f9fafb; color: #111827; }
+.dr .rd-mejorar:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
+/* En la fila de un equipo (04 Equipos y hallazgos) y en la banda oscura del cierre, en su propio renglón. */
+.dr .re-equipo-nombre > .rd-mejorar, .dr .re-cierre > .rd-mejorar { justify-self: start; margin-left: 0; }
 .dr .rd-editable-origen { display: block; margin-top: 4px; font-size: 11.5px; line-height: 16px; color: var(--v3-apagado); }
 .dr .rd-editor { display: grid; gap: 8px; }
 /* El cuadro ocupa el lugar exacto del texto (9 nov): el mismo corrimiento que `.rd-editable-texto` (margen -4/-8 px, relleno
@@ -448,12 +452,19 @@
 .dr .rd-quitada-nota { font-size: 12px; font-weight: 500; color: #8a94a6; }
 .dr .ed-quitado { opacity: .75; }
 
-/* Solo adentro (la pantalla interna de la escala): de dónde sale cada cosa. Del Resumen anterior (9 a 12 nov) es lo único
-   que queda en uso: el Resumen editorial vive en resumen-editorial.css. */
-.dr .rs-citas { margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: #f6f8fc; border: 1px dashed var(--v3-borde-fuerte); font-size: 12.5px; line-height: 18px; color: var(--v3-secundario); }
-.dr .rs-citas ul { margin: 2px 0 0; padding-left: 16px; display: grid; gap: 4px; }
-.dr .rs-citas li span { color: var(--v3-apagado); }
-.dr .rs-citas-k { font-size: 11.5px; font-weight: 600; color: var(--v3-apagado); }
+/* Solo adentro (la pantalla interna de la escala): de dónde sale cada cosa. Desde el 24 nov es un ícono (i) con las citas
+   en un globo (components/exploraciones/DeDondeSale.tsx; Elías: el recuadro empujaba el contenido hacia abajo). */
+.dr .rs-de-donde { display: inline-flex; vertical-align: middle; margin-left: 4px; line-height: 0; }
+.dr .rs-de-donde-i { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 999px; background: none; color: #8a94a6; cursor: help; }
+.dr .rs-de-donde-i svg { width: 14px; height: 14px; }
+.dr .rs-de-donde-i:hover, .dr .rs-de-donde-i[aria-expanded="true"] { color: #2d5fb3; background: #eef3fb; }
+.dr .rs-de-donde-i:focus-visible { outline: 2px solid #2d5fb3; outline-offset: 1px; }
+.dr .rs-de-donde-i.rs-de-donde-aviso { color: #b45309; }
+/* El globo va en un portal, fuera de `.dr`: sus reglas no cuelgan de la página. */
+.rs-de-donde-globo { box-sizing: border-box; max-width: min(420px, calc(100vw - 16px)); overflow-y: auto; padding: 10px 12px; border-radius: 10px; background: #ffffff; border: 1px solid #d6dee9; box-shadow: 0 10px 30px rgba(15, 27, 76, .14); font-size: 12.5px; line-height: 18px; font-weight: 400; letter-spacing: 0; text-transform: none; text-align: left; color: #3d4b63; }
+.rs-de-donde-globo ul { margin: 4px 0 0; padding-left: 16px; display: grid; gap: 4px; list-style: disc; }
+.rs-de-donde-globo li span { color: #5f6d85; }
+.rs-de-donde-k { margin: 0; font-size: 11.5px; font-weight: 600; color: #5f6d85; }
 
 /* ── El Sistema 2 de la escala de una empresa (12 nov; diseño aprobado por Elías, artefacto «Escala de Centauro · Sistema
       2»): fondo gris azulado, tarjetas blancas de 20 px, números grandes en letra fina y rótulos chicos en mayúscula. Solo

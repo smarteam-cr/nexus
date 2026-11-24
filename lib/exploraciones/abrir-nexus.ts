@@ -4,8 +4,8 @@
  *
  * El botón «Nexus» de arriba y «✨ Mejorar con IA» de La escala no conocen el cajón (components/exploraciones/
  * HablarConNexus.tsx): lo abren con `abrirNexusEnLaPreventa`, y el cajón lo escucha. Con `escala`, el cajón abre con el
- * lugar puesto como chip (el Resumen, un área o una pieza): lo que se escribe es un pedido de cambio a la página, y la
- * propuesta por pieza se ve adentro. Sin chip, es la conversación de siempre.
+ * lugar puesto como chip (el Resumen o un área, y la sección desde la que se pidió): lo que se escribe es un pedido de
+ * cambio a la página, y la propuesta por pieza se ve adentro. Sin chip, es la conversación de siempre.
  */
 import type { LugarEnLaEscala } from "./escala-con-nexus";
 
@@ -16,8 +16,11 @@ export interface LugarDeLaEscalaEnElCajon {
   lugar: LugarEnLaEscala;
   /** «Resumen» o el nombre del área. */
   nombre: string;
-  /** La pieza desde la que se pidió (el botón al pasar por ella); null: la página entera. */
-  foco: { clave: string; nombre: string } | null;
+  /**
+   * La SECCIÓN desde la que se pidió (24 nov: el botón del encabezado de cada sección; antes era una pieza), con su nombre
+   * de lib/external/secciones-de-la-escala.ts. null: la página entera.
+   */
+  foco: string | null;
 }
 
 export interface PedidoDeAbrirNexus {

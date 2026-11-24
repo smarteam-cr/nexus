@@ -85,7 +85,7 @@ import {
   type ReunionSinLeer,
 } from "./lectura";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
-import { reunionesParaUbicar } from "./posicionar";
+import { REUNIONES_QUE_LEE_UBICAR, reunionesParaUbicar } from "./posicionar";
 import { REUNIONES } from "./sesion";
 import { leerSitioWeb } from "./sitio-web";
 import { hostDelSitio } from "./sitio-web-reglas";
@@ -1093,7 +1093,7 @@ export async function transcripcionesDeLaExploracion(
   o: { cuantas?: number; caracteres?: number; porEquipo?: number; sinLugar?: ReadonlySet<ClaveDeEquipo> } = {},
   ahora = new Date(),
 ): Promise<{ fuentes: Fuente[]; reuniones: { fuente: string; etiqueta: string; equipo?: ClaveDeEquipo }[]; sesiones: string[] }> {
-  const cuantas = o.cuantas ?? 4;
+  const cuantas = o.cuantas ?? REUNIONES_QUE_LEE_UBICAR;
   const caracteres = o.caracteres ?? 40_000;
   const armadas = await armarReuniones(opts, 30, ahora);
   const pestanas = pestanasDeSesiones(opts.sesiones ?? [], armadas.todas, hoyEnCostaRica(ahora), { automaticas: armadas.automaticas, fuera: new Set(opts.fuera ?? []) });

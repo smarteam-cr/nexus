@@ -7,7 +7,8 @@
  * rápido de lo explorado. Las dos cosas salen de acá, con la misma cuenta:
  *   · `areasDeLaEscala`: cada área (Ventas, Marketing, Servicio) con cuántas partes tienen evidencia, cuántas son hipótesis
  *     y cuántas no tienen nada, cuántas sesiones fueron con su equipo y si se habló de ella;
- *   · `resumenDeLoExplorado`: la frase de «Dónde está hoy»;
+ *   · `resumenDeLoExplorado`: la frase de «Dónde está hoy» (desde el 24 nov la pantalla no la muestra: Elías, «demasiada
+ *     información»; lo que hay que actualizar lo dice la línea de arriba, ./linea-de-la-escala.ts);
  *   · `areasParaElCliente`: las que salen en la página del cliente (las que eligió el vendedor o, si no eligió, las que
  *     tienen algo que mostrar).
  *

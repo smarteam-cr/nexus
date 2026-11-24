@@ -6,7 +6,8 @@ import { describe, expect, it } from "vitest";
 import { claveAtadaDelResumen, tituloDeLoQueHicimos, type ResumenDeLaPagina } from "@/lib/external/pagina-del-resumen";
 import { CLAVES } from "@/lib/external/textos-de-la-pagina";
 import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
-import { guiaDeLaPieza, operacionDelCambio, piezasDelArea, piezasDelResumen } from "./escala-con-nexus";
+import { SECCIONES_DEL_AREA, SECCIONES_DEL_RESUMEN, seccionDelEquipo } from "@/lib/external/secciones-de-la-escala";
+import { guiaDeLaPieza, operacionDelCambio, piezasDeLaSeccion, piezasDelArea, piezasDelResumen } from "./escala-con-nexus";
 
 const CITA = { reunion: "gmeet_1", fecha: "2026-11-05T16:00:00.000Z", turno: 4, hablante: "Diego", texto: "registramos todo a mano" };
 const hicimos = { sesiones: 3, minutos: 150, sinDuracion: 0, equipos: [], personas: 2, texto: "", mano: false, areas: [] };
@@ -117,5 +118,67 @@ describe("cada cambio se escribe con la operación de la edición a mano", () =>
     expect(nombres).toEqual(expect.arrayContaining(["Qué priorizar en Registro", "El pie de la página", "Título de cada parte", "Por qué empezar por ahí"]));
     const priorizar = area.find((p) => p.nombre === "Qué priorizar en Registro")!;
     expect(priorizar).toMatchObject({ valor: "Un solo registro.", clave: `t/${CLAVES.detalle("1.3", "Un solo registro.")}` });
+  });
+});
+
+describe("cada pieza está en una sección de la página, la misma que pide su botón (24 nov: «✨ Mejorar con IA» por sección)", () => {
+  const lista = (piezas: { id: string; texto: string }[], nueva: string | null = null) => ({ piezas: piezas.map((p) => ({ ...p, clave: `x:${p.id}`, citas: [] })), nueva });
+  const subequipo = (id: string, nombre: string) => ({
+    id,
+    nombre,
+    claveDelNombre: `equipo:${id}:nombre`,
+    organizacion: lista([]),
+    bien: lista([{ id: `${id}-b`, texto: "Responden el mismo día." }]),
+    frena: lista([{ id: `${id}-f`, texto: "No hay un registro único." }]),
+    retos: lista([]),
+    cifras: [],
+    cifraNueva: null,
+    falta: null,
+    claveDeLaFalta: null,
+  });
+  const conEquipos = resumen({
+    tarjetas: [{ id: "t1", areaId: "3", nombre: "Servicio", nivel: "I", nivelNombre: "Inicial", conPorque: false, porExplorar: false, subequipos: [subequipo("s1", "Soporte"), subequipo("s2", "Customer Success")] }],
+    pendientes: [{ id: "p1", texto: "Cuántos casos entran al mes.", clave: "pendiente:p1", citas: [] }],
+  } as unknown as Partial<ResumenDeLaPagina>);
+  const piezas = piezasDelResumen(conEquipos, {});
+
+  it("las del Resumen: sus secciones son las de los encabezados (y la de cada equipo, dentro de «Equipos y hallazgos»)", () => {
+    const validas = new Set<string>([...Object.values(SECCIONES_DEL_RESUMEN), seccionDelEquipo("Soporte"), seccionDelEquipo("Customer Success")]);
+    for (const p of piezas) expect(validas.has(p.seccion), `${p.nombre}: «${p.seccion}»`).toBe(true);
+    expect(new Set(piezas.map((p) => p.seccion))).toEqual(
+      new Set([SECCIONES_DEL_RESUMEN.arriba, SECCIONES_DEL_RESUMEN.problema, SECCIONES_DEL_RESUMEN.puntos, SECCIONES_DEL_RESUMEN.operacion, seccionDelEquipo("Soporte"), seccionDelEquipo("Customer Success"), SECCIONES_DEL_RESUMEN.falta]),
+    );
+  });
+
+  it("pedir desde una sección da solo sus piezas; «Equipos y hallazgos» abarca a cada equipo", () => {
+    const puntos = piezasDeLaSeccion(piezas, SECCIONES_DEL_RESUMEN.puntos);
+    expect(puntos.length).toBeGreaterThan(0);
+    expect(puntos.every((p) => p.seccion === "Puntos clave")).toBe(true);
+    const soporte = piezasDeLaSeccion(piezas, seccionDelEquipo("Soporte"));
+    expect(soporte.map((p) => p.seccion)).toEqual(soporte.map(() => "Equipos y hallazgos · Soporte"));
+    expect(soporte.some((p) => p.valor === "No hay un registro único.")).toBe(true);
+    const equipos = piezasDeLaSeccion(piezas, SECCIONES_DEL_RESUMEN.equipos);
+    expect(new Set(equipos.map((p) => p.seccion))).toEqual(new Set([seccionDelEquipo("Soporte"), seccionDelEquipo("Customer Success")]));
+    // «Puntos» no es «Puntos clave»: el nombre se compara entero.
+    expect(piezasDeLaSeccion(piezas, "Puntos")).toEqual([]);
+  });
+
+  it("las de un área: sus secciones son las de sus encabezados", () => {
+    const r = {
+      areaId: "1",
+      areaNombre: "Ventas",
+      nivel: "D",
+      sintesis: "Ventas trabaja sin un registro único.",
+      preguntadas: 2,
+      dimensiones: [{ id: "1.3", nombre: "Registro", preguntada: true, nivel: "D" }],
+      recomendacion: { tipo: "trabajar", dimensionId: "1.3", dimensionNombre: "Registro", objetivoNombre: "Funcional", razon: "Sin registro no hay seguimiento.", costoDeQuedarse: "Se pierden ventas." },
+      casos: [{ id: "c1", titulo: "Un solo registro", promesa: "Todo en el CRM.", razon: "Sube Registro." }],
+      riesgos: ["Se pierden oportunidades sin seguimiento."],
+    } as unknown as ResultadoDelTest;
+    const area = piezasDelArea(r, { textos: {}, textosDelRadar: {}, descripcion: { origen: "agente" }, detalle: () => ({ impacto: "Registran en Excel.", siguiente: { nombre: "Funcional", prioridad: "Un solo registro." } }), conLoQueCuesta: true, fecha: null });
+    const validas = new Set<string>(Object.values(SECCIONES_DEL_AREA));
+    for (const p of area) expect(validas.has(p.seccion), `${p.nombre}: «${p.seccion}»`).toBe(true);
+    for (const s of [SECCIONES_DEL_AREA.resultado, SECCIONES_DEL_AREA.radar, SECCIONES_DEL_AREA.cuesta, SECCIONES_DEL_AREA.empezar, SECCIONES_DEL_AREA.casos, SECCIONES_DEL_AREA.riesgos, SECCIONES_DEL_AREA.partes])
+      expect(piezasDeLaSeccion(area, s).length, s).toBeGreaterThan(0);
   });
 });
