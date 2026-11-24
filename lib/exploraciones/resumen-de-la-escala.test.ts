@@ -496,7 +496,7 @@ describe("2 · el cliente nunca ve las citas", () => {
     // entregable, y los números van en las cifras.
     for (const parte of ["/ Tu operación", "/ Equipos y hallazgos", "Tu mirada completa el diagnóstico", "sesiones de exploración", "personas de tu equipo", "áreas exploradas"])
       expect(html).toContain(parte);
-    expect(html).toMatch(/<h1 class="re-titular rd-entra">Diagnóstico de [^<]+ en HubSpot<\/h1>/);
+    expect(html).toContain('<h1 class="re-titular rd-entra">Diagnóstico de rendimiento</h1>');
     for (const fuera of ["¿Entendimos bien?", "provisional", "más de", "Confirmar o corregir"]) expect(html).not.toContain(fuera);
     // Lo que queda fuera va en la línea del alcance, debajo de la tesis.
     expect(html).toContain("re-alcance");

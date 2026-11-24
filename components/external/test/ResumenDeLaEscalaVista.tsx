@@ -5,11 +5,12 @@
  * documento (hex literal de resumen-editorial.css: la página no tiene tema, no flipea) y en tuteo.
  *
  * Se lee en un minuto. Blanco, tinta azul marino, un solo azul, titulares cortos en negrita y una cifra grande por bloque:
- *   arriba, EL NOMBRE DEL ENTREGABLE (24 nov, Elías: «El nombre del entregable con un resumen»): la empresa en la ceja, el
- *   titular «Diagnóstico de Ventas, Marketing y Servicio en HubSpot» (`titularDelResumen`; del 21 al 24 nov decía lo que
- *   hicimos, «13 sesiones y 8 h de conversación…», que sigue en las cifras de abajo), el resumen de uno o dos párrafos que
- *   escribió el agente con las cifras de la empresa (sin él, la bajada de siempre), las cifras de sesiones, tiempo,
- *   personas y áreas exploradas, la próxima por explorar y el alcance;
+ *   arriba, EL NOMBRE DEL ENTREGABLE (24 nov, Elías: «El nombre del entregable con un resumen»; «algo como diagnóstico de
+ *   rendimiento»): la empresa en la ceja, el titular «Diagnóstico de rendimiento» (`titularDelResumen`, se cambia por
+ *   empresa; del 21 al 24 nov decía lo que hicimos, «13 sesiones y 8 h de conversación…», que sigue en las cifras de abajo
+ *   y en una foto publicada antes: `formaDeLaPortada`), el resumen de uno o dos párrafos que escribió el agente con las
+ *   cifras de la empresa (sin él, la bajada de siempre), las cifras de sesiones, tiempo, personas y áreas exploradas, la
+ *   próxima por explorar y el alcance;
  *   01 «El problema principal»: la TESIS (dos frases, 18 nov; hasta el 21 nov era el H1), las etiquetas del negocio, el
  *      dolor de cada equipo en una línea (24 nov: el reto principal de su fila, `doloresPorEquipo`) y, a la derecha, el
  *      tamaño del negocio si la empresa lo dijo (sin él, la tesis ocupa todo el ancho);
@@ -54,9 +55,12 @@ import {
   conclusionDelSubequipo,
   doloresPorEquipo,
   etiquetaDeLaCifra,
+  FORMA_DE_LA_PORTADA,
   partirLaLineaDelMapa,
   sinCosto,
   titularDelResumen,
+  titularDeLoQueHicimos,
+  tituloDeLoQueHicimos,
   BAJADA_DEL_RESUMEN,
 } from "@/lib/external/pagina-del-resumen";
 import { CLAVES, huella, quitadaDeLaPagina, textoDeLaPagina, type TextosDeLaPagina } from "@/lib/external/textos-de-la-pagina";
@@ -561,12 +565,14 @@ export default function ResumenDeLaEscalaVista({
   const Titular = edicion ? "div" : "h1";
   const Tesis = edicion ? "div" : "h2";
   const conTesis = tesis.piezas.length > 0;
-  // El H1 es el nombre del entregable (24 nov, Elías): «Diagnóstico de <los equipos explorados> en HubSpot», la misma pieza
-  // que cambia «Pedirle a Nexus». Atado a los equipos: si se explora otro, lo escrito para el de antes deja de valer. Sin
-  // ningún equipo explorado (o sin Resumen), el de siempre.
-  const titular = h ? titularDelResumen(exploradas, textos) : null;
+  /* El H1 es el nombre del entregable (24 nov, Elías): «Diagnóstico de rendimiento», la misma pieza que cambia «Pedirle a
+     Nexus». Una foto publicada antes (sin `formaDeLaPortada`) se pinta como se publicó: el titular de lo que hicimos, con
+     los mismos números que las cifras de abajo, y sin el dolor de cada equipo (Elías: «Que esperen a publicar»). Sin
+     Resumen, el de siempre. */
+  const portadaNueva = resumen.formaDeLaPortada === FORMA_DE_LA_PORTADA;
+  const titular = h ? (portadaNueva ? titularDelResumen(textos) : titularDeLoQueHicimos(h, textos)) : null;
   // El dolor de cada equipo (24 nov): el reto principal de su fila, en una línea. Se corrige en su fila (es la misma pieza).
-  const dolores = doloresPorEquipo(resumen);
+  const dolores = portadaNueva ? doloresPorEquipo(resumen) : [];
   // «El problema principal» (21 nov): la tesis, que hasta hoy era el H1, con las etiquetas del negocio y su tamaño. Un
   // Resumen de antes sin tesis trae aquí lo que vende, bajo «Tu negocio» (adentro y afuera, el mismo nombre).
   const conProblema = conTesis || vende.length > 0 || etiquetas.piezas.length > 0 || !!tamano || dolores.length > 0 || (!!edicion && (!!tesis.nueva || !!etiquetas.nueva));
@@ -598,7 +604,11 @@ export default function ResumenDeLaEscalaVista({
             </p>
             <Titular className="re-titular rd-entra">
               {/* Atado a los equipos explorados: si cambian, lo escrito para los de antes no queda pegado. */}
-              {titular ? fijo("titular.diagnostico", titular.original, "El título: el nombre del diagnóstico", false, true) : "Así entendimos tu negocio."}
+              {titular && h
+                ? portadaNueva
+                  ? fijo("titular.diagnostico", titular.original, "El título: el nombre del diagnóstico", false, true)
+                  : fijo("titular.hicimos", tituloDeLoQueHicimos(h) ?? titular.original, "El titular: lo que hicimos", false, true, titular.original)
+                : "Así entendimos tu negocio."}
             </Titular>
             {/* El resumen del agente (24 nov): uno o dos párrafos con lo que invierte la empresa, dónde se rompe y sus cifras.
                 Sin él, la bajada de siempre. */}

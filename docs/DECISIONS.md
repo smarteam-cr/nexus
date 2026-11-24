@@ -16102,9 +16102,9 @@ Elías, al ver la portada: «En el H1 no debería estar el problema. Ahí deber�
 horas de conversaciones, con cuántas personas se ha hablado, la sección de lo que hicimos. Después debería explicar el
 problema principal, y ese debería ser lo que hoy es el H1.»
 
-- *Enmienda (24 nov, Elías: «El nombre del entregable con un resumen»): el H1 es «Diagnóstico de <los equipos explorados>
-  en HubSpot», con un resumen de uno o dos párrafos debajo; los números siguen en las cifras. `tituloDeLoQueHicimos` ya no
-  existe. Ver «El Resumen, quinta vuelta».*
+- *Enmienda (24 nov, Elías: «El nombre del entregable con un resumen»): el H1 es «Diagnóstico de rendimiento», con un
+  resumen de uno o dos párrafos debajo; los números siguen en las cifras. `tituloDeLoQueHicimos` queda para pintar una
+  escala publicada antes, como se publicó. Ver «El Resumen, quinta vuelta».*
 - **Arriba, lo que hicimos:** la empresa en la ceja, el H1 con sus números («13 sesiones y 8 h de conversación con 3
   personas de tu equipo.», `tituloDeLoQueHicimos` en lib/external/pagina-del-resumen.ts), la bajada, las cifras de
   sesiones, tiempo, personas y áreas exploradas, la próxima área por explorar y el alcance («Qué abarca» y «Qué queda
@@ -16803,19 +16803,17 @@ ya dijo, entraba lo que la empresa ya resolvió y texto genérico de la escala.
 Elías probó el Resumen de Centauro Solutions y el de Cemaco · Ecuador en producción (a11a192f) y pidió seis cambios. Lo
 que ve el cliente tiene que ser confiable y no perder nada de lo que dijo.
 
-- **El título es el nombre del entregable** (Elías: «El nombre del entregable con un resumen»): el H1 dice «Diagnóstico de
-  <los equipos explorados> en HubSpot» (`tituloDelDiagnostico`, `titularDelResumen`), atado a esos equipos: si se explora
-  otro, lo escrito para el de antes deja de valer. Las sesiones, las horas y las personas siguen en las cifras de abajo.
-  Debajo va el RESUMEN (`negocio.portada`, uno o dos párrafos de hasta 220 caracteres): en qué invierte la empresa, dónde
-  se rompe ese esfuerzo y sus cifras, con la vara de siempre (cada número con su cita de la empresa). Sin él (un Resumen
-  de antes), la bajada de siempre. Los dos se editan en su lugar. *Medido el 24 nov:* nadie había reescrito el titular ni
-  la bajada en producción.
-  *«en HubSpot» es la fórmula de Elías (su ejemplo de kölbi) y sale para toda empresa:* es el nombre del entregable de
-  Smarteam (el diagnóstico para trabajar en HubSpot), no una afirmación de que la empresa ya lo usa; por eso no pasa por
-  la regla de las herramientas de las piezas del agente. La revisión del 24 nov lo marcó: para un prospecto que usa otro
-  CRM puede leerse como que ya está en HubSpot. Se corrige a mano en esa empresa; si Elías prefiere otra fórmula, cambia
-  `tituloDelDiagnostico`. El historial de versiones pinta las versiones viejas con el título de hoy (guarda los datos,
-  no el dibujo).
+- **El título es el nombre del entregable** (Elías: «El nombre del entregable con un resumen»; después, al ver la
+  primera versión: «Creo que el título debería ser algo como diagnóstico de rendimiento. Y que se pueda editar a mano y
+  cambiar con IA, como todo lo demás»): el H1 dice «Diagnóstico de rendimiento» (`TITULO_DEL_DIAGNOSTICO`,
+  `titularDelResumen`), sin las áreas (están en las tarjetas) y sin «en HubSpot» (la primera versión decía «Diagnóstico de
+  <los equipos explorados> en HubSpot», y para un prospecto con otro CRM se leía como que ya usaba HubSpot). Es un texto
+  fijo de la página: se cambia por empresa a mano o con «✨ Mejorar con IA» (la misma pieza, `titular.diagnostico`). Las
+  sesiones, las horas y las personas siguen en las cifras de abajo. Debajo va el RESUMEN (`negocio.portada`, uno o dos
+  párrafos de hasta 220 caracteres): en qué invierte la empresa, dónde se rompe ese esfuerzo y sus cifras, con la vara de
+  siempre (cada número con su cita de la empresa); también se edita a mano y con «✨ Mejorar con IA» (sección «Arriba»).
+  Sin él (un Resumen de antes), la bajada de siempre. *Medido el 24 nov:* nadie había reescrito el titular ni la bajada
+  en producción.
   *Por qué una parte del negocio y no un campo nuevo:* trae gratis la edición, «Rehacer con IA» sin pisar lo de una
   persona, lo quitado que no vuelve, «✨ Mejorar con IA» y la lectura pieza por pieza del Json. Lo mismo «Quién es quién».
 - **Las reuniones se leen enteras** (Elías eligió «Que se lean enteras»): el tope pasa de 400 a 700 mil caracteres, y de
@@ -16916,10 +16914,16 @@ que ve el cliente tiene que ser confiable y no perder nada de lo que dijo.
   veces porque su cita no estaba en la reunión (se agrega a mano, como cualquier pieza).
 - **Lo que no eligió Elías** del business case de Marco (las tres cifras del negocio arriba y los casos con resultado
   verificable) no se hizo.
-- **Después del deploy:** las escalas publicadas cambian su H1 solas (la foto guarda los datos, no el dibujo) y suman el
-  dolor de cada equipo; el resumen y quién es quién llegan al rehacer cada Resumen. Ninguna dice «Hay cambios que el
-  cliente no ve» por esto: afuera, esas dos partes solo van si tienen algo (`NACIDAS_EL_24_NOV`; la foto se compara
-  entera y dos partes vacías de más lo hacían saltar en todas). Sin SQL.
+- **Después del deploy, lo publicado no cambia solo** (Elías: «Que esperen a publicar»). La foto publicada guarda los
+  datos, no el dibujo: sin más, las 8 escalas publicadas habrían cambiado su H1 y sumado el dolor de cada equipo sin que
+  nadie publicara. Por eso la página lleva su forma (`formaDeLaPortada`, `FORMA_DE_LA_PORTADA`): una foto de antes no la
+  trae y se pinta como se publicó, con el titular de lo que hicimos (`titularDeLoQueHicimos`, lo escrito sobre él incluido)
+  y sin el dolor de cada equipo. La forma NO cuenta como cambio al comparar con lo publicado (`mismaPagina`): el deploy
+  solo no hace decir «Hay cambios que el cliente no ve». El resumen y quién es quién tampoco: afuera, esas dos partes solo
+  van si tienen algo (`NACIDAS_EL_24_NOV`). *La consecuencia, a sabiendas:* una escala publicada antes sigue con su
+  portada de antes hasta que se publique por otro cambio (rehacer el Resumen, corregir un texto), aunque arriba diga
+  «Publicado: el cliente ve esta versión». El historial de versiones pinta las versiones viejas con la forma de hoy si la
+  traen. Sin SQL.
 
 ## Registro de los SQL aplicados (2026-11-23)
 

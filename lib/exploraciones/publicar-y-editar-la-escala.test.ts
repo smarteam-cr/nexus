@@ -80,6 +80,16 @@ describe("la foto publicada", () => {
     expect(mismaPagina(hoy, { ...deLaBase, fecha: "2026-11-17T09:00:00.000Z" })).toBe(true);
   });
 
+  it("⛔ la forma de la portada (24 nov) no cuenta: el deploy no hace decir «Hay cambios que el cliente no ve»", () => {
+    const hoy = pagina();
+    const conLaForma = { ...hoy, resumen: { ...hoy.resumen, formaDeLaPortada: 2 } } as EscalaParaElCliente;
+    const { formaDeLaPortada, ...resumenDeAntes } = conLaForma.resumen;
+    void formaDeLaPortada;
+    expect(mismaPagina(conLaForma, { ...conLaForma, resumen: resumenDeAntes } as EscalaParaElCliente)).toBe(true);
+    // Lo demás sigue contando.
+    expect(mismaPagina(conLaForma, { ...conLaForma, resumen: { ...resumenDeAntes, sinExplorar: ["9"] } } as EscalaParaElCliente)).toBe(false);
+  });
+
   it("el vistazo de cada nivel (21 nov) no cuenta: una foto de antes no avisa cambios; un nivel con otro nombre sí", () => {
     const r = (niveles: unknown) => ({ areaId: "1", niveles }) as unknown as ResultadoDelTest;
     const antes = pagina({ resultados: [r([{ letra: "D", nombre: "Deficiente" }])] });

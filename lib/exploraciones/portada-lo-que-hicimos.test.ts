@@ -9,7 +9,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import ResumenDeLaEscalaVista from "@/components/external/test/ResumenDeLaEscalaVista";
-import { faltaParaPublicar, tituloDelDiagnostico } from "@/lib/external/pagina-del-resumen";
+import { faltaParaPublicar, TITULO_DEL_DIAGNOSTICO, titularDelResumen } from "@/lib/external/pagina-del-resumen";
 import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import { CLAVES, huella } from "@/lib/external/textos-de-la-pagina";
 import { resumenParaLaPagina, type ResumenGuardado } from "./resumen-de-la-escala";
@@ -88,37 +88,55 @@ const deLasDos = (g: ResumenGuardado): ResumenGuardado => ({
 });
 
 describe("el título: el nombre del entregable (24 nov)", () => {
-  it("dice «Diagnóstico de <los equipos explorados> en HubSpot», en una lista en palabras", () => {
-    expect(tituloDelDiagnostico(["Ventas"])).toBe("Diagnóstico de Ventas en HubSpot");
-    expect(tituloDelDiagnostico(["Marketing", "Ventas"])).toBe("Diagnóstico de Marketing y Ventas en HubSpot");
-    expect(tituloDelDiagnostico(["Ventas", "Marketing", "Servicio"])).toBe("Diagnóstico de Ventas, Marketing y Servicio en HubSpot");
-    expect(tituloDelDiagnostico([])).toBeNull();
-  });
-
-  it("⛔ el H1 ya no dice las sesiones: esos números siguen en las cifras de abajo", () => {
+  it("⛔ dice «Diagnóstico de rendimiento»: ni las sesiones (siguen en las cifras de abajo) ni las áreas (están en las tarjetas)", () => {
+    expect(TITULO_DEL_DIAGNOSTICO).toBe("Diagnóstico de rendimiento");
     const html = conEquipos(deLasDos(guardado()));
-    expect(html).toContain('<h1 class="re-titular rd-entra">Diagnóstico de Ventas y Marketing en HubSpot</h1>');
+    expect(html).toContain('<h1 class="re-titular rd-entra">Diagnóstico de rendimiento</h1>');
     expect(html).not.toMatch(/<h1[^>]*>\d+ sesiones/);
+    expect(html).not.toContain("en HubSpot");
     expect(html).toContain("<b>2</b><span>sesiones de exploración</span>");
     expect(html).toContain("<span>de conversación</span>");
   });
 
-  it("un equipo sin sesiones no entra al título", () => {
-    const g = deLasDos(guardado());
-    g.hicimos.sesiones = g.hicimos.sesiones.filter((x) => x.areaId === "1");
-    expect(conEquipos(g)).toContain('<h1 class="re-titular rd-entra">Diagnóstico de Ventas en HubSpot</h1>');
-  });
-
-  it("sin Resumen ni equipos explorados, la portada dice lo de siempre", () => {
+  it("sin Resumen, la portada dice lo de siempre", () => {
     expect(pinta({ ...guardado(), hicimos: { sesiones: [], personas: 0, texto: null } })).toContain('<h1 class="re-titular rd-entra">Así entendimos tu negocio.</h1>');
   });
 
-  it("el título se reescribe para esta empresa, y lo escrito se suelta cuando cambian los equipos explorados", () => {
-    const clave = CLAVES.delResumen(`titular.diagnostico.${huella("Diagnóstico de Ventas y Marketing en HubSpot")}`);
+  it("el título se reescribe para esta empresa (a mano o con «✨ Mejorar con IA», el mismo texto fijo)", () => {
+    const clave = CLAVES.delResumen(`titular.diagnostico.${huella("Diagnóstico de rendimiento")}`);
+    expect(titularDelResumen({ [clave]: "Diagnóstico comercial" })).toMatchObject({ clave, original: "Diagnóstico de rendimiento", valor: "Diagnóstico comercial" });
     expect(conEquipos(deLasDos(guardado()), { [clave]: "Diagnóstico comercial" })).toContain('<h1 class="re-titular rd-entra">Diagnóstico comercial</h1>');
-    const soloVentas = deLasDos(guardado());
-    soloVentas.hicimos.sesiones = soloVentas.hicimos.sesiones.filter((x) => x.areaId === "1");
-    expect(conEquipos(soloVentas, { [clave]: "Diagnóstico comercial" })).toContain('<h1 class="re-titular rd-entra">Diagnóstico de Ventas en HubSpot</h1>');
+  });
+});
+
+describe("⛔ una escala publicada antes del 24 nov se ve como se publicó (Elías: «Que esperen a publicar»)", () => {
+  const conEquipo = (g: ResumenGuardado): ResumenGuardado => ({
+    ...g,
+    operativas: [
+      { id: "o1", nombre: "Ventas", areaId: "1", organizacion: [], bien: [], frena: [{ id: "f1", texto: "La gerencia no ve qué vende cada asesor", citas: [CITA] }], retos: [], cifras: [], falta: null },
+    ],
+  });
+  // La foto publicada antes: la página de entonces, sin la forma de la portada.
+  const deAntes = () => {
+    const hoy = resumenParaLaPagina(conEquipo(deLasDos(guardado())), [VENTAS, MARKETING], {}, {}, { conCitas: false });
+    const { formaDeLaPortada, ...foto } = hoy;
+    void formaDeLaPortada;
+    return foto as typeof hoy;
+  };
+  const pintaLaFoto = (textos: Record<string, string> = {}) => renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: deAntes(), empresa: "Empresa de prueba", pestanas, textos }));
+
+  it("sin la forma nueva: el titular de lo que hicimos y sin el dolor de cada equipo; la de hoy, con los dos", () => {
+    const foto = pintaLaFoto();
+    expect(foto).toContain('<h1 class="re-titular rd-entra">2 sesiones y 8 h de conversación con 2 personas de tu equipo.</h1>');
+    expect(foto).not.toContain("re-dolores");
+    const hoy = conEquipos(conEquipo(deLasDos(guardado())));
+    expect(hoy).toContain('<h1 class="re-titular rd-entra">Diagnóstico de rendimiento</h1>');
+    expect(hoy).toContain("re-dolores");
+  });
+
+  it("lo que se escribió sobre el titular de antes se sigue viendo en esa foto", () => {
+    const clave = CLAVES.delResumen(`titular.hicimos.${huella("2 sesiones y 8 h de conversación con 2 personas de tu equipo.")}`);
+    expect(pintaLaFoto({ [clave]: "Ocho horas con tu equipo." })).toContain('<h1 class="re-titular rd-entra">Ocho horas con tu equipo.</h1>');
   });
 });
 

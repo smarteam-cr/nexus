@@ -42,6 +42,7 @@ import {
   nivelProvisional,
   partirElTamano,
   MAX_ETIQUETAS,
+  FORMA_DE_LA_PORTADA,
   MAX_LARGO_DEL_EQUIPO_DEL_MAPA,
   MAX_LINEAS_DEL_MAPA,
   MAX_PARRAFOS_DE_LA_PORTADA,
@@ -3174,6 +3175,8 @@ export function resumenParaLaPagina(
     /* Solo si hay: una página publicada antes del 18 nov no tiene estas claves, y con ellas vacías «Publicar» diría «Hay
        cambios que el cliente no ve» en todas las escalas sin que nada cambiara. Agregar un punto es solo de adentro. */
     ...(puntos.length ? { puntos } : {}),
+    // El título del entregable y el dolor de cada equipo (24 nov): una foto publicada antes no lo trae y se pinta como se publicó.
+    formaDeLaPortada: FORMA_DE_LA_PORTADA,
     ...(o.conCitas ? { puntoNuevo: v2 ? "punto:nuevo" : null, escalaCambio, avisos: conElAvisoDelRecorrido(sinAvisosResueltos(g), recorrido), malLeidas: g?.malLeidas ?? [], ...(g?.leidasEnteras ? { leidasEnteras: true } : {}) } : {}),
   };
 }
