@@ -227,6 +227,11 @@ export interface SesionHecha {
   areaId?: string | null;
   /** Quiénes de la empresa hablaron (normalizados): las personas se cuentan solo de las sesiones que se muestran. */
   quienes?: string[];
+  /**
+   * 24 nov (la preventa de un cliente): fue una REUNIÓN DE TRABAJO (`SesionPlaneada.deLoQueYaSabemos`), no una sesión de
+   * diagnóstico. «Lo que hicimos» la nombra aparte: «N reuniones de trabajo juntos y N sesiones de diagnóstico» (D4).
+   */
+  deTrabajo?: true;
 }
 
 export interface AreaDelResumenGuardada {
@@ -359,6 +364,8 @@ export interface ReunionParaElResumen {
   minutos?: number | null;
   /** Se le omitió un pedazo del medio por el tope de texto. */
   recortada?: boolean;
+  /** 24 nov: una reunión de trabajo (lo que ya sabemos), no una sesión de diagnóstico: pesa menos. */
+  deTrabajo?: true;
   /** Los que hablaron de Smarteam (por su correo, quien-hablo.ts): solo lo suyo sin corregir vale como cifra por confirmar. */
   deSmarteam?: string[];
   /** El equipo de la escala de la reunión («1» Ventas): con él se mira que cada equipo con reunión esté en el recorrido. */
@@ -425,6 +432,8 @@ export interface PesoDeLaSesion {
   minutos: number | null;
   /** La clave con que va en el pedido («R3»), o null si no se leyó (sin transcripción). */
   clave: string | null;
+  /** 24 nov: una reunión de trabajo (lo que ya sabemos): pesa menos que una sesión de diagnóstico. */
+  deTrabajo?: true;
 }
 
 /** El modelo: lee las transcripciones enteras y escribe lo que lee la dirección del cliente; las citas las verifica el código. */
@@ -494,7 +503,7 @@ export function bloqueDelPeso(peso: readonly PesoDeLaSesion[]): string {
     .sort((a, b) => (b.minutos ?? 0) - (a.minutos ?? 0))
     .map((x) => {
       const parte = total && x.minutos ? ` (${Math.round((100 * x.minutos) / total)} %)` : "";
-      return `- ${x.clave ?? "sin texto"} · ${x.fecha.slice(0, 10)} · «${x.titulo ?? "sin título"}» · ${x.minutos ? `${x.minutos} min${parte}` : "duración desconocida"}`;
+      return `- ${x.clave ?? "sin texto"} · ${x.fecha.slice(0, 10)} · «${x.titulo ?? "sin título"}» · ${x.minutos ? `${x.minutos} min${parte}` : "duración desconocida"}${x.deTrabajo ? ` · ${COMO_SE_NOMBRA_UNA_DE_TRABAJO}` : ""}`;
     })
     .join("\n");
 }
@@ -532,6 +541,16 @@ export function repartirElTope(largos: readonly number[], total: number, porUna:
  */
 export const PARTE_MINIMA_DEL_CLIENTE = 0.28;
 
+/** Cómo nombra el pedido del Resumen una reunión de trabajo (24 nov, la preventa de un cliente). */
+export const COMO_SE_NOMBRA_UNA_DE_TRABAJO = "reunión de trabajo (lo que ya sabemos)";
+
+/**
+ * Lo que dice el pedido cuando entre las reuniones hay de trabajo (24 nov, DECISIONS «La escala de un cliente con lo que ya
+ * sabemos»): valen, pero pesan menos que una sesión de diagnóstico, y nunca se presentan como exploración.
+ */
+export const REGLA_DE_LAS_REUNIONES_DE_TRABAJO =
+  "Las reuniones marcadas «reunión de trabajo» son capacitaciones o revisiones de avance con Smarteam, no sesiones de diagnóstico: lo que la empresa contó ahí de cómo trabaja hoy vale como evidencia, pero pesa menos que lo que dijo en una sesión de diagnóstico (si se contradicen, vale la sesión de diagnóstico), y lo que Smarteam explicó o configuró en ellas no es un hallazgo de la empresa. Nunca las llames sesiones de exploración ni de diagnóstico.";
+
 /**
  * Si una reunión no se pudo leer bien (18 nov): se le cortó un pedazo del medio, o la empresa dijo menos del 28 % de lo
  * dicho. `largo` y `leido`: los caracteres de la reunión entera y los que leyó el agente; `delCliente`: los de la empresa.
@@ -562,8 +581,9 @@ export function pedidoDelResumen(ctx: ContextoDelResumen, aviso = ""): Anthropic
   const notas = ctx.reuniones.filter(esNotaDelEquipo);
   const reuniones = ctx.reuniones.filter((r) => !esNotaDelEquipo(r)).map(
     (r) =>
-      `### ${r.clave} · ${r.fecha.slice(0, 10)}${r.titulo ? ` · «${r.titulo}»` : ""}${r.minutos ? ` · ${r.minutos} min` : ""}${r.equipo ? ` · con ${r.equipo}` : ""}${r.recortada ? " · (se omitió un pedazo del medio por largo)" : ""}\n${r.turnos.map((t) => `[${t.n}] ${t.hablante}: ${t.texto}`).join("\n")}`,
+      `### ${r.clave} · ${r.fecha.slice(0, 10)}${r.titulo ? ` · «${r.titulo}»` : ""}${r.minutos ? ` · ${r.minutos} min` : ""}${r.equipo ? ` · con ${r.equipo}` : ""}${r.deTrabajo ? ` · ${COMO_SE_NOMBRA_UNA_DE_TRABAJO}` : ""}${r.recortada ? " · (se omitió un pedazo del medio por largo)" : ""}\n${r.turnos.map((t) => `[${t.n}] ${t.hablante}: ${t.texto}`).join("\n")}`,
   );
+  const conDeTrabajo = ctx.reuniones.some((r) => !esNotaDelEquipo(r) && r.deTrabajo);
   const partes = [
     `La empresa: ${ctx.empresa}`,
     `Sus equipos de la escala, con lo que ya se ubicó:\n${JSON.stringify(ctx.areas, null, 1)}`,
@@ -572,6 +592,7 @@ export function pedidoDelResumen(ctx: ContextoDelResumen, aviso = ""): Anthropic
     ctx.deciden ? `Quiénes dirigen o deciden en la empresa (sus dolores pesan más; nunca escribas sus nombres):\n${ctx.deciden}` : "",
     ctx.perdida ?? "",
     bloqueDeLasNotas(notas),
+    conDeTrabajo ? REGLA_DE_LAS_REUNIONES_DE_TRABAJO : "",
     `Las reuniones de diagnóstico (cada línea es un turno: [número] quien habla: lo que dijo):\n\n${reuniones.join("\n\n")}`,
     ctx.noNombrar?.length ? `Nombres que NUNCA van en lo que escribes (di su rol), salvo los de la gente de la empresa en «quienes»: ${ctx.noNombrar.join(", ")}.` : "",
     ctx.gente?.length ? `La gente de la EMPRESA (los únicos nombres de «quienes»): ${ctx.gente.join(", ")}.` : "",
@@ -953,13 +974,13 @@ export function loQueDijoLaEmpresa(turnos: readonly { hablante: string; texto: s
  * equipo), con su título, sus minutos y su clave en el pedido si se leyó.
  */
 export function pesoDeLasSesiones(
-  sesiones: readonly { id: string; origen: string; fecha: string; titulo: string | null; minutos: number | null; areaId: string | null }[],
+  sesiones: readonly { id: string; origen: string; fecha: string; titulo: string | null; minutos: number | null; areaId: string | null; deTrabajo?: boolean }[],
   areasQueVe: ReadonlySet<string>,
   claves: ReadonlyMap<string, string>,
 ): PesoDeLaSesion[] {
   return sesiones
     .filter((s) => s.origen === "meet" && (!s.areaId || areasQueVe.has(s.areaId)))
-    .map((s) => ({ fecha: s.fecha, titulo: s.titulo || null, minutos: s.minutos, clave: claves.get(s.id) ?? null }));
+    .map((s) => ({ fecha: s.fecha, titulo: s.titulo || null, minutos: s.minutos, clave: claves.get(s.id) ?? null, ...(s.deTrabajo ? { deTrabajo: true as const } : {}) }));
 }
 
 /** El último turno que abarca una cita: el suyo o, si la frase siguió en otro turno de la misma persona, ese. */
@@ -2680,6 +2701,19 @@ const enLista = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${
  * Lo que dice «Qué hicimos», con los datos de las reuniones. `areas`: los equipos de la escala que ve el cliente, para
  * decir cuáles se exploraron (con sesiones) y cuáles quedan pendientes.
  */
+/**
+ * Cuántas sesiones, en palabras (24 nov, D4): las reuniones de trabajo nunca se presentan como exploración. Sin ninguna de
+ * trabajo, «3 sesiones», como siempre; con alguna, «4 reuniones de trabajo juntos y 2 sesiones de diagnóstico» (sin la
+ * parte que es cero).
+ */
+export function cuantasSesiones(sesiones: readonly Pick<SesionHecha, "deTrabajo">[]): string {
+  const trabajo = sesiones.filter((x) => x.deTrabajo).length;
+  const diagnostico = sesiones.length - trabajo;
+  if (!trabajo) return `${diagnostico} ${diagnostico === 1 ? "sesión" : "sesiones"}`;
+  const deTrabajo = `${trabajo} ${trabajo === 1 ? "reunión de trabajo" : "reuniones de trabajo"} juntos`;
+  return diagnostico ? `${deTrabajo} y ${diagnostico} ${diagnostico === 1 ? "sesión de diagnóstico" : "sesiones de diagnóstico"}` : deTrabajo;
+}
+
 export function loQueHicimos(h: ResumenGuardado["hicimos"], areas: readonly { areaId: string; nombre: string }[] = []): LoQueHicimos | null {
   if (!h.sesiones.length) return null;
   // Las personas de las sesiones que se cuentan (sin repetir); un Resumen sin ese dato, el total que se guardó.
@@ -2691,11 +2725,13 @@ export function loQueHicimos(h: ResumenGuardado["hicimos"], areas: readonly { ar
   const n = h.sesiones.length;
   const tiempo = minutos ? `${sinDuracion ? "más de " : ""}${enHoras(minutos)}` : null;
   const deDatos = [
-    `${tiempo ? `Nos dedicaste ${tiempo} en ` : "Nos dedicaste "}${n} ${n === 1 ? "sesión" : "sesiones"}${equipos.length ? ` con ${enLista(equipos)}` : ""}${personas > 1 ? `, con ${personas} personas de tu equipo` : ""}.`,
+    `${tiempo ? `Nos dedicaste ${tiempo} en ` : "Nos dedicaste "}${cuantasSesiones(h.sesiones)}${equipos.length ? ` con ${enLista(equipos)}` : ""}${personas > 1 ? `, con ${personas} personas de tu equipo` : ""}.`,
     "Todo lo que ves en esta página sale de lo que nos contaste ahí.",
   ].join(" ");
+  const deTrabajo = h.sesiones.filter((x) => x.deTrabajo).length;
   return {
     sesiones: n,
+    ...(deTrabajo ? { deTrabajo } : {}),
     minutos,
     sinDuracion,
     equipos,

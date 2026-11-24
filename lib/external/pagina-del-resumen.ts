@@ -127,7 +127,13 @@ export interface AreaExplorada {
 }
 
 export interface LoQueHicimos {
+  /** Todas: las sesiones de diagnóstico y las reuniones de trabajo. */
   sesiones: number;
+  /**
+   * Cuántas de ellas fueron reuniones de trabajo (24 nov, D4; la preventa de un cliente). La página las nombra aparte
+   * («4 reuniones de trabajo juntos y 2 sesiones de diagnóstico»): nunca se presentan como sesiones de exploración.
+   */
+  deTrabajo?: number;
   minutos: number;
   /** Reuniones sin duración conocida: el tiempo es «al menos». */
   sinDuracion: number;

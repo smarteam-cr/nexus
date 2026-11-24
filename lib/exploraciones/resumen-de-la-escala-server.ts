@@ -20,6 +20,7 @@
  * arma solo al crear el «Acceso» (revisión del 9 nov): lo que lee la dirección del cliente lo mira antes una persona.
  */
 import "server-only";
+import { partirDeLoQueYaSabemos } from "./posicionar";
 import type { Prisma } from "@prisma/client";
 import { getAnthropic } from "@/lib/anthropic";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
@@ -236,10 +237,13 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
 
   // El equipo de cada reunión: el que le da la exploración a las que tienen texto; si no, el de la sesión a la que se unió.
   const equipoDeLaFuente = new Map(conTexto.reuniones.map((r, i) => [conTexto.sesiones[i], r.equipo ?? null]));
-  const claveDelEquipo = (r: (typeof hechas)[number]): ClaveDeEquipo | null =>
-    equipoDeLaFuente.get(r.id) ??
-    estado.contenido.sesiones.find((s) => (s.reunion?.id === r.id && s.reunion.origen === r.origen) || (!!r.eventoId && s.evento?.id === r.eventoId))?.equipo ??
-    null;
+  const sesionDe = (r: (typeof hechas)[number]) =>
+    estado.contenido.sesiones.find((s) => (s.reunion?.id === r.id && s.reunion.origen === r.origen) || (!!r.eventoId && s.evento?.id === r.eventoId));
+  const claveDelEquipo = (r: (typeof hechas)[number]): ClaveDeEquipo | null => equipoDeLaFuente.get(r.id) ?? sesionDe(r)?.equipo ?? null;
+  /* Una reunión de trabajo (24 nov, la preventa de un cliente): la que la exploración marcó así al leerla, o la de una sesión
+     marcada. Cuenta, pesa menos y «Lo que hicimos» la nombra aparte (D4). */
+  const deTrabajoDeLaFuente = new Map(conTexto.reuniones.map((r, i) => [conTexto.sesiones[i], !!r.deTrabajo]));
+  const esDeTrabajo = (r: (typeof hechas)[number]): boolean => deTrabajoDeLaFuente.get(r.id) ?? !!sesionDe(r)?.deLoQueYaSabemos;
   const duracion = new Map(filas.map((f) => [f.id, minutosDeLaReunion(f)]));
   const sesiones: SesionHecha[] = hechas
     .map((r) => {
@@ -250,13 +254,20 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
         minutos: r.origen === "meet" ? (duracion.get(r.id) ?? null) : null,
         areaId: areaDelEquipo(clave),
         quienes: r.origen === "meet" ? quienesDe(r.id) : [],
+        ...(esDeTrabajo(r) ? { deTrabajo: true as const } : {}),
       };
     })
     .sort((a, b) => Date.parse(a.fecha) - Date.parse(b.fecha));
 
   // Las reuniones con turnos, de la más vieja a la más nueva, repartiendo el tope entre todas.
   const conTurnos = reunionesQueLee(
-    conTexto.fuentes.map((f, i) => ({ id: conTexto.sesiones[i], equipo: conTexto.reuniones[i]?.equipo ?? null, areaId: areaDelEquipo(conTexto.reuniones[i]?.equipo), texto: f.texto })),
+    conTexto.fuentes.map((f, i) => ({
+      id: conTexto.sesiones[i],
+      equipo: conTexto.reuniones[i]?.equipo ?? null,
+      areaId: areaDelEquipo(conTexto.reuniones[i]?.equipo),
+      texto: f.texto,
+      deTrabajo: !!conTexto.reuniones[i]?.deTrabajo,
+    })),
     conTranscripcion,
     vistas,
   );
@@ -284,6 +295,7 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
       titulo: titulos.get(r.id) ?? null,
       minutos: duracion.get(r.id) ?? null,
       ...(omitidos ? { recortada: true } : {}),
+      ...(r.deTrabajo ? { deTrabajo: true as const } : {}),
       turnos,
       delCliente: delClienteDe(q?.personas, deOtraEn(r.id)),
       // Solo lo de Smarteam sin corregir vale como cifra por confirmar: no lo de HubSpot ni lo de alguien sin identificar.
@@ -324,7 +336,15 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
 
   // El peso de cada sesión (18 nov): su título y sus minutos, también las que no tienen texto (pesan: se habló de eso).
   const peso = pesoDeLasSesiones(
-    hechas.map((r) => ({ id: r.id, origen: r.origen, fecha: r.fecha, titulo: r.titulo || null, minutos: duracion.get(r.id) ?? null, areaId: areaDelEquipo(claveDelEquipo(r)) })),
+    hechas.map((r) => ({
+      id: r.id,
+      origen: r.origen,
+      fecha: r.fecha,
+      titulo: r.titulo || null,
+      minutos: duracion.get(r.id) ?? null,
+      areaId: areaDelEquipo(claveDelEquipo(r)),
+      deTrabajo: esDeTrabajo(r),
+    })),
     vistas,
     new Map(reuniones.map((r) => [r.id, r.clave])),
   );
@@ -376,6 +396,17 @@ async function corridaEnCurso(db: Pick<Prisma.TransactionClient, "agentRun">, ex
   return !!r;
 }
 
+/**
+ * Por qué no se arma el Resumen sin reuniones con texto, dicho donde se está (24 nov): en la cuenta no hay «preventa», y en
+ * la preventa de un cliente el camino es sumar reuniones de trabajo (Nexus sugiere cuáles).
+ */
+export function sinReunionesParaElResumen(fila: { projectId: string | null; client: { kind: string } }): string {
+  if (fila.projectId) return "Ninguna sesión de esta escala tiene transcripción todavía: el Resumen sale de lo que se habló en ellas.";
+  if (partirDeLoQueYaSabemos(fila.client.kind))
+    return "Ninguna sesión tiene transcripción todavía: suma reuniones de trabajo con «+ Agregar sesión» (Nexus sugiere cuáles) y el Resumen sale de lo que se habló en ellas.";
+  return "Ninguna sesión de esta preventa tiene transcripción todavía: el Resumen sale de lo que se habló en ellas.";
+}
+
 /** Arma (o rehace) el Resumen y lo guarda. */
 export async function generarElResumenDeLaEscala(o: { exploracionId: string; email: string | null }): Promise<ResultadoDelResumen> {
   const t0 = Date.now();
@@ -387,7 +418,7 @@ export async function generarElResumenDeLaEscala(o: { exploracionId: string; ema
 
   const le = await loQueLeeElResumen(l);
   // Las notas del equipo pesan, pero el Resumen sale de lo que se habló: sin ninguna reunión con texto no se arma.
-  if (!reunionesDeVerdad(le.ctx.reuniones).length) return { ok: false, status: 409, error: "Ninguna sesión de esta preventa tiene transcripción todavía: el Resumen sale de lo que se habló en ellas." };
+  if (!reunionesDeVerdad(le.ctx.reuniones).length) return { ok: false, status: 409, error: sinReunionesParaElResumen(fila) };
 
   /* Uno a la vez (revisión del 21 nov): la cuenta regresiva de una nota y el botón pueden pedirlo juntos. Dos corridas se
      pagan dos veces, y la que termina última pisa a la otra (podía dejar fuera la nota más nueva). Una corrida que lleva

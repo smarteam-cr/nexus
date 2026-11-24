@@ -142,3 +142,12 @@ describe("«Ubicar con lo que ya sabemos» — DB real", { timeout: 30_000 }, ()
     await expect(leer(s.exploracionId)).rejects.toThrow(/Ninguna sesión de esta preventa tiene transcripción/);
   });
 });
+
+describe("el motivo de un Resumen sin reuniones, dicho donde se está", () => {
+  it("la preventa de un cliente dice que sume reuniones de trabajo; la cuenta no habla de «preventa»", async () => {
+    const { sinReunionesParaElResumen } = await import("./resumen-de-la-escala-server");
+    expect(sinReunionesParaElResumen({ projectId: null, client: { kind: "CLIENTE" } })).toContain("suma reuniones de trabajo");
+    expect(sinReunionesParaElResumen({ projectId: "p1", client: { kind: "CLIENTE" } })).not.toContain("preventa");
+    expect(sinReunionesParaElResumen({ projectId: null, client: { kind: "PROSPECTO" } })).toContain("de esta preventa");
+  });
+});

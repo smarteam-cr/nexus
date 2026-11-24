@@ -7,6 +7,17 @@ import { describe, expect, it } from "vitest";
 import { pedidoDePosicionar, reglaDeLoQueYaSabemos, REUNION_DE_TRABAJO, type ContextoDelPedido } from "./agente-pedido";
 import { ESCALA_DE_PRUEBA, estadoDePrueba } from "./escala-de-prueba.test-helpers";
 import { clavesDeTrabajo, type PestanaDeSesion, type ReunionDeLaExploracion, type SesionPlaneada } from "./guia";
+import { lineaDeLaEscala } from "./linea-de-la-escala";
+import {
+  bloqueDelPeso,
+  cuantasSesiones,
+  loQueHicimos,
+  pedidoDelResumen,
+  pesoDeLasSesiones,
+  REGLA_DE_LAS_REUNIONES_DE_TRABAJO,
+  type ContextoDelResumen,
+  type ReunionParaElResumen,
+} from "./resumen-de-la-escala";
 import { sugerirReunionesDeTrabajo } from "./reuniones-de-trabajo";
 import { partirDeLoQueYaSabemos, reunionesParaUbicar } from "./posicionar";
 
@@ -143,5 +154,107 @@ describe("reunionesParaUbicar con reuniones de trabajo", () => {
 
   it("sin reuniones de trabajo, las más nuevas como siempre", () => {
     expect(reunionesParaUbicar(todas, deSesiones, 4)).toEqual(["trabajo1", "trabajo2", "trabajo3", "trabajo4"]);
+  });
+});
+
+describe("la línea de arriba de la preventa de un cliente", () => {
+  const reunion = (dia: string, titulo: string, deTrabajo = false) => ({
+    fecha: `2026-${dia}T15:00:00.000Z`,
+    titulo,
+    origen: "meet",
+    texto: "transcripcion",
+    ...(deTrabajo ? { deTrabajo: true as const } : {}),
+  });
+  const base = { ubicadaEn: null, resumenEn: null, ubicando: false, conLoQueYaSabemos: true };
+
+  it("sin sesiones de diagnóstico el botón dice «Ubicar con lo que ya sabemos» y siempre hay qué leer", () => {
+    const l = lineaDeLaEscala({ ...base, reuniones: [] });
+    expect(l).toMatchObject({ estado: "sinUbicar", boton: { etiqueta: "Ubicar con lo que ya sabemos", fuerte: true } });
+    expect(l.texto).toContain("Todavía no hay sesiones de diagnóstico");
+    const conTrabajo = lineaDeLaEscala({ ...base, reuniones: [reunion("10-22", "AE | Reportes de Ventas", true)] });
+    expect(conTrabajo.boton.etiqueta).toBe("Ubicar con lo que ya sabemos");
+    expect(conTrabajo.texto).toContain("1 reunión de trabajo");
+  });
+
+  it("con una sesión de diagnóstico vuelve el botón de siempre; un prospecto no cambia", () => {
+    expect(lineaDeLaEscala({ ...base, reuniones: [reunion("11-28", "Diagnóstico de Marketing")] }).boton.etiqueta).toBe("Ubicar con las reuniones");
+    expect(lineaDeLaEscala({ ...base, conLoQueYaSabemos: false, reuniones: [] })).toMatchObject({ estado: "sinReuniones", boton: { etiqueta: "Ubicar con las reuniones" } });
+  });
+
+  it("ubicada con lo que ya sabemos: al día lo dice así, sin contar lo leído en resumen como reuniones", () => {
+    const l = lineaDeLaEscala({
+      ...base,
+      reuniones: [],
+      ubicadaEn: "2026-11-24T18:00:00.000Z",
+      leyo: ["Reunión del 22 oct 2026 (resumen): AE | Reportes de Ventas", "Reunión del 21 oct 2026 (resumen): AE | Limpieza BBDD", "El handoff"],
+    });
+    expect(l.estado).toBe("alDia");
+    expect(l.texto).toMatch(/con lo que ya sabemos · al día\.$/);
+    expect(l.boton.etiqueta).toBe("Volver a ubicar con lo que ya sabemos");
+  });
+
+  it("una sesión de diagnóstico sumada sobre una base de trabajo es nueva aunque haya capacitaciones más recientes", () => {
+    const trabajo = ["11-20", "11-18", "11-15", "11-10"].map((d, i) => reunion(d, `Capacitación ${i + 1}`, true));
+    const l = lineaDeLaEscala({
+      ...base,
+      reuniones: [...trabajo, reunion("11-01", "Diagnóstico de Ventas")],
+      ubicadaEn: "2026-11-21T18:00:00.000Z",
+      leyo: ["Reunión del 20 nov 2026: Capacitación 1", "Reunión del 18 nov 2026: Capacitación 2", "Reunión del 15 nov 2026: Capacitación 3", "Reunión del 10 nov 2026: Capacitación 4"],
+    });
+    expect(l).toMatchObject({ estado: "nuevas", boton: { etiqueta: "Actualizar", fuerte: true } });
+    expect(l.texto).toContain("Hay 1 sesión de diagnóstico nueva");
+  });
+});
+
+describe("«Lo que hicimos» y el Resumen con reuniones de trabajo (D4)", () => {
+  const sesion = (deTrabajo: boolean, minutos = 60) => ({ fecha: "2026-11-01T15:00:00.000Z", equipo: "Ventas", minutos, areaId: "1", ...(deTrabajo ? { deTrabajo: true as const } : {}) });
+
+  it("dice «N reuniones de trabajo juntos y N sesiones de diagnóstico», sin la parte que es cero", () => {
+    expect(cuantasSesiones([sesion(true), sesion(true), sesion(false)])).toBe("2 reuniones de trabajo juntos y 1 sesión de diagnóstico");
+    expect(cuantasSesiones([sesion(true)])).toBe("1 reunión de trabajo juntos");
+    expect(cuantasSesiones([sesion(false), sesion(false)])).toBe("2 sesiones");
+  });
+
+  it("las reuniones de trabajo nunca se presentan como exploración en la página", () => {
+    const h = loQueHicimos({ sesiones: [sesion(true), sesion(true), sesion(false)], personas: 2, texto: null });
+    expect(h?.texto).toContain("en 2 reuniones de trabajo juntos y 1 sesión de diagnóstico");
+    expect(h?.texto).not.toMatch(/sesiones de exploración/);
+    expect(h).toMatchObject({ sesiones: 3, deTrabajo: 2 });
+    // Sin reuniones de trabajo, como siempre.
+    expect(loQueHicimos({ sesiones: [sesion(false)], personas: 1, texto: null })?.deTrabajo).toBeUndefined();
+  });
+
+  it("el pedido del Resumen nombra la reunión de trabajo y dice que pesa menos", () => {
+    const r = (clave: string, deTrabajo: boolean): ReunionParaElResumen => ({
+      id: clave,
+      clave,
+      fecha: "2026-11-10T15:00:00Z",
+      equipo: "Ventas",
+      areaId: "1",
+      turnos: [{ n: 1, hablante: "Ana", texto: "Armamos los reportes a mano" }],
+      delCliente: ["Ana"],
+      ...(deTrabajo ? { deTrabajo: true as const } : {}),
+    });
+    const ctx: ContextoDelResumen = { empresa: "TEC · AE", areas: [], reuniones: [r("R1", true), r("R2", false)], instrucciones: "" };
+    const texto = String((pedidoDelResumen(ctx).messages[0] as { content: string }).content);
+    expect(texto).toContain(REGLA_DE_LAS_REUNIONES_DE_TRABAJO);
+    expect(texto).toMatch(/### R1 · 2026-11-10 · con Ventas · reunión de trabajo \(lo que ya sabemos\)/);
+    expect(texto).not.toMatch(/### R2 [^\n]*reunión de trabajo/);
+    const sinTrabajo = String((pedidoDelResumen({ ...ctx, reuniones: [r("R2", false)] }).messages[0] as { content: string }).content);
+    expect(sinTrabajo).not.toContain(REGLA_DE_LAS_REUNIONES_DE_TRABAJO);
+  });
+
+  it("el peso de cada sesión marca las de trabajo", () => {
+    const peso = pesoDeLasSesiones(
+      [
+        { id: "a", origen: "meet", fecha: "2026-11-01", titulo: "Capacitación", minutos: 90, areaId: "1", deTrabajo: true },
+        { id: "b", origen: "meet", fecha: "2026-11-05", titulo: "Diagnóstico", minutos: 60, areaId: "1" },
+      ],
+      new Set(["1"]),
+      new Map([["a", "R1"]]),
+    );
+    expect(peso[0].deTrabajo).toBe(true);
+    expect(peso[1].deTrabajo).toBeUndefined();
+    expect(bloqueDelPeso(peso)).toContain("«Capacitación» · 90 min (60 %) · reunión de trabajo (lo que ya sabemos)");
   });
 });

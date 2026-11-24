@@ -981,6 +981,7 @@ const SesionHechaSchema = z.object({
   minutos: z.number().nonnegative().nullable(),
   areaId: ID_AREA.nullable().optional(),
   quienes: z.array(z.string().max(200)).max(60).optional(),
+  deTrabajo: z.literal(true).optional(),
 });
 const DatoRojoSchema = z.object({
   id: IdDelResumen,

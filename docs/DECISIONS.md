@@ -14692,9 +14692,19 @@ error»); para un prospecto, esa regla sigue igual.
     suman con un clic o en bloque, y se pueden leer de paso. Las de la lista de siempre entran como sesión de diagnóstico.
     *Por qué por cuánto habló el cliente:* en AE las capacitaciones de ventas dan 11 a 14 % (el Resumen las leería mal) y
     las revisiones de avance, 40 a 59 %.
-- **Al sumar sesiones de diagnóstico se mejora sin perder nada**: «Ubicar» de nuevo nunca pisa lo confirmado; la línea de
-  arriba cuenta como nuevas también las sesiones de diagnóstico sobre una base de trabajo; el Resumen, al rehacerse, da más
-  peso a las sesiones de diagnóstico, y «Rehacer con IA» sigue respetando lo escrito a mano (`juntarConLoEditado`).
+  - **«Lo que hicimos» (D4):** el texto dice «Nos dedicaste … en 4 reuniones de trabajo juntos y 2 sesiones de
+    diagnóstico» (`cuantasSesiones`, sin la parte que es cero), y las cifras de arriba separan «reuniones de trabajo
+    juntos» de «sesiones de diagnóstico» (`LoQueHicimos.deTrabajo`, la marca `SesionHecha.deTrabajo` en lo guardado). Sin
+    reuniones de trabajo, todo sigue igual («sesiones de exploración»).
+- **Al sumar sesiones de diagnóstico se mejora sin perder nada**: «Ubicar» de nuevo nunca pisa lo confirmado
+  (`fusionarPropuestas`); entre las reuniones que lee «Ubicar» y el Resumen, las sesiones de diagnóstico van primero aunque
+  haya capacitaciones más nuevas (`reunionesParaUbicar` con `deTrabajo`), y la línea de arriba usa el mismo orden: una
+  sesión de diagnóstico sumada sobre una base de trabajo se avisa como «Hay 1 sesión de diagnóstico nueva». El Resumen, al
+  rehacerse, recibe cada reunión de trabajo marcada como tal y la regla de que pesa menos
+  (`REGLA_DE_LAS_REUNIONES_DE_TRABAJO`, también en «El peso de cada sesión»), y «Rehacer con IA» sigue respetando lo
+  escrito a mano (`juntarConLoEditado`). La prueba de punta a punta (sin IA): `con-lo-que-ya-sabemos-de-punta-a-punta.test.ts`.
+- **Sin reuniones con texto, el Resumen dice qué hacer donde se está** (`sinReunionesParaElResumen`): en la preventa de un
+  cliente, sumar reuniones de trabajo; en la cuenta, ya no habla de «esta preventa».
 - **TI no entra (D3)**, como dice la decisión del 19 nov. **La preventa vieja de AE se usa (D2)**, revisando lo que propuso
   (la armaron con reuniones de TAE antes de separar el TEC).
 - **Simulacro:** `scripts/simular-ubicar-la-escala.ts` (solo lectura): qué lee «Ubicar», con `--llamar` qué propondría, con

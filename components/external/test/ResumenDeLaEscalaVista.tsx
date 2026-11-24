@@ -620,10 +620,28 @@ export default function ResumenDeLaEscalaVista({
           </div>
           {h && (
             <div className="re-hicimos rd-entra">
-              <div>
-                <b>{fijo("hicimos.sesiones", String(h.sesiones), "Cuántas sesiones", false, true)}</b>
-                <span>{fijo("hicimos.sesiones.rotulo", h.sesiones === 1 ? "sesión de exploración" : "sesiones de exploración", "Rótulo de las sesiones", false, true)}</span>
-              </div>
+              {/* Las reuniones de trabajo nunca se presentan como exploración (24 nov, D4): van en su cifra. */}
+              {h.deTrabajo ? (
+                <>
+                  <div>
+                    <b>{fijo("hicimos.trabajo", String(h.deTrabajo), "Cuántas reuniones de trabajo", false, true)}</b>
+                    <span>{fijo("hicimos.trabajo.rotulo", h.deTrabajo === 1 ? "reunión de trabajo juntos" : "reuniones de trabajo juntos", "Rótulo de las reuniones de trabajo", false, true)}</span>
+                  </div>
+                  {h.sesiones > h.deTrabajo && (
+                    <div>
+                      <b>{fijo("hicimos.diagnostico", String(h.sesiones - h.deTrabajo), "Cuántas sesiones de diagnóstico", false, true)}</b>
+                      <span>
+                        {fijo("hicimos.diagnostico.rotulo", h.sesiones - h.deTrabajo === 1 ? "sesión de diagnóstico" : "sesiones de diagnóstico", "Rótulo de las sesiones de diagnóstico", false, true)}
+                      </span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div>
+                  <b>{fijo("hicimos.sesiones", String(h.sesiones), "Cuántas sesiones", false, true)}</b>
+                  <span>{fijo("hicimos.sesiones.rotulo", h.sesiones === 1 ? "sesión de exploración" : "sesiones de exploración", "Rótulo de las sesiones", false, true)}</span>
+                </div>
+              )}
               {h.minutos > 0 && (
                 <div>
                   <b>{fijo("hicimos.tiempo", enHoras(h.minutos), "Cuánto tiempo de conversación", false, true)}</b>
