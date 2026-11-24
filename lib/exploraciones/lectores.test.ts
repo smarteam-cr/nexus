@@ -143,6 +143,11 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     motivo:
       "«Hablar con Nexus» (21 nov): una vuelta de la conversación en la preventa. Lee las notas del equipo, lo aceptado, la página de La escala sin citas y lo que tiene cada tarjeta; no escribe nada de la exploración. Pantalla interna, con la guardia de la exploración.",
   },
+  "app/api/sales/exploraciones/[id]/nexus/aplicar/route.ts": {
+    destino: "ventas",
+    motivo:
+      "Una sola conversación (24 nov): «Aplicar» la lista de un pedido de la cuenta (tareas, siguiente paso, la guía). Lee la fila solo por su cliente y la lista de la vuelta de quien aplica; escribe por la capa de operaciones, nunca la exploración. Pantalla interna, con la guardia de la exploración y la del chat de la cuenta.",
+  },
   "app/api/sales/exploraciones/[id]/nexus/guardado/route.ts": {
     destino: "ventas",
     motivo:

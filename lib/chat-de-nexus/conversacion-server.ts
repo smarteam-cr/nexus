@@ -40,7 +40,19 @@ import {
   type ResultadoDelTurno,
 } from "./conversacion";
 import { estadosValidos, leerLaSalida, reconstruirLaConversacion, type AnotacionesDeLaVuelta, type ConversacionGuardada, type SalidaDeLaVuelta } from "./guardada";
+import {
+  estadosDeLasListas,
+  leerListaGuardada,
+  listaParaLaPantalla,
+  listaPendiente,
+  ventanaParaLaCuenta,
+  type ListaEnLaConversacion,
+  type ListaGuardada,
+  type OperacionDeLaLista,
+} from "./lista";
 import { leerLaRespuesta, pedidoDeLaRespuesta, PREGUNTAS_POR_DIA, type FuenteDeLaCuenta, type LoQueQuedoAfuera, type RespuestaDeNexus } from "./respuesta";
+import { tomarHilo } from "@/lib/nexus-chat/candado-server";
+import { sinMarcadores } from "@/lib/nexus-chat/textos";
 
 /** El modo de la corrida de una vuelta: lo que cuentan los topes y lo que busca `ultimoTurnoListo`. */
 export const MODO_DEL_CHAT = "chat-de-nexus";
@@ -49,6 +61,8 @@ export const MODO_DE_LA_RESPUESTA = "chat-de-nexus-respuesta";
 /** En `filters.boton` de una vuelta: de qué botón salió. */
 export const BOTON_ERA_UNA_PREGUNTA = "era-una-pregunta";
 export const BOTON_GUARDARLO_COMO_NOTA = "guardarlo-como-nota";
+/** «Hazlo» (24 nov, una sola conversación): lo último era un pedido de la cuenta. */
+export const BOTON_ERA_UN_PEDIDO = "era-un-pedido";
 
 export interface DondeConversa {
   /** El agente al que se le carga el gasto (el del módulo del lugar). */
@@ -81,6 +95,42 @@ export async function vueltasHastaAhora(email: string, conversacion: string, aho
 
 /** Lo que el lugar lee para responder una pregunta: sus fuentes y lo que quedó afuera (./respuesta.ts › `armarLasFuentes`). */
 export type LeerLaCuenta = () => Promise<{ fuentes: FuenteDeLaCuenta[]; afuera: LoQueQuedoAfuera }>;
+
+/** Lo que devuelve la mano de la cuenta: lo que contestó y su lista, con las operaciones ya acotadas a la cuenta. */
+export interface ListaPreparada {
+  texto: string;
+  operaciones: OperacionDeLaLista[];
+  /** Un renglón por operación. */
+  lineas: string[];
+  arrastradas?: number[];
+  descartadas?: string[];
+  /** Soltó lo pendiente sin proponer otra cosa. */
+  cierre?: true;
+}
+
+/**
+ * LA MANO DE LA CUENTA (24 nov, una sola conversación): lo que el lugar hace con un pedido de la cuenta (una tarea, el
+ * siguiente paso, la guía, un documento). En la preventa corre el turno del chat de la cuenta (lib/nexus-chat ›
+ * `pensarConLaCuenta`) con esta conversación como historia, con el permiso de quien pide. No escribe nada de la cuenta:
+ * devuelve la lista. `ok: false`: no se pudo o no se puede (sin acceso a la cuenta, el tope del día); la vuelta no queda.
+ */
+export type PedirALaCuenta = (p: {
+  pedido: string;
+  /** Esta conversación hasta antes del pedido, como la ve el modelo (./lista.ts › `ventanaParaLaCuenta`). */
+  ventana: Array<{ rol: "user" | "assistant"; texto: string }>;
+  /** Lo propuesto en esta conversación que no se aplicó (se arrastra o se suelta). */
+  pendientes: Array<OperacionDeLaLista & { linea: string }>;
+  /** La vuelta: a ella se cargan las llamadas de la mano. */
+  agentRunId: string;
+}) => Promise<{ ok: true; lista: ListaPreparada } | { ok: false; status: number; error: string }>;
+
+/**
+ * El candado de una conversación: lo toman el pedido y «Aplicar», el mismo de la ficha (lib/nexus-chat/candado-server.ts,
+ * en memoria: una sola instancia). Un «Aplicar» mientras la mano de la cuenta piensa no deja que esa mano vuelva a
+ * proponer lo que se acaba de aplicar.
+ */
+const candadoDe = (email: string, conversacion: string) => `chat-de-nexus:${email.toLowerCase()}:${conversacion}`;
+const OCUPADA = "Nexus está terminando algo en esta conversación: espera un momento y vuelve a intentarlo.";
 
 const NO_SE_PUDO_RESPONDER = (afuera: LoQueQuedoAfuera): RespuestaDeNexus => ({
   sabe: false,
@@ -140,10 +190,26 @@ export async function correrUnaVuelta(o: {
   contar?: boolean;
   /** «Era una pregunta» debajo de lo que iba a guardarse: lo último se responde. */
   preguntar?: boolean;
+  /** Lo último es un pedido de la cuenta: lo prepara la mano de la cuenta sin la llamada que clasifica. */
+  pedir?: boolean;
+  /** La mano de la cuenta del lugar (en la preventa, el chat de la cuenta). Sin ella, un pedido se responde como pregunta. */
+  pedirALaCuenta?: PedirALaCuenta;
+  /**
+   * «Guardarlo como nota» debajo de una lista de la cuenta (con `contar`): esa lista (su vuelta) ya no va. Queda «soltada»
+   * antes de contar, así no se arrastra al pedido siguiente.
+   */
+  soltar?: string;
+  /**
+   * Antes de gastar la vuelta en un pedido seguro: lo que el lugar sabe sin la IA (el tope de dólares del día). Si no se
+   * puede, responde sin crear corrida: un pedido frenado no se come una de las vueltas de la conversación ni del día.
+   */
+  antesDePedir?: () => Promise<{ ok: true } | { ok: false; status: number; error: string }>;
 }): Promise<VueltaDeNexus> {
   const { contexto, mensajes, conversacion, donde } = o;
-  // Lo seguro lo decide el código (`comoSeLee`); lo dudoso, el modelo con la conversación a la vista.
-  const lectura = comoSeLee(mensajes, { contar: o.contar, preguntar: o.preguntar });
+  // Lo seguro lo decide el código (`comoSeLee`); lo dudoso, el modelo con la conversación a la vista. Un lugar sin la mano
+  // de la cuenta no tiene pedidos: lo que el código ve como pedido lo decide el modelo (contar o preguntar).
+  const leida = comoSeLee(mensajes, { contar: o.contar, preguntar: o.preguntar, pedir: o.pedir });
+  const lectura = leida === "pedido" && !o.pedirALaCuenta ? "duda" : leida;
   const loUltimo = mensajes[mensajes.length - 1]?.texto.trim().slice(0, TOPES.largoDelMensaje) ?? "";
   const vueltas = await vueltasHastaAhora(donde.email, conversacion);
   // Un «gracias» o un «ok» solos: Nexus contesta corto, sin la IA, sin corrida y sin proponer guardar nada (22 nov).
@@ -160,6 +226,10 @@ export async function correrUnaVuelta(o: {
   const conAviso = aviso ? { aviso } : {};
   /** Las vueltas que le quedan a la conversación después de esta. */
   const quedan = Math.max(0, TOPES.turnosPorConversacion - vueltas.deLaConversacion - 1);
+  if (lectura === "pedido" && o.antesDePedir) {
+    const r = await o.antesDePedir();
+    if (!r.ok) return r;
+  }
 
   const run = await prisma.agentRun.create({
     data: {
@@ -170,7 +240,7 @@ export async function correrUnaVuelta(o: {
       stepLabel: "Hablar con Nexus",
       triggeredByEmail: donde.email,
       // `boton`: la vuelta salió de «¿Era una pregunta?» o de «Guardarlo como nota» (el conteo de «Uso de Nexus», 22 nov).
-      filters: { modo: MODO_DEL_CHAT, superficie: donde.superficie, conversacion, ...donde.filtros, ...(o.preguntar ? { boton: BOTON_ERA_UNA_PREGUNTA } : o.contar ? { boton: BOTON_GUARDARLO_COMO_NOTA } : {}) } as Prisma.InputJsonValue,
+      filters: { modo: MODO_DEL_CHAT, superficie: donde.superficie, conversacion, ...donde.filtros, ...(o.preguntar ? { boton: BOTON_ERA_UNA_PREGUNTA } : o.contar ? { boton: BOTON_GUARDARLO_COMO_NOTA } : o.pedir ? { boton: BOTON_ERA_UN_PEDIDO } : {}) } as Prisma.InputJsonValue,
       // Los mensajes de esta vuelta: de acá se reconstruye la conversación al volver (./guardada.ts).
       output: JSON.stringify({ mensajes }),
     },
@@ -182,6 +252,9 @@ export async function correrUnaVuelta(o: {
     if (lectura === "pregunta") {
       // Una pregunta segura no pasa por el modelo que clasifica: se responde con las palabras de la persona.
       turno = { tipo: "consulta", pregunta: loUltimo };
+    } else if (lectura === "pedido") {
+      // Un pedido seguro de la cuenta tampoco: lo prepara la mano de la cuenta con las palabras de la persona.
+      turno = { tipo: "pedido", pedido: loUltimo };
     } else {
       const respuesta = await conContextoDeIA(ia, () => getAnthropic().messages.create(pedidoDelTurno(contexto, mensajes, lectura)));
       turno = leerElTurno(respuesta, {
@@ -191,16 +264,26 @@ export async function correrUnaVuelta(o: {
         puedePreguntar: puedePreguntar(mensajes),
         laPregunta: lectura === "duda" ? loUltimo : null,
       });
+      // Un lugar sin la mano de la cuenta: lo que el modelo leyó como pedido se responde como pregunta.
+      if (turno.tipo === "pedido" && !o.pedirALaCuenta) turno = { tipo: "consulta", pregunta: turno.pedido };
     }
-    // `contado`: la persona eligió «Guardarlo como nota»; al volver, «¿Era una pregunta?» no reaparece.
-    const salida: SalidaDeLaVuelta = { ...turno, mensajes, ...(o.contar && turno.tipo === "listo" ? { contado: true as const } : {}) };
-    await prisma.agentRun.update({ where: { id: run.id }, data: { status: "DONE", output: JSON.stringify(salida) } });
+    // El pedido queda en la vuelta recién con su lista (abajo): si la mano no puede, la vuelta no queda.
+    if (turno.tipo !== "pedido") {
+      // `contado`: la persona eligió «Guardarlo como nota»; al volver, «¿Era una pregunta?» no reaparece.
+      const salida: SalidaDeLaVuelta = { ...turno, mensajes, ...(o.contar && turno.tipo === "listo" ? { contado: true as const } : {}) };
+      await prisma.agentRun.update({ where: { id: run.id }, data: { status: "DONE", output: JSON.stringify(salida) } });
+    }
   } catch (e) {
     console.error("[chat-de-nexus] la IA no respondió", e);
     await prisma.agentRun
       .update({ where: { id: run.id }, data: { status: "ERROR", output: JSON.stringify({ error: e instanceof Error ? e.message : String(e), mensajes }) } })
       .catch(() => {});
     return { ok: true, turno: NO_SE_PUDO_LEER, quedan, ...conAviso };
+  }
+
+  if (turno.tipo === "pedido" && o.pedirALaCuenta) {
+    const r = await pedirEnLaVuelta({ runId: run.id, pedido: turno.pedido, mensajes, conversacion, donde, pedirALaCuenta: o.pedirALaCuenta });
+    return r.ok ? { ok: true, turno: { tipo: "lista", lista: r.lista }, quedan, ...conAviso } : r;
   }
 
   if (turno.tipo === "consulta") {
@@ -223,7 +306,137 @@ export async function correrUnaVuelta(o: {
     await anotarLaVuelta(run.id, { respuesta });
     return { ok: true, turno: { tipo: "respuesta", respuesta }, quedan, ...conAviso };
   }
+  // «Guardarlo como nota» debajo de una lista: recién con lo contado ya leído, esa lista deja de ir (si la IA falla, la
+  // lista vuelve a la pantalla con su «Aplicar» y sigue viva en el servidor).
+  if (turno.tipo === "listo" && !turno.sinLeer && o.contar && o.soltar) {
+    const r = await soltarLaLista({ email: donde.email, clientId: donde.clientId, conversacion, filtros: donde.filtros, vuelta: o.soltar }).catch(() => null);
+    if (!r?.ok) console.warn("[chat-de-nexus] no se pudo soltar la lista", o.soltar, r && !r.ok ? r.error : "");
+  }
   return { ok: true, turno, quedan, ...conAviso };
+}
+
+/**
+ * Un pedido de la cuenta en la vuelta `runId`: con el candado de la conversación, lee de la BASE las listas que dejó esta
+ * conversación (lo pendiente y lo que se propuso, nunca lo que mande el navegador), le pasa la historia a la mano de la
+ * cuenta y guarda lo que devolvió en la vuelta. Si la mano no puede o falla, la vuelta queda en ERROR (cuenta en el tope,
+ * no vuelve al recargar) y lo escrito vuelve a la caja.
+ */
+async function pedirEnLaVuelta(o: {
+  runId: string;
+  pedido: string;
+  mensajes: MensajeDeLaConversacion[];
+  conversacion: string;
+  donde: DondeConversa;
+  pedirALaCuenta: PedirALaCuenta;
+}): Promise<{ ok: true; lista: ListaEnLaConversacion } | { ok: false; status: number; error: string }> {
+  const { donde, runId } = o;
+  const fallar = async (status: number, error: string, detalle?: string) => {
+    await prisma.agentRun
+      .update({ where: { id: runId }, data: { status: "ERROR", output: JSON.stringify({ error: detalle ?? error, mensajes: o.mensajes }) } })
+      .catch(() => {});
+    return { ok: false as const, status, error };
+  };
+  const soltar = tomarHilo(candadoDe(donde.email, o.conversacion));
+  if (!soltar) return fallar(409, OCUPADA);
+  try {
+    const previas = await listasDeLaConversacion(donde.email, donde.clientId, o.conversacion, donde.filtros);
+    const r = await o.pedirALaCuenta({
+      pedido: o.pedido,
+      ventana: ventanaParaLaCuenta(o.mensajes.slice(0, -1), previas, sinMarcadores),
+      pendientes: listaPendiente(previas),
+      agentRunId: runId,
+    });
+    if (!r.ok) return fallar(r.status, r.error);
+    const p = r.lista;
+    const conLineas = p.lineas.length === p.operaciones.length;
+    const guardada: ListaGuardada = {
+      lista: {
+        id: runId,
+        // Con el largo de un mensaje: vuelve del navegador como mensaje y se reconoce por su texto (./lista.ts).
+        texto: (sinMarcadores(p.texto).trim() || "(Nexus no devolvió texto)").slice(0, TOPES.largoDelMensaje).trim(),
+        lineas: conLineas ? p.lineas : [],
+        ...(conLineas && p.arrastradas?.length ? { arrastradas: p.arrastradas } : {}),
+        ...(p.descartadas?.length ? { descartadas: p.descartadas } : {}),
+        ...(p.cierre ? { cierre: true as const } : {}),
+      },
+      operaciones: conLineas ? p.operaciones : [],
+    };
+    await prisma.agentRun.update({ where: { id: runId }, data: { status: "DONE", output: JSON.stringify({ tipo: "lista", ...guardada, mensajes: o.mensajes }) } });
+    return { ok: true, lista: listaParaLaPantalla(guardada, guardada.lista.lineas.length ? "viva" : "sin-cambios") };
+  } catch (e) {
+    console.error("[chat-de-nexus] la mano de la cuenta no respondió", e);
+    return fallar(502, "Nexus no pudo preparar lo que pediste. Vuelve a intentarlo: no se cambió nada.", e instanceof Error ? e.message : String(e));
+  } finally {
+    soltar();
+  }
+}
+
+/** Las listas que dejó esta conversación de esta persona en este lugar, de la más vieja a la más nueva. */
+async function listasDeLaConversacion(email: string, clientId: string, conversacion: string, filtros: Record<string, string>): Promise<ListaGuardada[]> {
+  const vueltas = await prisma.agentRun.findMany({
+    where: { ...deLaPersonaEn(email, clientId, filtros, conversacion), status: "DONE" },
+    orderBy: { createdAt: "asc" },
+    take: TOPES.turnosPorConversacion * 2,
+    select: { output: true },
+  });
+  return vueltas.map((v) => leerListaGuardada(leerLaSalida(v.output))).filter((g): g is ListaGuardada => !!g);
+}
+
+export type AplicadoEnLaConversacion<R> = { ok: true; yaEstaba: boolean; resultado: R | null; lista: ListaEnLaConversacion } | { ok: false; status: number; error: string };
+
+/**
+ * La persona eligió «Guardarlo como nota» debajo de una lista viva: esa lista queda «soltada» (`soltada: true` en su
+ * vuelta) y no se arrastra. Con el candado de la conversación; solo una lista de esta persona, este lugar y esta
+ * conversación. Una aplicada no se suelta (409).
+ */
+async function soltarLaLista(o: { email: string; clientId: string; conversacion: string; filtros: Record<string, string>; vuelta: string }): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const soltar = tomarHilo(candadoDe(o.email, o.conversacion));
+  if (!soltar) return { ok: false, status: 409, error: OCUPADA };
+  try {
+    const listas = await listasDeLaConversacion(o.email, o.clientId, o.conversacion, o.filtros);
+    const g = listas.find((x) => x.lista.id === o.vuelta);
+    if (!g) return { ok: false, status: 404, error: "Esa lista no es de tu conversación en esta preventa." };
+    const estado = estadosDeLasListas(listas).get(g.lista.id);
+    if (estado === "aplicada") return { ok: false, status: 409, error: "Esa lista ya se aplicó: no se puede guardar como nota." };
+    if (estado === "viva") await anotarLaVuelta(o.vuelta, { soltada: true });
+    return { ok: true };
+  } finally {
+    soltar();
+  }
+}
+
+/**
+ * «Aplicar» una lista de la conversación (24 nov). `vuelta`: la que la dejó (la que la pantalla muestra). Con el candado de
+ * la conversación, la lista se lee de la BASE (de esta persona, este lugar y esta conversación); tiene que ser la viva:
+ * una que otra lista reemplazó no se aplica (409; la nueva ya la lleva), y una aplicada responde «ya estaba».
+ * `aplicar` es del lugar (en la preventa, la capa de operaciones con el permiso de quien aplica: lib/nexus-chat ›
+ * `aplicarCambiosALaCuenta`) y puede lanzar (con su estado). Lo que dejó queda en la vuelta (`desenlace`): con algo
+ * aplicado, la lista se cierra.
+ */
+export async function aplicarLaListaDeLaConversacion<R extends { aplicadas: number; desenlace: string; renglones?: number[] }>(o: {
+  email: string;
+  clientId: string;
+  conversacion: string;
+  filtros: Record<string, string>;
+  vuelta: string;
+  aplicar: (operaciones: OperacionDeLaLista[]) => Promise<R>;
+}): Promise<AplicadoEnLaConversacion<R>> {
+  const soltar = tomarHilo(candadoDe(o.email, o.conversacion));
+  if (!soltar) return { ok: false, status: 409, error: OCUPADA };
+  try {
+    const listas = await listasDeLaConversacion(o.email, o.clientId, o.conversacion, o.filtros);
+    const g = listas.find((x) => x.lista.id === o.vuelta);
+    if (!g) return { ok: false, status: 404, error: "Esa lista no es de tu conversación en esta preventa." };
+    const estado = estadosDeLasListas(listas).get(g.lista.id);
+    if (estado === "aplicada") return { ok: true, yaEstaba: true, resultado: null, lista: listaParaLaPantalla(g, "aplicada") };
+    if (estado !== "viva") return { ok: false, status: 409, error: "Esa lista ya no está vigente: mira la más reciente." };
+    const r = await o.aplicar(g.operaciones);
+    const desenlace = { ok: r.aplicadas > 0, texto: r.desenlace, aplicadas: r.aplicadas, ...(r.renglones ? { renglones: r.renglones } : {}) };
+    await anotarLaVuelta(o.vuelta, { desenlace });
+    return { ok: true, yaEstaba: false, resultado: r, lista: listaParaLaPantalla({ ...g, desenlace }, desenlace.ok ? "aplicada" : "viva") };
+  } finally {
+    soltar();
+  }
 }
 
 /**

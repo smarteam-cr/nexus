@@ -5,8 +5,10 @@
  *
  * UNA SOLA PUERTA (23 nov, etapa 2 del plan maestro, aprobada por la coordinadora): el cajón lo abre el botón «Nexus» de
  * arriba (BotonDeNexus.tsx; el botón del riel se quitó) con `abrirNexusEnLaPreventa` (lib/exploraciones/abrir-nexus.ts).
- * Adentro, «Tareas, siguiente paso o la guía» abre el chat de la cuenta con el chip de la preventa (sin las notas de la
- * cuenta, que van a HubSpot). Y «✨ Mejorar con IA» de La escala lo abre con el lugar puesto como chip (el Resumen, un área
+ * Adentro, desde el 24 nov (una sola conversación), tareas, el siguiente paso y la guía se piden en la MISMA caja: los
+ * prepara el chat de la cuenta con esta conversación como historia y vuelven al hilo como una lista con «Aplicar»
+ * (PanelDeNexus.tsx; sin las notas de la cuenta, que van a HubSpot). El enlace «Tareas, siguiente paso o la guía», que abría
+ * otro chat, se quitó (Elías: «Quitarlo»). Y «✨ Mejorar con IA» de La escala lo abre con el lugar puesto como chip (el Resumen, un área
  * o, desde el 24 nov, una sección): con el chip, lo que se escribe es un pedido de cambio a la página y la propuesta por pieza se ve adentro
  * (PedirleANexus.tsx); quitar el chip vuelve a la conversación. En la escala de la cuenta (sin conversación) el cajón abre
  * solo con el chip.
@@ -38,9 +40,10 @@
  * Convive con «Agregar algo que sabes» (components/exploraciones/LoQueSabes.tsx): es otra puerta a las mismas notas.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Alert, Button } from "@/components/ui";
+import { Alert } from "@/components/ui";
 import { BotonAzul, BotonBlanco, BotonTexto } from "@/components/ui/sistema";
 import PanelDeNexus, { conversacionNueva, type ConversacionEnPantalla, type TurnoListo } from "@/components/chat-de-nexus/PanelDeNexus";
+import { useRouter } from "next/navigation";
 import AvisoDeImpacto from "@/components/impacto/AvisoDeImpacto";
 import { OMITIDO_POR_EL_TOPE } from "@/lib/ai/tope-de-nexus";
 import { diaConAnio } from "@/lib/exploraciones/fechas";
@@ -64,8 +67,7 @@ import type { ConversacionGuardada } from "@/lib/chat-de-nexus/guardada";
 import { useLienzo } from "./contexto";
 import { CORRIENDO_LA_ESCALA, useRehacerLaEscala } from "./rehacer-la-escala";
 import PedirleANexus from "./PedirleANexus";
-import { avisarQueNexusCambioLaEscala, EVENTO_ABRIR_NEXUS, type LugarDeLaEscalaEnElCajon, type PedidoDeAbrirNexus } from "@/lib/exploraciones/abrir-nexus";
-import { abrirElChatDeNexus } from "@/lib/nexus-chat/constantes";
+import { avisarQueNexusCambioLaEscala, EVENTO_ABRIR_NEXUS, type GuiaEnElCajon, type LugarDeLaEscalaEnElCajon, type PedidoDeAbrirNexus } from "@/lib/exploraciones/abrir-nexus";
 
 /** Lo que responde …/nexus/guardado (los tipos del servidor, sin importarlo). */
 interface Guardado {
@@ -443,14 +445,38 @@ const VACIO_DE_LA_PREVENTA = {
   cierre: "Si le cuentas algo, te pregunta lo que falte y te muestra qué cambia antes de guardarlo: lo guardas tú.",
 } as const;
 
+/**
+ * El chat vacío abierto desde «Mejorar con IA» de la guía (24 nov): con el chip, se le piden cambios a la guía; los pedidos
+ * listos van en botones sobre la caja, así que acá no hay ejemplos (revisión del 24 nov: invitaba a contar y lo contado
+ * salía como pedido sobre la guía).
+ */
+const VACIO_DE_LA_GUIA = {
+  intro: "Pídele un cambio a la guía de la sesión: más preguntas, otras repreguntas, preguntas más cortas o quitar alguna. Toca un pedido de abajo o escríbelo.",
+  ejemplos: [],
+  cierre: "Lo que propone queda en una lista que apruebas. Para contar o preguntar algo del cliente, quita el chip de la guía con su ✕.",
+} as const;
+
+/**
+ * El mismo chat vacío para quien puede pedirle a Nexus lo de la cuenta (el permiso del chat de la cuenta): una sola
+ * conversación (24 nov), así que también se le piden tareas, el siguiente paso o cambios a la guía, con su ejemplo.
+ */
+const VACIO_CON_PEDIDOS = {
+  intro: "Cuéntale lo que sabes del cliente, pregúntale lo que se habló o pídele una tarea, el siguiente paso o un cambio a la guía. Por ejemplo:",
+  ejemplos: [...VACIO_DE_LA_PREVENTA.ejemplos, "Crea una tarea para llamar al gerente el viernes."],
+  cierre: "Nada se guarda ni se aplica sin tu clic: lo que cuentas lo guardas tú, y lo que pides queda en una lista que apruebas.",
+} as const;
+
 export default function HablarConNexus() {
   const { exp, puedeEditar, cambiar, lugar, conAsistente, recargar } = useLienzo();
+  const router = useRouter();
   const [abierto, setAbierto] = useState(false);
   // El ancho del chat, como en los demás: «Más ancho» para leer una propuesta larga.
   const [ancho, setAncho] = useState<"normal" | "amplio">("normal");
   const alternarAncho = () => setAncho((a) => (a === "amplio" ? "normal" : "amplio"));
   /** El lugar de La escala desde el que se pidió «✨ Mejorar con IA» (el chip); null: la conversación. */
   const [escala, setEscala] = useState<LugarDeLaEscalaEnElCajon | null>(null);
+  /** La guía desde la que se pidió «Mejorar con IA» (24 nov): el chip de la conversación; null, la conversación de siempre. */
+  const [guia, setGuia] = useState<GuiaEnElCajon | null>(null);
   const [listo, setListo] = useState<Listo | null>(null);
   const [guardado, setGuardado] = useState<Guardado | null>(null);
   const [errorAlGuardar, setErrorAlGuardar] = useState<string | null>(null);
@@ -517,6 +543,8 @@ export default function HablarConNexus() {
       if (!p || p.exploracionId !== exp.id) return;
       if (p.escala) {
         if (!puedeEditar) return;
+        // Desde La escala no se vuelve a la guía al quitar ese chip: la conversación queda sin chip.
+        setGuia(null);
         // Pasar al pedido de La escala deja la conversación: la cuenta regresiva que estaba a la vista no vuelve a correr.
         setAviso((a) => avisoAlDejarLaConversacion(a, cuentaALaVista.current));
         setEscala(p.escala);
@@ -524,7 +552,9 @@ export default function HablarConNexus() {
         // Con el chat ya abierto, el cursor va igual a la caja (otra sección de La escala).
         setPedidoDeFoco((n) => n + 1);
       } else if (activo) {
+        // La conversación: desde la guía, con su chip y sus sugerencias; desde el botón «Nexus», sin chip.
         setEscala(null);
+        setGuia(p.guia ?? null);
         setAbierto(true);
         setPedidoDeFoco((n) => n + 1);
       }
@@ -538,6 +568,8 @@ export default function HablarConNexus() {
   if (!activo && !escala) return null;
   const llena = loQueSabeElEquipo(exp.estado.contenido.notas).length >= MAX_LO_QUE_SABES;
   const llenaAlEmpezar = llena && !listo && !conversacion.mensajes.length;
+  /** La guía como chip (24 nov): solo con el permiso del chat de la cuenta, que es el que la cambia. */
+  const conLaGuia = !!guia && conAsistente;
 
   const revisar = async (conversacion: string, clave: string) => {
     const sinRevision: Guardado = { hechos: { estado: "apagados" }, impacto: { cambia: false, aviso: "" }, fallo: true };
@@ -661,34 +693,31 @@ export default function HablarConNexus() {
         <PanelDeNexus
           abierto={abierto && !escala}
           onClose={cerrar}
-          subtitulo="Preventa · cuéntale o pregúntale lo del cliente"
+          subtitulo={conAsistente ? "Preventa · cuéntale, pregúntale o pídele lo del cliente" : "Preventa · cuéntale o pregúntale lo del cliente"}
           ancho={ancho}
           onAncho={alternarAncho}
           pedidoDeFoco={pedidoDeFoco}
-          vacio={VACIO_DE_LA_PREVENTA}
-          arriba={
-            conAsistente ? (
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
-                <span>¿Una tarea, el siguiente paso o un cambio a la guía?</span>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    cerrar();
-                    abrirElChatDeNexus({ chip: { tipo: "preventa", id: exp.id, etiqueta: "Preventa" } });
-                  }}
-                >
-                  Tareas, siguiente paso o la guía
-                </Button>
-              </div>
-            ) : undefined
-          }
+          // Sin el enlace «Tareas, siguiente paso o la guía» (Elías, 24 nov: «Quitarlo»): se pide en la misma caja, y el chat
+          // vacío lo muestra con un ejemplo.
+          vacio={conLaGuia ? VACIO_DE_LA_GUIA : conAsistente ? VACIO_CON_PEDIDOS : VACIO_DE_LA_PREVENTA}
           // Lleno, solo al empezar: a media conversación el aviso va junto al «Guardar» y la conversación sigue a la vista.
+          // Con la guía como chip no se cuenta nada (se le piden cambios a la guía): las notas llenas no apagan la caja.
           aviso={
-            llenaAlEmpezar ? <Alert variant="warning">«Lo que sabes del cliente» ya tiene {MAX_LO_QUE_SABES} notas: quita una en la Preparación antes de contar otra.</Alert> : null
+            llenaAlEmpezar && !conLaGuia ? <Alert variant="warning">«Lo que sabes del cliente» ya tiene {MAX_LO_QUE_SABES} notas: quita una en la Preparación antes de contar otra.</Alert> : null
           }
-          apagado={llenaAlEmpezar ? "«Lo que sabes del cliente» está lleno: quita una nota en la Preparación." : null}
+          apagado={llenaAlEmpezar && !conLaGuia ? "«Lo que sabes del cliente» está lleno: quita una nota en la Preparación." : null}
           urlDelTurno={`/api/sales/exploraciones/${exp.id}/nexus`}
+          // Una sola conversación (24 nov): con el permiso del chat de la cuenta, tareas, siguiente paso y la guía se piden
+          // en este mismo hilo; al aplicar, el lienzo vuelve a leer la guía y la página lo demás.
+          pedidosDeLaCuenta={conAsistente}
+          // «Mejorar con IA» de la guía (24 nov): la misma conversación, con la guía como chip; la ✕ vuelve a conversar.
+          {...(guia && conLaGuia
+            ? { lugar: "guia" as const, chip: { texto: `Sobre ${guia.etiqueta}`, alQuitar: () => setGuia(null) }, sugerencias: guia.sugerencias }
+            : {})}
+          alAplicar={() => {
+            void recargar();
+            router.refresh();
+          }}
           alQuedarListo={alQuedarListo}
           terminado={listo !== null}
           conversacion={conversacion}

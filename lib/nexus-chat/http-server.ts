@@ -32,6 +32,16 @@ export async function quienPide(clientId: string): Promise<QuienPide | NextRespo
 }
 
 /**
+ * La misma regla, para quien le pide algo de la cuenta desde la conversación de la preventa (24 nov, una sola
+ * conversación: lib/exploraciones/nexus-en-la-preventa-server.ts › `QuienPideLaCuenta`). null si no puede: la vuelta lo
+ * dice en palabras, sin cortar la conversación.
+ */
+export async function quienPideLaCuenta(clientId: string): Promise<{ persona: TeamMember; veMontos: boolean } | null> {
+  const q = await quienPide(clientId);
+  return q instanceof NextResponse ? null : { persona: q.persona, veMontos: q.veMontos };
+}
+
+/**
  * Un error para la persona: el del chat o de un escritor de la capa (por CLASE) con su estado; el presupuesto, 429; la
  * base atrasada, 503; lo demás —también un error de la API de Anthropic, que trae su propio `status` y su JSON crudo—,
  * 502 con un texto genérico, y el detalle al log.

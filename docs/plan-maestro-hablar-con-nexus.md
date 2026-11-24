@@ -5,12 +5,12 @@
 > el cliente («cambia el título», «agrega esta parte, que es crítica»); que «Mejorar con IA» sea Nexus abierto donde
 > hiciste clic; y que lo que cambias en algo que ve el cliente vuelva a lo que se sabe de la empresa.
 >
-> **Estado (23 nov):** la etapa 0 está en producción (a4e69a80). **Las etapas 2 y 5 esperan** al piloto de dos semanas
-> del conector de Claude (`docs/plan-conector-claude.md`, §0.2): con el conector, la conversación la pondría Claude, que
-> lee y escribe en Nexus, y el cajón de conversar en cada pantalla podría sobrar. Se avanza con las etapas 1, 3 y 4, que
-> sirven con o sin conector. La etapa 3 dependía del cajón de la etapa 2: Elías aprobó su versión sin cajón el 23 nov
-> (en la etapa 3). Tus 5 respuestas del 22 nov siguen en la sección 6 (y en DECISIONS, «Hablar
-> con Nexus, el plan maestro»).
+> **Estado (24 nov):** la etapa 0 está en producción (a4e69a80). **La etapa 2 ya no espera al conector:** el 23 nov
+> Elías pidió que «✨ Mejorar con IA» abra el chat «Nexus» (pregunta 104 del roadmap) y se construyó; el 24 nov se juntaron
+> en el servidor las dos conversaciones del cajón de la preventa (DECISIONS, «Una sola conversación en el chat «Nexus» de
+> la preventa»). **La etapa 5 sigue esperando** al piloto de dos semanas del conector de Claude
+> (`docs/plan-conector-claude.md`, §0.2). Las etapas 1 y 3 están construidas; la 4 sirve con o sin conector. Tus 5
+> respuestas del 22 nov siguen en la sección 6 (y en DECISIONS, «Hablar con Nexus, el plan maestro»).
 
 ## En una frase
 
@@ -411,11 +411,17 @@ Es el cimiento y lo que más vale: hoy lo que cuentas no sale de la preventa.
 > **Construida el 23 nov, sin SQL y sin desplegar** (DECISIONS, «Hablar con Nexus, el plan maestro», etapa 2): dejó de
 > esperar al conector cuando Elías pidió que «✨ Mejorar con IA» abra el chat «Nexus». El botón de arriba abre el cajón;
 > el del riel se quitó; tareas, siguiente paso y la guía se piden desde el cajón (la conversación de la cuenta, sin las
-> notas que van a HubSpot). Falta: un solo motor para las dos conversaciones, «Lo que sabe Nexus de <empresa>» y las
-> contradicciones lado a lado.
+> notas que van a HubSpot). Falta: «Lo que sabe Nexus de <empresa>» y las contradicciones lado a lado.
+>
+> **Un solo motor, 24 nov (servidor):** lo que se cuenta, lo que se pregunta y lo que se pide de la cuenta (tareas, el
+> siguiente paso, la guía) viven en la misma conversación, con la misma memoria (DECISIONS, «Una sola conversación en el
+> chat «Nexus» de la preventa»), y la lista con su «Aplicar» se ve en el cajón. El enlace «Tareas, siguiente paso o la
+> guía» se quitó (Elías, 24 nov: «Quitarlo»); son 12 vueltas por conversación, y «Mejorar con IA» de la guía abre el mismo
+> cajón con la guía como chip.
 
-> **En espera desde el 23 nov** hasta que termine el piloto de dos semanas del conector de Claude: si la conversación la
-> pone Claude, este cajón puede sobrar. Se retoma, se cambia o se descarta con lo que diga el piloto.
+> ~~**En espera desde el 23 nov** hasta que termine el piloto de dos semanas del conector de Claude.~~ Ya no espera: el
+> 23 nov Elías pidió que «✨ Mejorar con IA» abra el chat «Nexus» (pregunta 104 del roadmap), y la etapa siguió sin el
+> piloto.
 
 - **Qué se construye:**
   - En la preventa, el botón «Nexus» de arriba abre el cajón de «Hablar con Nexus» (que suma lo que hacía el de la

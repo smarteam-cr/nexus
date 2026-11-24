@@ -16530,7 +16530,7 @@ todavía: cada etapa arranca cuando él lo dice.
     queda montado en la preventa SIN su botón (lo abren ese enlace y «Mejorar con el asistente» de la guía). *Por qué no
     un solo motor:* son dos conversaciones distintas (la de contar, con sus rondas de preguntas y su nota con las palabras
     de la persona; la de la cuenta, con herramientas y una lista que se aplica en el servidor). Juntarlas es un paso propio;
-    la puerta, el cajón y el lugar ya son uno.
+    la puerta, el cajón y el lugar ya son uno. (*Enmendado el 24 nov:* se juntaron; ver «Una sola conversación en el chat «Nexus» de la preventa».)
   - **En la preventa, el chat de la cuenta no ofrece las notas de la cuenta** (`nota.crear`, que van a HubSpot): lo que se
     le cuenta a Nexus no va a HubSpot (decisión del 22 nov) y va a «Lo que sabes del cliente». El servidor lo decide por el
     chip (una preventa de esa cuenta, `focoDelChip` en la ruta del chat), no la pantalla. En la ficha sigue igual.
@@ -16892,4 +16892,111 @@ de la tarjeta de un caso de uso.
 - **Lo que no cambia:** los motores. Detrás del botón siguen dos conversaciones (contar y preguntar; tareas, siguiente
   paso y la guía) y los pedidos de un solo paso. Juntarlas es «Una sola conversación en el chat «Nexus»» del roadmap, un
   paso propio (la etapa 2 del plan maestro ya lo separaba). Las notas, los hechos, el aviso de lo interno, «Aplicar
-  todo», «Deshacer» y el historial de versiones siguen igual.
+  todo», «Deshacer» y el historial de versiones siguen igual. (El mismo día se juntaron del lado del servidor: ver la
+  sección siguiente.)
+
+## Una sola conversación en el chat «Nexus» de la preventa (2026-11-24)
+
+Elías, 24 nov: «Paso aparte pero arranca en cuanto puedas, quiero avanzar con eso». Hasta ese día, detrás del chat «Nexus»
+de la preventa había dos conversaciones: la de contar y preguntar (lib/chat-de-nexus, cada vuelta una `AgentRun` por persona
+y preventa) y la de tareas, siguiente paso y la guía (lib/nexus-chat, un `HiloDeChat` de la cuenta, el MISMO de la ficha),
+que se abría con el enlace «Tareas, siguiente paso o la guía». Ninguna veía lo que se había dicho en la otra. *Enmienda* el
+«por qué no un solo motor» de la etapa 2 (sección «Hablar con Nexus, el plan maestro»): el paso propio es este. Elías
+respondió las tres preguntas el mismo día: 12 vueltas por conversación, quitar el enlace y dejar en la ficha lo que ya se
+había conversado allá.
+
+- **El hilo es la conversación de la preventa.** No hay tabla nueva ni SQL: las vueltas siguen siendo `AgentRun`
+  (`modo: chat-de-nexus`), una por persona, preventa y conversación. *Por qué no el hilo de la cuenta:* es el de la ficha
+  (compartido por todas las preventas y proyectos de la empresa) y no sabe guardar la nota, sus hechos, los cambios a las
+  tarjetas ni las citas; la conversación de la preventa ya guardaba todo eso y se reconstruye al volver.
+- **Una sola ruta por mensaje** (`POST …/exploraciones/[id]/nexus`), y el servidor decide qué mano lo atiende: contar y
+  preguntar, igual que antes; y **pedir algo de la cuenta** (crear o cambiar una tarea, fijar el siguiente paso, cambiar
+  la guía de la próxima sesión, generar un documento), que corre el turno del chat de la cuenta (`pensarConLaCuenta`,
+  lib/nexus-chat/turno-server.ts: sus herramientas, sus operaciones y su lista) con ESTA conversación como historia y sin
+  las notas de la cuenta. Vuelve como un turno «lista» (lib/chat-de-nexus/lista.ts).
+- **12 vueltas por conversación** (Elías: «12 vueltas»; eran 6) y 28 mensajes que viajan (dos por vuelta). El tope del día
+  sigue en 60.
+- **Qué es un pedido lo decide el código cuando es seguro y el modelo cuando no** (`esPedidoDeLaCuenta` y `comoSeLee`,
+  lib/chat-de-nexus/conversacion.ts), con la regla de siempre: una orden («crea», «agrega», «cambia», «mueve», «genera»,
+  también amable: «¿Me puedes crear…?», «Quiero que agregues…») sobre una tarea, el siguiente paso, preguntas a la guía o
+  un documento, CON su artículo o su preposición («una tarea», «el siguiente paso», «a la guía»); y «Recuérdame llamar…».
+  *Por qué el artículo:* en español la orden y el presente se escriben igual («Crea tareas a mano en HubSpot» cuenta cómo
+  trabaja el cliente). *Por qué no «la guía» sola ni «… que»:* la revisión del 24 nov encontró «Pasa que el gerente no usa
+  la guía de ventas» leído como pedido (7 de 7 frases así); «la guía» también es la del cliente, «pasa que», «cambia
+  que» cuentan lo que pasa, y «Programa de referidos», «Agenda del gerente» son el sustantivo. Un pedido seguro gana aunque
+  Nexus haya preguntado algo de lo que se contaba (iba a la nota y no había cómo decir «hazlo»), pero ahí la orden tiene
+  que ir pegada a su objeto («Crea una tarea…»): lo que contesta casi siempre cuenta. Lo dudoso lo decide el modelo que ya clasificaba, con una cuarta salida
+  (`{"tipo":"pedido"}`); después de una lista de Nexus, lo que sigue («para Ana», «¿y la de Juan?») también lo decide él.
+  Cada error tiene su salida: «Guardarlo como nota» va también debajo de lo que contestó la mano de la cuenta, si no se
+  aplicó nada y no lleva lo pendiente de otra lista (soltarla se lo llevaría); esa lista queda «soltada» recién cuando lo
+  contado se leyó (si la IA falla, sigue viva con su «Aplicar»). El servidor acepta `pedir` y `lugar: "guia"`: los
+  manda el chip de la guía (abajo).
+- **La misma memoria:** la mano de contar ve «la persona pidió algo de la cuenta» y «Nexus, sobre la cuenta» en la
+  conversación; la mano de la cuenta recibe los mensajes de la conversación como su historia (`ventanaParaLaCuenta`), con
+  lo que propuso («[La lista que propuse: …]»), lo que se aplicó y lo que la persona no quiso. Lo pedido no va a la nota y
+  lo que contesta la mano de la cuenta no es una ronda de preguntas.
+- **Cada mensaje con su lista, por su vuelta** (`emparejarListas`): el mensaje de Nexus lleva la vuelta que lo dejó
+  (`vuelta`, la pone el servidor y la pantalla la devuelve); sin ella, se empareja por orden desde el final. *Por qué no
+  por el texto:* así nació y la revisión lo encontró grave: la mano de la cuenta repite «Te dejé el cambio en la lista.», y
+  al volver dos listas con ese texto se pisaban (la aplicada desaparecía y quedaban dos «Aplicar» de la otra).
+- **La lista queda en la vuelta** (`output.operaciones`, ya acotadas a la cuenta; nunca salen al navegador). «Aplicar» es
+  `POST …/nexus/aplicar` { conversacion, vuelta, desmarcadas }: el servidor lee la lista de la vuelta de esa persona en esa
+  preventa y esa conversación, la vuelve a preparar contra hoy y la aplica por la capa de operaciones, con el permiso de
+  cada una (`aplicarCambiosALaCuenta`, el mismo corazón que el «Aplicar» de la ficha). Una tarea lleva la clave de la vuelta
+  y su lugar (`p:<vuelta>:<k>`): aplicar dos veces no la duplica. Una nota de la cuenta no se aplica aunque viniera (y el
+  modelo no la puede preparar aunque nombre la herramienta). Lo que dejó queda en la vuelta (`desenlace`, con los renglones
+  que entraron). Lo propuesto y no aplicado se arrastra al pedido siguiente, como en la ficha. El estado de cada lista se
+  DERIVA de las vueltas, sin columna, con UNA regla que usan el servidor y la pantalla (`mueveALasDeAntes`): «viva»,
+  «aplicada», «reemplazada» (la siguiente la lleva: 409 si se aplica), «soltada» (un cierre la soltó, o la persona la
+  guardó como nota: no se arrastra) o «sin cambios». El turno, «Aplicar» y soltar toman el mismo candado por conversación
+  (en memoria, como el de la ficha).
+- **Permiso y gasto:** la vuelta pide lo de antes (poder cambiar la preventa); un pedido suma lo que pedía el chat de la
+  cuenta (`asistente.read` y acceso a la empresa, `quienPideLaCuenta`, una vez por vuelta). Sin eso no hay mano de la
+  cuenta: lo que parece un pedido se lee como antes (contar o preguntar), sin chocar siempre con «sin acceso». El pedido
+  cuenta en las vueltas de la conversación y del día, respeta el tope de dólares por persona del chat de la cuenta
+  (US$ 3 al día, su agente «nexus-chat»; si no se puede leer lo gastado, no corre: `decidirElPedido`; un pedido seguro
+  frenado así no se come una vuelta) y entra al tope de US$ 100 del mes de
+  Nexus conversando (origen `chat:preventa:cuenta`; antes, el chat de la cuenta no contaba ahí). El tope de 40 mensajes al
+  día del chat de la cuenta no cuenta estos pedidos: los cuenta el de 60 vueltas de la preventa.
+- **En el cajón** (components/chat-de-nexus/PanelDeNexus.tsx): lo que contesta la mano de la cuenta va en el hilo, y su
+  lista con la caja del acuerdo de todos los chats (`PropuestaEnElHilo`): un renglón por cambio con su casilla, lo
+  arrastrado y lo que ya no va dichos, «Aplicar N cambios» a todo el ancho. Aplicada dice lo que dejó y tacha lo que no
+  entró («2 de 3 aplicados»); reemplazada, «Sigue en la lista de abajo»; soltada, «Ya no va». Mientras se aplica, la caja y
+  «Nueva conversación» esperan, y lo que vuelve se pone sobre la conversación de ese momento. Al aplicar, el lienzo vuelve
+  a leer la guía. *Compatibilidad:* el servidor prepara listas solo si la pantalla manda `listas: true` (lo manda quien
+  tiene el permiso del chat de la cuenta): un cajón viejo, o quien no puede pedir, sigue igual que antes.
+- **Antes → después, en la preventa:**
+
+  | Antes | Después |
+  |---|---|
+  | Arriba del hilo, «¿Una tarea, el siguiente paso o un cambio a la guía?» con el botón «Tareas, siguiente paso o la guía», que cerraba el cajón y abría OTRO chat (el de la cuenta) | **Sale** (Elías: «Quitarlo»). Se pide en la misma caja: el chat vacío dice «…o pídele una tarea, el siguiente paso o un cambio a la guía» con el ejemplo «Crea una tarea para llamar al gerente el viernes.» |
+  | Subtítulo «Preventa · cuéntale o pregúntale lo del cliente» | «Preventa · cuéntale, pregúntale o pídele lo del cliente» (para quien puede pedir) |
+  | La lista de tareas, siguiente paso o guía, en el otro chat | En el mismo hilo, debajo de lo que pidió la persona, con su «Aplicar» |
+  | Lo pendiente de ese chat, compartido con la ficha | Lo pendiente de ESTA conversación |
+  | Las conversaciones de la cuenta tenidas desde la preventa | Quedan en el chat de la ficha (Elías: «Quedan en la ficha»); no pasan al hilo nuevo |
+  | «Mejorar con IA» de la guía abría el chat de la cuenta (otro hilo) con la guía y sus sugerencias | Abre la MISMA conversación del cajón, con el chip «Sobre la guía de la sesión N» y las mismas sugerencias en botones sobre la caja. Con el chip, todo lo que se escribe es un pedido sobre la guía (como el chip de La escala); la ✕ vuelve a la conversación de siempre. En la exploración de un proyecto, donde no hay ese cajón, sigue abriendo el chat de la cuenta |
+- **La guía, en la misma conversación** (la coordinadora, 24 nov, con la decisión de Elías: «Todo debe abrir el mismo
+  chat con la misma interfaz»): «Mejorar con IA» de la guía de la próxima sesión abre el cajón de la preventa
+  (`abrirNexusEnLaPreventa` con `guia`, lib/exploraciones/abrir-nexus.ts) con la guía como chip y sus sugerencias (las
+  mismas de antes, sin IA). Con el chip, el cajón manda `pedir` y `lugar: "guia"`: la mano de la cuenta tiene la guía a la
+  vista (sus preguntas con su clave) y lo que propone vuelve como una lista con «Aplicar». *Por qué todo es pedido con el
+  chip:* «¿Qué otras preguntas agregarías?» es una pregunta y el código la habría mandado al que responde con citas, que
+  no conoce la guía; es lo mismo que hace el chip de La escala. Lo que no es pedido con el chip: «Guardarlo como nota»,
+  «Respóndela» y un «gracias» u «ok» (se contesta corto, sin la IA). El cuerpo de cada vuelta lo arma una función pura
+  probada (`cuerpoDeLaVuelta`, lib/chat-de-nexus/lista.ts). Con el chip, el chat vacío tiene su propia bienvenida (qué
+  pedirle a la guía, y que la ✕ vuelve a contar o preguntar) y las notas llenas de «Lo que sabes del cliente» no apagan
+  la caja (no se cuenta nada). Abrir desde La escala limpia la guía. Los pedidos listos son una sola pieza para los dos
+  chats (`SugerenciasDeNexus`, components/asistente/CajonDeNexus.tsx), y se esconden con la caja apagada.
+- **Lo que no cambia:** en la ficha, el chat de la cuenta sigue con su hilo y sus rutas. En la preventa sigue montado sin
+  botón para quien puede cambiar la preventa (y con su botón para quien no), y lo usa la guía de la exploración de un
+  proyecto. Al leer reuniones, el chat de la cuenta deja
+  afuera la cancelada sin texto y dice el día en Costa Rica, como el conector de Claude; el filtro va junto al del cliente
+  en un `AND`, para que no lo pueda pisar (guarda en lib/sessions/canceladas.test.ts).
+- **Lo que no queda garantizado:** que el modelo lea bien los pedidos dudosos (no se midió con conversaciones reales:
+  pasar 10 frases reales en el 3004 y, después del deploy, comparar cuántas conversaciones terminan en nota); quedan órdenes
+  con artículo que cuentan algo («Cambia el siguiente paso cada semana el gerente») y se toman como pedido (la salida es
+  «Guardarlo como nota»); si la anotación del desenlace falla, la lista sigue viva y un segundo «Aplicar» no duplica las
+  tareas pero sí volvería a escribir lo demás; el candado vive en la memoria de un servidor (dos contenedores a la vez en
+  un deploy, o el 3004 contra producción, podrían aplicar dos veces lo que no es una tarea); con «Lo que sabes del cliente»
+  lleno la caja se apaga también para pedir; los permisos se probaron con un super admin, no con alguien de Ventas; nadie
+  abrió el cajón en pantalla (el preview no está logueado).

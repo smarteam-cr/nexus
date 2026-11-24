@@ -14,10 +14,38 @@
  *   4. disparar el agente de impacto  — `alGuardarLaNota` corre `impactoDeLaNotaEnLaEscala` y devuelve el aviso con su
  *      cuenta regresiva. Nunca publica.
  * Solo la preventa: la exploración de un proyecto no tiene La escala de la empresa ni este panel todavía.
+ *
+ * UNA SOLA CONVERSACIÓN (Elías, 24 nov): lo que antes era otro chat (tareas, el siguiente paso, la guía de la próxima
+ * sesión, generar un documento: el chat de la cuenta, lib/nexus-chat) es una mano más de ESTA conversación
+ * (`manoDeLaCuenta`): un pedido de la cuenta corre el turno del chat de la cuenta con esta conversación como historia y sin
+ * las notas de la cuenta (van a HubSpot; lo que se cuenta va a «Lo que sabes del cliente»). Pide lo mismo que pedía ese
+ * chat: `asistente.read` y acceso a la empresa (lo decide la ruta: `QuienPideLaCuenta`). «Aplicar» es
+ * `aplicarEnLaPreventa`: la lista se lee de la vuelta y se aplica por la capa de operaciones, con el permiso de cada una.
  */
 import "server-only";
+import type { TeamMember } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { anotarLaVuelta, cerrarLaConversacion, conversacionGuardada, correrUnaVuelta, guardarLosEstados, ultimoTurnoListo, type VueltaDeNexus } from "@/lib/chat-de-nexus/conversacion-server";
+import { PresupuestoDeIaAgotado } from "@/lib/ai/presupuesto";
+import {
+  anotarLaVuelta,
+  aplicarLaListaDeLaConversacion,
+  cerrarLaConversacion,
+  conversacionGuardada,
+  correrUnaVuelta,
+  guardarLosEstados,
+  ultimoTurnoListo,
+  type AplicadoEnLaConversacion,
+  type PedirALaCuenta,
+  type VueltaDeNexus,
+} from "@/lib/chat-de-nexus/conversacion-server";
+import { hablaDeLaGuia } from "@/lib/chat-de-nexus/lista";
+import { aplicarCambiosALaCuenta, ErrorDelChat, type ResultadoDeAplicar } from "@/lib/nexus-chat/aplicar-server";
+import { SLUG_DEL_CHAT_DE_NEXUS, TOPES_DEL_CHAT } from "@/lib/nexus-chat/constantes";
+import { RESUMEN_DEL_CIERRE_DE_NEXUS } from "@/lib/nexus-chat/libro";
+import { sinMarcadores } from "@/lib/nexus-chat/textos";
+import { pensarConLaCuenta, type FocoDelChat } from "@/lib/nexus-chat/turno-server";
+import { decidirElPedido } from "./nexus-en-la-preventa";
+import { usoDeHoy } from "@/lib/nexus-chat/uso-server";
 import { sinLasReuniones, type ConversacionGuardada } from "@/lib/chat-de-nexus/guardada";
 import type { ContextoParaNexus, MensajeDeLaConversacion } from "@/lib/chat-de-nexus/conversacion";
 import { armarLasFuentes, type FuenteDeLaCuenta, type LoQueQuedoAfuera } from "@/lib/chat-de-nexus/respuesta";
@@ -116,9 +144,74 @@ async function laPreventa(exploracionId: string): Promise<LaPreventa> {
 }
 
 /**
- * La acción 3: una vuelta de la conversación (preguntar, responder, o decir adónde va cada cosa). `puedeVerLaCuenta`: si
- * quien conversa tiene acceso a la empresa (la ruta lo pregunta con `guardAccessToClient`); sin él, una pregunta se
- * responde sin leer sus reuniones.
+ * Quién le pide a Nexus algo de la cuenta: la persona del equipo y si ve los montos de los negocios. Lo decide la ruta con
+ * la regla del chat de la cuenta (lib/nexus-chat/http-server.ts › `quienPide`: `asistente.read` y acceso a la empresa);
+ * null si no puede.
+ */
+export type QuienPideLaCuenta = (clientId: string) => Promise<{ persona: TeamMember; veMontos: boolean } | null>;
+
+/** El origen del gasto de un pedido de la cuenta: empieza por «chat:», así entra al tope de US$ 100 de Nexus conversando. */
+export const ORIGEN_DEL_PEDIDO = "chat:preventa:cuenta";
+const SIN_LA_CUENTA =
+  "Para pedirle a Nexus tareas, el siguiente paso o cambios a la guía necesitas acceso a esta cuenta. Lo que cuentas o preguntas de la preventa sigue igual.";
+
+/**
+ * La mano de la cuenta en la preventa: el turno del chat de la cuenta (`pensarConLaCuenta`) con esta conversación como
+ * historia, sin las notas de la cuenta, con la guía a la vista si el pedido habla de ella (o se abrió desde la guía). Pide
+ * el permiso del chat de la cuenta y respeta su tope de dólares por persona y día (el gasto va a su agente, «nexus-chat»,
+ * y entra al tope del mes por su origen). No escribe nada.
+ */
+/** El tope de dólares del día de quien pide, leído de la base (lo que no se puede leer, no se gasta). */
+async function topeDeHoy(email: string): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  return decidirElPedido(await usoDeHoy(email.toLowerCase()).catch(() => null), TOPES_DEL_CHAT.usdPorDia);
+}
+
+function manoDeLaCuenta(fila: FilaDeExploracion, email: string, quien: { persona: TeamMember; veMontos: boolean }, lugar?: "guia"): PedirALaCuenta {
+  return async ({ pedido, ventana, pendientes, agentRunId }) => {
+    const correo = email.toLowerCase();
+    // El tope del día, otra vez: un pedido que decidió el modelo no pasó por `antesDePedir`.
+    const tope = await topeDeHoy(correo);
+    if (!tope.ok) return tope;
+    const foco: FocoDelChat = { tipo: lugar === "guia" || hablaDeLaGuia(pedido) ? "guia" : "preventa", exploracionId: fila.id, sinNotasDeLaCuenta: true };
+    try {
+      const t = await pensarConLaCuenta({
+        ventana,
+        pendientes,
+        mensaje: sinMarcadores(pedido).trim(),
+        quien: { persona: quien.persona, clientId: fila.clientId, veMontos: quien.veMontos },
+        ahora: new Date(),
+        foco,
+        agentRunId,
+        medidor: { agentSlug: SLUG_DEL_CHAT_DE_NEXUS, origen: ORIGEN_DEL_PEDIDO, triggeredByEmail: correo },
+      });
+      const a = t.acuerdo;
+      const operaciones = (a?.operaciones ?? []) as Array<{ nombre: string; entrada: unknown }>;
+      return {
+        ok: true,
+        lista: {
+          texto: t.respuesta,
+          operaciones,
+          lineas: a?.lineas ?? [],
+          ...(a?.arrastradas?.length ? { arrastradas: a.arrastradas } : {}),
+          ...(a?.descartadas?.length ? { descartadas: a.descartadas } : {}),
+          ...(a && !operaciones.length && a.resumen === RESUMEN_DEL_CIERRE_DE_NEXUS ? { cierre: true as const } : {}),
+        },
+      };
+    } catch (e) {
+      if (e instanceof ErrorDelChat) return { ok: false, status: e.status, error: e.message };
+      if (e instanceof PresupuestoDeIaAgotado) return { ok: false, status: 429, error: "Nexus ya usó el presupuesto de IA de hoy. Mañana sigues." };
+      throw e;
+    }
+  };
+}
+
+/**
+ * La acción 3: una vuelta de la conversación (preguntar, responder, decir adónde va cada cosa o, desde el 24 nov, preparar
+ * un pedido de la cuenta). `puedeVerLaCuenta`: si quien conversa tiene acceso a la empresa (la ruta lo pregunta con
+ * `guardAccessToClient`); sin él, una pregunta se responde sin leer sus reuniones. `quienPideLaCuenta`: quién puede pedir
+ * algo de la cuenta (sin él, no hay pedidos: lo decide el modelo entre contar y preguntar). `pedir`: lo último es un
+ * pedido de la cuenta. `lugar`: «guia» si el cajón se abrió desde la guía. `soltar` (con `contar`): la lista que la persona
+ * eligió guardar como nota ya no va.
  */
 export async function vueltaEnLaPreventa(
   exploracionId: string,
@@ -126,10 +219,13 @@ export async function vueltaEnLaPreventa(
   mensajes: MensajeDeLaConversacion[],
   email: string,
   puedeVerLaCuenta: (clientId: string) => Promise<boolean>,
-  o: { contar?: boolean; preguntar?: boolean } = {},
+  o: { contar?: boolean; preguntar?: boolean; pedir?: boolean; lugar?: "guia"; soltar?: string; quienPideLaCuenta?: QuienPideLaCuenta } = {},
 ): Promise<VueltaDeNexus> {
   const p = await laPreventa(exploracionId);
   if (!p.ok) return p;
+  // Quién puede pedir lo de la cuenta, una vez por vuelta. Sin ese permiso no hay mano de la cuenta: lo que parece un
+  // pedido se lee como antes (contar o preguntar), y no choca siempre con «sin acceso» (revisión del 24 nov).
+  const quien = o.quienPideLaCuenta ? await o.quienPideLaCuenta(p.fila.clientId).catch(() => null) : null;
   const contexto = await contextoParaNexus(p.fila, p.estado);
   return correrUnaVuelta({
     contexto,
@@ -137,10 +233,55 @@ export async function vueltaEnLaPreventa(
     conversacion,
     contar: o.contar,
     preguntar: o.preguntar,
+    pedir: o.pedir,
+    soltar: o.soltar,
     valorValido,
     leerLaCuenta: async () => fuentesDeLaCuenta(p.fila, p.estado, await puedeVerLaCuenta(p.fila.clientId).catch(() => false)),
+    ...(quien ? { pedirALaCuenta: manoDeLaCuenta(p.fila, email, quien, o.lugar), antesDePedir: () => topeDeHoy(email) } : {}),
     donde: { agentSlug: AGENTE_DE_LA_EXPLORACION, superficie: "preventa", clientId: p.fila.clientId, projectId: null, email, filtros: filtrosDe(exploracionId) },
   });
+}
+
+/**
+ * «Aplicar» la lista `vuelta` de una conversación en esta preventa (24 nov). La lista sale de la vuelta de esta persona en
+ * esta preventa (nunca del navegador); cada cambio se vuelve a preparar contra hoy, acotado a la cuenta y con el permiso
+ * de quien aplica, y se aplica por el escritor de su módulo (lib/nexus-chat/aplicar-server.ts › `aplicarCambiosALaCuenta`).
+ * Una tarea lleva la clave de la vuelta y su lugar: aplicar dos veces no la duplica.
+ */
+export async function aplicarEnLaPreventa(
+  exploracionId: string,
+  conversacion: string,
+  vuelta: string,
+  desmarcadas: readonly number[],
+  email: string,
+  quienPide: QuienPideLaCuenta,
+): Promise<AplicadoEnLaConversacion<ResultadoDeAplicar>> {
+  const p = await laPreventa(exploracionId);
+  if (!p.ok) return p;
+  const quien = await quienPide(p.fila.clientId).catch(() => null);
+  if (!quien) return { ok: false, status: 403, error: SIN_LA_CUENTA };
+  try {
+    return await aplicarLaListaDeLaConversacion({
+      email,
+      clientId: p.fila.clientId,
+      conversacion,
+      filtros: filtrosDe(exploracionId),
+      vuelta,
+      aplicar: (cambios) =>
+        aplicarCambiosALaCuenta({
+          persona: quien.persona,
+          veMontos: quien.veMontos,
+          clientId: p.fila.clientId,
+          cambios,
+          desmarcadas,
+          claveDeLaTarea: (k) => `p:${vuelta}:${k}`,
+          sinNotasDeLaCuenta: true,
+        }),
+    });
+  } catch (e) {
+    if (e instanceof ErrorDelChat) return { ok: false, status: e.status, error: e.message };
+    throw e;
+  }
 }
 
 export type GuardadoEnLaPreventa =

@@ -8,7 +8,9 @@
  * nunca elige la empresa.
  *
  * ⛔ Invariante 1: las reuniones salen SOLO por la regla única de pertenencia (`whereBelongsToClient` de
- * lib/sessions/project-sources.ts, el chokepoint) y la búsqueda por lib/busqueda (que usa la misma). La memoria, por el
+ * lib/sessions/project-sources.ts, el chokepoint) y la búsqueda por lib/busqueda (que usa la misma). Con los mismos cortes
+ * que el conector de Claude (24 nov): solo las que ya ocurrieron, nunca la cancelada sin texto (`NO_ES_CANCELADA_SIN_TEXTO`,
+ * lib/sessions/canceladas.ts), y el día en Costa Rica, no en hora universal (una de las 7 p. m. caía en el día siguiente). La memoria, por el
  * cargador único, declarado como lector «nexus-chat» en lib/memoria/consumidores.ts (alcance interno: lo lee una persona
  * del equipo, nunca el cliente). Nada de acá lee facturación, Partner, rentabilidad ni salarios.
  */
@@ -30,6 +32,8 @@ import { proyectoNavegableWhere } from "@/lib/projects/scope";
 import { exigirCliente, type ContextoDeNexus, type ExtrasDeNexus } from "@/lib/operaciones/contexto-server";
 import type { ContextoDeOperacion, OperacionQueLee } from "@/lib/operaciones/tipos";
 import { fmtDia } from "@/lib/cs/formato";
+import { NO_ES_CANCELADA_SIN_TEXTO } from "@/lib/sessions/canceladas";
+import { diaDeCostaRica } from "@/lib/notas/reglas";
 
 /** El contexto de una lectura del chat: el de la capa, más si la persona ve los montos de los negocios (Ventas). */
 export type ContextoDelChat = ContextoDeOperacion<TeamMember, ExtrasDeNexus & { veMontos: boolean }>;
@@ -39,6 +43,8 @@ const MAX_REUNIONES = 15;
 const TOPE_DE_UNA_REUNION = 20_000;
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
+/** El día de una reunión, en Costa Rica (UTC-6): una de las 7 p. m. de Costa Rica ya es el día siguiente en hora universal. */
+const diaDeLaReunion = (d: Date | null | undefined) => (d ? diaDeCostaRica(d) : null);
 
 export const LEER_MEMORIA_DE_LA_CUENTA: OperacionQueLee<{ clientId: string }, unknown, ContextoDeNexus> = {
   nombre: "cuenta.memoria",
@@ -79,7 +85,7 @@ export const LEER_REUNIONES_RECIENTES: OperacionQueLee<{ clientId: string }, unk
     const ahora = ctx.ahora;
     const [filas, dominios] = await Promise.all([
       prisma.firefliesSession.findMany({
-        where: { ...whereBelongsToClient(e.clientId), date: { lte: ahora } },
+        where: { AND: [whereBelongsToClient(e.clientId), NO_ES_CANCELADA_SIN_TEXTO], date: { lte: ahora } },
         orderBy: { date: "desc" },
         take: MAX_REUNIONES,
         select: { id: true, title: true, date: true, participants: true, organizerEmail: true, transcript: true, minute: { select: { status: true } } },
@@ -89,7 +95,7 @@ export const LEER_REUNIONES_RECIENTES: OperacionQueLee<{ clientId: string }, unk
     return filas.map((f) => ({
       id: f.id,
       titulo: f.title,
-      dia: iso(f.date),
+      dia: diaDeLaReunion(f.date),
       sala: esReunionDePuertasAdentro({ participants: f.participants, organizerEmail: f.organizerEmail }, dominios) ? "puertas adentro" : "con el cliente",
       transcripcion: !!f.transcript?.trim(),
       minuta: f.minute ? (f.minute.status === "DRAFT" ? "en borrador" : "revisada") : "sin minuta",
@@ -121,9 +127,9 @@ export const LEER_UNA_REUNION: OperacionQueLee<{ clientId: string; reunionId: st
   async leer(ctx, e) {
     await exigirCliente(ctx, e.clientId);
     const ahora = ctx.ahora;
-    // ⛔ Por la regla única: una reunión de otra empresa no existe para este chat.
+    // ⛔ Por la regla única: una reunión de otra empresa, futura o cancelada sin texto no existe para este chat.
     const f = await prisma.firefliesSession.findFirst({
-      where: { id: e.reunionId, ...whereBelongsToClient(e.clientId), date: { lte: ahora } },
+      where: { id: e.reunionId, AND: [whereBelongsToClient(e.clientId), NO_ES_CANCELADA_SIN_TEXTO], date: { lte: ahora } },
       select: {
         title: true,
         date: true,
@@ -134,11 +140,11 @@ export const LEER_UNA_REUNION: OperacionQueLee<{ clientId: string; reunionId: st
         minute: { select: { summary: true, decisions: true, agreements: true, risks: true, status: true } },
       },
     });
-    if (!f) return "Esa reunión no es de esta empresa, todavía no ocurrió o no existe.";
+    if (!f) return "Esa reunión no es de esta empresa, todavía no ocurrió, se canceló sin dejar nada o no existe.";
     const dominios = await dominiosDeLaCasa();
     const sala = esReunionDePuertasAdentro({ participants: f.participants, organizerEmail: f.organizerEmail }, dominios) ? "PUERTAS ADENTRO" : "CON EL CLIENTE";
     const notas = resumenDeReunion({ title: f.title, summary: f.summary, minuta: f.minute }).texto;
-    return `«${f.title}» · ${fmtDia(iso(f.date) ?? "")} · ${sala}\n\n${recortarTranscripcion(notas, f.transcript ?? "", TOPE_DE_UNA_REUNION) || "Sin notas ni transcripción."}`;
+    return `«${f.title}» · ${fmtDia(diaDeLaReunion(f.date) ?? "")} · ${sala}\n\n${recortarTranscripcion(notas, f.transcript ?? "", TOPE_DE_UNA_REUNION) || "Sin notas ni transcripción."}`;
   },
 };
 

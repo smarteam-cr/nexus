@@ -176,3 +176,12 @@ describe("⛔ la cuenta regresiva de La escala no vuelve a correr al dejar la co
     expect(conEscala).toContain("setAviso((a) => avisoAlDejarLaConversacion(a, cuentaALaVista.current))");
   });
 });
+
+describe("el tope de un pedido de la cuenta (24 nov, una sola conversación)", () => {
+  it("lo que no se puede leer no se gasta, y el tope del día frena sin llamar a la IA", async () => {
+    const { decidirElPedido } = await import("./nexus-en-la-preventa");
+    expect(decidirElPedido(null, 3)).toMatchObject({ ok: false, status: 503 });
+    expect(decidirElPedido({ usd: 3 }, 3)).toMatchObject({ ok: false, status: 429, error: expect.stringContaining("US$3,00") });
+    expect(decidirElPedido({ usd: 2.99 }, 3)).toEqual({ ok: true });
+  });
+});

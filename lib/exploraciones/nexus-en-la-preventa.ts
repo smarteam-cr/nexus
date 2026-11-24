@@ -320,3 +320,14 @@ export function seVeLaCuentaDeLaEscala(o: {
 export function avisoAlDejarLaConversacion(a: EstadoDelAvisoDeLaEscala, cuentaALaVista: boolean): EstadoDelAvisoDeLaEscala {
   return cuentaALaVista && a === "abierto" ? "cancelado-al-cerrar" : a;
 }
+/**
+ * ¿Corre un pedido de la cuenta con lo gastado hoy? (una sola conversación, 24 nov) `hoy` null: no se pudo leer, y lo que
+ * no se sabe no se gasta (como en la ficha). Con el tope del día cumplido, tampoco. Ninguno de los dos llama a la IA.
+ */
+export function decidirElPedido(hoy: { usd: number } | null, topeUsd: number): { ok: true } | { ok: false; status: number; error: string } {
+  if (!hoy) return { ok: false, status: 503, error: "No pude revisar tu tope de hoy: vuelve a intentarlo en un momento." };
+  if (hoy.usd >= topeUsd) {
+    return { ok: false, status: 429, error: `Hoy ya le pediste a Nexus cambios de la cuenta por US$${topeUsd.toFixed(2).replace(".", ",")}, el tope del día. Mañana sigues; contar y preguntar sigue igual.` };
+  }
+  return { ok: true };
+}

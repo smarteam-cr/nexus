@@ -57,6 +57,7 @@ import { MAX_INSTRUCCION_DE_LA_GUIA, type GuiaDeLaSesion } from "@/lib/exploraci
 import { PreguntasParaLaGuia } from "./PreguntasParaLaGuia";
 import { LoQueCubreLaGuia } from "./LoQueCubreLaGuia";
 import { abrirElChatDeNexus } from "@/lib/nexus-chat/constantes";
+import { abrirNexusEnLaPreventa } from "@/lib/exploraciones/abrir-nexus";
 import { queCubreLaGuia } from "@/lib/exploraciones/que-cubre-la-guia";
 import { sugerenciasDelAsistente } from "@/lib/exploraciones/sugerencias-del-asistente";
 import { QueVaPrimero } from "./QueVaPrimero";
@@ -977,7 +978,7 @@ function Columna({
 }
 
 function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxima: boolean }) {
-  const { exp, escala, marco, chequeo, mapa, puedeEditar, conAsistente, nombreDeNivel } = useLienzo();
+  const { exp, escala, marco, chequeo, mapa, puedeEditar, conAsistente, nombreDeNivel, lugar } = useLienzo();
   const temas = useTemasDeLaGuia(pestana.sesion?.equipo ?? null);
   // Cambiar la guía (regenerar, editar, quitar, sumar) es de la próxima sesión: la de una que ya pasó queda como se armó.
   const editable = esLaProxima && puedeEditar;
@@ -1058,27 +1059,28 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
           <button
             type="button"
             data-recorrido="preventa.sesion.asistente"
-            onClick={() =>
-              abrirElChatDeNexus({
-                chip: { tipo: "guia", id: exp.id, etiqueta: `la guía de la sesión ${pestana.numero}` },
-                texto: "",
-                // Lo que se le puede pedir sobre ESTA guía, en botones (sin IA): ver sugerencias-del-asistente.ts.
-                sugerencias: sugerenciasDelAsistente({
+            onClick={() => {
+              const etiqueta = `la guía de la sesión ${pestana.numero}`;
+              // Lo que se le puede pedir sobre ESTA guía, en botones (sin IA): ver sugerencias-del-asistente.ts.
+              const sugerencias = sugerenciasDelAsistente({
+                preguntas,
+                cubre: queCubreLaGuia({
                   preguntas,
-                  cubre: queCubreLaGuia({
-                    preguntas,
-                    puntos: enProyecto ? avanceDeLaEstrategia(e) : listaParaProponer(e, chequeo),
-                    escala,
-                    posiciones: mapa.posiciones,
-                    marco: enProyecto ? "cs" : "venta",
-                  }),
-                  dimensiones: escala.areas.filter((a) => e.areas.includes(a.id)).flatMap((a) => a.dimensiones.filter((d) => d.aplica)),
+                  puntos: enProyecto ? avanceDeLaEstrategia(e) : listaParaProponer(e, chequeo),
+                  escala,
                   posiciones: mapa.posiciones,
-                  nombreDe: (tema) => nombreDelPara(tema, escala, marco),
-                  sinLoVendido: enProyecto && deLoVendido.length === 0,
+                  marco: enProyecto ? "cs" : "venta",
                 }),
-              })
-            }
+                dimensiones: escala.areas.filter((a) => e.areas.includes(a.id)).flatMap((a) => a.dimensiones.filter((d) => d.aplica)),
+                posiciones: mapa.posiciones,
+                nombreDe: (tema) => nombreDelPara(tema, escala, marco),
+                sinLoVendido: enProyecto && deLoVendido.length === 0,
+              });
+              // En la preventa, la MISMA conversación del cajón «Nexus» (una sola conversación, 24 nov: «Todo debe abrir el
+              // mismo chat»), con la guía como chip. En la exploración de un proyecto no hay ese cajón: el chat de la cuenta.
+              if (lugar === "preventa") abrirNexusEnLaPreventa({ exploracionId: exp.id, guia: { etiqueta, sugerencias } });
+              else abrirElChatDeNexus({ chip: { tipo: "guia", id: exp.id, etiqueta }, texto: "", sugerencias });
+            }}
             className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-medium text-fg hover:bg-surface-hover"
           >
             <IconoDeSugerencia className="h-3.5 w-3.5 text-brand" />
