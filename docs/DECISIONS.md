@@ -16981,7 +16981,12 @@ había conversado allá.
   mismas de antes, sin IA). Con el chip, el cajón manda `pedir` y `lugar: "guia"`: la mano de la cuenta tiene la guía a la
   vista (sus preguntas con su clave) y lo que propone vuelve como una lista con «Aplicar». *Por qué todo es pedido con el
   chip:* «¿Qué otras preguntas agregarías?» es una pregunta y el código la habría mandado al que responde con citas, que
-  no conoce la guía; es lo mismo que hace el chip de La escala.
+  no conoce la guía; es lo mismo que hace el chip de La escala. Lo que no es pedido con el chip: «Guardarlo como nota»,
+  «Respóndela» y un «gracias» u «ok» (se contesta corto, sin la IA). El cuerpo de cada vuelta lo arma una función pura
+  probada (`cuerpoDeLaVuelta`, lib/chat-de-nexus/lista.ts). Con el chip, el chat vacío tiene su propia bienvenida (qué
+  pedirle a la guía, y que la ✕ vuelve a contar o preguntar) y las notas llenas de «Lo que sabes del cliente» no apagan
+  la caja (no se cuenta nada). Abrir desde La escala limpia la guía. Los pedidos listos son una sola pieza para los dos
+  chats (`SugerenciasDeNexus`, components/asistente/CajonDeNexus.tsx), y se esconden con la caja apagada.
 - **Lo que no cambia:** en la ficha, el chat de la cuenta sigue con su hilo y sus rutas. En la preventa sigue montado sin
   botón para quien puede cambiar la preventa (y con su botón para quien no), y lo usa la guía de la exploración de un
   proyecto. Al leer reuniones, el chat de la cuenta deja

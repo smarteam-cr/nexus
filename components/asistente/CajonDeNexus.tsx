@@ -387,6 +387,28 @@ export function PropuestaEnElHilo({
   );
 }
 
+/**
+ * Pedidos listos para mandar, en botones sobre la caja (los arma la guía real, sin IA). Un clic llena la caja y le pone el
+ * cursor; no la manda. Una sola pieza para el chat de la cuenta y el de la preventa (revisión del 24 nov: estaba copiada).
+ */
+export function SugerenciasDeNexus({ sugerencias, alElegir }: { sugerencias: readonly string[]; alElegir: (s: string) => void }) {
+  if (!sugerencias.length) return null;
+  return (
+    <div className="mb-2 flex flex-wrap gap-1.5" aria-label="Pedidos para empezar">
+      {sugerencias.map((s) => (
+        <button
+          key={s}
+          type="button"
+          onClick={() => alElegir(s)}
+          className="rounded-full border border-info-line bg-info-surface px-2.5 py-1 text-left text-xs text-brand hover:bg-surface-hover"
+        >
+          {s}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** Lo que se mejora («Sobre «Portada»»), encima de la caja, con su ✕ para dejar de hablar solo de eso. */
 export function ChipDeNexus({ children, onQuitar, quitarLabel }: { children: ReactNode; onQuitar?: () => void; quitarLabel?: string }) {
   return (

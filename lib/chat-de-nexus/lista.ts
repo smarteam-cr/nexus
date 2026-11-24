@@ -20,7 +20,7 @@
  *
  * ⛔ Las operaciones las lee el SERVIDOR de su vuelta: el navegador manda solo qué lista aplicar y qué desmarcó.
  */
-import type { MensajeDeLaConversacion } from "./conversacion";
+import { esCortesia, type MensajeDeLaConversacion } from "./conversacion";
 
 /** Un cambio de la cuenta como lo guarda la vuelta: la operación de la capa y su entrada, ya acotada a la cuenta. */
 export interface OperacionDeLaLista {
@@ -270,4 +270,29 @@ export function conLaListaAplicada<M extends ConLista>(m: readonly M[], lista: L
 export function seGuardaComoNota(l: ListaEnLaConversacion | undefined): boolean {
   if (!l) return true;
   return (l.estado === "viva" || l.estado === "sin-cambios") && !l.arrastradas?.length;
+}
+
+/**
+ * El cuerpo de una vuelta (`POST …/nexus`), como lo arma la pantalla. Cada mensaje con su marca y, si es una lista, su
+ * vuelta (con ella el servidor la reconoce). `listas` solo si quien conversa puede pedir lo de la cuenta. Con la guía como
+ * lugar, lo que se escribe es un pedido sobre ella (`pedir`), salvo «Guardarlo como nota» o «Respóndela» (ganan) y un
+ * «gracias» u «ok» (se contesta corto, sin la IA: revisión del 24 nov).
+ */
+export function cuerpoDeLaVuelta(o: {
+  conversacion: string;
+  mensajes: readonly MensajeDeLaConversacion[];
+  modo: "normal" | "contar" | "preguntar";
+  pedidosDeLaCuenta: boolean;
+  lugar?: "guia";
+  soltar?: string;
+}): Record<string, unknown> {
+  const mensajes = o.mensajes.map(({ de, texto, es, vuelta }) => ({ de, texto, ...(es ? { es } : {}), ...(vuelta ? { vuelta } : {}) }));
+  const ultimo = o.mensajes[o.mensajes.length - 1];
+  const pedir = o.lugar === "guia" && o.modo === "normal" && !!ultimo && ultimo.de === "persona" && !esCortesia(ultimo.texto);
+  return {
+    conversacion: o.conversacion,
+    mensajes,
+    ...(o.pedidosDeLaCuenta ? { listas: true, ...(o.lugar ? { lugar: o.lugar } : {}), ...(o.soltar ? { soltar: o.soltar } : {}), ...(pedir ? { pedir: true } : {}) } : {}),
+    ...(o.modo === "contar" ? { contar: true } : o.modo === "preguntar" ? { preguntar: true } : {}),
+  };
 }

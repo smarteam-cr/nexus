@@ -59,6 +59,18 @@ vi.mock("@/lib/anthropic", () => ({
   }),
 }));
 
+/** La guía que la mano de la cuenta recibe cuando el pedido viene desde la guía (su base real pide sesiones armadas). */
+const GUIA_DE_PRUEBA = "PREGUNTAS DE LA GUÍA DE PRUEBA";
+vi.mock("@/lib/operaciones/guia-server", async (original) => {
+  const real = await original<typeof import("@/lib/operaciones/guia-server")>();
+  return {
+    ...real,
+    baseDeLaGuia: async () => ({}) as Awaited<ReturnType<typeof real.baseDeLaGuia>>,
+    loEstableDeLaGuia: () => "LA GUÍA ESTABLE DE PRUEBA",
+    preguntasDeLaGuiaParaElChat: () => GUIA_DE_PRUEBA,
+  };
+});
+
 vi.mock("@/lib/ai/contexto-de-corrida", async (original) => {
   const real = await original<typeof import("@/lib/ai/contexto-de-corrida")>();
   return {
@@ -840,10 +852,25 @@ describe("«Mejorar con IA» de la guía abre la misma conversación (24 nov)", 
     if (!v.ok) throw new Error(v.error);
     expect(v.turno.tipo).toBe("lista");
     expect(pedidosALaCuenta).toHaveLength(1);
+    // La mano de la cuenta tiene la guía a la vista (sus preguntas, en el mensaje).
+    expect(pedidosALaCuenta[0].mensajes).toContain(GUIA_DE_PRUEBA);
     // Ni el que clasifica ni el que responde con citas: la pregunta es sobre la guía.
     expect(pedidos).toHaveLength(0);
     // Y queda en la misma conversación de la preventa.
     const c = await conversacionEnLaPreventa(s.id, SA, CON_ACCESO);
     expect(c?.mensajes.map((m) => m.es)).toEqual(["pedido", "lista"]);
+  });
+});
+
+describe("sin la guía como lugar, la mano de la cuenta no la recibe (espejo)", () => {
+  it("un pedido de una tarea va sin la guía", async () => {
+    const SA = "sa@smarteam.test";
+    const s = await sembrar();
+    const persona = await prisma.teamMember.create({ data: { name: "Sofía Admin", email: SA, roleEnum: "SUPER_ADMIN" } });
+    const v = await vueltaEnLaPreventa(s.id, CONVERSACION, [{ de: "persona", texto: "Crea una tarea para llamar a Ana" }], SA, CON_ACCESO, {
+      quienPideLaCuenta: async () => ({ persona, veMontos: false }),
+    });
+    if (!v.ok || v.turno.tipo !== "lista") throw new Error("esperaba una lista");
+    expect(pedidosALaCuenta[0].mensajes).not.toContain(GUIA_DE_PRUEBA);
   });
 });

@@ -28,7 +28,7 @@ import {
 } from "@/components/asistente/chat-de-seccion";
 import { PIEZA_CRONOGRAMA } from "@/lib/asistente/piezas";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import CajonDeNexus, { Burbuja, CajaDeNexus, ChatVacio, ChipDeNexus, Pensando } from "./CajonDeNexus";
+import CajonDeNexus, { Burbuja, CajaDeNexus, ChatVacio, ChipDeNexus, Pensando, SugerenciasDeNexus } from "./CajonDeNexus";
 import { devolverALaCaja } from "@/lib/asistente/caja";
 import { arrastreAlDesmarcar } from "@/lib/timeline/dependencias-de-operaciones";
 import { arrastreDeDesmarcadas } from "@/lib/asistente/arrastre";
@@ -697,21 +697,13 @@ export default function ChatDelAsistente({
         )}
         {chip ? <ChipDeNexus onQuitar={onSoltarChip}>Sobre {chip.etiqueta}</ChipDeNexus> : null}
         {sugerencias?.length && !texto.trim() && !pensando ? (
-          <div className="mb-2 flex flex-wrap gap-1.5" aria-label="Pedidos para empezar">
-            {sugerencias.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => {
-                  setTexto(s);
-                  composerRef.current?.focus();
-                }}
-                className="rounded-full border border-info-line bg-info-surface px-2.5 py-1 text-left text-xs text-brand hover:bg-surface-hover"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+          <SugerenciasDeNexus
+            sugerencias={sugerencias}
+            alElegir={(s) => {
+              setTexto(s);
+              composerRef.current?.focus();
+            }}
+          />
         ) : null}
         <CajaDeNexus
           cajaRef={composerRef}

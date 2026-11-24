@@ -25,6 +25,7 @@ import { LISTA_SIN_ACCESO, leerLaSalida, reconstruirLaConversacion, sinLasReunio
 import {
   conLaListaAplicada,
   conLaListaNueva,
+  cuerpoDeLaVuelta,
   emparejarListas,
   estadosDeLasListas,
   mueveALasDeAntes,
@@ -366,5 +367,34 @@ describe("lo que encontró la segunda vuelta de la revisión (24 nov)", () => {
   it("no se ofrece guardar como nota una lista que lleva lo pendiente de otra (soltarla se lo llevaría)", () => {
     expect(seGuardaComoNota({ id: "v", texto: "t", lineas: ["a", "b"], arrastradas: [0], estado: "viva" })).toBe(false);
     expect(seGuardaComoNota({ id: "v", texto: "t", lineas: ["b"], estado: "viva" })).toBe(true);
+  });
+});
+
+describe("el cuerpo de una vuelta, como lo arma la pantalla", () => {
+  const base = { conversacion: "c1", pedidosDeLaCuenta: true };
+  const m = (t: string) => [persona("Algo"), { ...nexus("Una.", "lista"), vuelta: "v1" }, persona(t)];
+
+  it("cada mensaje con su marca y la vuelta de su lista", () => {
+    const c = cuerpoDeLaVuelta({ ...base, mensajes: m("y otra"), modo: "normal" });
+    expect(c.mensajes).toEqual([{ de: "persona", texto: "Algo" }, { de: "nexus", texto: "Una.", es: "lista", vuelta: "v1" }, { de: "persona", texto: "y otra" }]);
+    expect(c).toMatchObject({ listas: true });
+    expect(c).not.toHaveProperty("pedir");
+  });
+
+  it("con la guía como lugar, lo escrito es un pedido sobre ella; «Guardarlo como nota», «Respóndela» y un «gracias» no", () => {
+    const guia = { ...base, lugar: "guia" as const };
+    expect(cuerpoDeLaVuelta({ ...guia, mensajes: m("¿Qué otras preguntas agregarías?"), modo: "normal" })).toMatchObject({ lugar: "guia", pedir: true });
+    expect(cuerpoDeLaVuelta({ ...guia, mensajes: m("gracias"), modo: "normal" })).not.toHaveProperty("pedir");
+    const contar = cuerpoDeLaVuelta({ ...guia, mensajes: m("Pasa que…"), modo: "contar", soltar: "v1" });
+    expect(contar).toMatchObject({ contar: true, soltar: "v1" });
+    expect(contar).not.toHaveProperty("pedir");
+    const preguntar = cuerpoDeLaVuelta({ ...guia, mensajes: m("¿Qué dijo Ana?"), modo: "preguntar" });
+    expect(preguntar).toMatchObject({ preguntar: true });
+    expect(preguntar).not.toHaveProperty("pedir");
+  });
+
+  it("sin el permiso del chat de la cuenta, la vuelta es la de antes (ni listas, ni lugar, ni pedir)", () => {
+    const c = cuerpoDeLaVuelta({ conversacion: "c1", pedidosDeLaCuenta: false, lugar: "guia", mensajes: m("Agrega una pregunta a la guía"), modo: "normal" });
+    expect(Object.keys(c).sort()).toEqual(["conversacion", "mensajes"]);
   });
 });

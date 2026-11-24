@@ -26,11 +26,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert } from "@/components/ui";
 import { BotonEnlace } from "@/components/ui/sistema";
-import CajonDeNexus, { Burbuja, CajaDeNexus, ChatVacio, ChipDeNexus, Pensando, PropuestaEnElHilo } from "@/components/asistente/CajonDeNexus";
+import CajonDeNexus, { Burbuja, CajaDeNexus, ChatVacio, ChipDeNexus, Pensando, PropuestaEnElHilo, SugerenciasDeNexus } from "@/components/asistente/CajonDeNexus";
 import { devolverALaCaja } from "@/lib/asistente/caja";
 import { notaDeLaConversacion, paraContarComoNota, paraPreguntar, paraSeguirDespuesDeGuardar, TOPES, type ResultadoDelTurno } from "@/lib/chat-de-nexus/conversacion";
 import type { MensajeGuardado } from "@/lib/chat-de-nexus/guardada";
-import { conLaListaAplicada, conLaListaNueva, seGuardaComoNota, type ListaEnLaConversacion } from "@/lib/chat-de-nexus/lista";
+import { conLaListaAplicada, conLaListaNueva, cuerpoDeLaVuelta, seGuardaComoNota, type ListaEnLaConversacion } from "@/lib/chat-de-nexus/lista";
 import type { CitaDeLaRespuesta, RespuestaDeNexus } from "@/lib/chat-de-nexus/respuesta";
 import { textoDelBoton, tituloDeLaLista } from "@/lib/nexus-chat/textos";
 import TextoConFormato from "./TextoConFormato";
@@ -284,19 +284,11 @@ export default function PanelDeNexus({
     setPensando(true);
     setError(null);
     try {
-      // La vuelta de cada lista viaja con su mensaje: con ella el servidor reconoce su lista (nunca por el texto).
-      const paraMandar = conLaPersona.map(({ de, texto: x, es, vuelta }) => ({ de, texto: x, ...(es ? { es } : {}), ...(vuelta ? { vuelta } : {}) }));
       const r = await fetch(urlDelTurno, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // `listas`: este cajón sabe mostrar la lista de un pedido de la cuenta (sin eso, el servidor no la prepara).
-        body: JSON.stringify({
-          conversacion,
-          mensajes: paraMandar,
-          // Con la guía como lugar, lo que se escribe es un pedido sobre ella (salvo «Guardarlo como nota» o «Respóndela»).
-          ...(pedidosDeLaCuenta ? { listas: true, ...(lugar ? { lugar } : {}), ...(soltar ? { soltar } : {}), ...(lugar === "guia" && modo === "normal" ? { pedir: true } : {}) } : {}),
-          ...(modo === "contar" ? { contar: true } : modo === "preguntar" ? { preguntar: true } : {}),
-        }),
+        // El cuerpo lo arma una función pura y probada (lib/chat-de-nexus/lista.ts › `cuerpoDeLaVuelta`).
+        body: JSON.stringify(cuerpoDeLaVuelta({ conversacion, mensajes: conLaPersona, modo, pedidosDeLaCuenta, lugar, soltar })),
       });
       const j = (await r.json().catch(() => null)) as { turno?: ResultadoDelTurno; error?: string; aviso?: string } | null;
       if (!r.ok || !j?.turno) throw new Error(j?.error ?? "Nexus no pudo responder. Inténtalo de nuevo.");
@@ -432,22 +424,15 @@ export default function PanelDeNexus({
             {chip.texto}
           </ChipDeNexus>
         ) : null}
-        {sugerencias?.length && !texto.trim() && !ocupado ? (
-          <div className="mb-2 flex flex-wrap gap-1.5" aria-label="Pedidos para empezar">
-            {sugerencias.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => {
-                  setTexto(s);
-                  cajaRef.current?.focus();
-                }}
-                className="rounded-full border border-info-line bg-info-surface px-2.5 py-1 text-left text-xs text-brand hover:bg-surface-hover"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+        {/* Con la caja apagada, los pedidos se esconden: un clic llenaría una caja que no se puede mandar. */}
+        {sugerencias?.length && !texto.trim() && !ocupado && !cajaApagada ? (
+          <SugerenciasDeNexus
+            sugerencias={sugerencias}
+            alElegir={(s) => {
+              setTexto(s);
+              cajaRef.current?.focus();
+            }}
+          />
         ) : null}
         <CajaDeNexus
           cajaRef={cajaRef}

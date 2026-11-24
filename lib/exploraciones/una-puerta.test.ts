@@ -60,7 +60,11 @@ describe("una sola puerta «Nexus» en la preventa", () => {
     const guia = leer("components/exploraciones/AntesDeLaSesion.tsx");
     expect(guia).toContain('if (lugar === "preventa") abrirNexusEnLaPreventa({ exploracionId: exp.id, guia: { etiqueta, sugerencias } });');
     expect(guia).toContain("else abrirElChatDeNexus(");
-    // Con la guía como chip, lo que se escribe es un pedido sobre ella.
-    expect(leer("components/chat-de-nexus/PanelDeNexus.tsx")).toContain('lugar === "guia" && modo === "normal" ? { pedir: true } : {}');
+    // Lo que se manda lo arma la función probada (con la guía como chip, un pedido sobre ella: una-sola-conversacion.test.ts).
+    expect(leer("components/chat-de-nexus/PanelDeNexus.tsx")).toContain("cuerpoDeLaVuelta({ conversacion, mensajes: conLaPersona, modo, pedidosDeLaCuenta, lugar, soltar })");
+    // Abrir desde La escala limpia la guía: al quitar ese chip no vuelve el de la guía.
+    expect(cajon.slice(cajon.indexOf("if (p.escala) {"), cajon.indexOf("setEscala(p.escala);"))).toContain("setGuia(null);");
+    // Con la guía como chip, las notas llenas no apagan la caja (no se cuenta nada).
+    expect(cajon).toContain("llenaAlEmpezar && !conLaGuia ?");
   });
 });

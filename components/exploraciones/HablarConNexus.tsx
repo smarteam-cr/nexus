@@ -446,6 +446,17 @@ const VACIO_DE_LA_PREVENTA = {
 } as const;
 
 /**
+ * El chat vacío abierto desde «Mejorar con IA» de la guía (24 nov): con el chip, se le piden cambios a la guía; los pedidos
+ * listos van en botones sobre la caja, así que acá no hay ejemplos (revisión del 24 nov: invitaba a contar y lo contado
+ * salía como pedido sobre la guía).
+ */
+const VACIO_DE_LA_GUIA = {
+  intro: "Pídele un cambio a la guía de la sesión: más preguntas, otras repreguntas, preguntas más cortas o quitar alguna. Toca un pedido de abajo o escríbelo.",
+  ejemplos: [],
+  cierre: "Lo que propone queda en una lista que apruebas. Para contar o preguntar algo del cliente, quita el chip de la guía con su ✕.",
+} as const;
+
+/**
  * El mismo chat vacío para quien puede pedirle a Nexus lo de la cuenta (el permiso del chat de la cuenta): una sola
  * conversación (24 nov), así que también se le piden tareas, el siguiente paso o cambios a la guía, con su ejemplo.
  */
@@ -532,6 +543,8 @@ export default function HablarConNexus() {
       if (!p || p.exploracionId !== exp.id) return;
       if (p.escala) {
         if (!puedeEditar) return;
+        // Desde La escala no se vuelve a la guía al quitar ese chip: la conversación queda sin chip.
+        setGuia(null);
         // Pasar al pedido de La escala deja la conversación: la cuenta regresiva que estaba a la vista no vuelve a correr.
         setAviso((a) => avisoAlDejarLaConversacion(a, cuentaALaVista.current));
         setEscala(p.escala);
@@ -555,6 +568,8 @@ export default function HablarConNexus() {
   if (!activo && !escala) return null;
   const llena = loQueSabeElEquipo(exp.estado.contenido.notas).length >= MAX_LO_QUE_SABES;
   const llenaAlEmpezar = llena && !listo && !conversacion.mensajes.length;
+  /** La guía como chip (24 nov): solo con el permiso del chat de la cuenta, que es el que la cambia. */
+  const conLaGuia = !!guia && conAsistente;
 
   const revisar = async (conversacion: string, clave: string) => {
     const sinRevision: Guardado = { hechos: { estado: "apagados" }, impacto: { cambia: false, aviso: "" }, fallo: true };
@@ -684,18 +699,19 @@ export default function HablarConNexus() {
           pedidoDeFoco={pedidoDeFoco}
           // Sin el enlace «Tareas, siguiente paso o la guía» (Elías, 24 nov: «Quitarlo»): se pide en la misma caja, y el chat
           // vacío lo muestra con un ejemplo.
-          vacio={conAsistente ? VACIO_CON_PEDIDOS : VACIO_DE_LA_PREVENTA}
+          vacio={conLaGuia ? VACIO_DE_LA_GUIA : conAsistente ? VACIO_CON_PEDIDOS : VACIO_DE_LA_PREVENTA}
           // Lleno, solo al empezar: a media conversación el aviso va junto al «Guardar» y la conversación sigue a la vista.
+          // Con la guía como chip no se cuenta nada (se le piden cambios a la guía): las notas llenas no apagan la caja.
           aviso={
-            llenaAlEmpezar ? <Alert variant="warning">«Lo que sabes del cliente» ya tiene {MAX_LO_QUE_SABES} notas: quita una en la Preparación antes de contar otra.</Alert> : null
+            llenaAlEmpezar && !conLaGuia ? <Alert variant="warning">«Lo que sabes del cliente» ya tiene {MAX_LO_QUE_SABES} notas: quita una en la Preparación antes de contar otra.</Alert> : null
           }
-          apagado={llenaAlEmpezar ? "«Lo que sabes del cliente» está lleno: quita una nota en la Preparación." : null}
+          apagado={llenaAlEmpezar && !conLaGuia ? "«Lo que sabes del cliente» está lleno: quita una nota en la Preparación." : null}
           urlDelTurno={`/api/sales/exploraciones/${exp.id}/nexus`}
           // Una sola conversación (24 nov): con el permiso del chat de la cuenta, tareas, siguiente paso y la guía se piden
           // en este mismo hilo; al aplicar, el lienzo vuelve a leer la guía y la página lo demás.
           pedidosDeLaCuenta={conAsistente}
           // «Mejorar con IA» de la guía (24 nov): la misma conversación, con la guía como chip; la ✕ vuelve a conversar.
-          {...(guia && conAsistente
+          {...(guia && conLaGuia
             ? { lugar: "guia" as const, chip: { texto: `Sobre ${guia.etiqueta}`, alQuitar: () => setGuia(null) }, sugerencias: guia.sugerencias }
             : {})}
           alAplicar={() => {
