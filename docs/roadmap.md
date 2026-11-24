@@ -10,11 +10,11 @@
 ```ejecutivo
 {
  "corte": "2026-11-24",
- "produccion": "a11a192f",
+ "produccion": "6cf3e1ee",
  "arriba": [
-  "En producción desde el 24 nov: La escala con la pantalla limpia y «✨ Mejorar con IA» por sección, su Resumen con mejor criterio y el registro de los cambios de base.",
-  "En curso: nada corriendo; el Resumen de Centauro quedó rehecho como borrador, sin publicar.",
-  "Te espera: revisar ese borrador con Marco y confirmar sus cifras, arrancar la tarea de Servicio con dos equipos y la pregunta 99 del conector."
+  "En producción desde el 24 nov: un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y las reuniones leídas enteras, y La escala de un cliente con lo que ya sabemos.",
+  "En curso: nada corriendo; la preventa de TEC · AE quedó ubicada con lo que ya sabemos y el Resumen de Centauro rehecho, los dos sin publicar.",
+  "Te espera: probar el chat y La escala nueva, revisar con Marco el borrador de Centauro, usar lo propuesto en TEC · AE, y la pregunta 99 del conector."
  ],
  "iniciativas": [
   {
@@ -110,18 +110,18 @@
    "nombre": "La escala y el diagnóstico",
    "color": "escala",
    "estado": "en-curso",
-   "donde": "La escala tiene la pantalla limpia y un Resumen con mejor criterio; falta revisar el de Centauro con Marco y probar con más empresas.",
+   "donde": "La escala ya sirve también para un cliente sin sesiones de diagnóstico (TEC · AE) y su Resumen salió de una quinta vuelta; falta revisar Centauro y AE contigo.",
    "hecho": [
     "La escala ubica a cada empresa por equipo e industria, con un radar, un Resumen que el cliente ve y su historia en el tiempo.",
     "El test del diagnóstico vive en Nexus, con su página de resultados en dinero y la escalera de niveles, igual a la curva de la app vieja.",
-    "El Resumen abre con lo que hicimos y el problema que cruza equipos, da por dicho lo que el cliente ya dijo y se cambia por sección con «✨ Mejorar con IA»."
+    "El Resumen se titula «Diagnóstico de rendimiento», lee las reuniones enteras, no pierde cifras, saca lo resuelto, y un cliente sin sesiones de diagnóstico se ubica con lo que ya sabemos."
    ],
    "sigue": [
-    "Revisar con Marco el Resumen de Centauro y confirmar sus cifras.",
+    "Revisar con Marco el Resumen de Centauro y usar lo propuesto en TEC · AE.",
     "Servicio con dos equipos, cada uno con su nivel.",
     "Probar la escala con 5 a 8 empresas de tres industrias."
    ],
-   "teToca": "Revisar con Marco el borrador de Centauro y arrancar la tarea de Servicio con dos equipos.",
+   "teToca": "Revisar con Marco el borrador de Centauro, usar lo propuesto en TEC · AE y arrancar la tarea de Servicio con dos equipos.",
    "preguntas": [
     18,
     54,
@@ -134,26 +134,33 @@
     71,
     105,
     106,
-    107
+    107,
+    108,
+    109,
+    110,
+    111,
+    112,
+    115,
+    116
    ],
    "ramas": [
     {
      "titulo": "El Resumen",
      "pasos": [
       {
-       "texto": "Lo que hicimos arriba, el problema después",
-       "estado": "hecho"
-      },
-      {
        "texto": "«✨ Mejorar con IA» por sección y por equipo",
        "estado": "hecho"
       },
       {
-       "texto": "Retos por equipo y cifras que tú confirmas",
+       "texto": "«Diagnóstico de rendimiento», reuniones enteras y cifras que no se pierden",
        "estado": "hecho"
       },
       {
-       "texto": "Revisar Centauro con Marco",
+       "texto": "Un cliente sin sesiones, con lo que ya sabemos",
+       "estado": "hecho"
+      },
+      {
+       "texto": "Revisar Centauro y TEC · AE",
        "estado": "te-toca"
       },
       {
@@ -457,14 +464,13 @@
    "nombre": "Contexto, Hablar con Nexus y Claude",
    "color": "reuniones",
    "estado": "en-curso",
-   "donde": "En la preventa hay un solo chat «Nexus» y «✨ Mejorar con IA» ya cambia La escala desde él; el conector de Claude espera la pregunta 99.",
+   "donde": "Todo chat y todo «✨ Mejorar con IA» abren el mismo «Nexus», y en la preventa es una sola conversación; el conector de Claude espera la pregunta 99.",
    "hecho": [
     "Cada reunión se lee una vez y queda como memoria de la cuenta, y cada uno lee solo las reuniones de sus clientes.",
     "Hablar con Nexus guarda lo que cuentas como notas con sus hechos, con tope de US$ 100 al mes, y lo que confirma el equipo llega a la memoria y a los casos de uso sin lo interno.",
-    "Un solo chat «Nexus» en la preventa, y «✨ Mejorar con IA» cambia La escala por pieza desde ese chat, con su versión y sin publicar; el conector de Claude ya responde en local."
+    "Un solo chat «Nexus» en toda la app, con una sola conversación en la preventa donde cuentas, preguntas y pides tareas, siguiente paso o la guía; el conector de Claude ya responde en local."
    ],
    "sigue": [
-    "Una sola conversación en el chat «Nexus», y que «✨ Mejorar con IA» abra ese chat en toda la app.",
     "Que lo que cambias en lo que ve el cliente vuelva a la memoria.",
     "El conector de Claude: la entrada solo para ti y tu piloto."
    ],
@@ -483,7 +489,9 @@
     100,
     101,
     102,
-    104
+    104,
+    113,
+    114
    ],
    "ramas": [
     {
@@ -498,12 +506,12 @@
        "estado": "hecho"
       },
       {
-       "texto": "Un solo chat «Nexus» y «Mejorar con IA» en La escala",
+       "texto": "Un solo chat «Nexus» en toda la app",
        "estado": "hecho"
       },
       {
-       "texto": "Una sola conversación y «Mejorar con IA» en toda la app",
-       "estado": "por-hacer"
+       "texto": "Una sola conversación en la preventa",
+       "estado": "hecho"
       },
       {
        "texto": "Lo que cambias vuelve a la memoria",
@@ -703,7 +711,7 @@
 ```linea
 {
  "hoy": "2026-11-24",
- "produccion": "a11a192f",
+ "produccion": "6cf3e1ee",
  "temasHechoHasta": "2026-10-29",
  "iniciativas": [
   {
@@ -1940,18 +1948,107 @@
    "commits": [
     "8e7a2386"
    ]
+  },
+  {
+   "fecha": "2026-11-24",
+   "iniciativa": "reuniones",
+   "titulo": "Un solo chat «Nexus» en toda la app",
+   "que": "Todo botón de chat y todo «✨ Mejorar con IA» abren el mismo panel «Nexus» a la derecha, con «Nueva conversación» arriba y la caja abajo: preventa, La escala, documentos, cronograma, ficha, Tareas, casos de uso, artefactos y perfil de puesto. «Asistente» pasó a llamarse «Nexus».",
+   "paraQuien": "Todo el equipo",
+   "prod": "si",
+   "tema": 2,
+   "preguntas": [
+    113
+   ],
+   "commits": [
+    "6f54bbcd"
+   ]
+  },
+  {
+   "fecha": "2026-11-24",
+   "iniciativa": "reuniones",
+   "titulo": "Una sola conversación en el chat «Nexus» de la preventa",
+   "que": "Lo que cuentas, lo que preguntas y lo que pides de la cuenta (tareas, siguiente paso, la guía) quedan en el mismo hilo, con una lista y «Aplicar» adentro. 12 vueltas por conversación y el pedido entra al tope de US$ 100.",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "si",
+   "tema": 2,
+   "preguntas": [
+    114
+   ],
+   "commits": [
+    "754ca6aa",
+    "2347a352"
+   ]
+  },
+  {
+   "fecha": "2026-11-24",
+   "iniciativa": "escala",
+   "titulo": "El Resumen de La escala: «Diagnóstico de rendimiento» y reuniones enteras",
+   "que": "El título es «Diagnóstico de rendimiento» con un resumen debajo, las reuniones se leen enteras, las cifras largas no se pierden, lo resuelto sale, cada equipo trae su dolor en una línea y hay un «Quién es quién». Las páginas publicadas no cambian hasta volver a publicar.",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "si",
+   "tema": 5,
+   "preguntas": [
+    108,
+    109,
+    110,
+    111,
+    112,
+    115
+   ],
+   "commits": [
+    "87ab9f00",
+    "93d9b994"
+   ]
+  },
+  {
+   "fecha": "2026-11-24",
+   "iniciativa": "escala",
+   "titulo": "La escala de un cliente con lo que ya sabemos",
+   "que": "La preventa de un cliente sin sesiones de diagnóstico se ubica con sus reuniones de entrega, la memoria y el handoff. Las reuniones de entrega se suman como «reuniones de trabajo» y nunca cuentan como exploración. El primero es TEC · AE.",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "si",
+   "tema": 5,
+   "preguntas": [
+    116
+   ],
+   "commits": [
+    "0a2ca860"
+   ]
   }
  ],
  "sigue": [
   {
    "iniciativa": "escala",
    "titulo": "Revisar con Marco el Resumen nuevo de Centauro",
-   "que": "El Resumen de Centauro quedó rehecho como borrador, sin publicar. Lo revisan, confirman cada cifra «Con tus cifras» y lo publican.",
+   "que": "El Resumen de Centauro se rehízo con la quinta vuelta («Diagnóstico de rendimiento», reuniones enteras), como borrador sin publicar. Lo revisan, confirman cada cifra y lo publican.",
    "paraQuien": "Ventas",
    "estado": "te-toca",
    "tema": 5,
    "preguntas": [
     107
+   ]
+  },
+  {
+   "iniciativa": "escala",
+   "titulo": "TEC · AE: usar lo propuesto y armar su Resumen",
+   "que": "La preventa de AE quedó ubicada con 4 reuniones de trabajo y el proyecto como contexto, sin publicar. Revisas lo propuesto (la preventa vieja se armó con reuniones de TAE), eliges los equipos y armas el Resumen.",
+   "paraQuien": "Customer Success",
+   "estado": "te-toca",
+   "tema": 5,
+   "preguntas": [
+    116
+   ]
+  },
+  {
+   "iniciativa": "escala",
+   "titulo": "Que el Resumen no pierda cifras que dijo la empresa",
+   "que": "En el Resumen real de Centauro se volvieron a perder los 1.800 tickets, el punto del churn y parte de «Quién es quién». Al fallar la verificación, se repara antes de descartar.",
+   "paraQuien": "Ventas y Customer Success",
+   "estado": "otra-sesion",
+   "tema": 5,
+   "preguntas": [
+    110
    ]
   },
   {
@@ -1967,8 +2064,8 @@
   },
   {
    "iniciativa": "reuniones",
-   "titulo": "Probar el chat «Nexus» y «Mejorar con IA» con Cemaco · Ecuador",
-   "que": "Contar algo y guardarlo, pedir un cambio en La escala, y revisar contigo qué hechos de las notas pasan a lo que ve el cliente.",
+   "titulo": "Probar el chat «Nexus» y La escala nueva",
+   "que": "Abrir «Nexus» desde la preventa, un documento y Tareas; contar algo, pedir una tarea y aplicarla en el mismo hilo; y ver el Resumen con «Diagnóstico de rendimiento».",
    "paraQuien": "Elías",
    "estado": "te-toca",
    "tema": 2,
@@ -1977,26 +2074,12 @@
    ]
   },
   {
-   "iniciativa": "reuniones",
-   "titulo": "Una sola conversación en el chat «Nexus»",
-   "que": "Hoy detrás del botón hay dos conversaciones: la de contar y preguntar, y la de tareas, siguiente paso y guía. Se juntan en una.",
-   "paraQuien": "Ventas y Customer Success",
+   "iniciativa": "nexus",
+   "titulo": "La preventa de un cliente pide acceso a la empresa",
+   "que": "Sumar una sesión, buscar «De la empresa» y armar el Resumen hoy piden solo el permiso de la preventa. En la preventa de un cliente, pedir también acceso a esa empresa.",
+   "paraQuien": "Las sesiones de trabajo",
    "estado": "por-hacer",
-   "tema": 2,
-   "preguntas": [
-    104
-   ]
-  },
-  {
-   "iniciativa": "reuniones",
-   "titulo": "«✨ Mejorar con IA» abre el chat «Nexus» en toda la app",
-   "que": "Los documentos del proyecto, la propuesta, los perfiles de puesto, el cronograma, los artefactos y los casos de uso abren el chat «Nexus» con la parte puesta, y la ficha usa el mismo chat.",
-   "paraQuien": "Todo el equipo",
-   "estado": "por-hacer",
-   "tema": 2,
-   "preguntas": [
-    104
-   ]
+   "tema": 3
   },
   {
    "iniciativa": "reuniones",
@@ -2402,7 +2485,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "Todo está en producción (a11a192f, 24 nov): La escala con la pantalla limpia y «✨ Mejorar con IA» por sección, su Resumen con mejor criterio y el registro de los cambios de base. Lo próximo: revisar con Marco el Resumen de Centauro, Servicio con dos equipos, y una sola conversación en el chat «Nexus».",
+ "dondeVamos": "Todo está en producción (6cf3e1ee, 24 nov): un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y reuniones enteras, y La escala de un cliente con lo que ya sabemos (TEC · AE). Lo próximo: tus pruebas, Centauro con Marco y TEC · AE.",
  "temas": [
   {
    "n": 4,
@@ -2505,7 +2588,7 @@
      "texto": "La escala única, arreglada: una cuenta medida solo en un proyecto ya se ve medida."
     }
    ],
-   "sigue": "Revisar con Marco el Resumen de Centauro y confirmar sus cifras; Servicio con dos equipos, cada uno con su nivel. Después, probar con 5 a 8 empresas de 3 industrias.",
+   "sigue": "Revisar con Marco el Resumen de Centauro y usar lo propuesto en TEC · AE; Servicio con dos equipos, cada uno con su nivel. Después, probar con 5 a 8 empresas de 3 industrias.",
    "teToca": "Crear «Telecomunicaciones» en «Industria (Smarteam)» de HubSpot. Después, las 52 decisiones provisionales de la 9.0.",
    "decisiones": [
     8,
@@ -2518,7 +2601,14 @@
     77,
     105,
     106,
-    107
+    107,
+    108,
+    109,
+    110,
+    111,
+    112,
+    115,
+    116
    ]
   },
   {
@@ -2866,7 +2956,7 @@
      "texto": "El plan de las empresas que comparten dominio: la pared es el proyecto y el nombre de la reunión pesa más."
     }
    ],
-   "sigue": "Una sola conversación en el chat «Nexus», y que «✨ Mejorar con IA» lo abra en toda la app. Que lo cambiado vuelva a la memoria. Tus respuestas al plan de dominio compartido.",
+   "sigue": "Que lo cambiado en lo que ve el cliente vuelva a la memoria. Tus respuestas al plan de dominio compartido.",
    "decisiones": [
     21,
     34,
@@ -2890,7 +2980,9 @@
     95,
     96,
     97,
-    104
+    104,
+    113,
+    114
    ]
   },
   {
@@ -3161,7 +3253,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `a11a192f` (todo `main`) desde el 24 nov: La escala con la pantalla limpia y «✨ Mejorar con IA» por sección, su Resumen con mejor criterio, el registro de los cambios de base, un solo chat «Nexus» en la preventa, «✨ Mejorar con IA» en los documentos y en el cronograma, Hablar con Nexus (etapas 0 y 1), el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
+| Producción | Corre `6cf3e1ee` (todo `main`) desde el 24 nov: un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y reuniones enteras, La escala de un cliente con lo que ya sabemos, la pantalla limpia de La escala, el registro de los cambios de base, Hablar con Nexus (etapas 0 y 1), el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
 | Por desplegar | Nada. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | Por datos de antes, ninguno nuevo (28 oct): 16 reuniones colgadas de proyectos de otro cliente (INV1) y 9 tareas que citan una reunión de otro cliente (INV42), las que ordena el plan de dominio compartido; el pipeline de Secure Title (INV11: 2 proyectos y 6 en una etapa desconocida); «TEC- AE» fusionada en HubSpot (INV13 e INV54: ya solo ella, kölbi quedó bien); una reunión de Meet leída antes de ocurrir (INV16a), y el corte de cartera de hace 96 días (INV32). |
 | Pruebas | 30 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 83 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
@@ -3291,6 +3383,15 @@ Sin esto, algo sigue mal o no se puede validar:
 105. ✓ **La escala · Servicio al cliente.** ¿Customer Success y Soporte son dos áreas o un área con dos equipos? **Tu respuesta (24 nov):** «Un área, dos equipos».
 106. ✓ **La escala · el dibujo del Resumen.** ¿Qué dibujo ayuda más al cliente? **Tu respuesta (24 nov):** «El recorrido del cliente».
 107. ✓ **La escala · el Resumen ya publicado de Centauro.** ¿Qué hacemos con él? **Tu respuesta (24 nov):** «Rehacerlo como borrador»: se rehace sin publicar, lo revisas con Marco y confirman cada cifra antes de publicarlo.
+108. ✓ **La escala · el título grande del Resumen.** Decía «7 sesiones y 9 h 16 min de conversación…», datos que ya están en las tarjetas. **Tu respuesta (24 nov):** primero «el nombre del entregable con un resumen» (con el ejemplo de kölbi) y después «Creo que el título debería ser algo como diagnóstico de rendimiento. Y que se pueda editar a mano y cambiar con IA, como todo lo demás».
+109. ✓ **La escala · las reuniones cortadas por largas.** **Tu respuesta (24 nov):** «Que se lean enteras».
+110. ✓ **La escala · las piezas largas y lo ya resuelto.** Acortar en vez de descartar, y sacar lo resuelto como la extranet. **Tu respuesta (24 nov):** «Sí, súmalo».
+111. ✓ **La escala · qué tomar del business case de Marco.** **Tu respuesta (24 nov):** un dolor por equipo en una línea, y quién es quién con nombres. No las tres cifras del negocio ni los casos con resultado verificable.
+112. ✓ **La escala · las reuniones que presentamos nosotros.** «Volver a leer» daba lo mismo. **Tu respuesta (24 nov):** «Una línea gris, sin botón».
+113. ✓ **Chat único · alcance, nombres y lo que baja.** **Tu respuesta (24 nov):** juntar las dos conversaciones como «paso aparte pero arranca en cuanto puedas»; «Asistente» pasa a «Nexus» y los botones a «Mejorar con IA»; casos de uso, artefactos y perfil de puesto entran en la misma tanda; se quitan el rótulo «Nexus» de cada respuesta y la línea «Enter envía».
+114. ✓ **Una sola conversación · vueltas, enlace e historial.** **Tu respuesta (24 nov):** 12 vueltas; se quita el enlace «Tareas, siguiente paso o la guía»; lo conversado antes queda en la ficha.
+115. ✓ **La escala · las páginas ya publicadas y el botón nuevo.** **Tu respuesta (24 nov):** «Que esperen a publicar»; el «✨ Mejorar con IA» de «Equipos y hallazgos» se queda.
+116. ✓ **La escala de un cliente con lo que ya sabemos (TEC · AE).** Plan con D1 a D4 (lo recomendado). **Tu respuesta (24 nov):** «ejecútalo de forma autónoma hasta el final para poder ver esto en producción… mandémoslo a producción».
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
