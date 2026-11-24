@@ -74,29 +74,48 @@ export function enHoras(min: number): string {
   return r ? `${h} h ${r} min` : `${h} h`;
 }
 
+/** Los párrafos del resumen de la portada (24 nov): uno o dos. Lo usan la lectura del agente, la edición y la página. */
+export const MAX_PARRAFOS_DE_LA_PORTADA = 2;
+/** Las líneas de «Quién es quién» (24 nov): quién lidera y una por equipo. */
+export const MAX_LINEAS_DEL_MAPA = 7;
+/** Hasta dónde puede estar el «:» de una línea del mapa: lo de antes es el equipo (la página lo pone en negrita). */
+export const MAX_LARGO_DEL_EQUIPO_DEL_MAPA = 40;
+
+/** Una lista en palabras: «Ventas», «Ventas y Marketing», «Ventas, Marketing y Servicio». */
+const enLista = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`);
+
 /**
- * El titular de la portada (21 nov, Elías: «En el H1 no debería estar el problema. Ahí debería estar las sesiones de
- * exploración, cuántas horas de conversaciones, con cuántas personas se ha hablado»): «13 sesiones y 8 h de conversación
- * con 3 personas de tu equipo.». Los números salen de lo que hicimos (nunca de la IA); `escritos` son los que una persona
- * cambió en las cifras de abajo, para que el titular no diga otro número que ellas. Sin sesiones, null: la portada dice
- * lo de siempre.
+ * El titular de la portada (24 nov, Elías: «El nombre del entregable con un resumen»): «Diagnóstico de Ventas, Marketing y
+ * Servicio en HubSpot.», con los equipos que se exploraron (los que tienen sesiones), en el orden de las pestañas. Hasta el
+ * 24 nov decía lo que hicimos («7 sesiones y 9 h 16 min de conversación con 6 personas de tu equipo.»): esos números siguen
+ * en las cifras de abajo. Sin ningún equipo explorado, null: la portada dice lo de siempre.
  */
-export function tituloDeLoQueHicimos(
-  h: { sesiones: number; minutos: number; personas: number },
-  escritos: { sesiones?: string; tiempo?: string; personas?: string } = {},
-): string | null {
-  if (h.sesiones <= 0) return null;
-  // El singular sale del número que se ve: si una persona escribió «2», dice «2 sesiones» aunque el sistema contara 1.
-  const cuantos = (escrito: string | undefined, n: number) => {
-    const x = Number((escrito ?? "").trim().replace(",", "."));
-    return escrito !== undefined && escrito.trim() !== "" && Number.isFinite(x) ? x : n;
-  };
-  const s = cuantos(escritos.sesiones, h.sesiones);
-  const p = cuantos(escritos.personas, h.personas);
-  const sesiones = `${escritos.sesiones ?? h.sesiones} ${s === 1 ? "sesión" : "sesiones"}`;
-  const tiempo = h.minutos > 0 ? ` y ${escritos.tiempo ?? enHoras(h.minutos)} de conversación` : "";
-  const personas = h.personas > 0 ? ` con ${escritos.personas ?? h.personas} ${p === 1 ? "persona" : "personas"} de tu equipo` : "";
-  return `${sesiones}${tiempo}${personas}.`;
+export function tituloDelDiagnostico(exploradas: readonly string[]): string | null {
+  const nombres = exploradas.map((x) => x.trim()).filter(Boolean);
+  return nombres.length ? `Diagnóstico de ${enLista(nombres)} en HubSpot` : null;
+}
+
+/**
+ * El dolor de cada equipo en una línea (24 nov, Elías, del business case de Marco: «Marketing: duplicados y dificultad para
+ * conectar campañas, leads y ventas»): el reto principal de cada subequipo explorado, el mismo de su fila en «Equipos y
+ * hallazgos». No es una pieza aparte (§2: una fila, una fuente): corregirlo en cualquiera de los dos lugares cambia el
+ * único que hay, porque lleva su misma clave. Un subequipo sin reto principal no sale.
+ */
+export function doloresPorEquipo(r: Pick<ResumenDeLaPagina, "tarjetas">): { id: string; equipo: string; pieza: PiezaDeLaPagina }[] {
+  return r.tarjetas
+    .filter((t) => !t.porExplorar)
+    .flatMap((t) => t.subequipos.flatMap((x) => (x.frena.piezas[0] ? [{ id: x.id, equipo: x.nombre, pieza: x.frena.piezas[0] }] : [])));
+}
+
+/**
+ * Una línea de «Quién es quién» (24 nov, Elías): «Marketing: Catalina, Verónica y Fabián» o «Lidera: Fernando, gerente
+ * general». Lo de antes de los dos puntos es el equipo (o quién lidera); lo de después, su gente. Sin dos puntos, todo es
+ * la gente (una línea escrita a mano así).
+ */
+export function partirLaLineaDelMapa(texto: string): { equipo: string | null; gente: string } {
+  const i = texto.indexOf(":");
+  if (i <= 0 || i > MAX_LARGO_DEL_EQUIPO_DEL_MAPA) return { equipo: null, gente: texto.trim() };
+  return { equipo: texto.slice(0, i).trim(), gente: texto.slice(i + 1).trim() };
 }
 
 /** Un equipo de la escala en «Qué hicimos»: con qué sesiones se exploró, o si quedó pendiente. */
@@ -284,10 +303,15 @@ export interface TraspasoDeLaPagina {
  * TESIS (dos frases cortas), las ETIQUETAS (qué vende, a quién, cómo cobra), el ALCANCE (qué abarca y qué queda fuera) y el
  * TAMAÑO del negocio (una cifra que dijo la empresa: «500 clientes activos»). Vende, ingresos, motivo y busca se siguen
  * guardando (sostienen la tesis y las etiquetas, y un Resumen anterior las trae), pero ya no salen al cliente.
+ * 24 nov (Elías): la PORTADA, uno o dos párrafos cortos debajo del título (qué invierte la empresa, dónde se rompe y con
+ * qué cifras suyas), y QUIÉN ES QUIÉN, una línea por equipo con su gente y una con quién lidera («Marketing: Catalina,
+ * Verónica y Fabián»). Son las únicas piezas con nombres de personas, y nunca pegados a un dolor.
  */
-export type TipoDelNegocio = "tesis" | "etiquetas" | "tamano" | "vende" | "ingresos" | "abarca" | "fuera" | "motivo" | "busca";
-export const TIPOS_DEL_NEGOCIO: readonly TipoDelNegocio[] = ["tesis", "etiquetas", "tamano", "vende", "ingresos", "abarca", "fuera", "motivo", "busca"];
+export type TipoDelNegocio = "tesis" | "etiquetas" | "tamano" | "vende" | "ingresos" | "abarca" | "fuera" | "motivo" | "busca" | "portada" | "quienes";
+export const TIPOS_DEL_NEGOCIO: readonly TipoDelNegocio[] = ["tesis", "etiquetas", "tamano", "vende", "ingresos", "abarca", "fuera", "motivo", "busca", "portada", "quienes"];
 export const TITULO_DEL_NEGOCIO: Record<TipoDelNegocio, string> = {
+  portada: "El resumen, debajo del título",
+  quienes: "Quién es quién",
   tesis: "La tesis",
   etiquetas: "Las etiquetas del negocio",
   tamano: "El tamaño del negocio",
@@ -497,6 +521,8 @@ export interface ResumenDeLaPagina {
   puntoNuevo?: string | null;
   /** Solo adentro: las reuniones que el Resumen no pudo leer bien (cortadas, o casi sin la voz de la empresa). */
   malLeidas?: ReunionMalLeida[];
+  /** Solo adentro: el Resumen se armó leyendo las reuniones enteras (24 nov). Sin esto, rehacerlo lee enteras las cortadas. */
+  leidasEnteras?: true;
 }
 
 /** Un punto clave: un título corto y una o dos frases, con el equipo de la escala del que habla. */
@@ -513,10 +539,6 @@ export interface PuntoDeLaPagina {
 
 /** Por qué el Resumen no pudo leer bien una reunión (18 nov). */
 export type MotivoDeMalLeida = "recortada" | "poco-del-cliente";
-export const MOTIVO_DE_MAL_LEIDA: Record<MotivoDeMalLeida, string> = {
-  recortada: "era muy larga y se leyó sin un pedazo del medio",
-  "poco-del-cliente": "casi todo lo dijo Smarteam: la empresa habló poco",
-};
 
 /** Una reunión que el Resumen no pudo leer bien, con lo que hace falta para avisarlo y volver a leerla. */
 export interface ReunionMalLeida {
@@ -588,25 +610,15 @@ export const BAJADA_DEL_RESUMEN = "Así entendimos tu negocio, cómo trabajan tu
 export const claveAtadaDelResumen = (nombre: string, original: string): string => CLAVES.delResumen(`${nombre}.${huella(original)}`);
 
 /**
- * El titular de la portada (el H1, 21 nov) como lo ve el cliente, con su clave de edición (23 nov: lo comparten la vista y
- * «Pedirle a Nexus», que lo cambia por el mismo texto fijo). Va atado a los números del SISTEMA, no a los escritos:
- * corregir una cifra no lo suelta; rehacer el Resumen con otras sesiones, sí. `valor`: lo cambiado para esta empresa o,
- * si nadie lo cambió, el titular con los números que se ven abajo. null: sin sesiones (la portada dice lo de siempre).
+ * El titular de la portada (el H1) como lo ve el cliente, con su clave de edición (23 nov: lo comparten la vista y «Pedirle a
+ * Nexus», que lo cambia por el mismo texto fijo). Desde el 24 nov es el nombre del entregable (`tituloDelDiagnostico`) y va
+ * atado a los equipos explorados: si se explora otro, el título cambia y lo escrito para el de antes deja de valer. Lo que
+ * alguien escribió sobre el titular de antes (el de las sesiones) tampoco vale: era de otra frase. `exploradas`: los equipos
+ * con sesiones, en el orden de la página. null: ninguno (la portada dice lo de siempre).
  */
-export function titularDelResumen(
-  h: { sesiones: number; minutos: number; personas: number } | null | undefined,
-  textos: TextosDeLaPagina | null | undefined,
-): { clave: string; original: string; valor: string } | null {
-  if (!h) return null;
-  const delSistema = tituloDeLoQueHicimos(h);
-  if (!delSistema) return null;
-  const escrito = (nombre: string, original: string) => textoDeLaPagina(textos, claveAtadaDelResumen(nombre, original), original);
-  const conLosDeAbajo =
-    tituloDeLoQueHicimos(h, {
-      sesiones: escrito("hicimos.sesiones", String(h.sesiones)),
-      tiempo: h.minutos > 0 ? escrito("hicimos.tiempo", enHoras(h.minutos)) : undefined,
-      personas: h.personas > 0 ? escrito("hicimos.personas", String(h.personas)) : undefined,
-    }) ?? delSistema;
-  const clave = claveAtadaDelResumen("titular.hicimos", delSistema);
-  return { clave, original: conLosDeAbajo, valor: textoDeLaPagina(textos, clave, conLosDeAbajo) };
+export function titularDelResumen(exploradas: readonly string[], textos: TextosDeLaPagina | null | undefined): { clave: string; original: string; valor: string } | null {
+  const original = tituloDelDiagnostico(exploradas);
+  if (!original) return null;
+  const clave = claveAtadaDelResumen("titular.diagnostico", original);
+  return { clave, original, valor: textoDeLaPagina(textos, clave, original) };
 }

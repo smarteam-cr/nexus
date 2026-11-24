@@ -23,6 +23,8 @@ import {
   estadoDeLaCifra,
   juntarConLoEditado,
   leerElResumen,
+  MAX_CANDIDATOS_A_PUNTO,
+  MAX_PUNTOS,
   NOTA_SIN_CORREGIR,
   noLaCorrigio,
   pedidoDelResumen,
@@ -243,9 +245,10 @@ describe("los 5 puntos clave", () => {
     expect(corregido.puntos?.map((p) => [p.titulo, p.areaId])).toEqual([["Sin reporte por gestor", "3"]]);
   });
 
-  it("no pasan de 5", () => {
-    const uno = (i: number) => ({ titulo: `Cartera a mano, punto ${"ABCDEF"[i]}`, texto: "La asignación de la cartera la hacemos a mano en Excel.", citas: [C(200, "la asignación de la cartera la hacemos a mano en Excel cada vez que cambia el corte")] });
-    expect(conPuntos([0, 1, 2, 3, 4, 5].map(uno)).puntos).toHaveLength(5);
+  it("la lectura guarda hasta 7 candidatos (24 nov: si la revisión de lo resuelto saca uno, entra el siguiente); al guardar quedan 5", () => {
+    const uno = (i: number) => ({ titulo: `Cartera a mano, punto ${"ABCDEFGH"[i]}`, texto: "La asignación de la cartera la hacemos a mano en Excel.", citas: [C(200, "la asignación de la cartera la hacemos a mano en Excel cada vez que cambia el corte")] });
+    expect(conPuntos([0, 1, 2, 3, 4, 5, 6, 7].map(uno)).puntos).toHaveLength(MAX_CANDIDATOS_A_PUNTO);
+    expect(MAX_PUNTOS).toBe(5);
   });
 });
 
@@ -474,10 +477,10 @@ describe("lo demás que cuida la revisión", () => {
     expect(r.resumen.puntos?.[0].citas).toEqual([]);
   });
 
-  it("un punto corregido vuelve a su lugar en el orden del agente, y quedan los 5 primeros", () => {
-    const base = (n: number) => ({ id: `k${n}`, titulo: `Punto ${"ABCDEFG"[n]}`, texto: "x", areaId: null, citas: [CITA_ANDREA] });
-    const corregido = conLasPiezas({ negocio: {}, operativas: [], puntos: [1, 3, 4, 5, 6].map(base) }, [{ lugar: "puntos", indice: 1, titulo: "El segundo", areaId: null, texto: "y", citas: [CITA_ANDREA], problema: "" }]);
-    expect(corregido.puntos?.map((p) => p.id)).toEqual(["k1", "k2", "k3", "k4", "k5"]);
+  it("un punto corregido vuelve a su lugar en el orden del agente, y quedan los candidatos (los 5 primeros se eligen al guardar)", () => {
+    const base = (n: number) => ({ id: `k${n}`, titulo: `Punto ${"ABCDEFGHI"[n]}`, texto: "x", areaId: null, citas: [CITA_ANDREA] });
+    const corregido = conLasPiezas({ negocio: {}, operativas: [], puntos: [1, 3, 4, 5, 6, 7, 8].map(base) }, [{ lugar: "puntos", indice: 1, titulo: "El segundo", areaId: null, texto: "y", citas: [CITA_ANDREA], problema: "" }]);
+    expect(corregido.puntos?.map((p) => p.id)).toEqual(["k1", "k2", "k3", "k4", "k5", "k6", "k7"]);
   });
 
   it("el peso deja fuera las sesiones de un equipo que el cliente no ve, y lo de la empresa se mide con la regla de las citas", () => {

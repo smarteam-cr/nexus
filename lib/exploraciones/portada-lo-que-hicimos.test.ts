@@ -1,15 +1,16 @@
 /**
  * lib/exploraciones/portada-lo-que-hicimos.test.ts — la portada del Resumen abre con lo que hicimos (21 nov, Elías: «En el
- * H1 no debería estar el problema. Ahí debería estar las sesiones de exploración, cuántas horas de conversaciones, con
- * cuántas personas se ha hablado, la sección de lo que hicimos. Después debería explicar el problema principal, y ese
- * debería ser lo que hoy es el H1.»). El H1 sale de los números (nunca de la IA), la tesis baja a «El problema principal»
- * con su peso, y ninguna pieza de antes desaparece: cambia de lugar.
+ * H1 no debería estar el problema […]»): las cifras de lo que hicimos van arriba, la tesis baja a «El problema principal»
+ * con su peso, y ninguna pieza de antes desaparece: cambia de lugar. Desde el 24 nov (Elías: «El nombre del entregable con
+ * un resumen») el H1 es «Diagnóstico de <los equipos explorados> en HubSpot», con el resumen del agente debajo; las
+ * sesiones, las horas y las personas siguen en las cifras.
  */
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import ResumenDeLaEscalaVista from "@/components/external/test/ResumenDeLaEscalaVista";
-import { faltaParaPublicar, tituloDeLoQueHicimos } from "@/lib/external/pagina-del-resumen";
+import { faltaParaPublicar, tituloDelDiagnostico } from "@/lib/external/pagina-del-resumen";
+import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import { CLAVES, huella } from "@/lib/external/textos-de-la-pagina";
 import { resumenParaLaPagina, type ResumenGuardado } from "./resumen-de-la-escala";
 
@@ -48,53 +49,130 @@ const pestanas = [{ id: "resumen", nombre: "Resumen", href: "#" }];
 const pinta = (g: ResumenGuardado, textos: Record<string, string> = {}) =>
   renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: resumenParaLaPagina(g, [], {}, {}, { conCitas: false }), empresa: "Empresa de prueba", pestanas, textos }));
 
-describe("el titular de lo que hicimos", () => {
-  it("dice sesiones, horas y personas, con singular y plural, y se acorta si falta un dato", () => {
-    expect(tituloDeLoQueHicimos({ sesiones: 13, minutos: 480, personas: 3 })).toBe("13 sesiones y 8 h de conversación con 3 personas de tu equipo.");
-    expect(tituloDeLoQueHicimos({ sesiones: 1, minutos: 73, personas: 1 })).toBe("1 sesión y 1 h 13 min de conversación con 1 persona de tu equipo.");
-    expect(tituloDeLoQueHicimos({ sesiones: 2, minutos: 0, personas: 4 })).toBe("2 sesiones con 4 personas de tu equipo.");
-    expect(tituloDeLoQueHicimos({ sesiones: 2, minutos: 90, personas: 0 })).toBe("2 sesiones y 1 h 30 min de conversación.");
+/** Un equipo de la escala mínimo, para que la página tenga su tarjeta (y su nombre en el título). */
+const equipo = (areaId: string, areaNombre: string) =>
+  ({
+    edicion: null,
+    areaId,
+    areaNombre,
+    version: areaNombre.toLowerCase(),
+    nivel: "I",
+    nivelNombre: "Inicial",
+    puntaje: null,
+    capas: [],
+    dimensiones: [],
+    niveles: [],
+    recomendacion: null,
+    riesgos: [],
+    casos: [],
+    sintesis: "",
+    preguntadas: 0,
+    total: 0,
+  }) as unknown as ResultadoDelTest;
+const VENTAS = equipo("1", "Ventas");
+const MARKETING = equipo("2", "Marketing");
+const conEquipos = (g: ResumenGuardado, textos: Record<string, string> = {}) =>
+  renderToStaticMarkup(
+    createElement(ResumenDeLaEscalaVista, { resumen: resumenParaLaPagina(g, [VENTAS, MARKETING], {}, {}, { conCitas: false }), empresa: "Empresa de prueba", pestanas, textos }),
+  );
+/** Las sesiones de las dos áreas (con su `areaId`): los dos equipos quedan explorados. */
+const deLasDos = (g: ResumenGuardado): ResumenGuardado => ({
+  ...g,
+  hicimos: {
+    ...g.hicimos,
+    sesiones: [
+      { fecha: "2026-11-05T16:00:00.000Z", equipo: "Ventas", areaId: "1", minutos: 300, quienes: ["diego rojas"] },
+      { fecha: "2026-11-06T16:00:00.000Z", equipo: "Marketing", areaId: "2", minutos: 180, quienes: ["ana mora"] },
+    ],
+  },
+});
+
+describe("el título: el nombre del entregable (24 nov)", () => {
+  it("dice «Diagnóstico de <los equipos explorados> en HubSpot», en una lista en palabras", () => {
+    expect(tituloDelDiagnostico(["Ventas"])).toBe("Diagnóstico de Ventas en HubSpot");
+    expect(tituloDelDiagnostico(["Marketing", "Ventas"])).toBe("Diagnóstico de Marketing y Ventas en HubSpot");
+    expect(tituloDelDiagnostico(["Ventas", "Marketing", "Servicio"])).toBe("Diagnóstico de Ventas, Marketing y Servicio en HubSpot");
+    expect(tituloDelDiagnostico([])).toBeNull();
   });
 
-  it("sin sesiones no hay titular de números (la portada dice lo de siempre)", () => {
-    expect(tituloDeLoQueHicimos({ sesiones: 0, minutos: 0, personas: 0 })).toBeNull();
+  it("⛔ el H1 ya no dice las sesiones: esos números siguen en las cifras de abajo", () => {
+    const html = conEquipos(deLasDos(guardado()));
+    expect(html).toContain('<h1 class="re-titular rd-entra">Diagnóstico de Ventas y Marketing en HubSpot</h1>');
+    expect(html).not.toMatch(/<h1[^>]*>\d+ sesiones/);
+    expect(html).toContain("<b>2</b><span>sesiones de exploración</span>");
+    expect(html).toContain("<span>de conversación</span>");
+  });
+
+  it("un equipo sin sesiones no entra al título", () => {
+    const g = deLasDos(guardado());
+    g.hicimos.sesiones = g.hicimos.sesiones.filter((x) => x.areaId === "1");
+    expect(conEquipos(g)).toContain('<h1 class="re-titular rd-entra">Diagnóstico de Ventas en HubSpot</h1>');
+  });
+
+  it("sin Resumen ni equipos explorados, la portada dice lo de siempre", () => {
     expect(pinta({ ...guardado(), hicimos: { sesiones: [], personas: 0, texto: null } })).toContain('<h1 class="re-titular rd-entra">Así entendimos tu negocio.</h1>');
   });
 
-  it("⛔ el H1 dice los mismos números que las cifras de abajo, también si una persona las cambió", () => {
-    const html = pinta(guardado());
-    expect(html).toContain('<h1 class="re-titular rd-entra">2 sesiones y 8 h de conversación con 3 personas de tu equipo.</h1>');
-    const cambiado = pinta(guardado(), {
-      [CLAVES.delResumen(`hicimos.sesiones.${huella("2")}`)]: "3",
-      [CLAVES.delResumen(`hicimos.tiempo.${huella("8 h")}`)]: "9 h",
-      [CLAVES.delResumen(`hicimos.personas.${huella("3")}`)]: "4",
-    });
-    expect(cambiado).toContain('<h1 class="re-titular rd-entra">3 sesiones y 9 h de conversación con 4 personas de tu equipo.</h1>');
-    expect(cambiado).toContain("<b>3</b><span>sesiones de exploración</span>");
-    expect(cambiado).toContain("<b>9 h</b><span>de conversación</span>");
-    expect(cambiado).toContain("<b>4</b><span>personas de tu equipo</span>");
+  it("el título se reescribe para esta empresa, y lo escrito se suelta cuando cambian los equipos explorados", () => {
+    const clave = CLAVES.delResumen(`titular.diagnostico.${huella("Diagnóstico de Ventas y Marketing en HubSpot")}`);
+    expect(conEquipos(deLasDos(guardado()), { [clave]: "Diagnóstico comercial" })).toContain('<h1 class="re-titular rd-entra">Diagnóstico comercial</h1>');
+    const soloVentas = deLasDos(guardado());
+    soloVentas.hicimos.sesiones = soloVentas.hicimos.sesiones.filter((x) => x.areaId === "1");
+    expect(conEquipos(soloVentas, { [clave]: "Diagnóstico comercial" })).toContain('<h1 class="re-titular rd-entra">Diagnóstico de Ventas en HubSpot</h1>');
+  });
+});
+
+describe("el resumen debajo del título (24 nov)", () => {
+  const PARRAFO = "Empresa de prueba invierte en 3 tiendas, pero las ventas se anotan a mano.";
+  it("va debajo del H1, en lugar de la bajada de siempre", () => {
+    const g = guardado();
+    g.negocio = { ...g.negocio, portada: [{ id: "n9", texto: PARRAFO, citas: [CITA] }] };
+    const html = conEquipos(deLasDos(g));
+    expect(html.indexOf(PARRAFO)).toBeGreaterThan(html.indexOf("<h1"));
+    expect(html.indexOf(PARRAFO)).toBeLessThan(html.indexOf('class="re-hicimos'));
+    expect(html).not.toContain("Así entendimos tu negocio, cómo trabajan tus equipos y qué los frena hoy.");
   });
 
-  it("el singular sale del número que se ve, no del que contó el sistema", () => {
-    expect(tituloDeLoQueHicimos({ sesiones: 1, minutos: 60, personas: 1 }, { sesiones: "2", personas: "3" })).toBe("2 sesiones y 1 h de conversación con 3 personas de tu equipo.");
-    expect(tituloDeLoQueHicimos({ sesiones: 2, minutos: 60, personas: 2 }, { sesiones: "1", personas: "1" })).toBe("1 sesión y 1 h de conversación con 1 persona de tu equipo.");
-    expect(tituloDeLoQueHicimos({ sesiones: 2, minutos: 0, personas: 0 }, { sesiones: "dos" })).toBe("dos sesiones.");
+  it("sin resumen (un Resumen de antes), la bajada de siempre", () => {
+    expect(conEquipos(deLasDos(guardado()))).toContain("Así entendimos tu negocio, cómo trabajan tus equipos y qué los frena hoy.");
+  });
+});
+
+describe("⛔ una escala publicada antes no dice «Hay cambios que el cliente no ve» por las partes nuevas (24 nov)", () => {
+  it("afuera, el resumen de la portada y quién es quién solo van si tienen algo; adentro, siempre (para escribirlos)", () => {
+    const tipos = (conCitas: boolean, g = guardado()) => resumenParaLaPagina(g, [], {}, {}, { conCitas }).negocio?.map((p) => p.tipo);
+    expect(tipos(false)).toEqual(["tesis", "etiquetas", "tamano", "vende", "ingresos", "abarca", "fuera", "motivo", "busca"]);
+    expect(tipos(true)).toContain("portada");
+    expect(tipos(true)).toContain("quienes");
+    const conPortada = guardado();
+    conPortada.negocio = { ...conPortada.negocio, portada: [{ id: "n9", texto: "La empresa invierte en tres tiendas.", citas: [CITA] }] };
+    expect(tipos(false, conPortada)).toContain("portada");
+  });
+});
+
+describe("el dolor de cada equipo y quién es quién (24 nov)", () => {
+  const conEquipo = (g: ResumenGuardado): ResumenGuardado => ({
+    ...g,
+    operativas: [
+      { id: "o1", nombre: "Ventas", areaId: "1", organizacion: [], bien: [], frena: [{ id: "f1", texto: "La gerencia no ve qué vende cada asesor", citas: [CITA] }], retos: [], cifras: [], falta: null },
+    ],
+  });
+  it("el reto principal de cada equipo sale en una línea debajo del problema principal (la misma pieza)", () => {
+    const html = conEquipos(conEquipo(deLasDos(guardado())));
+    expect(html).toContain('<ul class="re-dolores"><li><b>Ventas:</b> La gerencia no ve qué vende cada asesor</li></ul>');
+    expect(html.indexOf("re-dolores")).toBeGreaterThan(html.indexOf("/ El problema principal"));
+    expect(html.indexOf("re-dolores")).toBeLessThan(html.indexOf("/ Puntos clave"));
   });
 
-  it("el titular reescrito aguanta que se corrija una cifra (se ata a los números del sistema)", () => {
-    const clave = CLAVES.delResumen(`titular.hicimos.${huella("2 sesiones y 8 h de conversación con 3 personas de tu equipo.")}`);
-    const html = pinta(guardado(), { [clave]: "Ocho horas con tu equipo de ventas.", [CLAVES.delResumen(`hicimos.personas.${huella("3")}`)]: "4" });
-    expect(html).toContain('<h1 class="re-titular rd-entra">Ocho horas con tu equipo de ventas.</h1>');
-    expect(html).toContain("<b>4</b><span>personas de tu equipo</span>");
-  });
-
-  it("el titular se puede reescribir para esta empresa, y lo escrito se suelta cuando cambian las sesiones", () => {
-    const original = "2 sesiones y 8 h de conversación con 3 personas de tu equipo.";
-    const clave = CLAVES.delResumen(`titular.hicimos.${huella(original)}`);
-    expect(pinta(guardado(), { [clave]: "Ocho horas con tu equipo de ventas." })).toContain('<h1 class="re-titular rd-entra">Ocho horas con tu equipo de ventas.</h1>');
-    const conOtraSesion = guardado();
-    conOtraSesion.hicimos.sesiones.push({ fecha: "2026-11-07T16:00:00.000Z", equipo: "Ventas", minutos: 60, quienes: ["diego rojas"] });
-    expect(pinta(conOtraSesion, { [clave]: "Ocho horas con tu equipo de ventas." })).toContain('<h1 class="re-titular rd-entra">3 sesiones y 9 h');
+  it("quién es quién va arriba de las filas de los equipos, con el equipo en negrita", () => {
+    const g = conEquipo(deLasDos(guardado()));
+    g.negocio = { ...g.negocio, quienes: [{ id: "q1", texto: "Lidera: Diego, gerente general", citas: [CITA] }, { id: "q2", texto: "Ventas: Ana y Luis", citas: [CITA] }] };
+    const html = conEquipos(g);
+    expect(html).toContain("<h3>Quién es quién</h3>");
+    expect(html).toContain("<li><b>Lidera</b><span>Diego, gerente general</span></li>");
+    expect(html).toContain("<li><b>Ventas</b><span>Ana y Luis</span></li>");
+    expect(html.indexOf("re-mapa")).toBeGreaterThan(html.indexOf("/ Equipos y hallazgos"));
+    expect(html.indexOf("re-mapa")).toBeLessThan(html.indexOf("re-equipo-nombre"));
   });
 });
 

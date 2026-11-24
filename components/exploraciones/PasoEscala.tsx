@@ -66,7 +66,7 @@ import { esHipotesisDeNivel, type DestinoDePropuesta, type ItemPropuesto } from 
 import type { AreaDelLienzo, DimensionDelLienzo, EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { fraseDelFreno, ordenParaExplorar, partesParaExplorar } from "@/lib/exploraciones/equipos-de-la-escala";
 import { chequeoDelMapa, cuentaDelArea, fraseDeLaCuenta, loQueLaFrena, type PosicionEnElMapa } from "@/lib/exploraciones/mapa";
-import { lineaDeLaEscala } from "@/lib/exploraciones/linea-de-la-escala";
+import { cortadasQueSeLeenEnteras, lineaDeLaEscala } from "@/lib/exploraciones/linea-de-la-escala";
 import AccesoALaEscala from "./AccesoALaEscala";
 import PublicarLaEscala from "./PublicarLaEscala";
 import ListaQueSeAnima from "./ListaQueSeAnima";
@@ -155,6 +155,8 @@ function LineaDeArriba() {
     ubicadaEn: ultima?.en ?? null,
     leyo: ultima?.leyo,
     resumenEn: exp.estado.contenido.resumenDeLaEscala?.at ?? null,
+    // Las reuniones largas que ese Resumen leyó cortadas (24 nov): rehacerlo las lee enteras.
+    cortadas: cortadasQueSeLeenEnteras(exp.estado.contenido.resumenDeLaEscala),
     // Otro trabajo del agente (leer una reunión, la guía) no ubica la escala: la frase no cambia, solo el botón espera.
     ubicando: corriendo && corrida?.modo === "posicionar",
   });

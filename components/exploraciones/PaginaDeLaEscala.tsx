@@ -493,7 +493,7 @@ export default function PaginaDeLaEscala() {
               Los niveles se movieron después de armarlo. Revisa lo que dice o rehazlo con IA.
             </Alert>
           )}
-          {res.malLeidas && res.malLeidas.length > 0 && <ReunionesMalLeidas reuniones={res.malLeidas} />}
+          {res.malLeidas && res.malLeidas.length > 0 && <ReunionesMalLeidas reuniones={res.malLeidas} enteras={!!res.leidasEnteras} />}
           {res.avisos && res.avisos.length > 0 && (
             <ul className="list-disc space-y-0.5 pl-5 text-warn-ink">
               {res.avisos.map((a) => (

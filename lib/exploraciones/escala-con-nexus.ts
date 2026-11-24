@@ -4,7 +4,7 @@
  *
  * Arma, desde la MISMA página que ve el cliente (`PaginaParaElCse`, el cálculo de /external/escala), la lista de lo que
  * se puede cambiar, con el nombre que tiene en la pantalla y lo que acepta:
- *   · el Resumen: el titular y la bajada, el problema principal, las etiquetas, el alcance y el tamaño, los puntos clave,
+ *   · el Resumen: el titular, el resumen debajo (o la bajada, si no hay), el problema principal, las etiquetas, el alcance y el tamaño, los puntos clave,
  *     el recorrido, cada equipo (quiénes son, lo que funciona, el reto principal, lo que lo causa, sus cifras y lo que
  *     falta), lo que falta validar, y un lugar para AGREGAR en cada lista que acepta una pieza nueva;
  *   · la página de un área: la descripción de «Resultado general», lo que dice la tarjeta de cada parte medida, los
@@ -25,6 +25,8 @@ import {
   claveAtadaDelResumen,
   conclusionDelSubequipo,
   MAX_ETIQUETAS,
+  MAX_LINEAS_DEL_MAPA,
+  MAX_PARRAFOS_DE_LA_PORTADA,
   titularDelResumen,
   TOPE_A_MANO,
   TOPE_DE_LA_CIFRA,
@@ -134,14 +136,22 @@ export function piezasDelResumen(res: ResumenDeLaPagina, textos: TextosDeLaPagin
   // Sin Resumen armado no hay nada que mejorar con Nexus (ni versión a la que volver): primero se arma.
   if (!res.at) return [];
   const out: PiezaDeLaEscala[] = [];
-  const titular = titularDelResumen(res.hicimos, textos);
+  const parte = (tipo: string): ListaDeLaPagina => res.negocio?.find((p) => p.tipo === tipo)?.lista ?? { piezas: [], nueva: null };
+  // El título es el nombre del entregable (24 nov), con los equipos explorados, como lo pinta la página.
+  const titular = res.hicimos ? titularDelResumen(res.tarjetas.filter((t) => !t.porExplorar).map((t) => t.nombre), textos) : null;
   if (titular) {
-    const p = fijo(titular.clave, titular.original, "El titular (arriba de todo)", R.arriba, textos);
+    const p = fijo(titular.clave, titular.original, "El título (arriba de todo)", R.arriba, textos);
     out.push({ ...p, valor: titular.valor });
   }
-  out.push(fijo(claveAtadaDelResumen("bajada", BAJADA_DEL_RESUMEN), BAJADA_DEL_RESUMEN, "La bajada, debajo del titular", R.arriba, textos));
+  // El resumen debajo del título (24 nov); sin él, la página muestra la bajada de siempre.
+  const portada = parte("portada");
+  if (portada.piezas.length)
+    out.push(...deLaLista({ piezas: portada.piezas, nueva: portada.piezas.length < MAX_PARRAFOS_DE_LA_PORTADA ? portada.nueva : null }, "Un párrafo del resumen, debajo del título", R.arriba));
+  else {
+    out.push(fijo(claveAtadaDelResumen("bajada", BAJADA_DEL_RESUMEN), BAJADA_DEL_RESUMEN, "La bajada, debajo del titular", R.arriba, textos));
+    if (portada.nueva) out.push(delResumen(portada.nueva, null, "El resumen, debajo del título (uno o dos párrafos)", R.arriba, null));
+  }
 
-  const parte = (tipo: string): ListaDeLaPagina => res.negocio?.find((p) => p.tipo === tipo)?.lista ?? { piezas: [], nueva: null };
   const tesis = parte("tesis");
   const enElProblema = R.problema;
   // La tesis es obligatoria para publicar: se cambia, no se quita.
@@ -184,6 +194,11 @@ export function piezasDelResumen(res: ResumenDeLaPagina, textos: TextosDeLaPagin
   }
   if (res.etapaNueva) out.push(delResumen(res.etapaNueva, null, "Un paso nuevo (su nombre)", R.operacion, null, { tope: TOPE_DE_UN_NOMBRE }));
 
+  // Quién es quién (24 nov), arriba de las filas de los equipos: la única parte con nombres.
+  const quienes = parte("quienes");
+  // Va en «Equipos y hallazgos»: sin ningún equipo en la página, esa sección no sale (y no hay dónde verlo).
+  if (res.tarjetas.length && (quienes.piezas.length || quienes.nueva))
+    out.push(...deLaLista({ piezas: quienes.piezas, nueva: quienes.piezas.length < MAX_LINEAS_DEL_MAPA ? quienes.nueva : null }, "Una línea de quién es quién («Marketing: Catalina y Verónica»)", R.equipos));
   for (const t of res.tarjetas) {
     if (t.porExplorar) continue;
     for (const x of t.subequipos) {
