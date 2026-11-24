@@ -1,7 +1,15 @@
 "use client";
 
 /**
- * HablarConNexus — «Hablar con Nexus» en la preventa (Elías, 21 nov): el botón de la barra de la izquierda y su cajón.
+ * HablarConNexus — «Hablar con Nexus» en la preventa (Elías, 21 nov): el cajón «Nexus».
+ *
+ * UNA SOLA PUERTA (23 nov, etapa 2 del plan maestro, aprobada por la coordinadora): el cajón lo abre el botón «Nexus» de
+ * arriba (BotonDeNexus.tsx; el botón del riel se quitó) con `abrirNexusEnLaPreventa` (lib/exploraciones/abrir-nexus.ts).
+ * Adentro, «Tareas, siguiente paso o la guía» abre el chat de la cuenta con el chip de la preventa (sin las notas de la
+ * cuenta, que van a HubSpot). Y «✨ Mejorar con IA» de La escala lo abre con el lugar puesto como chip (el Resumen, un área
+ * o una pieza): con el chip, lo que se escribe es un pedido de cambio a la página y la propuesta por pieza se ve adentro
+ * (PedirleANexus.tsx); quitar el chip vuelve a la conversación. En la escala de la cuenta (sin conversación) el cajón abre
+ * solo con el chip.
  *
  * La conversación es la genérica (components/chat-de-nexus/PanelDeNexus.tsx): la persona cuenta algo o pregunta algo de
  * la cuenta. Cuando Nexus entiende lo que contó, acá pasa lo de la preventa, en este orden:
@@ -49,6 +57,9 @@ import { notaDeLaConversacion, type CambioPropuesto } from "@/lib/chat-de-nexus/
 import type { ConversacionGuardada } from "@/lib/chat-de-nexus/guardada";
 import { useLienzo } from "./contexto";
 import { CORRIENDO_LA_ESCALA, useRehacerLaEscala } from "./rehacer-la-escala";
+import PedirleANexus from "./PedirleANexus";
+import { avisarQueNexusCambioLaEscala, EVENTO_ABRIR_NEXUS, type LugarDeLaEscalaEnElCajon, type PedidoDeAbrirNexus } from "@/lib/exploraciones/abrir-nexus";
+import { abrirElChatDeNexus } from "@/lib/nexus-chat/constantes";
 
 /** Lo que responde …/nexus/guardado (los tipos del servidor, sin importarlo). */
 interface Guardado {
@@ -420,8 +431,10 @@ function LoQueQuedo({
 }
 
 export default function HablarConNexus() {
-  const { exp, puedeEditar, cambiar, lugar } = useLienzo();
+  const { exp, puedeEditar, cambiar, lugar, conAsistente, recargar } = useLienzo();
   const [abierto, setAbierto] = useState(false);
+  /** El lugar de La escala desde el que se pidió «✨ Mejorar con IA» (el chip); null: la conversación. */
+  const [escala, setEscala] = useState<LugarDeLaEscalaEnElCajon | null>(null);
   const [listo, setListo] = useState<Listo | null>(null);
   const [guardado, setGuardado] = useState<Guardado | null>(null);
   const [errorAlGuardar, setErrorAlGuardar] = useState<string | null>(null);
@@ -466,8 +479,28 @@ export default function HablarConNexus() {
     };
   }, [activo, exp.id]);
 
-  // Primero en la preventa: ni en la escala de la cuenta ni en la exploración de un proyecto.
-  if (!activo) return null;
+  // Lo abren el botón «Nexus» de arriba y «✨ Mejorar con IA» de La escala (con el lugar como chip).
+  useEffect(() => {
+    const alPedir = (e: Event) => {
+      const p = (e as CustomEvent<PedidoDeAbrirNexus>).detail;
+      // Solo el cajón de ESTA exploración (otra puede estar cargada y oculta en la misma pantalla).
+      if (!p || p.exploracionId !== exp.id) return;
+      if (p.escala) {
+        if (!puedeEditar) return;
+        setEscala(p.escala);
+        setAbierto(true);
+      } else if (activo) {
+        setEscala(null);
+        setAbierto(true);
+      }
+    };
+    window.addEventListener(EVENTO_ABRIR_NEXUS, alPedir);
+    return () => window.removeEventListener(EVENTO_ABRIR_NEXUS, alPedir);
+  }, [activo, puedeEditar, exp.id]);
+
+  // La conversación, solo en la preventa (ni en la escala de la cuenta ni en la exploración de un proyecto). Pedirle un
+  // cambio a La escala, donde haya escala y se pueda editar.
+  if (!activo && !escala) return null;
   const llena = loQueSabeElEquipo(exp.estado.contenido.notas).length >= MAX_LO_QUE_SABES;
 
   const revisar = async (conversacion: string, clave: string) => {
@@ -563,16 +596,53 @@ export default function HablarConNexus() {
 
   return (
     <>
-      <Button variant="secondary" size="sm" className="mb-3 w-full" onClick={() => setAbierto(true)}>
-        Hablar con Nexus
-      </Button>
       <Drawer
         open={abierto}
         onClose={cerrar}
-        title="Hablar con Nexus"
-        description="Cuéntale lo que sabes del cliente, o pregúntale lo que se habló, escrito o dictado. Si le cuentas algo, te pregunta lo que falte y te muestra qué cambia antes de guardarlo."
+        title="Nexus"
+        description={
+          escala
+            ? "Pídele un cambio a la página de La escala: te muestra cada parte con el antes y el después, y nada cambia hasta que lo apliques."
+            : "Cuéntale lo que sabes del cliente, o pregúntale lo que se habló, escrito o dictado. Si le cuentas algo, te pregunta lo que falte y te muestra qué cambia antes de guardarlo."
+        }
         size="lg"
       >
+        {escala ? (
+          <PedirleANexus
+            key={escala.lugar.pagina === "resumen" ? "resumen" : escala.lugar.areaId}
+            exploracionId={exp.id}
+            lugar={escala.lugar}
+            lugarNombre={escala.nombre}
+            foco={escala.foco}
+            onQuitarFoco={() => setEscala({ ...escala, foco: null })}
+            onCerrar={() => {
+              setEscala(null);
+              if (!activo) setAbierto(false);
+            }}
+            rotuloDeCerrar={activo ? "Volver a conversar" : "Cerrar"}
+            alCambiar={() => {
+              // Lo aplicado se guarda por su propia ruta: el lienzo y la página de La escala se ponen al día.
+              void recargar();
+              avisarQueNexusCambioLaEscala();
+            }}
+          />
+        ) : (
+          <>
+            {conAsistente && (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-surface-muted px-3 py-2 text-xs text-fg-muted">
+                <span>¿Una tarea, el siguiente paso o un cambio a la guía?</span>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    cerrar();
+                    abrirElChatDeNexus({ chip: { tipo: "preventa", id: exp.id, etiqueta: "Preventa" } });
+                  }}
+                >
+                  Tareas, siguiente paso o la guía
+                </Button>
+              </div>
+            )}
         {/* Lleno, solo al empezar: a media conversación el aviso va junto al «Guardar» y la conversación sigue a la vista. */}
         {llena && !listo && !conversacion.mensajes.length ? (
           <Alert variant="warning">«Lo que sabes del cliente» ya tiene {MAX_LO_QUE_SABES} notas: quita una en la Preparación antes de contar otra.</Alert>
@@ -608,6 +678,8 @@ export default function HablarConNexus() {
               />
             )}
           </PanelDeNexus>
+        )}
+          </>
         )}
       </Drawer>
     </>

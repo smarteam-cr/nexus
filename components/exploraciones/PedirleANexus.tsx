@@ -1,9 +1,11 @@
 "use client";
 
 /**
- * components/exploraciones/PedirleANexus.tsx — el panel «✨ Pedirle a Nexus» de la página de La escala (23 nov, etapa 3 del
- * plan maestro de «Hablar con Nexus», versión SIN cajón aprobada por Elías): se abre en la misma página, al lado de lo que
- * se mejora. Un pedido, una propuesta: no es una conversación.
+ * components/exploraciones/PedirleANexus.tsx — «✨ Mejorar con IA» de La escala DENTRO del cajón «Nexus» (23 nov, etapas 2
+ * y 3 del plan maestro de «Hablar con Nexus»): lo monta HablarConNexus.tsx cuando el cajón se abrió con el lugar como chip.
+ * Hasta la etapa 2 era un panel al lado de la página; se retiró (no quedan los dos). Un pedido, una propuesta: no es una
+ * conversación. Cerrar el cajón no pierde nada: el pedido de cada lugar queda recordado mientras la página esté abierta
+ * (lib/pedirle-a-nexus/recordado.ts).
  *
  * Arriba, el lugar (lo pone el botón: el Resumen, un área o una pieza; la pieza se puede quitar para pedir sobre toda la
  * página) y la caja para pedir. Debajo, la propuesta en el marco de siempre (`<AgentProposal>`): cada cambio con el antes y
@@ -14,7 +16,8 @@
  * aviso dice que hay cambios que el cliente no ve, con «Deshacer». Si otra persona cambió una parte entretanto, no se aplica
  * nada y se dice qué dice ahora.
  */
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
+import { leerRecordado, recordar, SIN_PEDIDO, suscribirAlRecordado, type EstadoDelCambio, type PedidoRecordado } from "@/lib/pedirle-a-nexus/recordado";
 import { Alert, Button, ConfirmDialog, IconButton, Textarea } from "@/components/ui";
 import { AgentProposal } from "@/components/ai/AgentProposal";
 import { MAX_PEDIDO, NOMBRE_DEL_BOTON, type CambioParaAplicar, type CambioPropuesto, type Choque, type DeshacerDeNexus, type PropuestaDeNexus } from "@/lib/pedirle-a-nexus/contrato";
@@ -26,7 +29,17 @@ export interface FocoDelPedido {
   nombre: string;
 }
 
-type EstadoDelCambio = "pendiente" | "aplicado" | "descartado";
+/** La clave del pedido recordado de un lugar de La escala (lib/pedirle-a-nexus/recordado.ts). */
+const claveDelPedido = (exploracionId: string, lugar: LugarEnLaEscala): string => `escala:${exploracionId}:${lugar.pagina === "resumen" ? "resumen" : `area:${lugar.areaId}`}`;
+
+/** El pedido recordado de un lugar (la misma referencia hasta que cambia: lo pide `useSyncExternalStore`). */
+function useRecordado(clave: string): PedidoRecordado {
+  return useSyncExternalStore(
+    suscribirAlRecordado,
+    () => leerRecordado(clave),
+    () => SIN_PEDIDO,
+  );
+}
 
 const EJEMPLO = "Por ejemplo: «cambia el titular a algo sobre la cobranza» o «agrega un punto clave sobre el WhatsApp, que es crítico».";
 
@@ -69,6 +82,7 @@ export default function PedirleANexus({
   foco,
   onQuitarFoco,
   onCerrar,
+  rotuloDeCerrar = "Cerrar",
   alCambiar,
 }: {
   exploracionId: string;
@@ -78,67 +92,58 @@ export default function PedirleANexus({
   foco: FocoDelPedido | null;
   onQuitarFoco: () => void;
   onCerrar: () => void;
+  /** El rótulo de `onCerrar`: dentro del cajón «Nexus», vuelve a la conversación. */
+  rotuloDeCerrar?: string;
   /** Después de aplicar o deshacer (o de un choque): la página y el lienzo se ponen al día. */
   alCambiar: () => void;
 }) {
-  const [pedido, setPedido] = useState("");
-  const [pidiendo, setPidiendo] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [propuesta, setPropuesta] = useState<PropuestaDeNexus | null>(null);
-  const [estados, setEstados] = useState<Record<string, EstadoDelCambio>>({});
-  const [aplicando, setAplicando] = useState(false);
-  const [choques, setChoques] = useState<Choque[]>([]);
-  /** Lo último aplicado: su aviso y cómo deshacerlo. */
-  const [hecho, setHecho] = useState<{ aviso: string; deshacer: DeshacerDeNexus | null; claves: string[] } | null>(null);
+  // El pedido de este lugar vive en el almacén del módulo (abajo): cerrar el cajón y volver a abrirlo lo trae como estaba.
+  const clave = claveDelPedido(exploracionId, lugar);
+  const { pedido, pidiendo, error, propuesta, estados, aplicando, choques, hecho } = useRecordado(clave);
   /** El cambio de una pieza escrita por el equipo, esperando que la persona confirme. */
   const [aConfirmar, setAConfirmar] = useState<CambioPropuesto | null>(null);
 
   const pedir = async () => {
     const texto = pedido.trim();
     if (!texto || pidiendo) return;
-    setPidiendo(true);
-    setError(null);
-    setChoques([]);
-    setHecho(null);
+    recordar(clave, { pidiendo: true, error: null, choques: [], hecho: null });
     const r = await fetch(`/api/sales/exploraciones/${exploracionId}/escala/nexus`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ lugar, pedido: texto, foco: foco?.clave ?? null }),
     }).catch(() => null);
     const data = ((await r?.json().catch(() => ({}))) ?? {}) as { propuesta?: PropuestaDeNexus; error?: string };
-    setPidiendo(false);
+    // Aunque el cajón se haya cerrado mientras Nexus pensaba: la respuesta queda para cuando se vuelva a abrir.
     if (!r?.ok || !data.propuesta) {
-      setError(data.error ?? "Nexus no pudo proponer. Vuelve a intentarlo.");
+      recordar(clave, { pidiendo: false, error: data.error ?? "Nexus no pudo proponer. Vuelve a intentarlo." });
       return;
     }
-    setPropuesta(data.propuesta);
-    setEstados({});
+    recordar(clave, { pidiendo: false, propuesta: data.propuesta, estados: {} });
   };
 
   /** Aplica (o deshace: vuelve a la versión de antes) por la ruta de la página. Devuelve si salió. */
   const enviar = async (pedidoAlServidor: { cambios: CambioParaAplicar[] } | { deshacer: DeshacerDeNexus }): Promise<boolean> => {
     const deshacer = "deshacer" in pedidoAlServidor;
     // «Deshacer» vuelve a como estaba antes del ÚLTIMO «Aplicar»: solo esas piezas quedan otra vez por decidir.
-    const deshechas = deshacer ? (hecho?.claves ?? []) : [];
-    setAplicando(true);
-    setError(null);
-    setChoques([]);
+    const deshechas = deshacer ? (leerRecordado(clave).hecho?.claves ?? []) : [];
+    recordar(clave, { aplicando: true, error: null, choques: [] });
     const r = await fetch(`/api/sales/exploraciones/${exploracionId}/escala/nexus`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(deshacer ? { lugar, ...pedidoAlServidor } : { lugar, ...pedidoAlServidor, pedido: propuesta?.pedido ?? null }),
+      body: JSON.stringify(deshacer ? { lugar, ...pedidoAlServidor } : { lugar, ...pedidoAlServidor, pedido: leerRecordado(clave).propuesta?.pedido ?? null }),
     }).catch(() => null);
     const data = ((await r?.json().catch(() => ({}))) ?? {}) as { aviso?: string; deshacer?: DeshacerDeNexus | null; error?: string; choques?: Choque[] };
-    setAplicando(false);
     if (!r?.ok) {
-      setError(data.error ?? "No se pudo aplicar.");
-      setChoques(data.choques ?? []);
+      recordar(clave, { aplicando: false, error: data.error ?? "No se pudo aplicar.", choques: data.choques ?? [] });
       // Lo que cambió otra persona se ve en la página.
       alCambiar();
       return false;
     }
-    setHecho(deshacer || !("cambios" in pedidoAlServidor) ? null : { aviso: data.aviso ?? "Listo.", deshacer: data.deshacer ?? null, claves: pedidoAlServidor.cambios.map((c) => c.clave) });
-    if (deshacer) setEstados((e) => Object.fromEntries(Object.entries(e).filter(([k]) => !deshechas.includes(k))));
+    recordar(clave, (e) => ({
+      aplicando: false,
+      hecho: deshacer || !("cambios" in pedidoAlServidor) ? null : { aviso: data.aviso ?? "Listo.", deshacer: data.deshacer ?? null, claves: pedidoAlServidor.cambios.map((c) => c.clave) },
+      estados: deshacer ? Object.fromEntries(Object.entries(e.estados).filter(([k]) => !deshechas.includes(k))) : e.estados,
+    }));
     alCambiar();
     return true;
   };
@@ -146,12 +151,14 @@ export default function PedirleANexus({
   const aplicar = async (lista: CambioPropuesto[]) => {
     if (!lista.length) return;
     const ok = await enviar({ cambios: lista.map((c) => ({ clave: c.clave, antes: c.antes, despues: c.despues })) });
-    if (ok) setEstados((e) => ({ ...e, ...Object.fromEntries(lista.map((c) => [c.clave, "aplicado" as const])) }));
+    if (ok) recordar(clave, (e) => ({ estados: { ...e.estados, ...Object.fromEntries(lista.map((c) => [c.clave, "aplicado" as const])) } }));
   };
 
   const pendientes = (propuesta?.cambios ?? []).filter((c) => (estados[c.clave] ?? "pendiente") === "pendiente");
   const sinPreguntar = pendientes.filter((c) => !c.aMano);
-  const descartar = (c: CambioPropuesto) => setEstados((e) => ({ ...e, [c.clave]: "descartado" }));
+  const descartar = (c: CambioPropuesto) => recordar(clave, (e) => ({ estados: { ...e.estados, [c.clave]: "descartado" } }));
+  const setPedido = (texto: string) => recordar(clave, { pedido: texto });
+  const descartarTodo = () => recordar(clave, { propuesta: null, estados: {} });
 
   return (
     <section aria-label={NOMBRE_DEL_BOTON} className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4">
@@ -169,7 +176,7 @@ export default function PedirleANexus({
           </p>
         </div>
         <Button size="sm" variant="secondary" onClick={onCerrar}>
-          Cerrar
+          {rotuloDeCerrar}
         </Button>
       </div>
 
@@ -233,10 +240,7 @@ export default function PedirleANexus({
           applyDisabled={!sinPreguntar.length}
           applying={aplicando}
           onApply={() => aplicar(sinPreguntar)}
-          onDiscard={() => {
-            setPropuesta(null);
-            setEstados({});
-          }}
+          onDiscard={descartarTodo}
         >
           {propuesta.cambios.length > 0 && (
             <ul className="flex flex-col gap-2">

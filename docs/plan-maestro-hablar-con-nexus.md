@@ -408,6 +408,12 @@ Es el cimiento y lo que más vale: hoy lo que cuentas no sale de la preventa.
 
 ### Etapa 2 · Una sola puerta en la preventa (≈ 1,5 sesiones; decidida el 22 nov)
 
+> **Construida el 23 nov, sin SQL y sin desplegar** (DECISIONS, «Hablar con Nexus, el plan maestro», etapa 2): dejó de
+> esperar al conector cuando Elías pidió que «✨ Mejorar con IA» abra el chat «Nexus». El botón de arriba abre el cajón;
+> el del riel se quitó; tareas, siguiente paso y la guía se piden desde el cajón (la conversación de la cuenta, sin las
+> notas que van a HubSpot). Falta: un solo motor para las dos conversaciones, «Lo que sabe Nexus de <empresa>» y las
+> contradicciones lado a lado.
+
 > **En espera desde el 23 nov** hasta que termine el piloto de dos semanas del conector de Claude: si la conversación la
 > pone Claude, este cajón puede sobrar. Se retoma, se cambia o se descarta con lo que diga el piloto.
 
@@ -430,9 +436,10 @@ Es el cimiento y lo que más vale: hoy lo que cuentas no sale de la preventa.
 
 ### Etapa 3 · Mejorar La escala y los casos de uso desde Nexus (≈ 2 sesiones)
 
-> **Construida el 23 nov en su versión sin cajón, sin SQL y sin desplegar** (DECISIONS, «Hablar con Nexus, el plan
-> maestro», etapa 3). Falta tu prueba con Cemaco · Ecuador: cambiar el titular y agregar una pieza. El historial de un
-> caso de uso guarda sus versiones pero todavía no tiene popup.
+> **Construida el 23 nov, sin SQL y sin desplegar** (DECISIONS, «Hablar con Nexus, el plan maestro», etapa 3). Con la
+> etapa 2, «✨ Mejorar con IA» abre el cajón «Nexus» con la parte puesta (sin panel aparte). Falta tu prueba con Cemaco ·
+> Ecuador: cambiar el titular y agregar una pieza. El historial de un caso de uso guarda sus versiones pero todavía no
+> tiene popup.
 
 Tu ejemplo: «cambia el título», «agrega esta parte, que es crítica».
 

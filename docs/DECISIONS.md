@@ -16495,7 +16495,33 @@ todavía: cada etapa arranca cuando él lo dice.
   - **Elías confirmó la enmienda el 23 nov** («Sí, con ese filtro»): los hechos de una nota del equipo llegan a lo
     que ve el cliente solo por `paraElAlcance`. Queda revisar con él, con notas reales de Cemaco · Ecuador, qué hechos pasan.
 
+- **Etapa 2, construida el 23 nov (sin SQL): una sola puerta «Nexus» en la preventa, y «✨ Mejorar con IA» la abre.**
+  Elías cambió el diseño de la etapa 3 ese día («el botón debería llamarse mejorar con IA y debería abrir siempre el chat de
+  Nexus referenciando la parte […] Y quitaría lo del botón de hablar con Nexus»), y la etapa 2 dejó de esperar al conector.
+  La coordinadora aprobó la lista de qué se mueve antes de construir.
+  - **El botón «Nexus» de arriba a la derecha** (components/exploraciones/BotonDeNexus.tsx) abre el cajón de «Hablar con
+    Nexus», que pasa a llamarse «Nexus». **El botón «Hablar con Nexus» del riel se quitó**; el cajón va con los demás
+    cajones del lienzo y se abre por un evento (`abrirNexusEnLaPreventa`, lib/exploraciones/abrir-nexus.ts). Todo lo que
+    hacía sigue igual: contar y preguntar, la nota con «Guardar», los hechos, los cambios a las tarjetas, la cuenta regresiva
+    de La escala y la conversación guardada.
+  - **Lo del chat de la cuenta** (tareas, siguiente paso, la guía, generar un documento) se pide desde el mismo cajón:
+    «Tareas, siguiente paso o la guía» abre la conversación de la cuenta con el chip «Preventa». El chat de la cuenta
+    queda montado en la preventa SIN su botón (lo abren ese enlace y «Mejorar con el asistente» de la guía). *Por qué no
+    un solo motor:* son dos conversaciones distintas (la de contar, con sus rondas de preguntas y su nota con las palabras
+    de la persona; la de la cuenta, con herramientas y una lista que se aplica en el servidor). Juntarlas es un paso propio;
+    la puerta, el cajón y el lugar ya son uno.
+  - **En la preventa, el chat de la cuenta no ofrece las notas de la cuenta** (`nota.crear`, que van a HubSpot): lo que se
+    le cuenta a Nexus no va a HubSpot (decisión del 22 nov) y va a «Lo que sabes del cliente». El servidor lo decide por el
+    chip (una preventa de esa cuenta, `focoDelChip` en la ruta del chat), no la pantalla. En la ficha sigue igual.
+  - **El chip del lugar:** «✨ Mejorar con IA» de La escala abre el cajón con el lugar como chip (el Resumen, un área o una
+    pieza). Con el chip, lo que se escribe es un pedido de cambio a la página y la propuesta por pieza, con «Aplicar» y
+    «Aplicar todo», se ve dentro del cajón; quitar el chip vuelve a la conversación. **El panel al lado de la página se
+    retiró:** no quedan los dos. En la escala de la cuenta, donde no hay conversación, el cajón abre solo con el chip.
+    Cerrar el cajón no pierde el pedido: lo pedido, la propuesta, lo aplicado, lo descartado y el «Deshacer» quedan
+    recordados por lugar mientras la página esté abierta (lib/pedirle-a-nexus/recordado.ts; no van a la base).
+  - «Agregar algo que sabes» (Preparación) no se tocó en esta tanda.
 - **Etapa 3, construida el 23 nov (sin SQL), en su versión sin cajón: «✨ Pedirle a Nexus» en la página de La escala.**
+  (Desde la etapa 2 del mismo día, el panel se retiró: «✨ Mejorar con IA» abre el cajón «Nexus» con el lugar como chip.)
   - **Dónde:** el botón «✨ Mejorar con IA» (el nombre que eligió Elías el 23 nov; en el código vive en una sola constante,
     `NOMBRE_DEL_BOTON`) en el Resumen armado (junto a «Rehacer con IA»), en la página de cada área (junto a su «Historial»)
     y al pasar el cursor por cada pieza que Nexus puede cambiar. Abre un panel AL LADO de la página (arriba, en pantallas
@@ -16624,8 +16650,16 @@ revirtió.
   lo que vuelve de lo que ve el cliente); las 2 y 5 construyen la conversación dentro de cada pantalla, que es lo que
   Claude ya hace. La etapa 1 deja sus lecturas en `lib/`, con la persona y la cuenta como parámetros, para que el
   conector las reuse.
-- **Sigue abierto** (sección 5 del plan): quiénes prueban, por dónde se entra, si Claude lee transcripciones completas,
-  dónde se guarda lo que la persona le cuenta y cuánto pesa eso en la escalera.
+- **Las respuestas de Elías del mismo día** (sección 5 del plan). El piloto lo hace él solo («Yo»). Claude lee las
+  transcripciones completas solo para quien ya las ve en Nexus, por partes y con registro. Lo que la persona le
+  cuenta a Claude se guarda en Nexus, en el mismo lugar de la empresa que usa Nexus. Lo que dice la persona pesa como
+  «confirmado por el equipo»; lo que Claude saque de una reunión, como «dicho en una reunión» solo con la cita
+  verificada. Sigue abierto por dónde se entra (el login de la primera conexión): su respuesta, «sería por texto»,
+  contestaba otra cosa y se le vuelve a preguntar.
+- **La etapa 2 deja de esperar al piloto** (Elías, 23 nov, más tarde). *Por qué:* duplicaba dos chats en la preventa.
+  Queda un solo chat «Nexus» y el botón «Hablar con Nexus» se quita. El botón para pedirle un cambio a la IA se llama
+  «✨ Mejorar con IA» en toda la app y abre siempre ese chat con la parte puesta. En los documentos del proyecto ya
+  cambió el nombre; que abran el chat «Nexus» y no el del documento viene después.
 
 ## Registro de los SQL aplicados (2026-11-23)
 

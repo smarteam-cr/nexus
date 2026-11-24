@@ -9,12 +9,12 @@
      Cómo se regenera: la skill regenerar-roadmap. -->
 ```ejecutivo
 {
- "corte": "2026-11-23",
- "produccion": "c21b1f3b",
+ "corte": "2026-11-24",
+ "produccion": "7d8e64da",
  "arriba": [
-  "En producción desde el 23 nov: Hablar con Nexus guarda notas con sus hechos y tiene tope de US$ 100 al mes, lo que el equipo cuenta en las preventas ya llega a la memoria y a los casos de uso, y cada uno lee solo las reuniones de sus clientes.",
-  "En curso: pedirle cambios a Nexus en la página de La escala, y el conector de Claude, probado en local y apagado en producción.",
-  "Te espera: probar lo nuevo con Cemaco · Ecuador, las cinco decisiones del conector y contratar Claude Team para el piloto."
+  "En producción desde el 24 nov: un solo botón «Nexus» en la preventa, «✨ Mejorar con IA» que cambia La escala desde ese chat, y el mismo nombre en los documentos y el cronograma.",
+  "En curso: el registro de los cambios de base aplicados en producción, en su propia sesión.",
+  "Te espera: probar lo nuevo con Cemaco · Ecuador, la pregunta 99 del conector y contratar Claude Team para tu piloto."
  ],
  "iniciativas": [
   {
@@ -117,7 +117,6 @@
     "El Resumen abre con lo que hicimos y el problema que más pesa, y se puede volver a la versión anterior."
    ],
    "sigue": [
-    "Pedirle a Nexus cambios en el Resumen y en cada área.",
     "Probar la escala con 5 a 8 empresas de tres industrias.",
     "Tu revisión del test y el corte de la aplicación vieja."
    ],
@@ -150,8 +149,8 @@
        "estado": "hecho"
       },
       {
-       "texto": "Pedirle cambios a Nexus",
-       "estado": "en-curso"
+       "texto": "«✨ Mejorar con IA» en el Resumen y cada área",
+       "estado": "hecho"
       }
      ]
     },
@@ -450,18 +449,18 @@
    "nombre": "Contexto, Hablar con Nexus y Claude",
    "color": "reuniones",
    "estado": "en-curso",
-   "donde": "Lo que el equipo cuenta ya llega a la memoria y a los casos de uso; el conector de Claude responde en local y espera tus decisiones.",
+   "donde": "En la preventa hay un solo chat «Nexus» y «✨ Mejorar con IA» ya cambia La escala desde él; el conector de Claude espera la pregunta 99.",
    "hecho": [
     "Cada reunión se lee una vez y queda como memoria de la cuenta, y cada uno lee solo las reuniones de sus clientes.",
     "Hablar con Nexus guarda lo que cuentas como notas con sus hechos, con tope de US$ 100 al mes, y lo que confirma el equipo llega a la memoria y a los casos de uso sin lo interno.",
-    "Lo que el equipo cuenta cambia La escala con 10 segundos para deshacer, y el conector de Claude ya responde en local con cuatro lecturas."
+    "Un solo chat «Nexus» en la preventa, y «✨ Mejorar con IA» cambia La escala por pieza desde ese chat, con su versión y sin publicar; el conector de Claude ya responde en local."
    ],
    "sigue": [
-    "Pedirle cambios a Nexus en La escala y que lo que cambias vuelva a la memoria.",
-    "El conector de Claude: la puerta de entrada solo para ti y, después, el piloto con tres personas.",
-    "Tus respuestas sobre las empresas que comparten dominio."
+    "Una sola conversación en el chat «Nexus», y que «✨ Mejorar con IA» abra ese chat en toda la app.",
+    "Que lo que cambias en lo que ve el cliente vuelva a la memoria.",
+    "El conector de Claude: la entrada solo para ti y tu piloto."
    ],
-   "teToca": "Responder las cinco decisiones del conector y contratar Claude Team.",
+   "teToca": "Responder la pregunta 99 del conector y contratar Claude Team.",
    "preguntas": [
     34,
     48,
@@ -475,7 +474,8 @@
     99,
     100,
     101,
-    102
+    102,
+    104
    ],
    "ramas": [
     {
@@ -490,16 +490,16 @@
        "estado": "hecho"
       },
       {
-       "texto": "Pedirle cambios a La escala",
-       "estado": "en-curso"
+       "texto": "Un solo chat «Nexus» y «Mejorar con IA» en La escala",
+       "estado": "hecho"
+      },
+      {
+       "texto": "Una sola conversación y «Mejorar con IA» en toda la app",
+       "estado": "por-hacer"
       },
       {
        "texto": "Lo que cambias vuelve a la memoria",
        "estado": "por-hacer"
-      },
-      {
-       "texto": "Una puerta en cada pantalla, después del piloto",
-       "estado": "espera"
       }
      ]
     },
@@ -515,17 +515,16 @@
        "estado": "hecho"
       },
       {
-       "texto": "¿Quiénes prueban primero?",
-       "estado": "te-toca",
-       "pregunta": 98
+       "texto": "Tus respuestas: el piloto es tuyo",
+       "estado": "hecho"
       },
       {
-       "texto": "¿Por dónde se entra?",
+       "texto": "¿Con qué login entras la primera vez?",
        "estado": "te-toca",
        "pregunta": 99
       },
       {
-       "texto": "La puerta solo para ti y el piloto",
+       "texto": "La entrada solo para ti y tu piloto",
        "estado": "por-hacer"
       }
      ]
@@ -692,8 +691,8 @@
      regenera: la skill regenerar-roadmap. Lo hecho nuevo entra SOLO acá, con su «tema»; el Resumen lo toma de aquí. -->
 ```linea
 {
- "hoy": "2026-11-23",
- "produccion": "c21b1f3b",
+ "hoy": "2026-11-24",
+ "produccion": "7d8e64da",
  "temasHechoHasta": "2026-10-29",
  "iniciativas": [
   {
@@ -1852,24 +1851,44 @@
    "commits": [
     "ac8a1192"
    ]
+  },
+  {
+   "fecha": "2026-11-23",
+   "iniciativa": "reuniones",
+   "titulo": "Un solo chat «Nexus» en la preventa y «✨ Mejorar con IA» en La escala",
+   "que": "El botón «Nexus» de arriba abre el chat que era «Hablar con Nexus» y suma tareas, siguiente paso y guía; el del riel se quitó. «✨ Mejorar con IA» cambia el Resumen y cada área de La escala desde ese chat, por pieza, con su versión y sin publicar.",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "si",
+   "tema": 2,
+   "preguntas": [
+    104
+   ],
+   "commits": [
+    "ce96b9da",
+    "b35bd200",
+    "ed7f012c"
+   ]
+  },
+  {
+   "fecha": "2026-11-23",
+   "iniciativa": "documentos",
+   "titulo": "«✨ Mejorar con IA» también en los documentos y el cronograma",
+   "que": "El botón de cada sección decía «Cambiar» y el de cada fase del cronograma, «IA»: ahora los dos dicen «Mejorar con IA», como en el resto de Nexus. Por ahora siguen abriendo el chat de cada documento.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "preguntas": [
+    104
+   ],
+   "commits": [
+    "8d881b27"
+   ]
   }
  ],
  "sigue": [
   {
-   "iniciativa": "escala",
-   "titulo": "Pedirle cambios a Nexus en La escala",
-   "que": "«Pedirle a Nexus» en el Resumen, en cada área y en cada pieza: escribes lo que quieres y ves la propuesta con el antes y el después, «Aplicar» o «Descartar».",
-   "paraQuien": "Ventas",
-   "estado": "otra-sesion",
-   "tema": 2,
-   "preguntas": [
-    95
-   ]
-  },
-  {
    "iniciativa": "reuniones",
-   "titulo": "Probar Hablar con Nexus con Cemaco · Ecuador",
-   "que": "Contar algo, guardarlo y ver que los casos de uso lo usan; y revisar contigo qué hechos de las notas pasan a lo que ve el cliente.",
+   "titulo": "Probar el chat «Nexus» y «Mejorar con IA» con Cemaco · Ecuador",
+   "que": "Contar algo y guardarlo, pedir un cambio en La escala, y revisar contigo qué hechos de las notas pasan a lo que ve el cliente.",
    "paraQuien": "Elías",
    "estado": "te-toca",
    "tema": 2,
@@ -1878,29 +1897,26 @@
    ]
   },
   {
-   "iniciativa": "nexus",
-   "titulo": "Conector de Claude: la puerta de entrada solo para ti",
-   "que": "Que entres a Nexus desde tu Claude con tu cuenta de Google y Claude lea solo lo que tú ves.",
-   "paraQuien": "Elías",
-   "estado": "espera",
-   "esperaA": "tus respuestas a las preguntas 98 a 102",
-   "tema": 3,
+   "iniciativa": "reuniones",
+   "titulo": "Una sola conversación en el chat «Nexus»",
+   "que": "Hoy detrás del botón hay dos conversaciones: la de contar y preguntar, y la de tareas, siguiente paso y guía. Se juntan en una.",
+   "paraQuien": "Ventas y Customer Success",
+   "estado": "por-hacer",
+   "tema": 2,
    "preguntas": [
-    98,
-    99,
-    100,
-    101,
-    102
+    104
    ]
   },
   {
-   "iniciativa": "nexus",
-   "titulo": "El piloto del conector con tres personas",
-   "que": "Dos semanas con tres personas del equipo usando Nexus desde Claude, para decidir si se abre a todos y qué funciones propias se retiran.",
+   "iniciativa": "reuniones",
+   "titulo": "«✨ Mejorar con IA» abre el chat «Nexus» en toda la app",
+   "que": "Los documentos del proyecto, la propuesta, los perfiles de puesto, el cronograma, los artefactos y los casos de uso abren el chat «Nexus» con la parte puesta, y la ficha usa el mismo chat.",
    "paraQuien": "Todo el equipo",
-   "estado": "espera",
-   "esperaA": "la puerta de entrada y contratar Claude Team",
-   "tema": 3
+   "estado": "por-hacer",
+   "tema": 2,
+   "preguntas": [
+    104
+   ]
   },
   {
    "iniciativa": "reuniones",
@@ -1914,23 +1930,43 @@
    ]
   },
   {
-   "iniciativa": "reuniones",
-   "titulo": "Una puerta «Nexus» en cada pantalla",
-   "que": "El botón «Nexus» en la preventa, la ficha y los documentos del proyecto, y lo que sabe Nexus guardado en la empresa.",
-   "paraQuien": "Todo el equipo",
+   "iniciativa": "nexus",
+   "titulo": "Conector de Claude: la puerta de entrada solo para ti",
+   "que": "Que entres a Nexus desde tu Claude con tu cuenta de Google y Claude lea solo lo que tú ves.",
+   "paraQuien": "Elías",
    "estado": "espera",
-   "esperaA": "el resultado del piloto del conector",
-   "tema": 2,
+   "esperaA": "tu respuesta a la pregunta 99",
+   "tema": 3,
    "preguntas": [
-    94
+    99
    ]
   },
   {
    "iniciativa": "nexus",
-   "titulo": "Partir el archivo de decisiones y registrar los cambios de base",
-   "que": "Que el archivo de decisiones se lea por módulo y quede anotado qué cambio de base ya corrió en producción.",
+   "titulo": "Tu piloto del conector",
+   "que": "Dos semanas usando Nexus desde tu Claude, para decidir si se abre al equipo y qué funciones propias se retiran.",
+   "paraQuien": "Elías",
+   "estado": "espera",
+   "esperaA": "la puerta de entrada y contratar Claude Team",
+   "tema": 3
+  },
+  {
+   "iniciativa": "nexus",
+   "titulo": "Registrar los cambios de base aplicados en producción",
+   "que": "Una tabla que anota qué cambio de base corrió en cada base, y un chequeo que dice cuál falta antes de desplegar.",
    "paraQuien": "Las sesiones de trabajo",
-   "estado": "te-toca",
+   "estado": "otra-sesion",
+   "tema": 3,
+   "preguntas": [
+    103
+   ]
+  },
+  {
+   "iniciativa": "nexus",
+   "titulo": "Partir el archivo de decisiones por módulo",
+   "que": "Que el archivo de decisiones se lea por módulo. Va cuando ninguna sesión lo esté editando.",
+   "paraQuien": "Las sesiones de trabajo",
+   "estado": "por-hacer",
    "tema": 3,
    "preguntas": [
     103
@@ -2297,7 +2333,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "Desde el 20 nov entraron unos 30 cambios, todos en producción (c21b1f3b, 23 nov): Hablar con Nexus en la preventa con sus etapas 0 y 1, el Resumen liviano, el historial de versiones y el cierre de las lecturas de reuniones. Lo próximo: pedirle cambios a Nexus en La escala y, con tus respuestas, la puerta del conector de Claude.",
+ "dondeVamos": "Desde el 20 nov entraron unos 35 cambios, todos en producción (7d8e64da, 24 nov): Hablar con Nexus en la preventa, el Resumen liviano, el historial de versiones, las lecturas de reuniones con guarda, un solo chat «Nexus» en la preventa y «✨ Mejorar con IA» en La escala. Lo próximo: una sola conversación en ese chat y que «Mejorar con IA» lo abra en toda la app.",
  "temas": [
   {
    "n": 4,
@@ -2758,7 +2794,7 @@
      "texto": "El plan de las empresas que comparten dominio: la pared es el proyecto y el nombre de la reunión pesa más."
     }
    ],
-   "sigue": "Pedirle cambios a Nexus en La escala y que lo cambiado vuelva a la memoria. La puerta «Nexus» en cada pantalla espera al piloto del conector. Tus respuestas al plan de dominio compartido.",
+   "sigue": "Una sola conversación en el chat «Nexus», y que «✨ Mejorar con IA» lo abra en toda la app. Que lo cambiado vuelva a la memoria. Tus respuestas al plan de dominio compartido.",
    "decisiones": [
     21,
     34,
@@ -2781,7 +2817,8 @@
     94,
     95,
     96,
-    97
+    97,
+    104
    ]
   },
   {
@@ -2808,8 +2845,8 @@
      "texto": "Partner: un cliente colgado de un registro inactivo pasa solo al activo; KAIZEN KAPITAL y KJ Publicidad ya pasaron."
     }
    ],
-   "sigue": "El conector de Claude: tus cinco respuestas, la puerta de entrada solo para ti y el piloto con tres personas. Tus configuraciones del servidor y lo que queda de HubSpot.",
-   "teToca": "Responder las preguntas del conector y contratar Claude Team; después, las configuraciones del servidor.",
+   "sigue": "El conector de Claude: la pregunta 99, la entrada solo para ti y tu piloto. Tus configuraciones del servidor y lo que queda de HubSpot.",
+   "teToca": "Responder la pregunta 99 del conector y contratar Claude Team; después, las configuraciones del servidor.",
    "decisiones": [
     1,
     9,
@@ -3052,7 +3089,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `c21b1f3b` (todo `main`) desde el 23 nov: Hablar con Nexus en la preventa (etapas 0 y 1), el Resumen liviano, el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
+| Producción | Corre `7d8e64da` (todo `main`) desde el 24 nov: un solo chat «Nexus» en la preventa, «✨ Mejorar con IA» en La escala, en los documentos y en el cronograma, Hablar con Nexus (etapas 0 y 1), el Resumen liviano, el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
 | Por desplegar | Nada. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | Por datos de antes, ninguno nuevo (28 oct): 16 reuniones colgadas de proyectos de otro cliente (INV1) y 9 tareas que citan una reunión de otro cliente (INV42), las que ordena el plan de dominio compartido; el pipeline de Secure Title (INV11: 2 proyectos y 6 en una etapa desconocida); «TEC- AE» fusionada en HubSpot (INV13 e INV54: ya solo ella, kölbi quedó bien); una reunión de Meet leída antes de ocurrir (INV16a), y el corte de cartera de hace 96 días (INV32). |
 | Pruebas | 30 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 83 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
@@ -3172,12 +3209,13 @@ Sin esto, algo sigue mal o no se puede validar:
 95. ✓ **Hablar con Nexus · la etapa 3 sin cajón.** **Tu respuesta (23 nov):** sí: un pedido y una propuesta por pieza, en la misma página.
 96. ✓ **Lo interno · los hechos de una nota del equipo en lo que ve el cliente.** **Tu respuesta (23 nov):** «Sí, con ese filtro»: solo los hechos de la empresa, nada de la compra.
 97. ✓ **Propuesta comercial · el acceso al cliente.** **Tu respuesta (23 nov):** dejarlo anotado; se cierra antes de darle el permiso de Ventas a una CSE.
-98. **Conector · quiénes prueban primero.** Recomiendo: tú, una CSE y alguien de Ventas.
-99. **Conector · por dónde se entra.** Una puerta propia de Nexus, el servidor de Supabase (en beta) o un proveedor externo. Recomiendo la puerta propia, con el mismo login de Google.
-100. **Conector · las transcripciones completas.** ¿Claude puede leerlas? Recomiendo: sí, para quien ya las ve en Nexus, por partes y con registro.
-101. **Conector · dónde guarda Claude lo que le cuentas.** Recomiendo adelantar solo el lugar de la empresa (una tabla chica), para que Nexus y Claude guarden en el mismo sitio.
-102. **Conector · cuánto pesa lo guardado desde Claude.** Recomiendo: lo que dijo la persona cuenta como «confirmado por el equipo»; lo que Claude sacó de una reunión, como «dicho en una reunión» solo con la cita verificada.
-103. **Nexus por dentro · dos mejoras de la evaluación.** Partir el archivo de decisiones por módulo (pesa 1,6 MB) y llevar registro de los cambios de base aplicados en producción.
+98. ✓ **Conector · quiénes prueban primero.** Recomiendo: tú, una CSE y alguien de Ventas. **Tu respuesta (23 nov):** «Yo»: el piloto lo haces tú solo.
+99. **Conector · por dónde se entra.** Una puerta propia de Nexus, el servidor de Supabase (en beta) o un proveedor externo. Recomiendo la puerta propia, con el mismo login de Google. *(23 nov: respondiste que el conector es para usar Nexus desde Claude, por texto; la pregunta es otra: con qué login Claude demuestra que eres tú la primera vez que lo conectas. Va de nuevo con esa aclaración.)*
+100. ✓ **Conector · las transcripciones completas.** ¿Claude puede leerlas? Recomiendo: sí, para quien ya las ve en Nexus, por partes y con registro. **Tu respuesta (23 nov):** «Como recomiendas».
+101. ✓ **Conector · dónde guarda Claude lo que le cuentas.** Recomiendo adelantar solo el lugar de la empresa (una tabla chica), para que Nexus y Claude guarden en el mismo sitio. **Tu respuesta (23 nov):** «En Nexus».
+102. ✓ **Conector · cuánto pesa lo guardado desde Claude.** Recomiendo: lo que dijo la persona cuenta como «confirmado por el equipo»; lo que Claude sacó de una reunión, como «dicho en una reunión» solo con la cita verificada. **Tu respuesta (23 nov):** «Ok».
+103. ✓ **Nexus por dentro · dos mejoras de la evaluación.** Partir el archivo de decisiones por módulo (pesa 1,6 MB) y llevar registro de los cambios de base aplicados en producción. **Tu respuesta (23 nov):** «Ok». El registro arrancó el mismo día en su propia sesión; partir el archivo de decisiones va después de juntar la etapa 2, porque todas las sesiones lo editan.
+104. ✓ **Hablar con Nexus · una sola puerta y el nombre del botón.** Cambia las 94 (etapa 2) y 95 (etapa 3 sin cajón). **Tu respuesta (23 nov):** «el botón debería llamarse mejorar con IA y debería abrir siempre el chat de Nexus referenciando la parte donde quiere mejorarse y que todo se haga por el chat de Nexus […] Y quitaría lo del botón de hablar con Nexus»; y «sí, cambia el nombre a Mejorar con IA» en los documentos. La etapa 2 deja de esperar al conector.
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 

@@ -25,9 +25,9 @@
  *     lo que cuesta quedarse así, los casos, los riesgos, «Ver detalles», la bajada y lo que hicimos del Resumen, el pie.
  *     Se editan en su lugar (`TextoFijo`, operación `textoDeLaPagina`) y los casos, los riesgos y lo que arma la página
  *     se pueden quitar para el cliente (lib/external/textos-de-la-pagina.ts).
- *   · «✨ Pedirle a Nexus» (23 nov, etapa 3 del plan maestro de «Hablar con Nexus», sin cajón): en el Resumen, en cada área y
- *     al pasar por cada pieza abre un panel AL LADO de la página (PedirleANexus.tsx): un pedido, una propuesta por pieza, que
- *     se aplica por estas mismas operaciones. La página de cada área tiene su historial (HistorialDelArea.tsx).
+ *   · «✨ Mejorar con IA» (23 nov, etapa 3 del plan maestro de «Hablar con Nexus»): en el Resumen, en cada área y al pasar
+ *     por cada pieza abre el cajón «Nexus» con el lugar como chip (HablarConNexus.tsx): un pedido, una propuesta por pieza,
+ *     que se aplica por estas mismas operaciones. La página de cada área tiene su historial (HistorialDelArea.tsx).
  * Nada de esto lo ve el cliente hasta «Publicar» (16 nov, PublicarLaEscala.tsx, al lado de «Acceso»): el enlace sirve la
  * foto publicada.
  * Arriba de la página, fuera de ella: la línea del área (si la ve el cliente, cuánto tiene, sumarla o sacarla) y el
@@ -35,7 +35,7 @@
  * Todo se guarda en la exploración; la página se vuelve a pedir cuando cambia su versión. Lo que propone el agente y nadie
  * usó NO se dibuja: el cliente no lo ve. Para eso están la franja de sugerencias y la vista «Comparar áreas».
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Button, ConfirmDialog, Drawer, Field, Skeleton, Textarea, useToast } from "@/components/ui";
 import ArrastreDelRadar from "@/components/escala/ArrastreDelRadar";
 import { PESTANA_DEL_RESUMEN } from "@/components/external/test/ArribaDeLaEscala";
@@ -57,7 +57,7 @@ import { BotonDelHistorial } from "@/components/versiones/HistorialDeVersiones";
 import { avisarQueLaEscalaCambio } from "./escala-al-dia";
 import { useSeRehaceLaEscala } from "./rehacer-la-escala";
 import { DetalleDeDimension, useMarcarNivel } from "./DetalleDeLaDimension";
-import PedirleANexus, { type FocoDelPedido } from "./PedirleANexus";
+import { abrirNexusEnLaPreventa, EVENTO_LA_ESCALA_CAMBIO_CON_NEXUS } from "@/lib/exploraciones/abrir-nexus";
 import { NOMBRE_DEL_BOTON } from "@/lib/pedirle-a-nexus/contrato";
 import HistorialDelArea from "./HistorialDelArea";
 import { conLoQueCuestaDelArea, piezasDelArea, piezasDelResumen, type LugarEnLaEscala, type PiezaDeLaEscala } from "@/lib/exploraciones/escala-con-nexus";
@@ -305,8 +305,6 @@ export default function PaginaDeLaEscala() {
   const [armando, setArmando] = useState(false);
   /** El historial de versiones del Resumen (21 nov, reemplaza a «Volver a la versión anterior»). */
   const [historialAbierto, setHistorialAbierto] = useState(false);
-  /** «✨ Pedirle a Nexus» (23 nov): el panel abierto al lado de la página, con su lugar y la pieza desde la que se pidió. */
-  const [pedirle, setPedirle] = useState<{ lugar: LugarEnLaEscala; foco: FocoDelPedido | null } | null>(null);
   /** El historial de la página del área elegida (23 nov). */
   const [historialDelArea, setHistorialDelArea] = useState(false);
   // La cuenta regresiva del agente de impacto de esta pestaña: mientras rehace, no se usa otra versión (el servidor también frena).
@@ -324,6 +322,15 @@ export default function PaginaDeLaEscala() {
   useEffect(() => {
     if (resumenEnLaPagina && !resumenEnElLienzo) void recargar();
   }, [resumenEnLaPagina, resumenEnElLienzo, recargar]);
+  // Lo que aplicó (o deshizo) Nexus desde su cajón: la página y las descripciones se vuelven a pedir.
+  useEffect(() => {
+    const alCambiar = () => {
+      otraVez();
+      descripciones.otraVez();
+    };
+    window.addEventListener(EVENTO_LA_ESCALA_CAMBIO_CON_NEXUS, alCambiar);
+    return () => window.removeEventListener(EVENTO_LA_ESCALA_CAMBIO_CON_NEXUS, alCambiar);
+  });
 
   if (!pagina)
     return error ? (
@@ -350,13 +357,13 @@ export default function PaginaDeLaEscala() {
   const elegir = (id: string) => {
     setElegida(id);
     setAbierta(null);
-    // El panel de Nexus es de una página: al cambiar de pestaña se cierra (lo propuesto era de la otra).
-    setPedirle(null);
   };
 
-  /* «✨ Pedirle a Nexus» (23 nov): las piezas de esta página, las mismas que lee el servidor (lib/exploraciones/escala-con-nexus.ts).
-     El botón al pasar por un texto sale solo en las piezas que Nexus puede cambiar. */
+  /* «✨ Mejorar con IA» (23 nov): las piezas de esta página, las mismas que lee el servidor (lib/exploraciones/escala-con-nexus.ts).
+     El botón al pasar por un texto sale solo en las piezas que Nexus puede cambiar. Abre el cajón «Nexus» con el lugar
+     puesto como chip (HablarConNexus.tsx): la propuesta por pieza se ve allá, y al aplicarla la página se vuelve a pedir. */
   const lugarDeAqui: LugarEnLaEscala = enElResumen ? { pagina: "resumen" } : { pagina: "area", areaId: r.areaId };
+  const nombreDeAqui = enElResumen ? "Resumen" : r.areaNombre;
   const piezasDeAqui: PiezaDeLaEscala[] = enElResumen
     ? piezasDelResumen(pagina.resumen, pagina.textos)
     : piezasDelArea(r, {
@@ -369,40 +376,21 @@ export default function PaginaDeLaEscala() {
       });
   const nombreDePieza = new Map(piezasDeAqui.map((p) => [p.clave, p.nombre]));
   const pedirSobre = (clave: string) =>
-    puedeEditar && nombreDePieza.has(clave) ? () => setPedirle({ lugar: lugarDeAqui, foco: { clave, nombre: nombreDePieza.get(clave)! } }) : undefined;
-  const abrirPedirle = () => setPedirle({ lugar: lugarDeAqui, foco: null });
-  /** Lo aplicado se guarda por su propia ruta: el lienzo, la página y las descripciones se ponen al día. */
-  const alCambiarConNexus = () => {
+    puedeEditar && nombreDePieza.has(clave)
+      ? () => abrirNexusEnLaPreventa({ exploracionId: exp.id, escala: { lugar: lugarDeAqui, nombre: nombreDeAqui, foco: { clave, nombre: nombreDePieza.get(clave)! } } })
+      : undefined;
+  /** Lo que cambia la página por su propia ruta (el historial del área): el lienzo, la página y las descripciones al día. */
+  const alCambiarLaPagina = () => {
     void recargar();
     otraVez();
     descripciones.otraVez();
   };
-  /** La página con el panel al lado (en pantallas angostas, arriba de la página). */
-  const conPanel = (contenido: ReactNode) =>
-    pedirle ? (
-      <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="order-2 min-w-0 lg:order-1">{contenido}</div>
-        <div className="order-1 lg:sticky lg:top-4 lg:order-2">
-          <PedirleANexus
-            key={pedirle.lugar.pagina === "resumen" ? "resumen" : pedirle.lugar.areaId}
-            exploracionId={exp.id}
-            lugar={pedirle.lugar}
-            lugarNombre={enElResumen ? "Resumen" : r.areaNombre}
-            foco={pedirle.foco}
-            onQuitarFoco={() => setPedirle({ ...pedirle, foco: null })}
-            onCerrar={() => setPedirle(null)}
-            alCambiar={alCambiarConNexus}
-          />
-        </div>
-      </div>
-    ) : (
-      contenido
-    );
-  const botonDePedirle = puedeEditar ? (
-    <Button size="sm" variant="secondary" onClick={abrirPedirle}>
-      {NOMBRE_DEL_BOTON}
-    </Button>
-  ) : null;
+  const botonDePedirle =
+    puedeEditar && piezasDeAqui.length ? (
+      <Button size="sm" variant="secondary" onClick={() => abrirNexusEnLaPreventa({ exploracionId: exp.id, escala: { lugar: lugarDeAqui, nombre: nombreDeAqui, foco: null } })}>
+        {NOMBRE_DEL_BOTON}
+      </Button>
+    ) : null;
 
   /** Guarda un texto fijo de la página (16 nov) y trae la página al día. */
   const guardarFijo = async (clave: string, texto: string | null) => {
@@ -555,8 +543,7 @@ export default function PaginaDeLaEscala() {
           frenado={armando || seRehace ? "Nexus está rehaciendo el Resumen: espera a que termine para usar otra versión." : guardando ? "Se está guardando un texto: espera un momento." : null}
           alCambiar={alCambiarDeVersion}
         />
-        {conPanel(
-          <div className="overflow-hidden rounded-xl border border-line">
+        <div className="overflow-hidden rounded-xl border border-line">
             <ResumenDeLaEscalaVista
               resumen={res}
               empresa={pagina.empresa}
@@ -567,8 +554,7 @@ export default function PaginaDeLaEscala() {
               edicion={edicionDelResumen}
               textos={pagina.textos}
             />
-          </div>,
-        )}
+          </div>
       </div>
     );
   }
@@ -716,7 +702,7 @@ export default function PaginaDeLaEscala() {
         areaNombre={r.areaNombre}
         empresa={pagina.empresa}
         puedeEditar={puedeEditar}
-        alCambiar={alCambiarConNexus}
+        alCambiar={alCambiarLaPagina}
       />
       {descripciones.data && <ContextoParaLaDescripcion areaId={r.areaId} nombre={r.areaNombre} onRehacer={rehacer} rehaciendo={rehaciendo} />}
       {error && (
@@ -727,7 +713,6 @@ export default function PaginaDeLaEscala() {
           </button>
         </Alert>
       )}
-      {conPanel(
         <div className="overflow-hidden rounded-xl border border-line">
         <ResultadoDelTestVista
           r={r}
@@ -748,8 +733,7 @@ export default function PaginaDeLaEscala() {
           }}
           edicion={edicion}
         />
-        </div>,
-      )}
+        </div>
       {abierta && <PanelDeLaDimension key={abierta} id={abierta} onCerrar={() => setAbierta(null)} />}
       <ConfirmDialog
         open={pisarLaEscrita}
