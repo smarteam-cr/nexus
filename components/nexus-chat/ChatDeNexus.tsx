@@ -59,7 +59,21 @@ interface Resumen {
  * `sinSugerencias`: en la preventa (validación 71) el chat se monta para «Mejorar con el asistente» de la guía, sin el
  * botón «Sugerencias» (lo que te toca en la cuenta se ve en su ficha).
  */
-export function ChatDeNexus({ clientId, nombre, sinSugerencias = false }: { clientId: string; nombre: string; sinSugerencias?: boolean }) {
+export function ChatDeNexus({
+  clientId,
+  nombre,
+  sinSugerencias = false,
+  sinBoton = false,
+  exploracionId = null,
+}: {
+  clientId: string;
+  nombre: string;
+  sinSugerencias?: boolean;
+  /** Sin su botón (23 nov, la preventa: la puerta es «Nexus» de components/exploraciones/BotonDeNexus.tsx). Se abre por evento. */
+  sinBoton?: boolean;
+  /** En la preventa: el chip «Preventa» va siempre (el servidor no ofrece ahí las notas de la cuenta, que van a HubSpot). */
+  exploracionId?: string | null;
+}) {
   const router = useRouter();
   const feedback = useFeedback();
   const toast = useToast();
@@ -162,6 +176,8 @@ export function ChatDeNexus({ clientId, nombre, sinSugerencias = false }: { clie
 
   const acciones = resumen?.acciones ?? [];
   const desdeLaGuia = chip?.tipo === "guia";
+  // En la preventa, sin otro chip, el de la preventa: dice dónde se está y no se puede soltar.
+  const chipQueVa: ChipDelChat | null = chip ?? (exploracionId ? { tipo: "preventa", id: exploracionId, etiqueta: "Preventa" } : null);
   const conSugerencias = desdeLaGuia && sugerencias.length > 0;
   const rotulos = useMemo(() => rotulosDelChat(desdeLaGuia, conSugerencias), [desdeLaGuia, conSugerencias]);
 
@@ -242,7 +258,7 @@ export function ChatDeNexus({ clientId, nombre, sinSugerencias = false }: { clie
           </div>
         )}
       </div>}
-      <button
+      {!sinBoton && <button
         type="button"
         onClick={() => (abierto ? setAbierto(false) : abrir())}
         aria-expanded={abierto}
@@ -257,7 +273,7 @@ export function ChatDeNexus({ clientId, nombre, sinSugerencias = false }: { clie
           <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12z" />
         </svg>
         Nexus
-      </button>
+      </button>}
       {montado ? (
         <ChatDelAsistente
           base={base}
@@ -272,11 +288,16 @@ export function ChatDeNexus({ clientId, nombre, sinSugerencias = false }: { clie
           onAncho={() => setAncho((a) => (a === "amplio" ? "normal" : "amplio"))}
           borrador={borrador}
           pedidoDeFoco={pedidoDeFoco}
-          chip={chip}
-          onSoltarChip={() => {
-            setChip(null);
-            setSugerencias([]);
-          }}
+          chip={chipQueVa}
+          // El de la preventa no se suelta (dice dónde se está): sin la ✕. El de la guía sí, y queda el de la preventa.
+          onSoltarChip={
+            chip
+              ? () => {
+                  setChip(null);
+                  setSugerencias([]);
+                }
+              : undefined
+          }
           sugerencias={desdeLaGuia ? sugerencias : undefined}
         />
       ) : null}

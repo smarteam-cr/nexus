@@ -25,7 +25,7 @@ import { correrBucle, type CambioPropuesto, type EjecutorDelChat } from "./bucle
 import { MODELO_DEL_ASISTENTE } from "@/lib/asistente/turno";
 import { componerAcuerdo, pendientesDeNexus, ventanaDelHilo } from "./libro";
 import { bloqueDeLoPendiente, contextoDeLaCuenta, PROMPT_DE_NEXUS } from "./prompt";
-import { contextoDelChat, ejecutorDelChat, herramientasDelChat, prepararParaLaCuenta } from "./herramientas-server";
+import { contextoDelChat, ejecutorDelChat, herramientasDelChat, NOTA_DE_LA_CUENTA, prepararParaLaCuenta } from "./herramientas-server";
 import { loQueSeSabeDeLaCuenta } from "./lecturas-server";
 import { costoDeLaCorrida } from "./uso-server";
 import { avisoDeRechazos, lineaDeLaLista, sinMarcadores } from "./textos";
@@ -54,15 +54,18 @@ export interface ResultadoDelTurnoDeNexus {
  * después de la cuenta, y se cachea; las preguntas, que cambian al aplicar, van en el mensaje de ESTE turno, como
  * información de la cuenta (caso CEMACO, 2026-10-20: antes iba todo en el mensaje y sin ninguna sesión).
  */
-export interface FocoDelChat {
-  tipo: "guia";
-  exploracionId: string;
-}
+/**
+ * Desde dónde se abrió el chat. «guia»: la guía de una exploración (suma la guía al mensaje). «preventa»: el cajón «Nexus»
+ * de la preventa (etapa 2 del plan maestro de «Hablar con Nexus», 23 nov: «Tareas, siguiente paso o la guía»).
+ * `sinNotasDeLaCuenta`: en la preventa no se ofrece «nota.crear» (las notas de la cuenta van a HubSpot, y lo que se le
+ * cuenta a Nexus no va a HubSpot: decisión de Elías del 22 nov; lo que se cuenta va a «Lo que sabes del cliente»).
+ */
+export type FocoDelChat = { tipo: "guia" | "preventa"; exploracionId: string; sinNotasDeLaCuenta?: boolean };
 
 /** La guía, si la exploración es de esta cuenta: lo estable para el `system` y las preguntas para el mensaje. */
 export async function bloqueDelFoco(foco: FocoDelChat | undefined, clientId: string, ctx: object): Promise<{ contexto: string; mensaje: string }> {
   const nada = { contexto: "", mensaje: "" };
-  if (!foco) return nada;
+  if (!foco || foco.tipo !== "guia") return nada;
   const f = await prisma.exploracionDeVenta.findUnique({ where: { id: foco.exploracionId }, select: { clientId: true } });
   if (!f || f.clientId !== clientId) return nada;
   // La guía queda armada en el contexto del turno: los cambios que se preparen después la reusan (guia-server.ts).
@@ -154,6 +157,11 @@ export async function pensarElTurno(o: {
   const vivas: CambioPropuesto[] = [];
   const caidas: Array<{ linea: string; motivo: string }> = [];
   for (const p of pendientesDeNexus(hilo.turnos)) {
+    // En la preventa no se guardan notas de la cuenta (van a HubSpot): una que quedó pendiente en la ficha sale de la lista.
+    if (foco?.sinNotasDeLaCuenta && p.nombre === NOTA_DE_LA_CUENTA) {
+      caidas.push({ linea: p.linea, motivo: "en la preventa no se guardan notas de la cuenta: cuéntaselo a Nexus y va a «Lo que sabes del cliente»" });
+      continue;
+    }
     const r = await prepararParaLaCuenta(ctx, clientId, p.nombre, p.entrada);
     if (r.ok) vivas.push(r.cambio);
     else caidas.push({ linea: p.linea, motivo: r.motivo });
@@ -190,7 +198,7 @@ export async function pensarElTurno(o: {
     i === ventana.length - 1 ? { role: t.rol, content: [{ type: "text" as const, text: t.texto, cache_control: { type: "ephemeral" as const } }] } : { role: t.rol, content: t.texto },
   );
   const messages: Anthropic.Messages.MessageParam[] = [...historia, { role: "user", content: `${bloqueDeLoPendiente(vivas.map((v) => v.linea))}${guia.mensaje}${mensaje}` }];
-  const tools = herramientasDelChat();
+  const tools = herramientasDelChat({ sinNotasDeLaCuenta: foco?.sinNotasDeLaCuenta });
   const llamar = async (msgs: Anthropic.Messages.MessageParam[], op: { sinHerramientas: boolean }) => {
     const tl = Date.now();
     const m = await conContextoDeIA({ agentSlug: SLUG_DEL_CHAT_DE_NEXUS, agentRunId: o.agentRunId, clientId, triggeredByEmail: hilo.usuarioEmail, origen: origenDelHilo(hilo.id) }, () =>

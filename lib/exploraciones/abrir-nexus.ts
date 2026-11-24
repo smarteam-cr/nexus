@@ -1,0 +1,41 @@
+/**
+ * lib/exploraciones/abrir-nexus.ts — UNA SOLA PUERTA «Nexus» en la preventa (etapa 2 del plan maestro de «Hablar con
+ * Nexus», 23 nov). PURO y client-safe: los eventos del navegador con que cualquier parte de la preventa abre el cajón.
+ *
+ * El botón «Nexus» de arriba y «✨ Mejorar con IA» de La escala no conocen el cajón (components/exploraciones/
+ * HablarConNexus.tsx): lo abren con `abrirNexusEnLaPreventa`, y el cajón lo escucha. Con `escala`, el cajón abre con el
+ * lugar puesto como chip (el Resumen, un área o una pieza): lo que se escribe es un pedido de cambio a la página, y la
+ * propuesta por pieza se ve adentro. Sin chip, es la conversación de siempre.
+ */
+import type { LugarEnLaEscala } from "./escala-con-nexus";
+
+export const EVENTO_ABRIR_NEXUS = "nexus:abrir-en-la-preventa";
+
+/** El lugar de La escala desde el que se pidió, como chip del cajón. */
+export interface LugarDeLaEscalaEnElCajon {
+  lugar: LugarEnLaEscala;
+  /** «Resumen» o el nombre del área. */
+  nombre: string;
+  /** La pieza desde la que se pidió (el botón al pasar por ella); null: la página entera. */
+  foco: { clave: string; nombre: string } | null;
+}
+
+export interface PedidoDeAbrirNexus {
+  /**
+   * La exploración cuyo cajón se abre. En la ficha del cliente pueden quedar cargadas dos (la de la cuenta y la de un
+   * proyecto, oculta): sin esto, se abrían los dos cajones y lo pedido iba a la que no se estaba mirando.
+   */
+  exploracionId: string;
+  escala?: LugarDeLaEscalaEnElCajon;
+}
+
+export function abrirNexusEnLaPreventa(p: PedidoDeAbrirNexus): void {
+  window.dispatchEvent(new CustomEvent<PedidoDeAbrirNexus>(EVENTO_ABRIR_NEXUS, { detail: p }));
+}
+
+/** Lo dispara el cajón al aplicar o deshacer un cambio de La escala: la página se vuelve a pedir. */
+export const EVENTO_LA_ESCALA_CAMBIO_CON_NEXUS = "nexus:la-escala-cambio";
+
+export function avisarQueNexusCambioLaEscala(): void {
+  window.dispatchEvent(new Event(EVENTO_LA_ESCALA_CAMBIO_CON_NEXUS));
+}
