@@ -16611,23 +16611,31 @@ todavía: cada etapa arranca cuando él lo dice.
        queda fuera de «Aplicar todo» y «Aplicar» pregunta. Nada interno llega como un cambio normal.
     2. *Lo no pedido no llega:* una palabra interna que la pieza no tenía, solo si el pedido nombra su tema y no pide
        quitar ni dejar de mencionar nada (con eso, lo interno se pide aparte).
-    3. *Lo pedido, con las palabras del pedido, si Nexus lo tiene y con su respaldo a la vista:* si el pedido nombra lo
-       interno que el cambio toca, cada palabra y cada número que aparece más veces que antes en la pieza sale del pedido
-       (se cuenta en la pieza entera: partir o juntar oraciones no cambia nada; «no», «más», «hasta» o «desde», con su
-       pareja; «1,5» no es 15): el modelo no lee las notas, así que una causa, una fecha o una cifra que agrega es inventada;
-       y el tema está en las notas, su memoria o el resto de la página. El cambio muestra, debajo, lo que lo respalda («Lo que Nexus tiene de la cuenta»): lo que más se
-       parece al cambio, de a dos por tema pedido, recortado alrededor del tema, y cuántas oraciones más lo nombran.
+    3. *Lo pedido se agrega, con las palabras del pedido, si Nexus lo tiene y con su respaldo a la vista:* si el pedido
+       nombra lo interno que el cambio toca, el resto de la pieza queda igual (si el modelo reescribe, parte o junta una
+       oración que no habla de lo interno, se descarta: no se puede saber qué palabra salió de dónde, y así se mudaba un
+       «no» o un «20» de una frase del cliente a la interna); lo nuevo sale entero del pedido (o de la oración interna que
+       reemplaza), con cada número y cada «no», «más», «hasta» o «desde» tantas veces como ahí y con su pareja («más de»,
+       no un «más claro»), y los números con su decimal; y el tema está en las notas, su memoria o el resto de la página.
+       El cambio muestra, debajo, lo que lo respalda («Lo que Nexus tiene de la cuenta»): lo que más se parece a lo nuevo,
+       repartido entre los temas, recortado alrededor de lo que importa, y cuántas oraciones más lo nombran.
     *El sentido lo juzga quien aplica, no el código.* Se intentó comparar por palabras si lo pedido dice lo mismo que la
-    nota (contradicción, cobertura, cada número con su palabra) y cinco vueltas de revisión del 24 nov encontraron siempre
+    nota (contradicción, cobertura, cada número con su palabra) y las vueltas de revisión del 24 nov encontraron siempre
     otro caso («no está aprobado» con el «no» después del tema, la cifra en la oración de al lado). Lo que sí se garantiza:
     nada interno sin pedir, nada inventado por Nexus, el tema en el contexto de la cuenta y todo lo interno marcado, con
     su pregunta y su nota al lado. La regla del modelo nombra los temas desde la misma lista (`NOMBRES_DE_LO_INTERNO`).
     *Por qué acotada:* «precios», «firma el contrato», «prefiere» o «inversión» solos son el vocabulario de la escala y de
-    la operación del cliente; marcarlos frenaba ediciones normales. *Lo que no garantiza:* que lo pedido diga lo mismo que
-    la nota (lo compara la persona); un tema fuera de la lista («el gerente duda») llega como un cambio normal y lo frena
-    solo la regla del modelo, como antes del 24 nov; una forma no listada de «no lo pongas» deja el cambio marcado, con su
-    pregunta, en vez de descartarlo; y lo que Nexus «tiene de la cuenta» son las notas confirmadas y sus hechos, no las
-    transcripciones.
+    la operación del cliente; marcarlos frenaba ediciones normales. *Por qué «se agrega»:* con lo interno pedido, si el
+    modelo reescribe el resto de la pieza el cambio se descarta y se pide de nuevo; la regla del modelo ya se lo pide.
+    *Límites conocidos* (el cambio llega marcado, con el antes y el después a la vista, y lo aprueba una persona):
+    - Si lo pedido dice lo mismo que la nota (o lo contrario, u otra cifra) no lo juzga el código: lo compara la persona.
+    - Un tema fuera de la lista («el gerente duda») llega como un cambio normal: lo frena solo la regla del modelo.
+    - Una forma no listada de «no lo pongas» deja el cambio marcado y con su pregunta, en vez de descartarlo.
+    - Reescribir sin pedirlo una oración que ya hablaba de un tema interno llega marcado, no verificado.
+    - Un número que cambia de tamaño por su palabra («20 mil» → «20 millones») en una edición sin nada interno pasa: la
+      vara general de las cifras mira los dígitos.
+    - El respaldo muestra hasta 4 oraciones: con cinco temas pedidos, uno queda en «y N más».
+    - Lo que Nexus «tiene de la cuenta» son las notas confirmadas y sus hechos, no las transcripciones.
   - **La pantalla, más limpia:** sin «Contexto adicional» (decía «sin agente propio» y no hacía nada); arriba, UNA línea
     que dice si hay reuniones de después de la última vez que se ubicó la escala o de que se armó el Resumen, con el botón
     de siempre, «Ubicar con las reuniones» (`lib/exploraciones/linea-de-la-escala.ts`). Reemplaza la fila «1 Ubicar · 2

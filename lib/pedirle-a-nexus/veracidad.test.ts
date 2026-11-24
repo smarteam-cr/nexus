@@ -38,7 +38,8 @@ const revisar = (propuesto: { clave: string; despues: string | null }[], o: { pe
 /** Un cambio a una sola pieza (`antes`), con otras piezas de la página si hacen falta. */
 const pedir = (antes: string, despues: string, pedido: string, interno: string[] = [], otras: PiezaDelDocumento[] = []) =>
   revisarLaPropuesta({ piezas: [pieza("p", antes, { quitable: true })], pagina: [...otras, pieza("p", antes, { quitable: true })], propuesto: [{ clave: "p", despues }], pedido, delCliente: [], interno });
-const ANTES = "Un texto de antes.";
+/** Una pieza vacía: lo interno pedido se AGREGA (el resto de una pieza no se toca; hay casos propios para eso). */
+const ANTES = "";
 
 describe("las cifras", () => {
   it("lee los números sin el separador de miles, y con su decimal («1,5» no es 15)", () => {
@@ -270,7 +271,8 @@ describe("lo interno · 3. lo pedido, con las palabras del pedido, si Nexus lo t
 
   it("⛔ el cambio ENTERO va con las palabras y los números del pedido: ni una causa, ni una fecha, ni una oración inventada al lado", () => {
     const causa = pedir("Televentas no da seguimiento a las cotizaciones.", "Televentas no da seguimiento a las cotizaciones porque no tiene presupuesto.", "menciona el presupuesto", ["El presupuesto está congelado."]);
-    expect(causa.descartados[0].motivo).toMatch(/más de lo que pediste/);
+    // Reescribe la oración del cliente para pegarle la causa: lo interno se agrega, el resto no se toca.
+    expect(causa.descartados[0].motivo).toMatch(/más de lo que pediste|no reescribe el resto/);
     const marzo = pedir(ANTES, "El gerente general aprueba el presupuesto en marzo.", "agrega que el gerente general aprueba el presupuesto", ["El gerente general aprueba el presupuesto."]);
     expect(marzo.descartados[0].motivo).toMatch(/«marzo»/);
     const alLado = pedir(ANTES, "El presupuesto de marketing es de US$ 20.000 al año. Se aprobó en la junta de marzo.", "agrega que el presupuesto de marketing es de US$ 20.000 al año", [nota]);
@@ -302,9 +304,9 @@ describe("lo interno · 3. lo pedido, con las palabras del pedido, si Nexus lo t
 
   it("una frase de una nota que el pedido trae llega marcada, con la nota de respaldo", () => {
     const fiscal = "el gerente financiero frenó la compra hasta enero por el cierre fiscal";
-    const r = revisar([{ clave: "quitable", despues: "El gerente financiero frenó la compra hasta enero por el cierre." }], { pedido: `agrega que ${fiscal}`, interno: [fiscal] });
+    const r = revisar([{ clave: "nuevo", despues: "El gerente financiero frenó la compra hasta enero por el cierre." }], { pedido: `agrega que ${fiscal}`, interno: [fiscal] });
     expect(r.descartados).toEqual([]);
-    expect(r.cambios[0]).toMatchObject({ clave: "quitable", interno: true, respaldo: [fiscal] });
+    expect(r.cambios[0]).toMatchObject({ clave: "nuevo", interno: true, respaldo: [fiscal] });
   });
 });
 
@@ -329,14 +331,14 @@ describe("lo que encontró la sexta revisión del 24 nov", () => {
   it("⛔ «no menciones» una frase de una nota no la pide", () => {
     const fiscal = "el gerente financiero frenó la compra hasta enero por el cierre fiscal";
     for (const pedido of [`no menciones que ${fiscal}`, `quita lo de que ${fiscal}`])
-      expect(revisar([{ clave: "quitable", despues: "El gerente financiero frenó la compra hasta enero por el cierre fiscal." }], { pedido, interno: [fiscal] }).cambios, pedido).toEqual([]);
+      expect(revisar([{ clave: "nuevo", despues: "El gerente financiero frenó la compra hasta enero por el cierre fiscal." }], { pedido, interno: [fiscal] }).cambios, pedido).toEqual([]);
   });
 
   describe("el respaldo muestra lo que importa", () => {
     it("pedida una nota sin tema, solo las oraciones que comparten frase con el pedido", () => {
       const fiscal = "el gerente financiero frenó la compra hasta enero por el cierre fiscal";
       const otras = ["El presupuesto de marketing es fijo.", "La competencia es Salesforce.", "El director no quiere dejar Salesforce."];
-      const r = revisar([{ clave: "quitable", despues: "El gerente financiero frenó la compra hasta enero por el cierre fiscal." }], { pedido: `agrega que ${fiscal}`, interno: [...otras, fiscal] });
+      const r = revisar([{ clave: "nuevo", despues: "El gerente financiero frenó la compra hasta enero por el cierre fiscal." }], { pedido: `agrega que ${fiscal}`, interno: [...otras, fiscal] });
       expect(r.cambios[0].respaldo).toEqual([fiscal]);
     });
 
@@ -378,12 +380,24 @@ describe("lo que encontró la séptima revisión del 24 nov", () => {
     expect(pedir("Hoy no hay CRM.", "Hoy no hay CRM. No hay presupuesto aprobado.", "agrega que hay presupuesto aprobado", nota).cambios).toEqual([]);
   });
 
-  it("partir o juntar oraciones al agregar lo pedido no lo descarta", () => {
-    const nota = ["El presupuesto es limitado."];
-    const partida = pedir("Tienes 20 mil contactos y los usas en Excel.", "Tienes 20 mil contactos. Los usas en Excel. El presupuesto es limitado.", "agrega que el presupuesto es limitado", nota);
-    expect(partida.cambios[0]).toMatchObject({ interno: true });
-    const junta = pedir("Las cotizaciones se pierden. Tu equipo trabaja en Excel.", "Las cotizaciones se pierden y tu equipo trabaja en Excel. El presupuesto es limitado.", "agrega que el presupuesto es limitado", nota);
-    expect(junta.cambios[0]).toMatchObject({ interno: true });
+  it("lo interno pedido se AGREGA: el resto de la pieza queda igual (partirlo, juntarlo o mudarle una palabra lo descarta, con su porqué)", () => {
+    const nota = ["El presupuesto es limitado.", "Hay presupuesto aprobado."];
+    // Agregado sin tocar lo demás: llega.
+    expect(pedir("Tienes 20 mil contactos y los usas en Excel.", "Tienes 20 mil contactos y los usas en Excel. El presupuesto es limitado.", "agrega que el presupuesto es limitado", nota).cambios[0]).toMatchObject({ interno: true });
+    const tocadas: [string, string, string][] = [
+      ["Tienes 20 mil contactos y los usas en Excel.", "Tienes 20 mil contactos. Los usas en Excel. El presupuesto es limitado.", "agrega que el presupuesto es limitado"],
+      ["Las cotizaciones se pierden. Tu equipo trabaja en Excel.", "Las cotizaciones se pierden y tu equipo trabaja en Excel. El presupuesto es limitado.", "agrega que el presupuesto es limitado"],
+      // La mudanza de la octava revisión: el «no» y el «20» de una frase del cliente, a la interna.
+      ["El equipo no usa el CRM.", "El equipo usa el CRM. No hay presupuesto aprobado.", "agrega que hay presupuesto aprobado"],
+      ["Tienes 20 mil contactos.", "Tienes contactos. El presupuesto es limitado, de 20 mil.", "agrega que el presupuesto es limitado"],
+      ["Tu equipo usa HubSpot.", "Tu equipo no usa HubSpot. El presupuesto no está aprobado.", "agrega que el presupuesto no está aprobado"],
+    ];
+    for (const [antes, despues, pedido] of tocadas) expect(pedir(antes, despues, pedido, nota).descartados[0]?.motivo, despues).toMatch(/no reescribe el resto de la pieza/);
+  });
+
+  it("reemplazar la oración interna de antes conserva sus otras palabras («cambia el presupuesto a 30 mil»)", () => {
+    const r = pedir("El equipo no usa el CRM y el presupuesto es de 20 mil.", "El equipo no usa el CRM y el presupuesto es de 30 mil.", "cambia el presupuesto a 30 mil", ["El presupuesto es de 30 mil."]);
+    expect(r.cambios[0]).toMatchObject({ interno: true });
   });
 
   it("⛔ un «más», «no» o «desde» suelto en el pedido no alcanza: tiene que venir con su pareja", () => {
@@ -409,7 +423,7 @@ describe("lo que encontró la séptima revisión del 24 nov", () => {
 
     const fiscal = "el gerente financiero frenó la compra hasta enero por el cierre fiscal";
     const larga = `${"Hablamos de muchas cosas con el equipo comercial durante la reunión, ".repeat(4)}y ${fiscal}`;
-    const n = revisar([{ clave: "quitable", despues: "El gerente financiero frenó la compra hasta enero por el cierre fiscal." }], { pedido: `agrega que ${fiscal}`, interno: [larga] });
+    const n = revisar([{ clave: "nuevo", despues: "El gerente financiero frenó la compra hasta enero por el cierre fiscal." }], { pedido: `agrega que ${fiscal}`, interno: [larga] });
     expect(n.cambios[0].respaldo?.[0]).toContain("gerente financiero frenó la compra");
   });
 
@@ -419,5 +433,41 @@ describe("lo que encontró la séptima revisión del 24 nov", () => {
     const t0 = performance.now();
     for (let k = 0; k < 5; k++) pedir(ANTES, "El presupuesto está aprobado.", "agrega que el presupuesto está aprobado", notas, otras);
     expect(performance.now() - t0).toBeLessThan(1500);
+  });
+});
+
+describe("lo que encontró la octava revisión del 24 nov", () => {
+  const nota = ["El presupuesto es de US$ 20.000.", "El presupuesto está aprobado.", "El presupuesto es de 20 mil o más."];
+  it("⛔ «más», «desde», «hasta», «menos» piden su pareja también delante de un número o al final", () => {
+    const casos: [string, string][] = [
+      ["El presupuesto es de más de US$ 20.000.", "hazlo más claro y agrega que el presupuesto es de US$ 20.000"],
+      ["El presupuesto es de más del 20 %.", "hazlo más claro y agrega que el presupuesto es del 20 %"],
+      ["El presupuesto es desde US$ 20.000.", "agrega que el presupuesto es de US$ 20.000"],
+      ["El presupuesto es hasta 20.000.", "hazlo hasta donde puedas y agrega que el presupuesto es de 20.000"],
+      ["El presupuesto es de menos de 20.000.", "hazlo menos técnico y agrega que el presupuesto es de 20.000"],
+      ["El presupuesto es de 20 mil o más.", "agrega que el presupuesto es de 20 mil, y hazlo más claro"],
+    ];
+    for (const [despues, pedido] of casos) expect(pedir(ANTES, despues, pedido, nota).cambios, despues).toEqual([]);
+    // Con la pareja en el pedido, sí: «o más» al final.
+    expect(pedir(ANTES, "El presupuesto es de 20 mil o más.", "agrega que el presupuesto es de 20 mil o más", nota).cambios[0]).toMatchObject({ interno: true });
+  });
+
+  it("⛔ un «no» o un número del pedido alcanza para uno, no para dos", () => {
+    expect(pedir(ANTES, "El presupuesto no está aprobado. No hay presupuesto.", "agrega que el presupuesto no está aprobado", nota).cambios).toEqual([]);
+    expect(pedir(ANTES, "El presupuesto es de 20 mil. Son 20 mil.", "agrega que el presupuesto es de 20 mil", nota).cambios).toEqual([]);
+  });
+
+  it("el respaldo se mide contra lo nuevo: la nota que contradice no queda debajo de las que repiten lo que ya decía la pieza", () => {
+    const pieza1 = "Tu equipo comercial trabaja en Excel y pierde cotizaciones.";
+    const notas = ["El equipo comercial trabaja en Excel desde hace años.", "El equipo comercial pierde cotizaciones en Excel.", "El presupuesto NO está aprobado."];
+    const r = pedir(pieza1, `${pieza1} El presupuesto está aprobado.`, "agrega que el presupuesto está aprobado", notas);
+    expect(r.cambios[0].respaldo?.[0]).toBe("El presupuesto NO está aprobado.");
+  });
+
+  it("el recorte encuentra la frase pedida aunque traiga un monto con punto", () => {
+    const pedida = "el gerente aprobó US$ 20.000 para el CRM en diciembre";
+    const larga = `${"Hablamos de muchas cosas con el equipo comercial durante la reunión, ".repeat(4)}y ${pedida}`;
+    const r = revisar([{ clave: "nuevo", despues: "El gerente aprobó US$ 20.000 para el CRM en diciembre." }], { pedido: `agrega que ${pedida}`, interno: [larga] });
+    expect(r.cambios[0].respaldo?.[0]).toContain("aprobó US$ 20.000 para el CRM");
   });
 });

@@ -17,16 +17,17 @@
  *       2. LO QUE NO SE PIDIÓ, NO LLEGA. Una palabra interna que la pieza no tenía llega solo si el pedido nombra su tema y
  *          no pide quitar ni dejar de mencionar nada (`PIDE_QUE_NO`: con eso, lo interno se pide aparte). Una frase de una
  *          nota, solo si el pedido la trae o va con un tema pedido.
- *       3. LO PEDIDO, CON LAS PALABRAS DEL PEDIDO Y SI NEXUS LO TIENE. Si el pedido nombra lo interno que el cambio toca:
- *          cada palabra y cada número que aparece más veces que antes en la pieza (se cuenta en la pieza entera: partir o
- *          juntar oraciones no cambia nada) sale del pedido; las que dan vuelta lo dicho («no», «sí», «ya», «más», «hasta»,
- *          «desde»), con su pareja («más de», no un «más claro» suelto); y los números se leen con su decimal («1,5» no es
- *          15). El modelo no lee las notas, así que lo que agrega (una causa, una fecha, una cifra) es inventado. Y el tema está en lo que Nexus tiene
- *          de la cuenta (sus notas y su memoria, `interno`, o el resto de la página). El cambio trae lo que lo respalda
- *          (`respaldo`: lo que más se parece al cambio, de a dos por tema, recortado alrededor del tema; `respaldoDeMas`,
+ *       3. LO PEDIDO SE AGREGA, CON LAS PALABRAS DEL PEDIDO Y SI NEXUS LO TIENE. Si el pedido nombra lo interno que el cambio
+ *          toca: el resto de la pieza queda igual (cada oración que no habla de lo interno; si el modelo la reescribe, la
+ *          parte o la junta, no se sabe qué palabra salió de dónde, y se descarta); lo nuevo sale entero del pedido (o de la
+ *          oración interna que reemplaza): cada palabra está ahí, cada número y cada palabra que da vuelta lo dicho («no»,
+ *          «más», «hasta», «desde»…) tantas veces como ahí y con la misma palabra al lado («más de», no un «más claro»
+ *          suelto), y los números se leen con su decimal («1,5» no es 15); y el tema está en lo que Nexus tiene de la cuenta
+ *          (sus notas y su memoria, `interno`, o el resto de la página). El cambio trae lo que lo respalda (`respaldo`: lo que
+ *          más se parece a lo nuevo, repartido entre los temas, recortado alrededor de lo que importa; `respaldoDeMas`,
  *          cuántas más), y la pantalla lo muestra debajo.
  *     Lo que el código NO juzga es el sentido: si lo pedido dice lo mismo que la nota (o lo contrario, o otra cifra). Se
- *     intentó por palabras (la contradicción, la cobertura, cada número con su palabra) y cinco vueltas de revisión, el 24
+ *     intentó por palabras (la contradicción, la cobertura, cada número con su palabra) y las vueltas de revisión del 24
  *     nov, encontraron siempre otro caso: «no está aprobado» con el «no» después del tema, una cifra en la oración de al
  *     lado. Por eso la nota va a la vista y decide quien aplica. Tampoco ve un tema fuera de la lista (lo frena solo la regla
  *     del modelo, como antes del 24 nov) ni todas las formas de decir «no lo pongas» (si se escapa una, el cambio igual llega
@@ -57,7 +58,7 @@ const sinTildes = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLo
 function leerNumero(n: string): string {
   const limpio = n.replace(/[.,]+$/, "");
   const decimal = limpio.match(/^(.*\d)[.,](\d{1,2})$/);
-  const entero = (x: string) => (/^\d{1,3}(?:[.,]\d{3})+$/.test(x) || /^\d+$/.test(x) ? x.replace(/[.,]/g, "") : x.replace(/[.,]/g, ""));
+  const entero = (x: string) => x.replace(/[.,]/g, "");
   // «4.800» no es un decimal: un solo separador con tres dígitos detrás es de miles.
   if (!decimal || (/^\d{1,3}[.,]\d{3}$/.test(limpio) && !/[.,].*[.,]/.test(limpio))) return entero(limpio);
   const fraccion = decimal[2].replace(/0+$/, "");
@@ -172,11 +173,15 @@ const LARGO_DEL_RESPALDO = 240;
  */
 function recortar(oracion: string, temas: readonly { patron: RegExp }[], frase: string | null): string {
   if (oracion.length <= LARGO_DEL_RESPALDO) return oracion;
-  // Dónde empieza la frase en la oración: se busca palabra por palabra (las cinco seguidas), con su posición en el texto.
-  const fichasConLugar = [...sinTildes(oracion).matchAll(/[a-z0-9ñ]+/g)];
+  // Dónde empieza la frase en la oración: se busca ficha por ficha (las cinco seguidas, los números como los lee `fichas`),
+  // con su posición en el texto.
+  const fichasConLugar = [...sinTildes(oracion).matchAll(/\d[\d.,]*|[a-z0-9ñ]+/g)].map((m) => ({
+    ficha: /^\d/.test(m[0]) ? (cifrasDe(m[0])[0] ?? "").replace(".", "d") : m[0],
+    en: m.index ?? 0,
+  }));
   const buscada = frase?.split(" ") ?? [];
-  const i = buscada.length ? fichasConLugar.findIndex((_, k) => buscada.every((w, j) => fichasConLugar[k + j]?.[0] === w)) : -1;
-  const enLaFrase = i >= 0 ? (fichasConLugar[i].index ?? -1) : -1;
+  const i = buscada.length ? fichasConLugar.findIndex((_, k) => buscada.every((w, j) => fichasConLugar[k + j]?.ficha === w)) : -1;
+  const enLaFrase = i >= 0 ? fichasConLugar[i].en : -1;
   const enElTema = Math.min(...temas.map((t) => [...oracion.matchAll(t.patron)][0]?.index ?? Infinity), Infinity);
   const en = Number.isFinite(enElTema) ? enElTema : enLaFrase >= 0 ? enLaFrase : Infinity;
   const desde = Number.isFinite(en) ? Math.max(0, Math.min(en - 80, oracion.length - LARGO_DEL_RESPALDO)) : 0;
@@ -184,11 +189,6 @@ function recortar(oracion: string, temas: readonly { patron: RegExp }[], frase: 
 }
 /** Cuántas veces está cada elemento. */
 const contar = (xs: readonly string[]) => xs.reduce((m, x) => m.set(x, (m.get(x) ?? 0) + 1), new Map<string, number>());
-/** Cada palabra con la que la sigue, para pedirle a «más», «no» o «hasta» su pareja en el pedido. */
-const parejas = (texto: string) => {
-  const ps = palabras(texto);
-  return new Set(ps.map((p, i) => `${p} ${ps[i + 1] ?? ""}`.trim()));
-};
 
 export function revisarLaPropuesta(o: {
   /** Las piezas que se podían cambiar (la página o, con el pedido hecho desde una sección, las de esa sección). */
@@ -213,8 +213,6 @@ export function revisarLaPropuesta(o: {
   const loQueSePuede = frases([pagina, ...o.delCliente].join("\n"));
   const deLoInterno = new Set([...frases(deLaCuenta)].filter((f) => !loQueSePuede.has(f)));
   const delPedido = frases(o.pedido);
-  const palabrasDelPedido = new Set(palabras(o.pedido));
-  const numerosDelPedido = new Set(cifrasDe(o.pedido));
   const pideQueNo = PIDE_QUE_NO.test(sinTildes(o.pedido)) || sinElTema(o.pedido);
   const loPide = (t: (typeof TEMAS_INTERNOS)[number]) => !pideQueNo && terminos(t, o.pedido).length > 0;
 
@@ -292,30 +290,40 @@ export function revisarLaPropuesta(o: {
           descartar(`Habla de algo interno («${sinTenerlo.nombre}») que Nexus no tiene en lo que sabe de la cuenta: si es cierto, cuéntaselo primero.`);
           continue;
         }
-        /* Todo lo nuevo del cambio sale del pedido. Se cuenta en la pieza ENTERA, no oración por oración (partir o juntar
-           oraciones no cambia nada): cada vez que una palabra o un número aparece más que antes, esa aparición tiene que venir
-           del pedido. Así el segundo «20» de «20 mil contactos y un presupuesto de 20 mil», o el segundo «no» de «no usa el CRM
-           y no hay presupuesto», piden estar en el pedido. Las que dan vuelta lo dicho («no», «más», «hasta»…) piden además su
-           pareja: «más de» en el pedido, no un «más claro». */
-        const antesCuenta = contar(palabras(antes ?? ""));
-        const parejasDelPedido = parejas(o.pedido);
-        const parejasDelCambio = palabras(despues).map((p, i, ps) => `${p} ${ps[i + 1] ?? ""}`.trim());
-        const sumadas = [...contar(palabras(despues))].filter(([p, n]) => n > (antesCuenta.get(p) ?? 0)).map(([p]) => p);
-        const numerosAntes = contar(cifrasDe(antes ?? ""));
-        const numerosSumados = [...contar(cifrasDe(despues))].filter(([n, k]) => k > (numerosAntes.get(n) ?? 0)).map(([n]) => n);
+        /* LO INTERNO PEDIDO SE AGREGA; EL RESTO DE LA PIEZA NO SE TOCA. Cada oración de antes que no habla de lo interno
+           queda igual: si el modelo la reescribe, la parte o la junta, no se puede saber qué palabra salió de dónde (ocho
+           vueltas de revisión, el 24 nov, encontraron cómo mudar un «no» o un «20» de una frase del cliente a la interna). */
+        const deDespues = new Set(oracionesDe(despues).map(igualQue));
+        const tocada = oracionesDe(antes ?? "").find((a) => !deDespues.has(igualQue(a)) && !TEMAS_INTERNOS.some((t) => terminos(t, a).length > 0));
+        if (tocada) {
+          descartar(`Para lo interno, Nexus no reescribe el resto de la pieza (cambió «${tocada}»): vuelve a pedirlo, o escríbelo tú.`);
+          continue;
+        }
+        /* Y lo nuevo (las oraciones que no estaban) sale entero del pedido, o de la oración interna de antes que reemplaza
+           («cambia el presupuesto a 30 mil» conserva el resto de esa oración): cada palabra está ahí; cada número y cada
+           palabra que da vuelta lo dicho («no», «más», «hasta»…), tantas veces como ahí y con la misma palabra al lado («más
+           de», no un «más claro» suelto; al final, con la de antes: «o más»). */
+        const nuevo = oracionesDe(despues).filter((x) => !deAntes.has(igualQue(x))).join(" ");
+        const fuentes = [o.pedido, ...oracionesDe(antes ?? "").filter((a) => !deDespues.has(igualQue(a)))].map(fichas);
+        const enLoNuevo = fichas(nuevo);
+        const palabrasDeLaFuente = new Set(fuentes.flatMap((f) => f.filter((p) => palabras(p).length > 0)));
+        const cuentaDeLaFuente = contar(fuentes.flat());
+        const juntasDeLaFuente = new Set(fuentes.flatMap((fs) => fs.map((f, i) => `${f} ${fs[i + 1] ?? "."}`)));
+        const antesDeFin = new Set(fuentes.flatMap((fs) => fs.map((f, i) => `${fs[i - 1] ?? "."} ${f}`)));
         const deMas =
-          sumadas.find((p) => !palabrasDelPedido.has(p)) ??
-          sumadas.find((p) => DAN_VUELTA.has(p) && !parejasDelCambio.some((par) => par.startsWith(`${p} `) && parejasDelPedido.has(par)) && parejasDelCambio.some((par) => par.startsWith(`${p} `))) ??
-          numerosSumados.find((n) => !numerosDelPedido.has(n));
+          palabras(nuevo).find((p) => !palabrasDeLaFuente.has(p)) ??
+          [...contar(enLoNuevo)].find(([f, n]) => (DAN_VUELTA.has(f) || /^\d/.test(f)) && n > (cuentaDeLaFuente.get(f) ?? 0))?.[0] ??
+          enLoNuevo.find((f, i) => DAN_VUELTA.has(f) && (enLoNuevo[i + 1] ? !juntasDeLaFuente.has(`${f} ${enLoNuevo[i + 1]}`) : !antesDeFin.has(`${enLoNuevo[i - 1] ?? "."} ${f}`)));
         if (deMas) {
-          descartar(`Dice de algo interno más de lo que pediste («${deMas}»): escríbelo en tu pedido tal como es.`);
+          descartar(`Dice de algo interno más de lo que pediste («${deMas.replace(/^(\d+)d(\d+)$/, "$1,$2")}»): escríbelo en tu pedido tal como es.`);
           continue;
         }
         /* Lo que lo respalda, para que quien aplica lo compare: lo que más se parece al cambio en proporción (una nota corta
            y exacta no queda debajo de una larga que repite las palabras), repartido por vueltas entre los temas pedidos (y la
            nota pedida), de a lo más dos por tema, y recortado alrededor de lo que importa. Lo que no entra se cuenta
            (`respaldoDeMas`). Cada oración se lee una vez: la cuenta puede tener cientos. */
-        const delCambio = new Set(palabras(despues));
+        // El parecido se mide contra lo NUEVO: lo que ya decía la pieza no tiene que ganarle a la nota que importa.
+        const delCambio = new Set(palabras(nuevo));
         const vistasDelRespaldo = new Set<string>();
         const candidatas = [...oracionesDe(deLaCuenta), ...oracionesDe(deOtraParte)]
           .flatMap((oracion) => {
