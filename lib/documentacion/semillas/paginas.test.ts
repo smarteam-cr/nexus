@@ -14,6 +14,7 @@ import { construirComoFunciona } from "./como-funciona";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  ACCIONES_EN_LA_PAGINA,
   construirChatNexus,
   DOCUMENTOS_CON_CHAT,
   LARGO_DE_UN_PEDIDO_DE_ARTEFACTO,
@@ -25,6 +26,10 @@ import { PREGUNTAS_POR_DIA } from "@/lib/chat-de-nexus/respuesta";
 import { TOPES_DEL_CHAT } from "@/lib/nexus-chat/constantes";
 import { PEDIDOS_POR_DIA } from "@/lib/pedirle-a-nexus/contrato";
 import { PIEZA_CRONOGRAMA, PIEZAS_CON_CHAT } from "@/lib/asistente/piezas";
+import { COMO_SE_ACOTA } from "@/lib/nexus-chat/alcance";
+import { OPERACIONES_DE_TAREAS } from "@/lib/tareas/chat/operaciones";
+import { OPERACIONES_VALIDAS } from "@/lib/timeline/operaciones";
+import { OPERACIONES_DE_DOCUMENTO_VALIDAS } from "@/lib/canvas/operaciones-de-documento";
 import { construirEscala } from "./escala";
 import { construirGuiaCse } from "./guia-cse";
 import { construirTrabajarEnSmarteam } from "./trabajar-en-smarteam";
@@ -312,6 +317,30 @@ describe("«El chat Nexus: qué le puedes pedir» (2026-11-24)", () => {
     const enElCodigo = PIEZAS_CON_CHAT.filter((p) => p !== PIEZA_CRONOGRAMA).sort();
     expect(Object.keys(DOCUMENTOS_CON_CHAT).sort()).toEqual(enElCodigo);
     for (const nombre of Object.values(DOCUMENTOS_CON_CHAT)) expect(texto, nombre).toContain(nombre);
+  });
+
+  it("⭐ cada acción que el chat sabe hacer la nombra la página, en su lugar (2026-11-25)", () => {
+    /* El texto de una sección: desde su título (nivel 3) hasta el siguiente título de nivel 3 o 2. */
+    const nivel = (b: BloqueGuardado) => (b.type === "heading" ? Number((b.props as { level?: number } | undefined)?.level ?? 0) : 0);
+    const seccion = (titulo: string) => {
+      const desde = pagina.bloques.findIndex((b) => nivel(b) === 3 && b.content === titulo);
+      expect(desde, `la página no tiene la sección «${titulo}»`).toBeGreaterThanOrEqual(0);
+      const hasta = pagina.bloques.findIndex((b, i) => i > desde && nivel(b) > 0 && nivel(b) <= 3);
+      return textoDeBloques(pagina.bloques.slice(desde, hasta < 0 ? undefined : hasta));
+    };
+    const enElCodigo: Record<keyof typeof ACCIONES_EN_LA_PAGINA, readonly string[]> = {
+      cuenta: Object.keys(COMO_SE_ACOTA),
+      tareas: OPERACIONES_DE_TAREAS,
+      cronograma: OPERACIONES_VALIDAS,
+      documento: OPERACIONES_DE_DOCUMENTO_VALIDAS,
+    };
+    for (const [chat, acciones] of Object.entries(ACCIONES_EN_LA_PAGINA) as [keyof typeof ACCIONES_EN_LA_PAGINA, Record<string, readonly [string, string]>][]) {
+      // Ni una de más ni una de menos: una acción nueva del chat sin su frase pone esto en rojo.
+      expect(Object.keys(acciones).sort(), `las acciones del chat «${chat}»`).toEqual([...enElCodigo[chat]].sort());
+      for (const [accion, [titulo, frase]] of Object.entries(acciones)) {
+        expect(seccion(titulo), `${chat} › ${accion}: «${frase}» en «${titulo}»`).toContain(frase);
+      }
+    }
   });
 
   it("⛔ los topes y los largos salen del código, no de un número escrito a mano", () => {

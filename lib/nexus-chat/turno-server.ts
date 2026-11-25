@@ -58,8 +58,10 @@ export interface ResultadoDelTurnoDeNexus {
  * información de la cuenta (caso CEMACO, 2026-10-20: antes iba todo en el mensaje y sin ninguna sesión).
  */
 /**
- * Desde dónde se abrió el chat. «guia»: la guía de una exploración (suma la guía al mensaje). «preventa»: el cajón «Nexus»
- * de la preventa (etapa 2 del plan maestro de «Hablar con Nexus», 23 nov: «Tareas, siguiente paso o la guía»).
+ * Desde dónde se abrió el chat. «guia»: la guía de una exploración (suma la guía al mensaje). «preventa»: la preventa, por
+ * dos caminos: el chat de la cuenta montado ahí (con su botón para quien no puede cambiar la preventa) y, desde el 24 nov,
+ * lo que se pide en la conversación del cajón «Nexus» (`pedirALaCuentaEnLaPreventa`). El enlace «Tareas, siguiente paso o
+ * la guía» que abría este chat desde el cajón se quitó ese día.
  * `sinNotasDeLaCuenta`: en la preventa no se ofrece «nota.crear» (las notas de la cuenta van a HubSpot, y lo que se le
  * cuenta a Nexus no va a HubSpot: decisión de Elías del 22 nov; lo que se cuenta va a «Lo que sabes del cliente»).
  */

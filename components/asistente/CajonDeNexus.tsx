@@ -78,7 +78,10 @@ export interface CajonDeNexusProps {
   ancho?: "normal" | "amplio";
   /** Con esto, la cabecera ofrece «Más ancho» / «Más angosto». */
   onAncho?: () => void;
-  /** Fijo arriba del hilo, debajo de la cabecera (en la preventa: «Tareas, siguiente paso o la guía»). */
+  /**
+   * Fijo arriba del hilo, debajo de la cabecera. Hoy ningún chat lo llena: la preventa lo usaba para el enlace «Tareas,
+   * siguiente paso o la guía», que se quitó el 24 nov (eso se pide en la misma caja).
+   */
   arriba?: ReactNode;
   /** El hilo: el chat vacío con sus ejemplos, los mensajes, las propuestas, «pensando…» y los errores. */
   children: ReactNode;

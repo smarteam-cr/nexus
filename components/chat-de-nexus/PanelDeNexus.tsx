@@ -170,7 +170,7 @@ export interface PanelDeNexusProps {
   onClose: () => void;
   /** De qué se habla, debajo de «Nexus» («Preventa · …»). */
   subtitulo: string;
-  /** Fijo arriba del hilo (en la preventa: «Tareas, siguiente paso o la guía»). */
+  /** Fijo arriba del hilo. Hoy la preventa no lo llena: el enlace «Tareas, siguiente paso o la guía» se quitó el 24 nov. */
   arriba?: ReactNode;
   ancho: "normal" | "amplio";
   onAncho: () => void;

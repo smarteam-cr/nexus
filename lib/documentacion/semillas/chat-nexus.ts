@@ -12,7 +12,9 @@
  * «Mejorar con IA» de un pedido. Los topes y los largos salen de las constantes del código (abajo), así un tope cambiado
  * entra en la próxima siembra. Dos van escritos a mano porque su constante vive en un módulo del servidor: los mensajes
  * de Tareas por día y el largo de los «Mejorar con IA» de artefactos y perfiles. `paginas.test.ts` los compara con el
- * código, igual que la lista de documentos con chat (`DOCUMENTOS_CON_CHAT` contra `PIEZAS_CON_CHAT`).
+ * código, igual que la lista de documentos con chat (`DOCUMENTOS_CON_CHAT` contra `PIEZAS_CON_CHAT`) y cada acción que el
+ * chat sabe hacer (`ACCIONES_EN_LA_PAGINA` contra las listas de operaciones de cada chat): una acción nueva sin su frase
+ * en la página pone la prueba en rojo.
  *
  * ⛔ AL CAMBIAR LO QUE EL CHAT SABE HACER (una operación nueva, un lugar nuevo, un tope), se actualiza esta página y se
  * vuelve a correr el script. Las frases de ejemplo que son pedidos de la preventa las prueba `paginas.test.ts` contra la
@@ -63,6 +65,98 @@ export const DOCUMENTOS_CON_CHAT: Readonly<Record<string, string>> = {
   "business-case": "la propuesta comercial",
   role: "los documentos de Roles",
 };
+
+/** Dónde la página nombra una acción: el título de su sección y una frase que aparece en ella, tal cual. */
+type DondeSeNombra = readonly [seccion: string, frase: string];
+
+const FICHA = "En la ficha del cliente";
+const GUIA = "En la guía de la próxima sesión";
+const DOCUMENTOS = "En los documentos";
+const CRONOGRAMA = "En el cronograma";
+const TAREAS = "En Tareas";
+
+/**
+ * ⭐ CADA ACCIÓN QUE SABE HACER EL CHAT, con dónde la nombra la página (2026-11-25). Una lista por motor del chat, con las
+ * claves de su lista en el código:
+ *   · `cuenta`: el chat de la cuenta, que también atiende los pedidos de la preventa (`COMO_SE_ACOTA`, lib/nexus-chat/alcance.ts);
+ *   · `tareas`: el de Tareas (`OPERACIONES_DE_TAREAS`, lib/tareas/chat/operaciones.ts);
+ *   · `cronograma`: el del cronograma (`OPERACIONES_VALIDAS`, lib/timeline/operaciones.ts);
+ *   · `documento`: el de los documentos (`OPERACIONES_DE_DOCUMENTO_VALIDAS`, lib/canvas/operaciones-de-documento.ts).
+ * `paginas.test.ts` compara cada lista con la del código y busca cada frase en su sección: si el chat gana una acción, la
+ * prueba se pone en rojo hasta que la página la cuente (y la frase entre acá). Lo que cuenta el chat de la preventa (las
+ * tarjetas) y los «Mejorar con IA» de un solo pedido no tienen una lista de acciones: no entran.
+ */
+export const ACCIONES_EN_LA_PAGINA = {
+  cuenta: {
+    "cuenta.memoria": [FICHA, "lo que Nexus sabe de la cuenta"],
+    "proyecto.memoria": [FICHA, "sus proyectos"],
+    "reuniones.recientes": [FICHA, "las reuniones"],
+    "reunion.leer": [FICHA, "las lee enteras"],
+    "reuniones.buscar": [FICHA, "busca adentro de lo que se dijo"],
+    "cuenta.tareas": [FICHA, "las tareas"],
+    "cuenta.notas": [FICHA, "las notas"],
+    "cuenta.siguientes-pasos": [FICHA, "los siguientes pasos"],
+    "cuenta.negocios": [FICHA, "los negocios abiertos de HubSpot"],
+    "cuenta.personas": [FICHA, "las personas con sus tickets"],
+    "comunicaciones.recientes": [FICHA, "los correos, notas y llamadas que quedaron en HubSpot"],
+    "tarea.crear": [FICHA, "crear tareas"],
+    "tarea.cambiar-estado": [FICHA, "cambiarles el estado"],
+    "tarea.mover-semana": [FICHA, "pasarlas de semana"],
+    "nota.crear": [FICHA, "la nota de la cuenta"],
+    "siguiente-paso.fijar": [FICHA, "Fija el siguiente paso"],
+    "documento.generar": [FICHA, "vuelve a generar, un documento"],
+    "guia.leer": [GUIA, "Lee la guía"],
+    "guia.pregunta.agregar": [GUIA, "más preguntas"],
+    "guia.pregunta.cambiar": [GUIA, "cambiar alguna"],
+    "guia.pregunta.quitar": [GUIA, "quitar las que sobran"],
+    "guia.repregunta.cambiar": [GUIA, "otras repreguntas"],
+  },
+  tareas: {
+    "tarea.crear": [TAREAS, "crear tareas"],
+    "tarea.editar": [TAREAS, "cambiarles el título, la prioridad, la fecha o las notas"],
+    "tarea.asignar": [TAREAS, "salvo que puedas asignársela"],
+    "tarea.mover-semana": [TAREAS, "pasarlas de semana"],
+    "tarea.depender": [TAREAS, "una va después de otra"],
+    "proyecto.crear": [TAREAS, "crear o editar un proyecto de tareas"],
+    "proyecto.editar": [TAREAS, "crear o editar un proyecto de tareas"],
+  },
+  cronograma: {
+    "fase.duracion": [CRONOGRAMA, "alargar o acortar una fase"],
+    "fase.renombrar": [CRONOGRAMA, "renombrarla, moverla"],
+    "fase.mover": [CRONOGRAMA, "renombrarla, moverla"],
+    "fase.crear": [CRONOGRAMA, "crearla o borrarla"],
+    "fase.borrar": [CRONOGRAMA, "crearla o borrarla"],
+    "fase.insertar-semana": [CRONOGRAMA, "sumarle o quitarle una semana"],
+    "fase.quitar-semana": [CRONOGRAMA, "sumarle o quitarle una semana"],
+    "fase.arranque-relativo": [CRONOGRAMA, "elegir en qué semana arranca"],
+    "fase.tipo": [CRONOGRAMA, "cambiarle el tipo de actividad"],
+    "fase.redistribuir": [CRONOGRAMA, "repartir sus tareas parejo entre sus semanas"],
+    "fase.nota": [CRONOGRAMA, "la nota que lee el cliente"],
+    "tarea.mover-semana": [CRONOGRAMA, "moverlas de semana"],
+    "tarea.mover-fase": [CRONOGRAMA, "o de fase"],
+    "tarea.crear": [CRONOGRAMA, "crearlas"],
+    "tarea.renombrar": [CRONOGRAMA, "renombrarlas"],
+    "tarea.borrar": [CRONOGRAMA, "borrarlas"],
+    "tarea.duenio": [CRONOGRAMA, "cambiarles el responsable"],
+    "tarea.tipo": [CRONOGRAMA, "como sesión o como tarea"],
+    arranque: [CRONOGRAMA, "la fecha de arranque del proyecto"],
+  },
+  documento: {
+    "seccion.texto": [DOCUMENTOS, "cambiar un texto"],
+    "seccion.campo": [DOCUMENTOS, "o un campo"],
+    "seccion.item.agregar": [DOCUMENTOS, "agregar, quitar o mover puntos de una lista"],
+    "seccion.item.borrar": [DOCUMENTOS, "agregar, quitar o mover puntos de una lista"],
+    "seccion.item.mover": [DOCUMENTOS, "agregar, quitar o mover puntos de una lista"],
+    "seccion.vaciar": [DOCUMENTOS, "vaciar una sección"],
+    "seccion.rotular": [DOCUMENTOS, "el rótulo de arriba de una sección"],
+    "seccion.crear": [DOCUMENTOS, "crear, borrar, ocultar, mostrar, mover o renombrar secciones"],
+    "seccion.borrar": [DOCUMENTOS, "crear, borrar, ocultar, mostrar, mover o renombrar secciones"],
+    "seccion.ocultar": [DOCUMENTOS, "crear, borrar, ocultar, mostrar, mover o renombrar secciones"],
+    "seccion.mostrar": [DOCUMENTOS, "crear, borrar, ocultar, mostrar, mover o renombrar secciones"],
+    "seccion.mover": [DOCUMENTOS, "crear, borrar, ocultar, mostrar, mover o renombrar secciones"],
+    "seccion.renombrar": [DOCUMENTOS, "crear, borrar, ocultar, mostrar, mover o renombrar secciones"],
+  },
+} as const satisfies Record<string, Record<string, DondeSeNombra>>;
 
 /**
  * Frases que el chat de la preventa toma SEGURO como un pedido de la cuenta (una tarea, el siguiente paso, la guía), con el
@@ -144,8 +238,9 @@ function bloques(): BloqueGuardado[] {
     ),
 
     titulo(3, "En la guía de la próxima sesión"),
-    vinneta("«✨ Mejorar con IA» de la guía abre la misma conversación con la marca «Sobre la guía de la sesión…» y pedidos listos en botones. Un clic llena la caja; lo mandas tú."),
-    vinneta("Le pides más preguntas, otras repreguntas, preguntas más cortas o quitar alguna."),
+    vinneta("«✨ Mejorar con IA» de la guía abre la misma conversación con la marca «Sobre la guía de la sesión…» y pedidos listos en botones. Un clic llena la caja; lo mandas tú. En la exploración de un proyecto abre el chat de la cuenta, con lo mismo."),
+    vinneta("Lee la guía con lo que dejó cada sesión y lo que ya se sabe del cliente."),
+    vinneta("Le pides más preguntas, cambiar alguna (más corta, más directa), otras repreguntas o quitar las que sobran."),
     vinneta("Si no le dices cuántas, propone de dos a cuatro. No vuelve a preguntar lo que ya se sabe ni habla de licencias o precios."),
     vinneta("Con la marca puesta, todo lo que escribes es un pedido sobre la guía. Para contar o preguntar algo del cliente, quítala con su ✕."),
     ...ejemplos(
@@ -163,7 +258,7 @@ function bloques(): BloqueGuardado[] {
     ...ejemplos("Cambia el titular a algo sobre la cobranza", "Agrega un punto clave sobre el WhatsApp, que es crítico"),
 
     titulo(3, "En la ficha del cliente"),
-    vinneta("Pregúntale lo que Nexus sabe de la cuenta. Lee sus proyectos, las reuniones (y busca adentro de lo que se dijo), las tareas, las notas, los siguientes pasos, los negocios abiertos de HubSpot, las personas con sus tickets, y los correos, notas y llamadas que quedaron en HubSpot."),
+    vinneta("Pregúntale lo que Nexus sabe de la cuenta. Lee sus proyectos, las reuniones (las lee enteras y busca adentro de lo que se dijo), las tareas, las notas, los siguientes pasos, los negocios abiertos de HubSpot, las personas con sus tickets, y los correos, notas y llamadas que quedaron en HubSpot."),
     vinneta("Cuéntale lo que pasó fuera de una reunión grabada: te propone la nota de la cuenta (queda también en HubSpot), las tareas que salen de ahí y el siguiente paso, todo en una lista."),
     vinneta("Te puede crear tareas, cambiarles el estado o pasarlas de semana. Una tarea para otra persona le llega como sugerencia."),
     vinneta("Fija el siguiente paso de tu equipo, o de uno que lideras, en la empresa, un negocio o un proyecto. Queda como tarea y en HubSpot."),
@@ -182,15 +277,16 @@ function bloques(): BloqueGuardado[] {
     vinneta("El chat aparece cuando el documento ya tiene contenido: la primera vez se usa «Generar»."),
     vinneta("Con «Nexus» hablas de todo el documento; con «✨ Mejorar con IA» de una sección, de esa sección."),
     vinneta("Primero conversan el cambio: te dice qué se puede y qué implica, antes de tocar nada."),
-    vinneta("Te puede cambiar un texto, agregar, quitar o mover puntos, y crear, ocultar, mostrar, mover o renombrar secciones, según lo que permita cada documento."),
+    vinneta("Te puede cambiar un texto o un campo, agregar, quitar o mover puntos de una lista, vaciar una sección, cambiar el rótulo de arriba de una sección, y crear, borrar, ocultar, mostrar, mover o renombrar secciones, según lo que permita cada documento. Vaciar o borrar te lo marca con ⚠ antes de aplicar."),
     vinneta("Cuando una reunión trae novedades para el documento, «✨ Mejorar con IA» desde la novedad abre el chat con esa sección y lo que dejó la reunión."),
     vinneta("«Aplicar» pasa por el editor de siempre y pide tu permiso de editar ese documento."),
     ...ejemplos("Saca la sección de riesgos", "Resume los objetivos en tres puntos", "Mueve el alcance antes del cronograma"),
 
     titulo(3, "En el cronograma"),
     vinneta("Le preguntas qué pasa si mueves algo: te dice qué fecha se corre antes de cambiarla."),
-    vinneta("Te puede alargar o acortar una fase, renombrarla, moverla, crearla o borrarla, sumarle o quitarle una semana y ponerle una nota."),
-    vinneta("Con las tareas del plan: moverlas de semana o de fase, crearlas, renombrarlas, borrarlas o cambiarles el responsable."),
+    vinneta("Te puede alargar o acortar una fase, renombrarla, moverla, crearla o borrarla, sumarle o quitarle una semana, elegir en qué semana arranca, cambiarle el tipo de actividad, repartir sus tareas parejo entre sus semanas y ponerle la nota que lee el cliente."),
+    vinneta("Con las tareas del plan: moverlas de semana o de fase, crearlas, renombrarlas, borrarlas, cambiarles el responsable o marcarlas como sesión o como tarea."),
+    vinneta("Y cambiar la fecha de arranque del proyecto, con tu «Aplicar»."),
     vinneta("Si elegiste reuniones o pegaste notas en «Contexto del cronograma», también las lee."),
     ...ejemplos(
       "¿Qué pasa si alargo una fase dos semanas?",
@@ -200,7 +296,7 @@ function bloques(): BloqueGuardado[] {
 
     titulo(3, "En Tareas"),
     vinneta("La conversación es tuya, no de una cuenta: abarca las cuentas que ves."),
-    vinneta("Pídele lo que harías a mano: crear tareas, cambiarles el título, la prioridad o la fecha, pasarlas de semana o decir que una va después de otra."),
+    vinneta("Pídele lo que harías a mano: crear tareas, cambiarles el título, la prioridad, la fecha o las notas, pasarlas de semana o decir que una va después de otra."),
     vinneta("Te puede armar un plan entero de tareas, y crear o editar un proyecto de tareas."),
     vinneta("Lo tuyo lo decides tú; lo de otra persona le llega como sugerencia, salvo que puedas asignársela."),
     ...ejemplos(
@@ -256,7 +352,7 @@ function bloques(): BloqueGuardado[] {
       `Un mensaje puede tener hasta ${conPuntos(TOPES.largoDelMensaje)} caracteres. Los «Mejorar con IA» de un solo pedido aceptan menos: ${conPuntos(LARGO_DE_UN_PEDIDO_DE_ARTEFACTO)} en los artefactos y el perfil de un puesto, ${conPuntos(MAX_PEDIDO)} en La escala y ${conPuntos(MAX_LARGO_DE_LA_INSTRUCCION)} en un caso de uso.`,
     ),
     titulo(4, "Permisos"),
-    vinneta("En la preventa, La escala y los casos de uso: poder editar la preventa."),
+    vinneta("En la preventa, La escala y los casos de uso: poder editar la preventa. Si no puedes editarla, el botón «Nexus» de la preventa abre el chat de la cuenta, el mismo de la ficha."),
     vinneta("En la ficha, los documentos del proyecto, la propuesta comercial, el cronograma y Tareas: el permiso «Conversar con el asistente». Lo tienen de base CS, Ventas, Desarrollo y Marketing; lo ajusta la dirección en Equipo. La propuesta comercial pide además el acceso de Ventas."),
     vinneta("Para pedirle cosas de la cuenta desde la preventa: ese mismo permiso y acceso a la empresa. Sin ellos, lo que pides se lee como algo que cuentas o preguntas."),
     vinneta("En los documentos de Roles y el perfil de un puesto: poder administrar Roles."),

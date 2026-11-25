@@ -17,8 +17,10 @@ export const EVENTO_ABRIR_EL_CHAT = "nexus-chat:abrir";
 
 export interface PedidoDeAbrirElChat {
   /**
-   * Lo que se señala: la guía de una exploración, o la preventa entera (23 nov: «Tareas, siguiente paso o la guía» desde el
-   * cajón «Nexus» de la preventa). `id` = la exploración.
+   * Lo que se señala: la guía de una exploración, o la preventa entera. «preventa» es el chat de la cuenta montado en la
+   * preventa: con su botón para quien no puede cambiar la preventa, y sin botón para quien sí (a ese lo abre la guía). Del
+   * 23 al 24 nov también lo abría el enlace «Tareas, siguiente paso o la guía» del cajón «Nexus», que se quitó: eso se pide
+   * en la misma conversación. `id` = la exploración.
    */
   chip?: { tipo: "guia" | "preventa"; id: string; etiqueta: string };
   /** Llena el campo sin mandarlo. */
