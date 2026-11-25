@@ -11,6 +11,25 @@
  */
 import { describe, expect, it } from "vitest";
 import { construirComoFunciona } from "./como-funciona";
+import fs from "node:fs";
+import path from "node:path";
+import {
+  ACCIONES_EN_LA_PAGINA,
+  construirChatNexus,
+  DOCUMENTOS_CON_CHAT,
+  LARGO_DE_UN_PEDIDO_DE_ARTEFACTO,
+  MENSAJES_DE_TAREAS_POR_DIA,
+  PEDIDOS_DE_EJEMPLO_EN_LA_PREVENTA,
+} from "./chat-nexus";
+import { esPedidoDeLaCuenta, TOPES } from "@/lib/chat-de-nexus/conversacion";
+import { PREGUNTAS_POR_DIA } from "@/lib/chat-de-nexus/respuesta";
+import { TOPES_DEL_CHAT } from "@/lib/nexus-chat/constantes";
+import { PEDIDOS_POR_DIA } from "@/lib/pedirle-a-nexus/contrato";
+import { PIEZA_CRONOGRAMA, PIEZAS_CON_CHAT } from "@/lib/asistente/piezas";
+import { COMO_SE_ACOTA } from "@/lib/nexus-chat/alcance";
+import { OPERACIONES_DE_TAREAS } from "@/lib/tareas/chat/operaciones";
+import { OPERACIONES_VALIDAS } from "@/lib/timeline/operaciones";
+import { OPERACIONES_DE_DOCUMENTO_VALIDAS } from "@/lib/canvas/operaciones-de-documento";
 import { construirEscala } from "./escala";
 import { construirGuiaCse } from "./guia-cse";
 import { construirTrabajarEnSmarteam } from "./trabajar-en-smarteam";
@@ -22,7 +41,7 @@ import { HERRAMIENTAS } from "./base/recursos";
 import type { PaginaSembrada } from "./bloques";
 import { leerReglamentoV5 } from "./escala-v5";
 import { leerEscalaVigente } from "./escala-vigente";
-import { FUENTES_VIVAS, SLUG_DE_INICIO, TIPOS_DE_BLOQUE, type BloqueGuardado } from "../tipos";
+import { FUENTES_VIVAS, SLUG_DE_INICIO, SLUG_DEL_CHAT_NEXUS, TIPOS_DE_BLOQUE, type BloqueGuardado } from "../tipos";
 import { textoDeBloques } from "../texto";
 
 const ARTICULOS = () => construirDocumentacion();
@@ -264,6 +283,77 @@ describe("«¿Cómo funciona Nexus?»", () => {
 
   it("dice que lo que escribe un agente es un borrador", () => {
     expect(texto).toMatch(/SIEMPRE es un borrador/i);
+  });
+});
+
+describe("«El chat Nexus: qué le puedes pedir» (2026-11-24)", () => {
+  const pagina = construirChatNexus();
+  const texto = textoDeBloques(pagina.bloques);
+
+  it("vive adentro de «¿Cómo funciona Nexus?», en la dirección que abre el chat vacío", () => {
+    expect(pagina.slug).toBe(SLUG_DEL_CHAT_NEXUS);
+    expect((construirComoFunciona().hijas ?? []).map((h) => h.slug)).toEqual([SLUG_DEL_CHAT_NEXUS]);
+    expect(slugsMencionados(construirComoFunciona().bloques)).toContain(SLUG_DEL_CHAT_NEXUS);
+  });
+
+  it("⭐ las frases de ejemplo de un pedido en la preventa las toma de verdad como pedido", () => {
+    // Si la regla que reconoce un pedido cambia, la página no puede seguir enseñando frases que ya no andan. También
+    // después de una pregunta de Nexus (`estricto`), que es cuando más se usan.
+    for (const frase of PEDIDOS_DE_EJEMPLO_EN_LA_PREVENTA) {
+      expect(esPedidoDeLaCuenta(frase), frase).toBe(true);
+      expect(esPedidoDeLaCuenta(frase, { estricto: true }), `${frase} (después de una pregunta)`).toBe(true);
+      expect(texto).toContain(`«${frase}»`);
+    }
+  });
+
+  it("dice cada lugar donde se abre el chat y la regla de «Aplicar»", () => {
+    for (const lugar of ["En la preventa", "En la guía de la próxima sesión", "En La escala", "En la ficha del cliente", "En los documentos", "En el cronograma", "En Tareas", "En los casos de uso", "En los artefactos y en el perfil de un puesto"]) {
+      expect(texto, lugar).toContain(lugar);
+    }
+    expect(texto).toContain("Nada cambia hasta que aprietas «Aplicar»");
+  });
+
+  it("⭐ los documentos con chat son los del código: ni uno de más, ni uno de menos", () => {
+    const enElCodigo = PIEZAS_CON_CHAT.filter((p) => p !== PIEZA_CRONOGRAMA).sort();
+    expect(Object.keys(DOCUMENTOS_CON_CHAT).sort()).toEqual(enElCodigo);
+    for (const nombre of Object.values(DOCUMENTOS_CON_CHAT)) expect(texto, nombre).toContain(nombre);
+  });
+
+  it("⭐ cada acción que el chat sabe hacer la nombra la página, en su lugar (2026-11-25)", () => {
+    /* El texto de una sección: desde su título (nivel 3) hasta el siguiente título de nivel 3 o 2. */
+    const nivel = (b: BloqueGuardado) => (b.type === "heading" ? Number((b.props as { level?: number } | undefined)?.level ?? 0) : 0);
+    const seccion = (titulo: string) => {
+      const desde = pagina.bloques.findIndex((b) => nivel(b) === 3 && b.content === titulo);
+      expect(desde, `la página no tiene la sección «${titulo}»`).toBeGreaterThanOrEqual(0);
+      const hasta = pagina.bloques.findIndex((b, i) => i > desde && nivel(b) > 0 && nivel(b) <= 3);
+      return textoDeBloques(pagina.bloques.slice(desde, hasta < 0 ? undefined : hasta));
+    };
+    const enElCodigo: Record<keyof typeof ACCIONES_EN_LA_PAGINA, readonly string[]> = {
+      cuenta: Object.keys(COMO_SE_ACOTA),
+      tareas: OPERACIONES_DE_TAREAS,
+      cronograma: OPERACIONES_VALIDAS,
+      documento: OPERACIONES_DE_DOCUMENTO_VALIDAS,
+    };
+    for (const [chat, acciones] of Object.entries(ACCIONES_EN_LA_PAGINA) as [keyof typeof ACCIONES_EN_LA_PAGINA, Record<string, readonly [string, string]>][]) {
+      // Ni una de más ni una de menos: una acción nueva del chat sin su frase pone esto en rojo.
+      expect(Object.keys(acciones).sort(), `las acciones del chat «${chat}»`).toEqual([...enElCodigo[chat]].sort());
+      for (const [accion, [titulo, frase]] of Object.entries(acciones)) {
+        expect(seccion(titulo), `${chat} › ${accion}: «${frase}» en «${titulo}»`).toContain(frase);
+      }
+    }
+  });
+
+  it("⛔ los topes y los largos salen del código, no de un número escrito a mano", () => {
+    expect(texto).toContain(`hasta ${TOPES.turnosPorConversacion} mensajes por conversación`);
+    expect(texto).toContain(`hasta ${PREGUNTAS_POR_DIA} preguntas al día`);
+    expect(texto).toContain(`${TOPES_DEL_CHAT.mensajesPorDia} mensajes al día y ${TOPES_DEL_CHAT.usdPorDia} dólares`);
+    expect(texto).toContain(`En La escala: ${PEDIDOS_POR_DIA} pedidos al día`);
+    // Los dos escritos a mano viven en módulos del servidor: se leen del texto del código, que es lo que manda.
+    const fuente = (archivo: string) => fs.readFileSync(path.join(process.cwd(), archivo), "utf8");
+    expect(fuente("lib/tareas/chat/turno.ts")).toMatch(new RegExp(`MAX_TURNOS_DE_TAREAS_POR_DIA = ${MENSAJES_DE_TAREAS_POR_DIA};`));
+    for (const ruta of ["app/api/projects/[projectId]/canvas-assist/route.ts", "app/api/roles/[id]/assist/route.ts"]) {
+      expect(fuente(ruta), ruta).toMatch(new RegExp(`instruction: z\\.string\\(\\)\\.trim\\(\\)\\.min\\(4\\)\\.max\\(${LARGO_DE_UN_PEDIDO_DE_ARTEFACTO}\\)`));
+    }
   });
 });
 

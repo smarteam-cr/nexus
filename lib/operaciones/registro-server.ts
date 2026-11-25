@@ -9,6 +9,9 @@
  * Primera tanda: Tareas, las notas de la cuenta y el siguiente paso. Desde el 2026-10-17, generar un entregable del
  * proyecto con su plantilla (./documentos-server.ts). Desde el 2026-10-18, la guía de la próxima sesión de una
  * exploración (./guia-server.ts: leerla y agregar, cambiar o quitar preguntas y repreguntas).
+ *
+ * ⛔ Una operación nueva que llega al chat se cuenta también en la página «El chat Nexus: qué le puedes pedir»
+ * (lib/documentacion/semillas/chat-nexus.ts), y se vuelve a correr scripts/seed-pagina-chat-nexus.ts.
  */
 import "server-only";
 import type { TeamMember } from "@prisma/client";

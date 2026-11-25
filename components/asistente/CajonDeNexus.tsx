@@ -17,7 +17,11 @@
  *    y se envía con el botón; mientras se compone un acento, no envía).
  *  · Lo que se mejora, como chip quitable encima de la caja (`ChipDeNexus`).
  *  · «Nexus está pensando…» a la vista, y el hilo baja solo al último mensaje.
- *  · Escape cierra; los ejemplos, solo con el chat vacío (`ChatVacio`).
+ *  · Escape cierra; los ejemplos, solo con el chat vacío (`ChatVacio`), con el enlace «¿Qué puedo pedirte?» a la página de
+ *    Documentación que explica el chat por lugar.
+ *
+ * ⛔ Al cambiar lo que el chat sabe hacer (un lugar, una operación, un tope), se actualiza esa página
+ * (lib/documentacion/semillas/chat-nexus.ts) y se vuelve a correr scripts/seed-pagina-chat-nexus.ts.
  *
  * ── POR QUÉ NO ES MODAL ─────────────────────────────────────────────────────────────────────
  * La conversación es SOBRE lo que está en pantalla: hay que poder mirar el documento, el cronograma o La escala mientras se
@@ -34,6 +38,7 @@ import { BotonDeDictado, Button, IconButton } from "@/components/ui";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import { cn } from "@/lib/cn";
 import { textoConLoDictado } from "@/lib/asistente/caja";
+import { SLUG_DEL_CHAT_NEXUS } from "@/lib/documentacion/tipos";
 
 /** El único título del chat, en toda la app. */
 export const TITULO_DEL_CHAT = "Nexus";
@@ -73,7 +78,10 @@ export interface CajonDeNexusProps {
   ancho?: "normal" | "amplio";
   /** Con esto, la cabecera ofrece «Más ancho» / «Más angosto». */
   onAncho?: () => void;
-  /** Fijo arriba del hilo, debajo de la cabecera (en la preventa: «Tareas, siguiente paso o la guía»). */
+  /**
+   * Fijo arriba del hilo, debajo de la cabecera. Hoy ningún chat lo llena: la preventa lo usaba para el enlace «Tareas,
+   * siguiente paso o la guía», que se quitó el 24 nov (eso se pide en la misma caja).
+   */
   arriba?: ReactNode;
   /** El hilo: el chat vacío con sus ejemplos, los mensajes, las propuestas, «pensando…» y los errores. */
   children: ReactNode;
@@ -301,6 +309,13 @@ export function ChatVacio({
         </ol>
       ) : null}
       {cierre ? <div className="space-y-1 text-xs text-fg-muted">{cierre}</div> : null}
+      {/* La página de Documentación que dice qué hace el chat en cada lugar (24 nov). En otra pestaña: no saca a la persona
+          de lo que está haciendo. */}
+      <p className="text-xs">
+        <a href={`/documentacion/${SLUG_DEL_CHAT_NEXUS}`} target="_blank" rel="noopener" title="Se abre en otra pestaña" className="text-brand hover:underline">
+          ¿Qué puedo pedirte?
+        </a>
+      </p>
     </div>
   );
 }
