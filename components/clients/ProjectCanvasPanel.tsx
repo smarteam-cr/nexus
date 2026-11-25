@@ -1182,7 +1182,11 @@ export default function ProjectCanvasPanel({
           {/* La Entrega de siempre es la excepción (9 nov, Juan Carlos en Construtecho: «ya no me dan la opción de presentar»):
               no tiene enlace propio (`sinEnlaceElDeSiempre`, lib/artefactos/tipos.ts) y se le muestra al cliente publicándola
               en este acceso; sin el botón en su barra, desde el 30 oct no había cómo hacerlo desde el documento. */}
-          {(enResumen || (activeSlug === "delivery" && !copiaActiva)) && !esPrueba && <ExternalAccessButton projectId={projectId} />}
+          {/* El cronograma de siempre, igual (25 nov, Elías con RC Inmobiliaria: «la parte de cronograma debe tener el CTA de
+              acceso»): el cliente lo ve en /external/cronograma con este mismo acceso, no con un enlace propio. */}
+          {(enResumen || ((activeSlug === "delivery" || activeSlug === PIEZA_CRONOGRAMA) && !copiaActiva)) && !esPrueba && (
+            <ExternalAccessButton projectId={projectId} />
+          )}
         </div>
       </div>
 
