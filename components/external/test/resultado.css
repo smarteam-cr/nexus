@@ -411,6 +411,10 @@
   .dr [data-revela="oculta"], .dr .rd-fila[data-barra="vacia"] { opacity: 1; transform: none; transition: none; }
 }
 
+/* La vista previa de una versión en el historial (25 nov, ResumenDeLaEscalaVista › `vistaPrevia`): del alto de su
+   contenido, no del de la pantalla (`.dr` pide 100vh: en el popup quedaba un gran blanco al final). */
+.dr.rd-vista-previa { min-height: 0; }
+
 /* ── La página como artefacto que se edita (La escala interna, 8 nov). Solo con `.rd-editable`: la página pública no
       la lleva. Hex literal, como el resto de la página: aquí no hay tema. ──────────────────────────────────────────── */
 .dr.rd-editable { border-radius: 16px; }
@@ -420,19 +424,50 @@
 .dr.rd-editable.rd-arrastrando, .dr.rd-editable.rd-arrastrando * { cursor: grabbing !important; user-select: none; }
 .dr.rd-editable.rd-arrastrando .rd-tip { display: none; }
 .dr .rd-editable-texto { position: relative; border-radius: 10px; margin: -4px -8px; padding: 4px 8px; cursor: text; transition: background .15s, box-shadow .15s; }
-.dr .rd-editable-texto:hover, .dr .rd-editable-texto:focus-visible { background: rgba(255, 255, 255, .7); box-shadow: 0 0 0 1px var(--v3-borde-fuerte); outline: none; }
+/* El foco va al texto (`rd-editable-boton`, 25 nov: la cola es otro botón y no puede ir adentro); el anillo es el del cuadro. */
+.dr .rd-editable-boton { outline: none; }
+.dr .rd-editable-texto:hover, .dr .rd-editable-texto:has(> .rd-editable-boton:focus-visible) { background: rgba(255, 255, 255, .7); box-shadow: 0 0 0 1px var(--v3-borde-fuerte); outline: none; }
 .dr .rd-editable-vacio { color: var(--v3-marca); font-size: 14px; font-weight: 600; }
-.dr .rd-editable-lapiz { position: absolute; top: 4px; right: 6px; font-size: 11px; font-weight: 600; color: var(--v3-marca); opacity: 0; transition: opacity .15s; }
-.dr .rd-editable-texto:hover .rd-editable-lapiz, .dr .rd-editable-texto:focus-visible .rd-editable-lapiz { opacity: 1; }
-/* «✨ Mejorar con IA» de una SECCIÓN (24 nov; antes era un botón por pieza, al pasar el cursor): la píldora va en el
-   encabezado de cada sección, como la de cada sección de los documentos del cliente (app/landing-engine.css ›
-   `.stl-chat-seccion`). Solo adentro: la pasa `edicion.mejorar` (components/exploraciones/PaginaDeLaEscala.tsx). */
-.dr .rd-mejorar { display: inline-flex; align-items: center; gap: 5px; vertical-align: middle; margin-left: 10px; padding: 2px 9px; border-radius: 6px; border: 1px solid #e5e7eb; background: #ffffff; color: #374151; font: 500 12px/1.3 "Segoe UI", system-ui, -apple-system, sans-serif; letter-spacing: 0; text-transform: none; white-space: nowrap; cursor: pointer; }
+/* «Editar» no recibe el cursor (25 nov): invisible, tapaba el (i) de un texto que termina en su esquina y el clic abría el
+   editor en vez de las citas. El cuadro abre el editor igual. */
+.dr .rd-editable-lapiz { position: absolute; top: 4px; right: 6px; font-size: 11px; font-weight: 600; color: var(--v3-marca); opacity: 0; transition: opacity .15s; pointer-events: none; }
+.dr .rd-editable-texto:hover .rd-editable-lapiz, .dr .rd-editable-texto:has(> .rd-editable-boton:focus-visible) .rd-editable-lapiz { opacity: 1; }
+/* La cola (25 nov): lo que va pegado al final del texto, en su renglón (el ícono de de dónde sale), junto con la última
+   palabra en un renglón que no se corta (`rd-editable-fin`): un botón siempre deja cortar antes de él y, con el texto
+   justo al borde, el ícono bajaba solo. Con el cursor encima de la cola, el cuadro no se marca ni dice «Editar»: ese
+   toque abre las citas, no el editor. */
+.dr .rd-editable-fin { white-space: nowrap; }
+.dr .rd-editable-cola { cursor: auto; }
+.dr .rd-editable-texto:has(.rd-editable-cola:hover):not(:has(> .rd-editable-boton:focus-visible)) { background: none; box-shadow: none; }
+.dr .rd-editable-texto:has(.rd-editable-cola:hover) .rd-editable-lapiz { opacity: 0; }
+/* «✨ Mejorar con IA» de una SECCIÓN (24 nov; antes era un botón por pieza), como el de cada sección de los documentos del
+   cliente (app/landing-engine.css › `.stl-chat-seccion`). Desde el 25 nov (Elías con TEC · AE: siempre a la vista, repetido
+   y a veces en un segundo renglón) tiene un LUGAR FIJO arriba a la derecha de su sección y APARECE al pasar el cursor por
+   ella o al llegar con el teclado a algo de adentro; el de la fila de un equipo, por su fila. En una pantalla sin cursor
+   (táctil) se ve siempre. El renglón que lo lleva le guarda el lugar: no tapa el texto ni el «Editar» de un título
+   editable, y nada se corre al aparecer. Solo adentro: la pasa `edicion.mejorar` (components/exploraciones/PaginaDeLaEscala.tsx);
+   la prueba lib/exploraciones/escala-pantalla-limpia.test.ts (7) mira que cada botón caiga en un lugar de esta lista. */
+.dr .rd-mejorar { position: absolute; z-index: 1; display: inline-flex; align-items: center; gap: 5px; margin: 0; padding: 2px 9px; border-radius: 6px; border: 1px solid #e5e7eb; background: #ffffff; color: #374151; font: 500 12px/1.3 "Segoe UI", system-ui, -apple-system, sans-serif; letter-spacing: 0; text-transform: none; white-space: nowrap; cursor: pointer; transition: opacity .15s; }
 .dr .rd-mejorar svg { width: 13px; height: 13px; flex-shrink: 0; color: #3b82f6; }
 .dr .rd-mejorar:hover { background: #f9fafb; color: #111827; }
 .dr .rd-mejorar:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
-/* En la fila de un equipo (04 Equipos y hallazgos) y en la banda oscura del cierre, en su propio renglón. */
-.dr .re-equipo-nombre > .rd-mejorar, .dr .re-cierre > .rd-mejorar { justify-self: start; margin-left: 0; }
+/* Dónde va: a la derecha del renglón de la ceja de su sección («02 / PUNTOS CLAVE»); la ceja le guarda el lugar. */
+.dr .re-ceja:has(> .rd-mejorar), .dr .ed-ceja:has(> .rd-mejorar) { position: relative; padding-right: 148px; }
+.dr .re-ceja > .rd-mejorar, .dr .ed-ceja > .rd-mejorar { top: 50%; right: 0; transform: translateY(-50%); }
+/* En la fila de un equipo (04 Equipos y hallazgos): a la derecha de su número, arriba de la columna del nombre. */
+.dr .re-equipo-nombre:has(> .rd-mejorar) { position: relative; }
+.dr .re-equipo-nombre > .rd-mejorar { top: -3px; right: 0; }
+/* En la banda oscura del cierre (no tiene ceja): arriba a la derecha de la banda, antes de su título. */
+.dr .re-cierre:has(> .rd-mejorar) { position: relative; }
+.dr .re-cierre > .rd-mejorar { top: 12px; right: 56px; }
+@container (max-width: 760px) { .dr .re-cierre > .rd-mejorar { top: 5px; right: 20px; } }
+/* Cuándo se ve, con cursor: al pasarlo por su sección o con el foco del teclado adentro. Una fila de «Equipos y
+   hallazgos» es una sección dentro de otra: su botón sale solo por su fila. */
+@media (hover: hover) {
+  .dr .rd-mejorar { opacity: 0; }
+  .dr :is(.re-hero, .re-parte, .re-equipo, .re-cierre, .ed-hero, .ed-parte):is(:hover, :has(:focus-visible)) .rd-mejorar { opacity: 1; }
+  .dr .re-equipo:not(:hover):not(:has(:focus-visible)) .rd-mejorar { opacity: 0; }
+}
 .dr .rd-editable-origen { display: block; margin-top: 4px; font-size: 11.5px; line-height: 16px; color: var(--v3-apagado); }
 .dr .rd-editor { display: grid; gap: 8px; }
 /* El cuadro ocupa el lugar exacto del texto (9 nov): el mismo corrimiento que `.rd-editable-texto` (margen -4/-8 px, relleno

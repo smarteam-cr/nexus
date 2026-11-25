@@ -18,8 +18,36 @@
  *
  * Del 23 al 24 nov, al pasar el cursor salía también «✨ Mejorar con IA» de esta pieza. Se fue (Elías: «por sección, no
  * por texto»): ahora va uno en el encabezado de cada sección (EdicionDelResumen / EdicionDeLaPagina › `mejorar`).
+ *
+ * `cola` (25 nov, Elías con TEC · AE): lo que va PEGADO AL FINAL del texto, en su mismo renglón, como el ícono (i) de de
+ * dónde sale. Antes ese ícono iba después de este bloque y caía debajo de cada línea. Para que pueda ser su propio botón
+ * (un botón dentro de otro no se anuncia), el que se enfoca y anuncia «Editar: …» es el texto (`rd-editable-boton`) y el
+ * cuadro entero sigue abriendo el editor al tocarlo; un toque en la cola (o en su globo) no lo abre. La ÚLTIMA PALABRA va
+ * con la cola en un renglón que no se corta (`rd-editable-fin`, `partirLaUltimaPalabra`): un botón siempre deja cortar el
+ * renglón antes de él, y sin esto, con el texto justo al borde, el ícono bajaba solo. Mientras se edita, la cola va al
+ * final de los botones: las citas se pueden mirar mientras se corrige.
  */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+
+/** El texto partido antes de su última palabra: esa palabra y la cola van juntas, el renglón no se corta entre ellas. */
+export function partirLaUltimaPalabra(texto: string): { antes: string; ultima: string } {
+  const m = texto.match(/^([\s\S]*?)(\S+)\s*$/);
+  return m ? { antes: m[1], ultima: m[2] } : { antes: texto, ultima: "" };
+}
+
+/** Un texto con algo pegado al final (lo que no se edita: quien no tiene permiso), con la misma regla del renglón. */
+export function textoConCola(texto: string | null, cola: ReactNode): ReactNode {
+  const { antes, ultima } = partirLaUltimaPalabra(texto ?? "");
+  return (
+    <>
+      {antes}
+      <span className="rd-editable-fin">
+        {ultima}
+        {cola}
+      </span>
+    </>
+  );
+}
 
 /** El alto del cuadro: el de lo escrito (sin barra), y nunca menos que el texto que reemplazó. */
 export function ajustarAlto(el: HTMLTextAreaElement, minimo = 0): void {
@@ -36,6 +64,7 @@ export default function TextoEditableDeLaPagina({
   origen = null,
   acciones,
   quitar = null,
+  cola = null,
   onGuardar,
 }: {
   valor: string | null;
@@ -50,6 +79,8 @@ export default function TextoEditableDeLaPagina({
   acciones?: (poner: (texto: string) => void) => ReactNode;
   /** Con un rótulo, un botón que guarda null (quitarlo, o volver al texto de la escala). */
   quitar?: string | null;
+  /** Pegado al final del texto, en su mismo renglón (el ícono de de dónde sale). Tocarlo no abre el editor. */
+  cola?: ReactNode;
   /** Devuelve si se guardó: si no, el cuadro queda abierto con lo escrito. */
   onGuardar: (texto: string | null) => Promise<boolean>;
 }) {
@@ -130,26 +161,41 @@ export default function TextoEditableDeLaPagina({
           <span className="rd-editor-nota">
             {borrador.length}/{max} · Ctrl+Enter guarda
           </span>
+          {cola && <span className="rd-editable-cola">{cola}</span>}
         </div>
       </div>
     );
 
+  // Con cola, la última palabra va con ella (fuera del botón de editar, que no puede tener otro botón adentro).
+  const partes = cola && visible ? partirLaUltimaPalabra(visible) : null;
   return (
     <div ref={caja}>
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label={`Editar: ${etiqueta}`}
-        className="rd-editable-texto"
-        onClick={abrir}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            abrir();
-          }
-        }}
-      >
-        {visible ? <span style={{ whiteSpace: "pre-line" }}>{visible}</span> : <span className="rd-editable-vacio">{vacio}</span>}
+      {/* El cuadro se toca entero para editar; el foco va al texto, y la cola es otro botón a su lado (no adentro). */}
+      <div className="rd-editable-texto" onClick={abrir}>
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label={`Editar: ${etiqueta}`}
+          className="rd-editable-boton"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              abrir();
+            }
+          }}
+        >
+          {visible ? <span style={{ whiteSpace: "pre-line" }}>{partes ? partes.antes : visible}</span> : <span className="rd-editable-vacio">{vacio}</span>}
+        </span>
+        {cola && (
+          <span className="rd-editable-fin">
+            {/* Como el resto del texto (el botón de editar se anuncia por su nombre, «Editar: …»), no se anuncia suelta. */}
+            {partes?.ultima && <span aria-hidden="true">{partes.ultima}</span>}
+            {/* Los eventos del globo (un portal) también suben por aquí: se cortan para que no abran el editor. */}
+            <span className="rd-editable-cola" onClick={(e) => e.stopPropagation()}>
+              {cola}
+            </span>
+          </span>
+        )}
         {visible && (
           <span className="rd-editable-lapiz" aria-hidden="true">
             Editar

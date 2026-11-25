@@ -14578,7 +14578,23 @@ puede editar».
   (`touch-action: none`, solo con `.rd-editable`). *Lo aceptado:* sobre el radar, la página se desplaza fuera de él.
 - **En la pantalla interna, la página va quieta** (`AnimacionesDelResultado` con `quieta`): sin imán, que corría los
   vértices mientras se arrastraba, y sin la entrada de las secciones al desplazarse. La pantalla interna se desplaza en
-  su propio contenedor y no en la ventana, así que lo de abajo quedaba escondido.
+  su propio contenedor y no en la ventana, así que lo de abajo quedaba escondido. **La vista previa del historial de
+  versiones también** (25 nov, `vistaPrevia` de ResumenDeLaEscalaVista): ahí el popup se desplaza adentro, y las secciones
+  de abajo no aparecían nunca; además `.dr` pide el alto de la pantalla. Elías lo vio como «más grande de lo que debería,
+  con un gran espacio en blanco al final». Ahora mide lo que su contenido.
+- **Lo que solo ve el equipo no se mete en el renglón del cliente** (25 nov, Elías probando TEC · AE):
+  - *El ícono (i) de de dónde sale va pegado al final del texto que sostiene*, en su mismo renglón (la `cola` del texto:
+    `EdicionDelResumen.texto` › TextoEditableDeLaPagina). Antes iba después del bloque del texto y caía debajo de cada
+    línea «como un salto de línea feo». Va unido a la última palabra (`rd-editable-fin`): un botón siempre deja cortar el
+    renglón antes de él. Para que el ícono sea su propio botón, el botón de editar pasó del cuadro entero al texto (el
+    cuadro sigue abriendo el editor al tocarlo). En una cifra, al final de lo que significa; en un punto clave o un paso,
+    al final de su explicación o, sin ella, de su título.
+  - *«✨ Mejorar con IA» de cada sección tiene un lugar fijo* (arriba a la derecha, en el renglón de la ceja; en una fila
+    de «Equipos y hallazgos», a la derecha de su número; en la banda del cierre, en su esquina) *y aparece al pasar el
+    cursor por la sección o al llegar a ella con el teclado*. Antes estaba siempre a la vista, repetido en cada rótulo y a
+    veces en un segundo renglón. Sin cursor (pantalla táctil) se ve siempre. Lo que hace no cambió. El de toda la página,
+    en la franja de arriba, sigue siempre a la vista. Dónde puede caer cada uno lo vigila
+    `escala-pantalla-limpia.test.ts` (7): un botón en un lugar sin ancla en el CSS la pone en rojo.
 - **Datos y SQL:** sin SQL. Los dos campos son opcionales en el Json de la exploración.
 ## Dos fichas que comparten dominio: el TEC se separa en AE y TAE (2026-10-29)
 

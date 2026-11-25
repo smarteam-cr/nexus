@@ -11,7 +11,8 @@
  *   · la página abre en «Resumen» (9 nov), la portada que presenta el vendedor (ResumenDeLaEscalaVista): «Armar el Resumen» /
  *     «Rehacer con IA» la pide al agente (/api/sales/exploraciones/[id]/escala/resumen), en la franja interna de arriba,
  *     FUERA del marco que imita la página del cliente (Elías, 9 nov), y cada texto se edita en su lugar
- *     (la operación `resumenDeLaEscala`); debajo de cada dato rojo y cada hallazgo, de dónde sale (solo adentro). Desde el
+ *     (la operación `resumenDeLaEscala`); al final de cada pieza, en su renglón, el ícono (i) de de dónde sale (solo adentro;
+ *     hasta el 25 nov caía debajo). Desde el
  *     24 nov (Elías con TEC · AE) la corrida sigue en el servidor y el aviso de arriba (`AvisoDelResumen`) dice en qué va,
  *     por qué falló o que hay respuestas nuevas; sin Resumen se ve la PLANTILLA (PlantillaDelResumenVista: la forma de la
  *     portada, sin texto inventado) con «Falta armar el Resumen» y su botón;
@@ -32,7 +33,9 @@
  *     entera) y, desde el 24 nov, en el encabezado de cada sección (antes era un botón por pieza, al pasar el cursor; Elías:
  *     «por sección, no por texto», como los documentos del cliente) abre el cajón «Nexus» con el lugar y la sección como
  *     chip (HablarConNexus.tsx): un pedido, una propuesta por pieza de esa sección, que se aplica por estas mismas
- *     operaciones. La página de cada área tiene su historial (HistorialDelArea.tsx).
+ *     operaciones. Desde el 25 nov el de cada sección tiene un lugar fijo arriba a la derecha y aparece al pasar el cursor
+ *     por ella o al llegar con el teclado (sin cursor, siempre; resultado.css › `.rd-mejorar`). La página de cada área tiene
+ *     su historial (HistorialDelArea.tsx).
  * Nada de esto lo ve el cliente hasta «Publicar» (16 nov, PublicarLaEscala.tsx, al lado de «Acceso»): el enlace sirve la
  * foto publicada.
  * Arriba de la página, fuera de ella: la línea del área (si la ve el cliente, cuánto tiene, sumarla o sacarla) y el
@@ -47,7 +50,7 @@ import { PESTANA_DEL_RESUMEN } from "@/components/external/test/ArribaDeLaEscala
 import ResultadoDelTestVista, { type EdicionDeLaPagina, type EdicionDeUnTextoFijo } from "@/components/external/test/ResultadoDelTestVista";
 import PlantillaDelResumenVista from "@/components/external/test/PlantillaDelResumenVista";
 import ResumenDeLaEscalaVista, { type EdicionDelResumen } from "@/components/external/test/ResumenDeLaEscalaVista";
-import TextoEditableDeLaPagina from "@/components/external/test/TextoEditableDeLaPagina";
+import TextoEditableDeLaPagina, { textoConCola } from "@/components/external/test/TextoEditableDeLaPagina";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { MAX_CONTEXTO_DE_LA_ESCALA, MAX_TEXTO_DEL_RADAR } from "@/lib/exploraciones/contenido";
 import { textoVigenteDelRadar } from "@/lib/exploraciones/escala-para-el-cliente";
@@ -546,12 +549,16 @@ export default function PaginaDeLaEscala() {
             max={o.tope}
             etiqueta={o.etiqueta}
             quitar={o.quitar ?? null}
+            // El ícono de de dónde sale, pegado al final del texto (25 nov): antes caía debajo de cada línea.
+            cola={o.cola}
             onGuardar={async (texto) => {
               const ok = await cambiar([{ op: "resumenDeLaEscala", clave: o.clave, texto }]);
               if (ok) otraVez();
               return ok;
             }}
           />
+        ) : o.cola ? (
+          textoConCola(o.valor, o.cola)
         ) : (
           o.valor
         ),
