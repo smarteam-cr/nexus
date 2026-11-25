@@ -14457,7 +14457,8 @@ escalas, en los departamentos, y cómo eso se traduce en casos de uso».
   nivel ante el cliente): las citas siguen en `PosicionEnElMapa.citas`.
 - **«Por qué está ahí» pasó a «Lo que más frena a cada equipo»**, debajo del radar: un renglón por equipo (nivel,
   puntaje y la parte que lo frena, o cuántas faltan), y en la preventa el puente «Ver los casos de uso →»
-  (`irA("casos")`): «Los casos de uso salen de aquí». Antes era de la principal sola y arriba del radar.
+  (`irA("casos")`): «Los casos de uso salen de aquí». Antes era de la principal sola y arriba del radar. Desde el 24 nov
+  (noche) vive, con «Para explorar más», en «Para completar el diagnóstico» (ver «La escala sin Resumen y lo que falta saber»).
 - **La elección sobrevive a recargar** (lo había cazado una revisión del 8 nov: volvía a una sola). Se guarda en el
   NAVEGADOR, por lugar y por exploración (`lib/escala/eleccion-guardada.ts`, `localStorage` envuelto en try/catch): las
   áreas, en su orden, y la principal; también soltarlas todas. *Por qué no en el estado de la exploración:* es lo que mira
@@ -14534,7 +14535,8 @@ Elías (Centauro Solutions): la descripción bajo «Resultado general» decía �
 Elías: «la página de resultados debe verse igual externo que interno, pero interno debe funcionar como un artefacto que se
 puede editar».
 
-- **La misma vista, no una copia.** «Dónde está hoy» abre en «Como lo ve el cliente» (`PaginaDeLaEscala.tsx`), que pinta
+- **La misma vista, no una copia.** La escala abre en «Como lo ve el cliente» (`PaginaDeLaEscala.tsx`; hasta el 24 nov bajo
+  el título «Dónde está hoy», que se quitó), que pinta
   `ResultadoDelTestVista`, el componente de `/external/escala/[token]`, con su tema de hex literal. Lo que edita entra por
   los huecos de `EdicionDeLaPagina` (pestañas como botones, descripción, texto de cada tarjeta, radar, pie de cada
   tarjeta). La página pública no los pasa, y `escala-interna-editable.test.ts` falla si algo de `app/external` monta una
@@ -14739,6 +14741,94 @@ error»); para un prospecto, esa regla sigue igual.
 - **Vuelta atrás:** el código de antes del 24 nov descarta en silencio la marca de reunión de trabajo al guardar (su
   esquema no la conoce). Si se vuelve atrás un deploy, revisar las marcas de las preventas de clientes antes de publicar.
 
+## La escala sin Resumen y lo que falta saber (2026-11-24, noche, TEC · AE)
+
+Elías probó TEC · AE: publicó antes de tener Resumen, el artefacto decía solo «Así entendimos tu negocio.» y «Armar el
+Resumen con IA» pareció cancelarse. Pidió (aprobado así): plantilla mientras no hay Resumen, un aviso claro para armarlo,
+la línea de «Ubicada…» debajo de la página, sin «Dónde está hoy», y debajo un lugar para completar lo que falta con el chat
+«Nexus». Corrige «El Resumen de la escala que ve el cliente» (9 nov) y su rehechura del 10 nov (sin Resumen ya no se
+pinta la portada con lo que hay), «La escala interna se ve como la página del cliente», la novena vuelta y la pantalla
+limpia del 24 nov.
+
+- **Armar el Resumen sigue en el servidor.** Lo que pasó (producción, corrida `cmwvnvktm000g07mwlu3ulzp6`): UNA llamada sin
+  streaming (`max_tokens` 16 000, el tope por defecto del SDK) no devolvió nada en 904 s; nginx corta a los 600 s
+  (`proxy_read_timeout`) y el navegador recibió un 504. No era el tamaño: 4 reuniones, unas 134 mil letras; lo normal son
+  125 a 205 s (13 corridas desde el 21 nov). Ahora el POST arranca la corrida y responde 202 (`lanzarElResumenDeLaEscala`;
+  el trabajo con la IA corre con `after`), y el GET de la misma ruta devuelve la última (`ultimaCorridaDelResumen`). La
+  pantalla la sigue cada 3 s con UN seguimiento por exploración (lib/exploraciones/corrida-del-resumen.ts,
+  `useResumenEnCurso`) que comparten el botón y la cuenta regresiva de una nota (`useRehacerLaEscala`): si ya corre una, el
+  409 la trae y se sigue esa; al volver a la página, se retoma. La fase es la real (`FASES_DEL_RESUMEN`): «Leyendo N
+  reuniones y N notas del equipo…», «Escribiendo el Resumen…» con la primera señal del stream, «Revisando…»,
+  «Guardando…». El simulacro con `--guardar` sigue esperando entero (`generarElResumenDeLaEscala`).
+- **Cada llamada a la IA del Resumen va con streaming y tope** (lib/ai/llamada-con-tope.ts; los números en
+  `TOPES_DEL_RESUMEN`): la principal se corta a los 150 s sin ninguna señal o a los 6 min en total; las de arreglo, a los
+  90 s o 3 min. Se intenta UNA vez más si colgó o si la IA la cortó a mitad del stream. Un error con su código HTTP (529,
+  5xx, 429) lo reintenta el SDK con su espera antes de abrir el stream, y esa capa no lo repite (revisión del 24 nov: las
+  dos capas juntas multiplicaban los pedidos); lo de la cuenta (créditos, la key, un pedido mal armado) no se repite.
+  Colgada las dos veces, la corrida dice «La IA no respondió, ni al volver a intentarlo. No se cambió nada». *Por qué
+  streaming y no solo un tope:* con un tope fijo, una llamada sana de 4 minutos y una colgada se ven igual hasta el final;
+  con streaming la colgada se nota porque no llega nada. *Lo aceptado:* una respuesta sana de más de 6 min se corta
+  (ninguna medida pasó de 205 s), y el reintento de una colgada cuesta otra llamada entera.
+- **El latido** (`updatedAt`): lo escribe cada cambio de fase y el comienzo de cada llamada a la IA, aunque la fase no
+  cambie (`LATIDO_MINIMO_MS`, 45 s; revisión del 24 nov: los arreglos van todos con «Revisando…» y una corrida viva
+  quedaba sin latido). Dos preguntas, dos números, como separa lib/agents/run-colgada.ts:
+  - **¿Murió?** La regla de todo Nexus (`estaColgada`, 30 min sin latido, con `MOTIVO_COLGADA`): la pantalla dice que se
+    interrumpió, igual que el centro de corridas. *Se descartó* una regla propia de 10 min: el mismo AgentRun tenía dos
+    veredictos entre el minuto 10 y el 30.
+  - **¿Puedo arrancar otra?** `MINUTOS_SIN_LATIDO` (10), más que la llamada más larga (6 min): una corrida viva siempre
+    late antes. Sin latido por más de eso, el candado del servidor deja otra y la pantalla la muestra DETENIDA, con
+    «Volver a intentar». Antes el candado miraba cuándo empezó, y una corrida con reintento pasa de 10 minutos viva.
+  - **El candado se vuelve a mirar con la fila de la exploración bloqueada** (`bloquearFila`, en la misma transacción que
+    crea la corrida): leer las reuniones tarda segundos y dos pedidos de dos pestañas podían pagar dos corridas.
+- **El seguimiento no se queda girando:** tolera un minuto de consultas fallidas (un deploy) y, si igual no puede saberlo,
+  la pantalla dice «No pudimos saber en qué va el Resumen» con «Volver a mirar» en vez de un reloj que sigue para
+  siempre. Una corrida que ya corría (otra pestaña, otra persona, o un pedido en curso de esta misma pestaña al que se
+  suma la cuenta regresiva de una nota guardada mientras tanto) se sigue en vez de arrancar otra, y se marca como AJENA:
+  lo sumado después no entró. La cuenta regresiva rehace entonces una vez más (es lo que pidió); el botón lo dice.
+- **El medidor anota un stream cortado** (`abort`, lib/anthropic.ts), con lo que ya se gastó (`currentMessage.usage`: la
+  entrada llega con `message_start` y Anthropic la cobra): antes una llamada que corta quien llama no emitía `error` y no
+  dejaba fila; con fila pero sin el uso, el gasto quedaba en 0 justo en las corridas más caras. *Lo aceptado:* de la
+  salida escrita solo se sabe el total al final (`message_delta`), así que una llamada cortada anota la entrada y casi
+  nada de lo que alcanzó a escribir (unos USD 0,15 a 0,24 de menos por intento cortado de la principal).
+- **Sin Resumen, adentro se ve la plantilla** (`PlantillaDelResumenVista`): las partes de la portada en su orden, cada una
+  con un hueco que dice qué va ahí, y los equipos que ve el cliente con su nivel, lo único con datos. Ningún texto
+  inventado ni editable hasta que haya Resumen.
+- **Afuera, sin Resumen publicado no hay pestaña «Resumen»** (lib/external/escala-sin-resumen.ts): el enlace abre en el
+  equipo pedido o en el primero con algo medido, sin «← Volver al Resumen». *Por qué:* sin Resumen la portada era un
+  titular de relleno, la bajada de siempre y nada debajo; los niveles ya están en la página de cada equipo. *Se descartó*
+  frenar «Publicar» sin Resumen: la página de cada equipo se sostiene sola. Armado y publicado otra vez, la pestaña vuelve.
+- **El aviso, arriba del Resumen** (`AvisoDelResumen`, en la franja interna): sin Resumen, «Falta armar el Resumen» con
+  «Armar el Resumen con IA»; mientras corre, la fase y cuánto lleva; si falló, el motivo (con un Resumen, «No se pudo
+  rehacer el Resumen», que se cierra y no vuelve, ni al cambiar de vista ni al recargar: se recuerda en el navegador por
+  exploración, como la elección de áreas; un error viejo, de antes del Resumen que hay, no sale); con notas que el Resumen no
+  leyó, «Hay N respuestas nuevas» con «Rehacer con IA». Un solo botón de la IA a la vista: si el aviso trae el suyo, la
+  fila de abajo no repite «Rehacer con IA». Qué dice lo decide `queDiceElAviso` (puro, con prueba). Las nuevas se cuentan
+  desde que EMPEZÓ la corrida que armó el Resumen que hay (`leidoHasta`, con la última que terminó bien si es la de su
+  `agentRunId`; si no, desde cuándo se armó): una nota guardada mientras Nexus escribía no entró.
+- **Arriba, «Como lo ve el cliente» / «Comparar áreas» y, a la derecha, «Publicado…» y «Acceso».** Sale el título «Dónde
+  está hoy». La línea de cómo se ubicó la escala (`LineaDeLaUbicacion`, solo la preventa) baja: va debajo de la página.
+- **«Para completar el diagnóstico»**, debajo de la línea, junta «Lo que más frena a cada equipo» y «Para explorar más»:
+  por equipo, su nivel, lo que lo frena y cuánto tiene con evidencia; cada parte por explorar Y cada parte sin dato con su
+  pregunta (la de la tarjeta de Nexus o la de la escala; lo sin dato era una lista de nombres) y «Llevar a la sesión N»;
+  cuatro a la vista y «Ver N más»; la lectura de engagement en Marketing; el puente «Ver los casos de uso →».
+  - **«Responder con Nexus»** (solo en la preventa, para quien edita: la cuenta no tiene conversación) abre la MISMA
+    conversación del chat «Nexus» (`abrirNexusEnLaPreventa` con `pregunta`) con la pregunta como chip. Lo primero que
+    escribe la persona sale con «Sobre <equipo> · <parte> (<la pregunta, sin signos>): » adelante
+    (`prefijoDeLaRespuesta`, lib/exploraciones/completar-el-diagnostico.ts) y, con «Guardar», es una nota de «Lo que sabes
+    del cliente», que el Resumen lee al rehacerse (`notasComoFuentes`). *Por qué en el mensaje:* lo lee el modelo del
+    chat, la nota se ve entera antes de «Guardar», sobrevive a recargar (va en la conversación guardada) y marca la
+    pregunta como respondida (`respuestaDe`, en cualquier renglón: la nota junta todo lo que se contó sin guardar). *Sin
+    signos de pregunta:* el chat lee como consulta lo que tiene forma de pregunta. Si la persona pregunta en vez de contar,
+    el chat responde como siempre. La caja deja lugar para el prefijo (el mensaje entero no pasa los 4.000 caracteres).
+    *Lo aceptado:* con una conversación a medias, la respuesta se suma a esa misma nota (va marcada con su pregunta).
+- **Pendiente, sin construir: «Ubicar» no lee estas notas.** `loQueLeeUbicar` › `fuentesParaPosicionar` no arma ninguna
+  fuente N, aunque el pedido nombra «las notas del equipo (N)» entre lo que respalda un nivel, y `bloqueDeInstrucciones`
+  solo lleva las instrucciones adicionales. Una respuesta cambia el Resumen, no los niveles. Propuesta: sumarlas a
+  «Ubicar» como fuentes N1, N2…, con quién las escribió (como `notasComoFuentes`), y que Elías decida si una nota del
+  equipo puede fijar un nivel o solo dejarlo por explorar.
+- **No se escondió nada:** lo que estaba a la vista sigue, en otro lugar (la lista, en el cierre de la sesión del 24 nov).
+- **Datos y SQL:** sin SQL; la ruta del Resumen suma su GET.
+
 ## Una empresa con varias unidades: cada unidad es una ficha (2026-11-07)
 
 Elías, 6 nov: «Que una empresa (un dominio) pueda tener varias unidades, y que cada unidad funcione en Nexus como un
@@ -14866,6 +14956,8 @@ con proyectos (abajo). Plan, números y etapas: `docs/empresas-con-dominio-compa
 > ⚠ Rehecho el 10 nov como resumen ejecutivo (ver «El Resumen de la escala, rehecho como resumen ejecutivo»): las cinco
 > partes y las tarjetas por área operativa reemplazan la banda de datos rojos y las cuatro partes de abajo. Lo de las citas,
 > la edición en su lugar y lo que no sale al cliente sigue valiendo.
+> ⚠ Desde el 24 nov (noche), SIN Resumen publicado el cliente no ve la pestaña «Resumen» (abre en la página de un equipo) y
+> adentro se ve la plantilla: ver «La escala sin Resumen y lo que falta saber». Con Resumen, abre en él como dice abajo.
 
 Elías, para la presentación de Marco a Centauro Solutions (jueves 12 nov, 15 a 20 minutos): la página de la escala abría
 directo en un departamento. Ahora abre en **«Resumen»**, la primera pestaña, en las dos caras (la del cliente,
@@ -14956,6 +15048,8 @@ los datos rojos.
 
 > ⚠ Segunda vuelta el 11 nov (ver «El Resumen de la escala, segunda vuelta: la veracidad primero»): las tarjetas son los
 > equipos de la escala con sus subequipos adentro, sin «provisional», sin «¿Entendimos bien?» y con «Qué hicimos» en tres cifras.
+> ⚠ Desde el 24 nov (noche), SIN Resumen publicado el cliente no ve la pestaña «Resumen» (abre en la página de un equipo) y
+> adentro se ve la plantilla: ver «La escala sin Resumen y lo que falta saber». Con Resumen, abre en él como dice abajo.
 
 Elías, para la presentación de Marco a Centauro Solutions (jueves 12 nov): el Resumen del 9 nov se leía como una alarma
 (la banda de datos rojos arriba) y como una lista de hallazgos por equipo de la escala. El objetivo nuevo es que la dirección
@@ -16737,7 +16831,8 @@ todavía: cada etapa arranca cuando él lo dice.
       vara general de las cifras mira los dígitos.
     - El respaldo muestra hasta 4 oraciones: con cinco temas pedidos, uno queda en «y N más».
     - Lo que Nexus «tiene de la cuenta» son las notas confirmadas y sus hechos, no las transcripciones.
-  - **La pantalla, más limpia:** sin «Contexto adicional» (decía «sin agente propio» y no hacía nada); arriba, UNA línea
+  - **La pantalla, más limpia:** sin «Contexto adicional» (decía «sin agente propio» y no hacía nada); arriba (desde la
+    noche del 24 nov, debajo de la página: «La escala sin Resumen y lo que falta saber»), UNA línea
     que dice si hay reuniones de después de la última vez que se ubicó la escala o de que se armó el Resumen, con el botón
     de siempre, «Ubicar con las reuniones» (`lib/exploraciones/linea-de-la-escala.ts`). Reemplaza la fila «1 Ubicar · 2
     Confirmar · 3 Armar», el objetivo de la primera venta, la frase de lo explorado y «Armado el … Cada texto se cambia con

@@ -955,11 +955,14 @@ describe("9 · lo que pidió Elías al probarla (9 nov)", () => {
     const pagina = fs.readFileSync(path.join(RAIZ, "components/exploraciones/PaginaDeLaEscala.tsx"), "utf8");
     const resumen = pagina.slice(pagina.indexOf("if (enElResumen) {"), pagina.indexOf("const nivelesEnVivo"));
     const marco = resumen.indexOf("<ResumenDeLaEscalaVista");
-    for (const control of ["Armar el Resumen con IA", "Todavía no hay Resumen", "Nexus está leyendo las reuniones", "no pasó la verificación ("]) {
+    // Desde el 24 nov el aviso (armarlo, en qué va, por qué falló) es `AvisoDelResumen`, que va antes del marco.
+    for (const control of ["<AvisoDelResumen", "Rehacer con IA", "no pasó la verificación ("]) {
       const donde = resumen.indexOf(control);
       expect(donde, control).toBeGreaterThan(-1);
       expect(donde, control).toBeLessThan(marco);
     }
+    const aviso = pagina.slice(pagina.indexOf("function AvisoDelResumen("), pagina.indexOf("export default function PaginaDeLaEscala"));
+    for (const control of ["Armar el Resumen con IA", "Falta armar el Resumen", "Nexus está armando el Resumen"]) expect(aviso, control).toContain(control);
     expect(resumen).not.toMatch(/rs-barra|rd-btn/);
   });
 
@@ -1399,7 +1402,8 @@ describe("19 · lo que encontró la revisión del 11 nov", () => {
 
   it("la página pública no abre la pestaña de un equipo sin sesiones, tampoco con ?area=", () => {
     const pagina = fs.readFileSync(path.join(RAIZ, "app/external/escala/[token]/page.tsx"), "utf8");
-    expect(pagina).toMatch(/area !== PESTANA_DEL_RESUMEN && !sinExplorar\.has\(area\)/);
+    // Desde el 24 nov el pedido se lee una vez (`pedida`), y sin Resumen publicado abre en un equipo (escala-sin-resumen.ts).
+    expect(pagina).toMatch(/pedida !== PESTANA_DEL_RESUMEN && !sinExplorar\.has\(pedida\)/);
   });
 
   it("la firma de los niveles sobrevive a guardar y volver a leer", () => {

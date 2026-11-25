@@ -10,6 +10,10 @@
  * Lo que ve es la foto PUBLICADA (16 nov, lib/exploraciones/escala-publicada.ts), con los textos que el equipo cambió
  * (`textos`, lib/external/textos-de-la-pagina.ts).
  *
+ * Sin Resumen en lo publicado (24 nov, TEC · AE se publicó antes de armarlo), no hay pestaña «Resumen»: sería una portada
+ * con huecos y texto de relleno. Abre en la página de un equipo y las pestañas son las de los equipos
+ * (lib/external/escala-sin-resumen.ts). Armado el Resumen y publicado otra vez, la pestaña vuelve.
+ *
  * Toda la seguridad vive en `escalaParaElToken` (chokepoint fail-closed, re-chequea en CADA render). `force-dynamic` no es
  * decoración: sin él, revocar no surtiría efecto. El `Referrer-Policy: no-referrer` de `/external/*` vive en
  * next.config.ts. `noindex`: la URL circula por correo.
@@ -20,6 +24,7 @@ import { PESTANA_DEL_RESUMEN } from "@/components/external/test/ArribaDeLaEscala
 import ResultadoDelTestVista, { EscalaSinMedir } from "@/components/external/test/ResultadoDelTestVista";
 import ResumenDeLaEscalaVista from "@/components/external/test/ResumenDeLaEscalaVista";
 import { escalaParaElToken } from "@/lib/external/escala-view";
+import { areaSinResumen, tieneResumen } from "@/lib/external/escala-sin-resumen";
 import { nivelesConElVistazoDeHoy } from "@/lib/tests-diagnostico/servicio-server";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +46,14 @@ export default async function EscalaDelClientePage({ params, searchParams }: { p
   // Un equipo sin sesiones dice «Por explorar» y no se abre, tampoco con su dirección directa (Elías, 11 nov).
   const sinExplorar = new Set(d.resumen.sinExplorar);
   const areas = d.areas.map((a) => ({ ...a, href: `${base}?area=${encodeURIComponent(a.id)}`, ...(sinExplorar.has(a.id) ? { porExplorar: true } : {}) }));
-  const r = typeof area === "string" && area !== PESTANA_DEL_RESUMEN && !sinExplorar.has(area) ? d.resultados.find((x) => x.areaId === area) : undefined;
+  const pedida = typeof area === "string" ? area : null;
+  const conResumen = tieneResumen(d.resumen);
+  const r = conResumen
+    ? pedida && pedida !== PESTANA_DEL_RESUMEN && !sinExplorar.has(pedida)
+      ? d.resultados.find((x) => x.areaId === pedida)
+      : undefined
+    : d.resultados.find((x) => x.areaId === areaSinResumen(d.resultados, pedida));
+  if (!r && !conResumen) return <EscalaSinMedir />;
   if (!r)
     return (
       <ResumenDeLaEscalaVista
@@ -69,7 +81,8 @@ export default async function EscalaDelClientePage({ params, searchParams }: { p
       deLaEscala={{
         areas,
         porExplorar: d.porExplorar[r.areaId] ?? [],
-        resumen: { href: base },
+        // Sin Resumen publicado, ni su pestaña ni «← Volver al Resumen».
+        resumen: conResumen ? { href: base } : null,
         textos: d.textos,
         // Lo que más le cuesta al área (20 nov): su tarjeta del Resumen publicado.
         tarjeta: d.resumen.tarjetas.find((t) => t.areaId === r.areaId) ?? null,

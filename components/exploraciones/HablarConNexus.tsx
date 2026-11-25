@@ -38,6 +38,9 @@
  * regresiva a la vista, el cuadro de escribir vuelve debajo (`alSeguir`): lo ya guardado queda marcado y no se repite en la
  * nota siguiente. Un «gracias» o un «ok» no se ofrece guardar (lib/chat-de-nexus/conversacion.ts › `esCortesia`).
  * Convive con «Agregar algo que sabes» (components/exploraciones/LoQueSabes.tsx): es otra puerta a las mismas notas.
+ * RESPONDER CON NEXUS (24 nov, «Para completar el diagnóstico» de La escala): la misma conversación, con la pregunta como
+ * chip («Ventas · Datos: ¿…?»). Lo primero que escribe la persona sale con «Sobre Ventas · Datos (…): » adelante
+ * (`prefijoDeLaRespuesta`): Nexus sabe qué se responde, y con «Guardar» la nota lo lleva. Después el chip se va.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert } from "@/components/ui";
@@ -68,6 +71,7 @@ import { useLienzo } from "./contexto";
 import { CORRIENDO_LA_ESCALA, useRehacerLaEscala } from "./rehacer-la-escala";
 import PedirleANexus from "./PedirleANexus";
 import { avisarQueNexusCambioLaEscala, EVENTO_ABRIR_NEXUS, type GuiaEnElCajon, type LugarDeLaEscalaEnElCajon, type PedidoDeAbrirNexus } from "@/lib/exploraciones/abrir-nexus";
+import { prefijoDeLaRespuesta, type PreguntaParaResponder } from "@/lib/exploraciones/completar-el-diagnostico";
 
 /** Lo que responde …/nexus/guardado (los tipos del servidor, sin importarlo). */
 interface Guardado {
@@ -456,6 +460,14 @@ const VACIO_DE_LA_GUIA = {
   cierre: "Lo que propone queda en una lista que apruebas. Para contar o preguntar algo del cliente, quita el chip de la guía con su ✕.",
 } as const;
 
+/** El chat vacío abierto desde «Responder con Nexus» (24 nov): la pregunta entera, y adónde va lo que se responde. */
+const vacioDeLaRespuesta = (p: PreguntaParaResponder) => ({
+  intro: `${p.equipo} · ${p.dimension}: ${p.pregunta}`,
+  ejemplos: [] as string[],
+  cierre:
+    "Cuéntale lo que sabes, escrito o dictado. Si falta algo, te pregunta; después te muestra la nota y la guardas tú en «Lo que sabes del cliente». El Resumen la lee cuando lo rehaces.",
+});
+
 /**
  * El mismo chat vacío para quien puede pedirle a Nexus lo de la cuenta (el permiso del chat de la cuenta): una sola
  * conversación (24 nov), así que también se le piden tareas, el siguiente paso o cambios a la guía, con su ejemplo.
@@ -477,6 +489,8 @@ export default function HablarConNexus() {
   const [escala, setEscala] = useState<LugarDeLaEscalaEnElCajon | null>(null);
   /** La guía desde la que se pidió «Mejorar con IA» (24 nov): el chip de la conversación; null, la conversación de siempre. */
   const [guia, setGuia] = useState<GuiaEnElCajon | null>(null);
+  /** La pregunta de La escala que se responde («Responder con Nexus», 24 nov): chip y prefijo del próximo mensaje. */
+  const [pregunta, setPregunta] = useState<PreguntaParaResponder | null>(null);
   const [listo, setListo] = useState<Listo | null>(null);
   const [guardado, setGuardado] = useState<Guardado | null>(null);
   const [errorAlGuardar, setErrorAlGuardar] = useState<string | null>(null);
@@ -545,6 +559,7 @@ export default function HablarConNexus() {
         if (!puedeEditar) return;
         // Desde La escala no se vuelve a la guía al quitar ese chip: la conversación queda sin chip.
         setGuia(null);
+        setPregunta(null);
         // Pasar al pedido de La escala deja la conversación: la cuenta regresiva que estaba a la vista no vuelve a correr.
         setAviso((a) => avisoAlDejarLaConversacion(a, cuentaALaVista.current));
         setEscala(p.escala);
@@ -552,9 +567,11 @@ export default function HablarConNexus() {
         // Con el chat ya abierto, el cursor va igual a la caja (otra sección de La escala).
         setPedidoDeFoco((n) => n + 1);
       } else if (activo) {
-        // La conversación: desde la guía, con su chip y sus sugerencias; desde el botón «Nexus», sin chip.
+        // La conversación: desde la guía, con su chip y sus sugerencias; desde una pregunta de La escala, con la pregunta
+        // como chip; desde el botón «Nexus», sin chip.
         setEscala(null);
         setGuia(p.guia ?? null);
+        setPregunta(p.pregunta ?? null);
         setAbierto(true);
         setPedidoDeFoco((n) => n + 1);
       }
@@ -699,7 +716,7 @@ export default function HablarConNexus() {
           pedidoDeFoco={pedidoDeFoco}
           // Sin el enlace «Tareas, siguiente paso o la guía» (Elías, 24 nov: «Quitarlo»): se pide en la misma caja, y el chat
           // vacío lo muestra con un ejemplo.
-          vacio={conLaGuia ? VACIO_DE_LA_GUIA : conAsistente ? VACIO_CON_PEDIDOS : VACIO_DE_LA_PREVENTA}
+          vacio={pregunta ? vacioDeLaRespuesta(pregunta) : conLaGuia ? VACIO_DE_LA_GUIA : conAsistente ? VACIO_CON_PEDIDOS : VACIO_DE_LA_PREVENTA}
           // Lleno, solo al empezar: a media conversación el aviso va junto al «Guardar» y la conversación sigue a la vista.
           // Con la guía como chip no se cuenta nada (se le piden cambios a la guía): las notas llenas no apagan la caja.
           aviso={
@@ -713,6 +730,14 @@ export default function HablarConNexus() {
           // «Mejorar con IA» de la guía (24 nov): la misma conversación, con la guía como chip; la ✕ vuelve a conversar.
           {...(guia && conLaGuia
             ? { lugar: "guia" as const, chip: { texto: `Sobre ${guia.etiqueta}`, alQuitar: () => setGuia(null) }, sugerencias: guia.sugerencias }
+            : {})}
+          // «Responder con Nexus» (24 nov): la pregunta como chip; lo próximo que escribe la persona la lleva adelante.
+          {...(pregunta
+            ? {
+                chip: { texto: `${pregunta.equipo} · ${pregunta.dimension}: ${pregunta.pregunta}`, alQuitar: () => setPregunta(null) },
+                prefijo: prefijoDeLaRespuesta(pregunta),
+                alUsarElPrefijo: () => setPregunta(null),
+              }
             : {})}
           alAplicar={() => {
             void recargar();

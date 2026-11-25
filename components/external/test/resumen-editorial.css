@@ -897,6 +897,50 @@
   cursor: pointer;
 }
 
+/* La PLANTILLA (24 nov, PlantillaDelResumenVista.tsx, solo adentro): la forma de la portada mientras no hay Resumen. Cada
+   hueco dice qué va ahí, sin texto inventado; no la ve el cliente. */
+.re-hueco {
+  padding: 14px 16px;
+  border: 1.5px dashed var(--re-linea);
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--re-apagada);
+  background: var(--re-panel);
+}
+.re-hueco-grande {
+  padding: 22px 18px;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 700;
+}
+.re-hicimos-vacio b {
+  color: var(--re-tenue);
+}
+.re-plantilla-equipos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.re-plantilla-equipos li {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--re-linea);
+  border-radius: 10px;
+}
+.re-plantilla-equipos b {
+  font-size: 15px;
+  color: var(--re-tinta);
+}
+.re-plantilla-equipos span {
+  font-size: 13px;
+  color: var(--re-apagada);
+}
+
 @container (max-width: 760px) {
   .dr.rd-ed.re .rd { padding: 0 20px; }
   .re-puntos { grid-template-columns: minmax(0, 1fr); gap: 18px; }
