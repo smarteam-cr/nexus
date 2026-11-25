@@ -11,6 +11,9 @@
  *
  * ⛔ NO ESCRIBE NADA DE LA CUENTA. Lo que propone vuelve como una lista; aplicarla es ./aplicar-server.ts, con el clic
  * de la persona. Cada llamada al modelo queda medida (`LlmCall`) con el agente, la cuenta, la persona y el hilo.
+ *
+ * ⛔ Al cambiar lo que el chat sabe hacer (una operación, una lectura, un tope), se actualiza la página «El chat Nexus: qué
+ * le puedes pedir» (lib/documentacion/semillas/chat-nexus.ts) y se vuelve a correr scripts/seed-pagina-chat-nexus.ts.
  */
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";

@@ -29,6 +29,7 @@ import {
   type PaginaSembrada,
 } from "./bloques";
 import type { BloqueGuardado } from "../tipos";
+import { construirChatNexus } from "./chat-nexus";
 
 function bloques(): BloqueGuardado[] {
   return [
@@ -124,12 +125,17 @@ function bloques(): BloqueGuardado[] {
     aviso("advertencia", "Lo que escribe un agente SIEMPRE es un borrador. Se revisa antes de darlo por bueno, y con más razón antes de que lo vea el cliente."),
     bloqueVivo("agentes"),
 
-    titulo(2, "El asistente que conversa sobre un documento"),
+    titulo(2, "El chat Nexus"),
     parrafo(
-      "Al costado de un documento hay un chat. Le pides un cambio en palabras —«corre la fase 2 dos semanas», «saca esta sección»— y te dice qué es posible y qué implica antes de tocar nada.",
+      "En casi toda la app hay un chat que se llama Nexus: el botón «Nexus» y cada «✨ Mejorar con IA» lo abren. Le pides un cambio en palabras —«corre la fase 2 dos semanas», «saca esta sección»— y te dice qué es posible y qué implica antes de tocar nada.",
     ),
     parrafo(
-      "El asistente nunca escribe solo: cuando estás de acuerdo, «Aplicar» pasa por el editor de siempre y respeta tus permisos. Si no puedes editar ese documento, tampoco puede el chat en tu nombre.",
+      "Nexus nunca escribe solo: cuando estás de acuerdo, «Aplicar» pasa por el editor de siempre y respeta tus permisos. Si no puedes editar algo, tampoco puede el chat en tu nombre.",
+    ),
+    parrafoRico(
+      "Qué le puedes contar, preguntar y pedir en cada lugar: ",
+      mencion("el-chat-nexus", "El chat Nexus: qué le puedes pedir", "💬"),
+      ".",
     ),
 
     titulo(2, "De dónde salen las reuniones"),
@@ -248,5 +254,7 @@ export function construirComoFunciona(): PaginaSembrada {
     titulo: "¿Cómo funciona Nexus?",
     icono: "🧭",
     bloques: bloques(),
+    // Las subpáginas: el chat «Nexus», por lugar (2026-11-24). La crea o la actualiza sola scripts/seed-pagina-chat-nexus.ts.
+    hijas: [construirChatNexus()],
   };
 }

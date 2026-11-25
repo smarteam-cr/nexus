@@ -74,6 +74,12 @@ export interface NodoDelArbol extends NodoDePagina {
 export const SLUG_DE_INICIO = "inicio";
 
 /**
+ * «El chat Nexus: qué le puedes pedir» (2026-11-24), adentro de «¿Cómo funciona Nexus?». La abre el enlace «¿Qué puedo
+ * pedirte?» del chat vacío. Estable: el enlace del chat apunta acá.
+ */
+export const SLUG_DEL_CHAT_NEXUS = "el-chat-nexus";
+
+/**
  * De dónde sale un bloque vivo: cada fuente se deriva de un registro del código o de la base.
  * `equipo` (2026-09-13) es el directorio: las personas activas de Nexus, por área.
  * `icp` y `personas` (2026-10-01) son el cliente ideal y las buyer personas de Marketing → Audiencia.

@@ -11,6 +11,10 @@
  * por ronda, que cada cambio vaya a un destino que existe con un valor que la superficie acepta, y que su cita esté en lo
  * que dijo la persona. Lo que no pasa, se descarta y se cuenta. La nota NO la escribe el modelo: son las palabras de la
  * persona, tal cual (`notaDeLaConversacion`), así «lo dijo <persona>» es verdad.
+ *
+ * ⛔ Al cambiar lo que el chat sabe hacer (contar, preguntar, pedir, un tope), se actualiza la página «El chat Nexus: qué
+ * le puedes pedir» (lib/documentacion/semillas/chat-nexus.ts) y se vuelve a correr scripts/seed-pagina-chat-nexus.ts. Sus
+ * frases de ejemplo de un pedido las prueba lib/documentacion/semillas/paginas.test.ts contra `esPedidoDeLaCuenta`.
  */
 import type Anthropic from "@anthropic-ai/sdk";
 import { escaleraParaElAgente } from "@/lib/impacto/escalera";
