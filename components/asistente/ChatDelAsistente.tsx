@@ -236,6 +236,11 @@ interface Props {
    * reuniones («Cambiar con el chat» de la franja del documento). Quien monta el chat las da por usadas.
    */
   onNovedadesAplicadas?: (novedades: NovedadEnElTurno[]) => void;
+  /**
+   * Llegó la respuesta de Nexus (25 nov). Con el cajón cerrado, quien lo monta lo marca en su botón con un punto rojo, en
+   * vez de un aviso flotante (el chat de la cuenta en la ficha: components/nexus-chat/ChatDeNexus.tsx).
+   */
+  alResponder?: () => void;
 }
 
 /** El id del cajón (vive en el marco). Lo apunta el `aria-controls` del botón que lo abre, en el otro componente. */
@@ -272,6 +277,7 @@ export default function ChatDelAsistente({
   borrador = null,
   sugerencias,
   onNovedadesAplicadas,
+  alResponder,
 }: Props) {
   /** Por qué no se aplica ESTE acuerdo ahora (E3 P5: puede depender del acuerdo). */
   const motivoPara = (a: AcuerdoDelChat): string | null =>
@@ -410,6 +416,7 @@ export default function ChatDelAsistente({
       if (!r.ok) throw new Error(j.error ?? "Nexus no pudo contestar");
       setTurnos(j.hilo?.turnos ?? []);
       setLectura(j.lectura ?? null);
+      alResponder?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Nexus no pudo contestar");
       /* Se saca el turno optimista: dejarlo mentiría diciendo que la pregunta quedó guardada. */

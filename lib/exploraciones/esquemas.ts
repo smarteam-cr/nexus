@@ -751,7 +751,18 @@ export const OperacionSchema = z.discriminatedUnion("op", [
     valor: z.object({ texto: z.string().max(MAX_TEXTO_DEL_RADAR), nivel: z.enum(NIVELES) }).nullable(),
   }),
   z.object({ op: z.literal("contextoDeLaEscala"), areaId: ID_AREA, texto: z.string().max(MAX_CONTEXTO_DE_LA_ESCALA).nullable() }),
-  z.object({ op: z.literal("resumenDeLaEscala"), clave: z.string().regex(CLAVE_DEL_RESUMEN).max(60), texto: z.string().max(TOPE_A_MANO + 200).nullable() }),
+  z.object({
+    op: z.literal("resumenDeLaEscala"),
+    clave: z.string().regex(CLAVE_DEL_RESUMEN).max(60),
+    texto: z.string().max(TOPE_A_MANO + 200).nullable(),
+    // Las demás partes de un ítem nuevo de varias partes (25 nov): nace entero.
+    campos: z
+      .object({ texto: z.string().max(TOPE_A_MANO).optional(), areaId: z.string().max(20).nullable().optional(), friccion: z.string().max(TOPE_A_MANO).nullable().optional() })
+      .strict()
+      .optional(),
+    // La cifra grande toma la cita de una cifra de un equipo (25 nov).
+    citasDe: z.string().regex(/^op:[\w-]{1,20}:cifra:[\w-]{1,20}$/).optional(),
+  }),
   z.object({ op: z.literal("textoDeLaPagina"), clave: z.string().regex(CLAVE_DE_LA_PAGINA), texto: z.string().max(MAX_TEXTO_DE_LA_PAGINA + 200).nullable() }),
   z.object({ op: z.literal("casoDeUso"), useCaseId: ID_CASO_DE_USO, valor: CasoDeUsoElegidoSchema.nullable() }),
   z.object({ op: z.literal("quitarCaso"), useCaseId: ID_CASO_DE_USO, descartar: z.boolean().optional() }),

@@ -165,7 +165,7 @@ describe("⛔ la cuenta regresiva de La escala no vuelve a correr al dejar la co
     expect(seVeLaCuentaDeLaEscala({ ...base, aviso: "cerrado" })).toBe(false);
   });
 
-  it("⛔ el chat lo usa al cerrar Y al pasar al pedido de La escala (el chat ya no tapa la página: se puede pasar sin cerrarlo)", () => {
+  it("⛔ el chat lo usa al cerrar Y al pasar al pedido de La escala de la CUENTA (en la preventa, desde el 25 nov, La escala es un chip de la misma conversación: no se deja nada)", () => {
     const cajon = readFileSync("components/exploraciones/HablarConNexus.tsx", "utf8");
     // Al cerrar.
     const cerrar = cajon.slice(cajon.indexOf("const cerrar = () => {"), cajon.indexOf("};", cajon.indexOf("const cerrar = () => {")));
@@ -173,7 +173,7 @@ describe("⛔ la cuenta regresiva de La escala no vuelve a correr al dejar la co
     // Al pasar al pedido de La escala con «✨ Mejorar con IA».
     const alPedir = cajon.slice(cajon.indexOf("const alPedir = (e: Event) => {"), cajon.indexOf("window.addEventListener(EVENTO_ABRIR_NEXUS"));
     const conEscala = alPedir.slice(alPedir.indexOf("if (p.escala) {"), alPedir.indexOf("} else if (activo)"));
-    expect(conEscala).toContain("setAviso((a) => avisoAlDejarLaConversacion(a, cuentaALaVista.current))");
+    expect(conEscala).toContain("if (!activo) setAviso((a) => avisoAlDejarLaConversacion(a, cuentaALaVista.current));");
   });
 });
 

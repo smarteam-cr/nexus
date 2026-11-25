@@ -9,6 +9,7 @@ import { MOTIVO_COLGADA, estaColgada, wherePorLatido } from "@/lib/agents/run-co
 import { canvasDelResultado, resolveRunResultUrl } from "@/lib/agents/run-url";
 import { slugForCanvas } from "@/lib/pieces/registry";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
+import { sinLasDelChat } from "@/lib/agents/corridas-del-chat";
 
 /**
  * GET /api/agent-runs — el feed del CENTRO DE CORRIDAS (RunsIndicator).
@@ -45,6 +46,9 @@ export async function GET(req: NextRequest) {
       { client: clientWhere ?? { ...CS_CLIENT_WHERE } },
       ...(canCobranza ? [{ clientId: null }] : []),
     ],
+    // Las corridas del chat «Nexus» no van al feed (25 nov): la respuesta se ve en el chat y no se avisa de cada mensaje
+    // («Listo: Nexus responde sobre la cuenta… · Ver» llevaba a la ficha). lib/agents/corridas-del-chat.ts.
+    AND: [sinLasDelChat()],
   };
 
   const select = {

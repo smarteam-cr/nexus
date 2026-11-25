@@ -210,7 +210,8 @@ describe("5 · lo interno entra si se pide", () => {
     const servidor = leer("lib/exploraciones/escala-con-nexus-server.ts");
     expect(servidor).not.toMatch(/LO INTERNO NUNCA/);
     expect(servidor).toContain("SOLO si el pedido lo pide con todas sus letras");
-    const cajon = leer("components/exploraciones/PedirleANexus.tsx");
+    // La propuesta a La escala vive en su pieza desde el 25 nov (la usan la conversación de la preventa y la escala de la cuenta).
+    const cajon = leer("components/exploraciones/PropuestaDeLaEscala.tsx");
     expect(cajon).toContain("{c.interno && <p");
     expect(cajon).toContain("{AVISO_DE_LO_INTERNO}");
   });
@@ -222,7 +223,7 @@ describe("5 · lo interno entra si se pide", () => {
   });
 
   it("⛔ lo interno no entra con «Aplicar todo»: se aplica uno por uno, con su pregunta (como lo escrito a mano)", () => {
-    const cajon = leer("components/exploraciones/PedirleANexus.tsx");
+    const cajon = leer("components/exploraciones/PropuestaDeLaEscala.tsx");
     expect(cajon).toContain("const sinPreguntar = pendientes.filter((c) => !c.aMano && !c.interno);");
     expect(cajon).toContain("onAplicar={() => (c.aMano || c.interno ? setAConfirmar(c) : void aplicar([c]))}");
     // Con lo que lo respalda a la vista: el sentido lo compara quien aplica (veracidad.ts no lo juzga).

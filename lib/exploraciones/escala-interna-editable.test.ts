@@ -318,12 +318,25 @@ describe("⛔ la página pública no edita, y la interna no se lee sin guardia",
     const usanLaVersion = quienesLlaman(/\bpaginaDeLaVersion\s*\(/, (f) => f === "lib/exploraciones/versiones-del-resumen-server.ts");
     expect(usanLaVersion).toEqual(["app/api/sales/exploraciones/[id]/escala/resumen/versiones/[versionId]/route.ts"]);
     conGuardia(usanLaVersion[0], "await paginaDeLaVersion(");
-    // El contrato de «Pedirle a Nexus» lo llama solo su ruta, después de la guardia de la exploración para escribir.
+    // El contrato de «Pedirle a Nexus» lo llama su ruta, después de la guardia de la exploración para escribir. Y, desde el
+    // 25 nov (un solo contexto), la conversación de la preventa propone con él: su mano de La escala, que solo corre en la
+    // vuelta, y la vuelta solo la llama su ruta, después de la misma guardia.
     const usanElContrato = quienesLlaman(/\b(leerLaEscalaParaNexus|proponerEnLaEscala|aplicarEnLaEscala|deshacerEnLaEscala)\s*\(/, (f) => f.startsWith("lib/exploraciones/escala-con-nexus"));
-    expect(usanElContrato).toEqual(["app/api/sales/exploraciones/[id]/escala/nexus/route.ts"]);
-    const ruta = fs.readFileSync(path.join(RAIZ, usanElContrato[0]), "utf8");
-    const guardia = ruta.search(/await guardDeLaExploracion\(id, "write"\);\s*if \(guard instanceof NextResponse\) return guard;/);
-    expect(guardia).toBeGreaterThan(-1);
-    for (const llamada of ["await proponerEnLaEscala(", "await aplicarEnLaEscala(", "await deshacerEnLaEscala("]) expect(guardia).toBeLessThan(ruta.indexOf(llamada));
+    expect(usanElContrato).toEqual(["app/api/sales/exploraciones/[id]/escala/nexus/route.ts", "lib/exploraciones/nexus-en-la-preventa-server.ts"]);
+    const conLaGuardiaDeEscribir = (archivo: string, llamadas: string[]) => {
+      const ruta = fs.readFileSync(path.join(RAIZ, archivo), "utf8");
+      const guardia = ruta.search(/await guardDeLaExploracion\(id, "write"\);\s*if \(guard instanceof NextResponse\) return guard;/);
+      expect(guardia, archivo).toBeGreaterThan(-1);
+      for (const llamada of llamadas) expect(guardia, `${archivo}: ${llamada}`).toBeLessThan(ruta.indexOf(llamada));
+    };
+    conLaGuardiaDeEscribir(usanElContrato[0], ["await proponerEnLaEscala(", "await aplicarEnLaEscala(", "await deshacerEnLaEscala("]);
+    const preventa = fs.readFileSync(path.join(RAIZ, usanElContrato[1]), "utf8");
+    // En la preventa, solo `proponerEnLaEscala` (aplicar va por la ruta de la página) y solo dentro de la mano de La escala.
+    expect(preventa.match(/\b(leerLaEscalaParaNexus|aplicarEnLaEscala|deshacerEnLaEscala)\s*\(/g)).toBeNull();
+    expect(preventa.match(/await proponerEnLaEscala\(/g)).toHaveLength(1);
+    expect(preventa.indexOf("await proponerEnLaEscala(")).toBeGreaterThan(preventa.indexOf("function manoDeLaEscala("));
+    const usanLaVuelta = quienesLlaman(/\bvueltaEnLaPreventa\s*\(/, (f) => f === "lib/exploraciones/nexus-en-la-preventa-server.ts");
+    expect(usanLaVuelta).toEqual(["app/api/sales/exploraciones/[id]/nexus/route.ts"]);
+    conLaGuardiaDeEscribir(usanLaVuelta[0], ["await vueltaEnLaPreventa("]);
   });
 });

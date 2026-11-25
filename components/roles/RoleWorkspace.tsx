@@ -22,7 +22,7 @@ import { IconCheck } from "@/components/ui";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo } from "@/components/ui/UndoProvider";
-import ChatDeUnPedido, { PuntoDePropuesta, useAvisoDePropuestaLista } from "@/components/asistente/ChatDeUnPedido";
+import ChatDeUnPedido, { PuntoDePropuesta } from "@/components/asistente/ChatDeUnPedido";
 import { Burbuja } from "@/components/asistente/CajonDeNexus";
 import PropuestaDeSecciones from "@/components/ai/PropuestaDeSecciones";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
@@ -220,8 +220,6 @@ export default function RoleWorkspace({
   const assistLabel = (key: string) =>
     key === "hero" ? "Título, área y resumen" : SECTION_LABELS[key] ?? key;
 
-  const avisarSiEstaCerrado = useAvisoDePropuestaLista(assistOpen);
-
   // ⚠ La propuesta de antes no se borra al pedir otra: se esconde mientras Nexus piensa y vuelve si el pedido falla.
   const submitAssist = async (instruction: string): Promise<boolean> => {
     const antes = { enviado: assistEnviado, hecho: assistHecho };
@@ -237,8 +235,7 @@ export default function RoleWorkspace({
       });
       setAssist(result);
       setAssistSelected(new Set(Object.keys(result.proposal)));
-      // Llegó con el chat cerrado: se avisa, y el botón lleva su punto.
-      avisarSiEstaCerrado();
+      // Si llegó con el chat cerrado, el botón lleva su punto rojo (25 nov: sin aviso flotante).
       return true;
     } catch (e) {
       setAssistError(e instanceof ApiError ? e.message : "Nexus no pudo proponer. Prueba de nuevo.");

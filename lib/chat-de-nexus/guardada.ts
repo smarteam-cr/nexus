@@ -10,16 +10,20 @@
  *
  * Con eso `reconstruirLaConversacion` arma lo que el cajón muestra al volver: los mensajes (cada respuesta con sus citas),
  * lo propuesto y lo aplicado. Las corridas de antes de esto no traen `mensajes`: esas no se reconstruyen.
+ *
+ * Desde el 25 nov (un solo contexto), una vuelta puede dejar una propuesta a la página de La escala (`escala`, con lo
+ * que la persona hizo con cada cambio en `estados`): vuelve en su mensaje, por su vuelta (./escala-en-la-conversacion.ts).
  */
 import { esMarcaDelMensaje, TOPES, type CambioPropuesto, type MensajeDeLaConversacion, type ResultadoDelTurno } from "./conversacion";
 import { emparejarListas, estadosDeLasListas, leerListaGuardada, listaParaLaPantalla, type DesenlaceDeLaLista, type ListaEnLaConversacion, type ListaGuardada } from "./lista";
 import type { RespuestaDeNexus } from "./respuesta";
+import { leerLaEscalaGuardada, type EscalaEnLaConversacion, type EstadoGuardadoEnLaEscala } from "./escala-en-la-conversacion";
 
 /**
  * Un mensaje como se ve: el de Nexus que respondió una pregunta lleva sus citas; el que contestó un pedido de la cuenta
  * (24 nov, una sola conversación), su lista con su estado.
  */
-export type MensajeGuardado = MensajeDeLaConversacion & { respuesta?: RespuestaDeNexus; lista?: ListaEnLaConversacion };
+export type MensajeGuardado = MensajeDeLaConversacion & { respuesta?: RespuestaDeNexus; lista?: ListaEnLaConversacion; escala?: EscalaEnLaConversacion };
 
 /** Lo que la persona hizo con un cambio propuesto. «aplicando» no se guarda: es solo mientras espera. */
 export const ESTADOS_GUARDADOS = ["aplicado", "descartado"] as const;
@@ -38,7 +42,8 @@ export interface AnotacionesDeLaVuelta {
   respuesta?: RespuestaDeNexus;
   notaClave?: string;
   guardado?: RevisionGuardada;
-  estados?: Record<string, EstadoGuardadoDelCambio>;
+  /** Lo hecho con los cambios del «listo» o, en una vuelta que dejó una propuesta a La escala, con los de esa propuesta. */
+  estados?: Record<string, EstadoGuardadoDelCambio | EstadoGuardadoEnLaEscala>;
   cerrada?: true;
   /** El «listo» salió de «Guardarlo como nota»: la persona ya eligió contarlo. */
   contado?: true;
@@ -79,7 +84,7 @@ export function leerLaSalida(output: string | null | undefined): SalidaDeLaVuelt
   if (!output) return null;
   try {
     const v = objeto(JSON.parse(output));
-    if (!v || (v.tipo !== "pregunta" && v.tipo !== "consulta" && v.tipo !== "listo" && v.tipo !== "respuesta" && v.tipo !== "lista")) return null;
+    if (!v || (v.tipo !== "pregunta" && v.tipo !== "consulta" && v.tipo !== "listo" && v.tipo !== "respuesta" && v.tipo !== "lista" && v.tipo !== "escala")) return null;
     return v as unknown as SalidaDeLaVuelta;
   } catch {
     return null;
@@ -110,7 +115,15 @@ function loQueContesto(s: SalidaDeLaVuelta, estados: ReadonlyMap<string, ListaEn
   if (s.tipo === "consulta" && s.respuesta && typeof s.respuesta.texto === "string") return { de: "nexus", es: "respuesta", texto: s.respuesta.texto, respuesta: s.respuesta };
   const g = leerListaGuardada(s);
   if (g) return { de: "nexus", es: "lista", texto: g.lista.texto, vuelta: g.lista.id, lista: listaParaLaPantalla(g, estados.get(g.lista.id) ?? "sin-cambios") };
+  const e = s.tipo === "escala" ? leerLaEscalaGuardada(s) : null;
+  if (e) return { de: "nexus", es: "escala", texto: textoDeLaVuelta(s, e), vuelta: e.id, escala: e };
   return null;
+}
+
+/** El texto que dejó en la conversación el mensaje de una propuesta a La escala (el que viajó). */
+function textoDeLaVuelta(s: SalidaDeLaVuelta, e: EscalaEnLaConversacion): string {
+  const t = (s as { textoDeLaEscala?: unknown }).textoDeLaEscala;
+  return typeof t === "string" && t ? t : e.propuesta.nota ?? "Nexus propuso cambios a La escala.";
 }
 
 /** Las frases de los hechos que propuso un «listo» (lo que Nexus entendió), leídas sin confiar en ellas. */
@@ -146,8 +159,11 @@ export function reconstruirLaConversacion(id: string, vueltas: readonly SalidaDe
   // La de la última vuelta no está en `base` (va abajo, como lo que contestó).
   const propiaDeLaUltima = leerListaGuardada(ultima)?.lista.id;
   const deCadaMensaje = emparejarListas(base, propiaDeLaUltima ? listas.filter((g) => g.lista.id !== propiaDeLaUltima) : listas);
+  // Cada propuesta a La escala con lo que se hizo con ella, por su vuelta (25 nov).
+  const escalas = new Map(vueltas.map((v) => (v.tipo === "escala" ? leerLaEscalaGuardada(v) : null)).filter((e): e is EscalaEnLaConversacion => !!e).map((e) => [e.id, e]));
   let mensajes: MensajeGuardado[] = base.map((m, i) => {
     if (m.de === "nexus" && m.es === "respuesta" && citas.has(m.texto)) return { ...m, respuesta: citas.get(m.texto) };
+    if (m.de === "nexus" && m.es === "escala" && m.vuelta && escalas.has(m.vuelta)) return { ...m, escala: escalas.get(m.vuelta) };
     const g = deCadaMensaje.get(i);
     return g ? { ...m, vuelta: g.lista.id, lista: listaParaLaPantalla(g, estadoDeCadaLista.get(g.lista.id) ?? "sin-cambios") } : m;
   });
@@ -161,7 +177,7 @@ export function reconstruirLaConversacion(id: string, vueltas: readonly SalidaDe
   }
   if (contesto) {
     // La consulta (o el pedido) de la persona no va a la nota: queda marcada como en la pantalla.
-    const marca = contesto.es === "respuesta" ? ("consulta" as const) : contesto.es === "lista" ? ("pedido" as const) : null;
+    const marca = contesto.es === "respuesta" ? ("consulta" as const) : contesto.es === "lista" ? ("pedido" as const) : contesto.es === "escala" ? ("cambio" as const) : null;
     if (marca) mensajes = mensajes.map((m, i) => (i === mensajes.length - 1 && m.de === "persona" ? { ...m, es: marca } : m));
     mensajes = [...mensajes, contesto];
   }

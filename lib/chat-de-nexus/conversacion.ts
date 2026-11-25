@@ -22,6 +22,7 @@ import { citaEstaEnLasFuentes, normalizarParaCita } from "@/lib/timeline/limites
 import { voseoEnProsa } from "@/lib/ui/voseo-formas";
 import type { RespuestaDeNexus } from "./respuesta";
 import type { ListaEnLaConversacion } from "./lista";
+import type { EscalaEnLaConversacion } from "./escala-en-la-conversacion";
 
 /** Sonnet 4.6, el modelo por defecto de Nexus: entender qué quiso decir y a qué tarjeta va pide más que Haiku. */
 export const MODELO_DEL_CHAT = "claude-sonnet-4-6";
@@ -63,17 +64,20 @@ export interface MensajeDeLaConversacion {
    * Desde el 24 nov (una sola conversación): «pedido», la persona le pidió algo de la cuenta (una tarea, el siguiente paso,
    * la guía, un documento: no va a la nota); «lista», lo que le contestó la parte de Nexus que trabaja la cuenta, con la
    * lista de cambios si la hubo (no es una ronda de preguntas).
+   * Desde el 25 nov (un solo contexto): «cambio», la persona pidió un cambio a la página de La escala (no va a la nota);
+   * «escala», lo que Nexus le propuso a esa página (no es una ronda de preguntas).
    */
   es?: MarcaDelMensaje;
   /**
-   * La vuelta que dejó este mensaje de Nexus, cuando es una lista de la cuenta («lista»): con ella se reconoce su lista al
-   * volver (./lista.ts › `emparejarListas`). La pone el servidor; la pantalla la devuelve tal cual.
+   * La vuelta que dejó este mensaje de Nexus, cuando es una lista de la cuenta («lista») o una propuesta a La escala
+   * («escala»): con ella se reconoce lo suyo al volver (./lista.ts › `emparejarListas`; ./guardada.ts). La pone el
+   * servidor; la pantalla la devuelve tal cual.
    */
   vuelta?: string;
 }
 
 /** Las marcas de un mensaje (`MensajeDeLaConversacion.es`). Las valida la ruta y las lee la conversación guardada. */
-export const MARCAS_DEL_MENSAJE = ["consulta", "respuesta", "cortesia", "guardado", "pedido", "lista"] as const;
+export const MARCAS_DEL_MENSAJE = ["consulta", "respuesta", "cortesia", "guardado", "pedido", "lista", "cambio", "escala"] as const;
 export type MarcaDelMensaje = (typeof MARCAS_DEL_MENSAJE)[number];
 export const esMarcaDelMensaje = (v: unknown): v is MarcaDelMensaje => typeof v === "string" && (MARCAS_DEL_MENSAJE as readonly string[]).includes(v);
 
@@ -100,6 +104,11 @@ export interface ContextoParaNexus {
   /** Lo que ya se sabe, en un bloque (lo del equipo, lo que aceptó el cliente). Interno. */
   contexto: string;
   destinos: DestinoDisponible[];
+  /**
+   * Hay una página de La escala que se le puede pedir cambiar (25 nov, un solo contexto: el Resumen armado, en la preventa).
+   * Con esto, lo dudoso también puede ser un cambio a la página (`{"tipo":"cambio"}`).
+   */
+  conLaEscala?: boolean;
 }
 
 /** Un cambio que Nexus propone y la persona aplica con un clic. */
@@ -139,7 +148,14 @@ export type ResultadoDelTurno =
    */
   | { tipo: "pedido"; pedido: string }
   /** Lo que contestó la parte de Nexus que trabaja la cuenta, con su lista de cambios (vacía si solo contestó). */
-  | { tipo: "lista"; lista: ListaEnLaConversacion };
+  | { tipo: "lista"; lista: ListaEnLaConversacion }
+  /**
+   * La persona pidió un cambio a la página de La escala (25 nov, un solo contexto). Un paso del servidor, como «pedido»: a
+   * la pantalla llega la «escala».
+   */
+  | { tipo: "cambio"; pedido: string }
+  /** Lo que Nexus propuso a la página de La escala: cada cambio con el antes y el después (./escala-en-la-conversacion.ts). */
+  | { tipo: "escala"; escala: EscalaEnLaConversacion };
 
 /** Lo que el modelo no pudo leer: «listo, sin cambios», marcado como no leído (la nota se guarda igual). */
 export const NO_SE_PUDO_LEER: ResultadoDelTurno = { tipo: "listo", cambios: [], hechos: [], descartados: 0, sinLeer: true };
@@ -155,7 +171,7 @@ export function mensajesValidos(m: readonly MensajeDeLaConversacion[]): MensajeD
       de: x.de,
       texto: x.texto.trim().slice(0, TOPES.largoDelMensaje),
       ...(x.es ? { es: x.es } : {}),
-      ...(x.de === "nexus" && x.es === "lista" && typeof x.vuelta === "string" && x.vuelta ? { vuelta: x.vuelta.slice(0, 60) } : {}),
+      ...(x.de === "nexus" && (x.es === "lista" || x.es === "escala") && typeof x.vuelta === "string" && x.vuelta ? { vuelta: x.vuelta.slice(0, 60) } : {}),
     }))
     .filter((x) => (x.de === "persona" || x.de === "nexus") && x.texto)
     .slice(-TOPES.mensajes);
@@ -340,6 +356,59 @@ export function esPedidoDeLaCuenta(texto: string, o: { estricto?: boolean } = {}
 }
 
 /**
+ * Las órdenes de cambiar un texto (25 nov, un solo contexto): «cambia», «acóplalo», «acórtalo», «ponle», «quita», «agrega»,
+ * «reescribe», «enfócalo»…, en imperativo (con su pronombre pegado o sin él), infinitivo («¿Puedes cambiarlo?»), subjuntivo
+ * («Quiero que lo cambies») o presente amable («¿Me lo acortas?»). Sin tildes. «resumen» (el sustantivo) no es «resume».
+ */
+const ORDEN_DE_CAMBIO =
+  /^((me|nos|le|lo|la|los|las|se)\s+)*(?!(mejor|resume)(?=[\s,.:;!?]|$))(cambi|reemplaz|reescrib|redact|acort|alarg|ajust|enfoc|acopl|mejor|correg|corrig|simplific|resum|actualiz|agreg|anad|quit|sac|borr|elimin|pon|pong|enfatiz|destac|suaviz|concret|precis)(a|e|ar|er|ir|as|es|ue|ues)?(lo|la|los|las|le|les|me|melo|mela|melos|melas|selo|sela)?(?=[\s,.:;!?]|$)/;
+/**
+ * Las partes de la página de La escala, como las nombra la persona (sin tildes): con una orden delante, es un cambio a la
+ * página aunque el chat se haya abierto desde «Nexus» de arriba (25 nov). «Diagnóstico» solo, no: «genera el diagnóstico»
+ * es un documento de la cuenta (lo prepara la mano de la cuenta).
+ */
+const PARTE_DE_LA_PAGINA =
+  /(^|\s)(el (titular|titulo)|la bajada|el subtitulo|el problema principal|la tesis|(el|un|otro|los|un nuevo) puntos? clave|los puntos clave|lo mas critico|el recorrido|del recorrido|un paso del recorrido|el resumen|la escala|la pagina|la pagina del diagnostico|el diagnostico de rendimiento|equipos y hallazgos|el reto principal|lo que lo causa|quien es quien|lo que ya funciona|lo que falta validar|la cifra( grande)?|las cifras|las etiquetas|una etiqueta|el (primer|segundo) parrafo|el parrafo|el texto (de arriba|debajo del titulo|debajo del titular))(?=[\s,.:;!?]|$)/;
+
+/** ¿Empieza con una orden de cambiar un texto (después de «¿Me puedes…», «Por favor…», «Quiero que…»)? Sin tildes. */
+export function empiezaConUnCambio(texto: string): boolean {
+  const inicio = sinTildes(inicioDe(texto)).replace(ANTES_DEL_PEDIDO, "");
+  return ORDEN_DE_CAMBIO.test(inicio);
+}
+
+/**
+ * ¿Lo que escribió la persona es SEGURO un cambio a la página de La escala, sin el chip de una sección? (25 nov) Una orden
+ * de cambiar un texto Y una parte de la página que se nombra («Cambia el titular…», «Agrega un punto clave sobre…»). Lo
+ * dudoso («Quiero que el texto se enfoque más en…») lo decide el modelo.
+ */
+export function pideUnCambioALaPagina(texto: string, o: { estricto?: boolean } = {}): boolean {
+  const inicio = sinTildes(inicioDe(texto)).replace(ANTES_DEL_PEDIDO, "");
+  const orden = ORDEN_DE_CAMBIO.exec(inicio);
+  if (!orden) return false;
+  // «Pasa que…», «Cambia que…»: cuenta lo que pasa; «Ponen el resumen en…»: no es la orden.
+  const despues = inicio.slice(orden[0].length);
+  if (/^\s*(que|de|del)(?=[\s,.:;!?]|$)/.test(despues)) return false;
+  const tope = o.estricto ? PALABRAS_HASTA_EL_OBJETO_AL_CONTESTAR + 2 : PALABRAS_HASTA_EL_OBJETO;
+  const cerca = ` ${despues.replace(/[¿?¡!]/g, " ").trim().split(/\s+/).slice(0, tope).join(" ")}`;
+  const pagina = PARTE_DE_LA_PAGINA.exec(cerca);
+  if (!pagina) return false;
+  // Gana lo que se nombra primero (segunda revisión del 25 nov): «Agrega una tarea para revisar el resumen» es una tarea;
+  // «Agrega un punto clave sobre las tareas» es la página.
+  const cuenta = NOMBRA_LA_CUENTA.exec(cerca);
+  return !cuenta || pagina.index < cuenta.index;
+}
+
+/**
+ * Lo de la cuenta que se nombra en un pedido (sin tildes): una tarea, un recordatorio, el siguiente paso, la guía o una nota.
+ * Con esto delante, una orden no es un cambio a la página aunque después la nombre (segunda revisión del 25 nov).
+ */
+const NOMBRA_LA_CUENTA =
+  /(^|\s)((un|una|el|la|los|las|esa|esta|otra|otro|mi|su|como|en|a|de|para)\s+)?(tareas?|recordatorios?|siguientes? pasos?|proximos? pasos?|guia|repreguntas?|notas?)(?=[\s,.:;!?]|$)/;
+
+/** ¿Nombra algo de la cuenta (una tarea, la guía, el siguiente paso, una nota)? Entonces no es un cambio seguro a la página. */
+export const nombraLaCuenta = (texto: string): boolean => NOMBRA_LA_CUENTA.test(` ${sinTildes(inicioDe(texto))}`);
+
+/**
  * Cómo se lee lo último que escribió la persona (Elías, 21 nov):
  *   - «contar»: SEGURO algo que cuenta: contesta una pregunta de Nexus, o arranca contando («Es importante…») sin
  *     preguntar nada. Aunque el modelo diga que es una consulta, no se responde.
@@ -357,8 +426,21 @@ export function esPedidoDeLaCuenta(texto: string, o: { estricto?: boolean } = {}
  * viernes», «¿y la de Juan?») puede seguir con el pedido: lo decide el modelo, salvo lo que arranca contando o es otro
  * pedido seguro.
  */
-export type ComoSeLee = "pregunta" | "contar" | "duda" | "cortesia" | "pedido";
-export function comoSeLee(m: readonly MensajeDeLaConversacion[], o: { contar?: boolean; preguntar?: boolean; pedir?: boolean } = {}): ComoSeLee {
+/*
+ * Desde el 25 nov (un solo contexto) también «cambio»: un cambio a la página de La escala. `escala`:
+ *   - «chip»: el chat se abrió desde «✨ Mejorar con IA» de La escala (el chip de una sección o de la página). Lo que no es
+ *     un pedido de la cuenta, un «gracias» ni una pregunta es un cambio a esa parte; una pregunta que empieza con una orden
+ *     («¿Me lo acortas?», «¿Puedes cambiar la cifra?») también. «¿Qué información tienes sobre el problema principal?» se
+ *     responde (Elías, 25 nov: antes contestaba «Nexus no propone cambios»).
+ *   - «pagina»: sin chip, pero hay una página de La escala que cambiar (el Resumen armado). Un cambio SEGURO
+ *     (`pideUnCambioALaPagina`: «Cambia el titular…») va a la página; lo dudoso lo decide el modelo, que puede devolver
+ *     `{"tipo":"cambio"}`.
+ */
+export type ComoSeLee = "pregunta" | "contar" | "duda" | "cortesia" | "pedido" | "cambio";
+export function comoSeLee(
+  m: readonly MensajeDeLaConversacion[],
+  o: { contar?: boolean; preguntar?: boolean; pedir?: boolean; escala?: "chip" | "pagina" | null } = {},
+): ComoSeLee {
   if (o.contar) return "contar";
   if (o.preguntar) return "pregunta";
   if (o.pedir) return "pedido";
@@ -368,7 +450,25 @@ export function comoSeLee(m: readonly MensajeDeLaConversacion[], o: { contar?: b
   // Un pedido seguro gana aunque Nexus le haya preguntado algo de lo que contaba: «Crea una tarea para revisarlo» no
   // contesta «¿De qué período?» (revisión del 24 nov: iba a la nota y no había botón para decir «hazlo»).
   const contesta = !!antes && antes.de === "nexus" && !antes.es;
+  // Una orden sobre una parte de la página que se nombra gana sobre un pedido de la cuenta (revisión del 25 nov: «Agrega un
+  // punto clave sobre las tareas manuales» o «Cambia el diagnóstico de rendimiento» se iban a la cuenta).
+  if (o.escala && pideUnCambioALaPagina(ultimo.texto, { estricto: contesta && o.escala === "pagina" })) return "cambio";
   if (esPedidoDeLaCuenta(ultimo.texto, { estricto: contesta })) return "pedido";
+  if (o.escala === "chip") {
+    // Con el chip de La escala: lo que se escribe es un cambio a esa parte, salvo un «gracias» o una pregunta de verdad.
+    if (esCortesia(ultimo.texto)) return "cortesia";
+    // Lo que nombra la cuenta («Ponlo en la guía», «Agrégalo como tarea») no es seguro un cambio: lo decide el modelo.
+    if (nombraLaCuenta(ultimo.texto)) return "duda";
+    if (empiezaConUnCambio(ultimo.texto)) return "cambio";
+    return pareceUnaPregunta(ultimo.texto) ? "pregunta" : "cambio";
+  }
+  // Sigue con lo que Nexus le propuso a la página (revisión del 25 nov: «Simplifícalo» se leía como una pregunta y gastaba
+  // una de las preguntas del día): una orden es un cambio; lo demás lo decide el modelo, que puede decir «cambio».
+  if (o.escala === "pagina" && antes?.de === "nexus" && antes.es === "escala") {
+    if (esCortesia(ultimo.texto)) return "cortesia";
+    if (empiezaConUnCambio(ultimo.texto) && !nombraLaCuenta(ultimo.texto)) return "cambio";
+    return "duda";
+  }
   // Contesta lo que Nexus le preguntó («¿De qué período?» → «¿Mensual, creo?»): eso es contar. Si en vez de contestar
   // preguntó otra cosa, la salida es «¿Era una pregunta?».
   if (antes && antes.de === "nexus" && !antes.es) return "contar";
@@ -473,14 +573,18 @@ function bloqueDeLaConversacion(m: readonly MensajeDeLaConversacion[]): string {
             ? "PERSONA (agradeció)"
             : x.es === "pedido"
               ? "PERSONA (pidió algo de la cuenta)"
-              : "PERSONA"
+              : x.es === "cambio"
+                ? "PERSONA (pidió un cambio a la página de La escala)"
+                : "PERSONA"
       : x.es === "respuesta"
         ? "NEXUS (respondió)"
         : x.es === "cortesia"
           ? "NEXUS (contestó)"
           : x.es === "lista"
             ? "NEXUS (sobre la cuenta)"
-            : "NEXUS";
+            : x.es === "escala"
+              ? "NEXUS (propuso cambios a La escala)"
+              : "NEXUS";
   return m.map((x) => `${quien(x)}: ${x.texto}`).join("\n\n");
 }
 
@@ -489,7 +593,7 @@ function bloqueDeLaConversacion(m: readonly MensajeDeLaConversacion[]): string {
  * nombre de quien escribe, a propósito: con él, el modelo armaba preguntas sobre esa persona («¿qué dijo Elías…?»).
  * Quién y cuándo los pone el servidor en la nota.
  */
-export function pedidoDelTurno(ctx: ContextoParaNexus, m: readonly MensajeDeLaConversacion[], lectura: Exclude<ComoSeLee, "pregunta" | "cortesia" | "pedido">): Anthropic.Messages.MessageCreateParamsNonStreaming {
+export function pedidoDelTurno(ctx: ContextoParaNexus, m: readonly MensajeDeLaConversacion[], lectura: Exclude<ComoSeLee, "pregunta" | "cortesia" | "pedido" | "cambio">): Anthropic.Messages.MessageCreateParamsNonStreaming {
   const pregunta = puedePreguntar(m);
   const texto = [
     `Estás en ${ctx.donde}. La empresa: ${ctx.empresa}. Te escribe alguien del equipo de Smarteam.`,
@@ -498,8 +602,12 @@ export function pedidoDelTurno(ctx: ContextoParaNexus, m: readonly MensajeDeLaCo
     `=== LA CONVERSACIÓN ===\n${bloqueDeLaConversacion(m)}`,
     pregunta ? "" : "YA NO PREGUNTES: responde «listo» con lo que tengas.",
     lectura === "duda"
-      ? "LO ÚLTIMO QUE ESCRIBIÓ PUEDE SER ALGO QUE CUENTA, UNA PREGUNTA O UN PEDIDO: decídelo mirando la conversación. Si te pregunta algo sobre la cuenta (o sigue con lo que le respondiste), devuelve {\"tipo\":\"consulta\"}; si te pide hacer algo en la cuenta (o sigue con la lista que Nexus le propuso), devuelve {\"tipo\":\"pedido\"}; si te cuenta algo, sigue como siempre."
-      : "LO ÚLTIMO QUE ESCRIBIÓ NO ES UNA PREGUNTA NI UN PEDIDO: te está contando algo. No devuelvas «consulta» ni «pedido».",
+      ? `LO ÚLTIMO QUE ESCRIBIÓ PUEDE SER ALGO QUE CUENTA, UNA PREGUNTA O UN PEDIDO: decídelo mirando la conversación. Si te pregunta algo sobre la cuenta (o sigue con lo que le respondiste), devuelve {"tipo":"consulta"}; si te pide hacer algo en la cuenta (una tarea, el siguiente paso, la guía; o sigue con la lista que Nexus le propuso), devuelve {"tipo":"pedido"};${
+          ctx.conLaEscala
+            ? ' si te pide cambiar algo de la página de La escala que ve el cliente (el título, el texto de arriba, el problema principal, los puntos clave, el recorrido, un equipo, una cifra; o sigue con los cambios que Nexus le propuso a esa página), devuelve {"tipo":"cambio"};'
+            : ""
+        } si te cuenta algo, sigue como siempre.`
+      : "LO ÚLTIMO QUE ESCRIBIÓ NO ES UNA PREGUNTA NI UN PEDIDO: te está contando algo. No devuelvas «consulta», «pedido» ni «cambio».",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -599,6 +707,10 @@ export function leerElTurno(respuesta: Pick<Anthropic.Messages.Message, "content
   if (crudo.tipo === "pedido") {
     // Igual que una consulta: solo si lo último PUEDE ser un pedido, y con las palabras de la persona.
     return o.laPregunta ? { tipo: "pedido", pedido: o.laPregunta.slice(0, TOPES.largoDelMensaje) } : LISTO_SIN_CAMBIOS;
+  }
+  if (crudo.tipo === "cambio") {
+    // Un cambio a la página de La escala (25 nov): igual, solo si lo último PUEDE serlo, con las palabras de la persona.
+    return o.laPregunta ? { tipo: "cambio", pedido: o.laPregunta.slice(0, TOPES.largoDelMensaje) } : LISTO_SIN_CAMBIOS;
   }
 
   if (crudo.tipo === "pregunta") {

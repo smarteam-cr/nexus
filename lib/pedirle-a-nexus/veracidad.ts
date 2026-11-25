@@ -197,6 +197,11 @@ export function revisarLaPropuesta(o: {
   pagina?: readonly PiezaDelDocumento[];
   propuesto: readonly PropuestoCrudo[];
   pedido: string;
+  /**
+   * Lo que la PERSONA dijo antes del pedido en la conversación del chat «Nexus» (25 nov, un solo contexto): sus cifras valen
+   * como las del pedido («son 900, no 620» … «ponla»). Solo para las cifras: lo interno se mide contra el pedido de ahora.
+   */
+  dichoAntes?: string;
   /** Lo que sabe Nexus de la empresa que SÍ puede ir al cliente (lo que se le dio al modelo). */
   delCliente: readonly string[];
   /** Lo que Nexus tiene de la cuenta entero (las notas del equipo y su memoria, también lo que no pasa el corte). */
@@ -208,7 +213,7 @@ export function revisarLaPropuesta(o: {
   const deLaPagina = new Map((o.pagina ?? o.piezas).map((p) => [p.clave, p]));
   // Lo que ve el cliente: una cifra que el sistema le esconde (su cita no la sostiene) no vale para otra pieza.
   const pagina = (o.pagina ?? o.piezas).filter((p) => !p.noLaVeElCliente).map((p) => p.valor ?? "").join("\n");
-  const permitidas = new Set([...cifrasDe(o.pedido), ...cifrasDe(pagina), ...o.delCliente.flatMap(cifrasDe)]);
+  const permitidas = new Set([...cifrasDe(o.pedido), ...cifrasDe(o.dichoAntes ?? ""), ...cifrasDe(pagina), ...o.delCliente.flatMap(cifrasDe)]);
   const deLaCuenta = o.interno.join("\n");
   const loQueSePuede = frases([pagina, ...o.delCliente].join("\n"));
   const deLoInterno = new Set([...frases(deLaCuenta)].filter((f) => !loQueSePuede.has(f)));
@@ -225,7 +230,7 @@ export function revisarLaPropuesta(o: {
     const descartar = (motivo: string) => descartados.push({ clave: pieza ? x.clave : null, nombre: pieza?.nombre ?? null, texto: despues ?? "(quitarla)", motivo });
     if (!pieza) {
       const deOtra = deLaPagina.get(x.clave);
-      if (deOtra) descartados.push({ clave: x.clave, nombre: deOtra.nombre, texto: despues ?? "(quitarla)", motivo: "Es de otra sección: pídelo desde esa sección o desde toda la página." });
+      if (deOtra) descartados.push({ clave: x.clave, nombre: deOtra.nombre, texto: despues ?? "(quitarla)", motivo: "Es de otra sección: quita la sección del chip (su ✕) y pídelo sobre toda la página, o pídelo desde esa sección." });
       else descartar("Esa parte no es de esta página.");
       continue;
     }

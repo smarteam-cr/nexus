@@ -41,6 +41,13 @@
  * RESPONDER CON NEXUS (24 nov, «Para completar el diagnóstico» de La escala): la misma conversación, con la pregunta como
  * chip («Ventas · Datos: ¿…?»). Lo primero que escribe la persona sale con «Sobre Ventas · Datos (…): » adelante
  * (`prefijoDeLaRespuesta`): Nexus sabe qué se responde, y con «Guardar» la nota lo lleva. Después el chip se va.
+ * UN SOLO CONTEXTO (25 nov, Elías probando TEC · AE): «✨ Mejorar con IA» de La escala ya no abre otro chat (era
+ * PedirleANexus, un pedido y una propuesta, que no respondía preguntas y borraba el pedido anterior del hilo). Abre ESTA
+ * conversación con la parte como chip: el chip solo dice a qué parte va un cambio; se puede preguntar de la cuenta y
+ * conversar igual, y desde «Nexus» de arriba también se pide un cambio a la página (va al Resumen). La propuesta va en el
+ * hilo (./PropuestaDeLaEscala.tsx) y lo hecho con cada cambio queda en la conversación guardada. PedirleANexus queda solo
+ * para La escala de la cuenta, donde no hay conversación. Lo que Nexus contesta con el cajón cerrado no sale como aviso: el
+ * botón «Nexus» lleva un punto rojo hasta que se abre.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert } from "@/components/ui";
@@ -70,7 +77,17 @@ import type { ConversacionGuardada } from "@/lib/chat-de-nexus/guardada";
 import { useLienzo } from "./contexto";
 import { CORRIENDO_LA_ESCALA, useRehacerLaEscala } from "./rehacer-la-escala";
 import PedirleANexus from "./PedirleANexus";
-import { avisarQueNexusCambioLaEscala, EVENTO_ABRIR_NEXUS, type GuiaEnElCajon, type LugarDeLaEscalaEnElCajon, type PedidoDeAbrirNexus } from "@/lib/exploraciones/abrir-nexus";
+import PropuestaDeLaEscala, { type ErrorAlAplicar, type HechoEnLaEscala } from "./PropuestaDeLaEscala";
+import {
+  avisarQueNexusCambioLaEscala,
+  EVENTO_ABRIR_NEXUS,
+  marcarNexusSinLeer,
+  type GuiaEnElCajon,
+  type LugarDeLaEscalaEnElCajon,
+  type PedidoDeAbrirNexus,
+} from "@/lib/exploraciones/abrir-nexus";
+import type { EscalaEnLaConversacion, EstadoEnLaEscala } from "@/lib/chat-de-nexus/escala-en-la-conversacion";
+import type { EstadoDelCambio as EstadoDelCambioEnLaEscala } from "@/lib/pedirle-a-nexus/recordado";
 import { prefijoDeLaRespuesta, type PreguntaParaResponder } from "@/lib/exploraciones/completar-el-diagnostico";
 
 /** Lo que responde …/nexus/guardado (los tipos del servidor, sin importarlo). */
@@ -104,6 +121,24 @@ interface Listo {
 }
 
 const urlDeLaConversacion = (id: string) => `/api/sales/exploraciones/${id}/nexus/conversacion`;
+
+/**
+ * Anota en el servidor lo que se hizo con los cambios de una propuesta a La escala de la conversación (25 nov). Si no
+ * llega, se pierde solo eso: la página ya cambió.
+ */
+function anotarLaEscala(exploracionId: string, conversacion: string, vuelta: string, estadosDeLaEscala: Record<string, EstadoDelCambioEnLaEscala>) {
+  void fetch(urlDeLaConversacion(exploracionId), { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversacion, vuelta, estadosDeLaEscala }) }).catch(() => {});
+}
+
+/** Los estados de una propuesta a La escala con los nuevos: «pendiente» (después de «Deshacer») sale de la lista. */
+function conLosEstados(antes: Record<string, EstadoEnLaEscala>, nuevos: Record<string, EstadoDelCambioEnLaEscala>): Record<string, EstadoEnLaEscala> {
+  const r: Record<string, EstadoEnLaEscala> = { ...antes };
+  for (const [k, v] of Object.entries(nuevos)) {
+    if (v === "pendiente") delete r[k];
+    else r[k] = v;
+  }
+  return r;
+}
 
 /** Anota en el servidor lo que pasó con la conversación. Si no llega, se pierde solo eso: la tarjeta ya cambió. */
 function anotar(exploracionId: string, cuerpo: { conversacion: string; estados: Record<string, "aplicado" | "descartado"> } | { conversacion: string; cerrar: true }) {
@@ -460,6 +495,18 @@ const VACIO_DE_LA_GUIA = {
   cierre: "Lo que propone queda en una lista que apruebas. Para contar o preguntar algo del cliente, quita el chip de la guía con su ✕.",
 } as const;
 
+/**
+ * El chat vacío abierto desde «✨ Mejorar con IA» de La escala (25 nov, un solo contexto): se pide un cambio a esa parte o se
+ * pregunta de la cuenta, en la misma conversación.
+ */
+const vacioDeLaEscala = (e: LugarDeLaEscalaEnElCajon) => ({
+  intro: `Pídele un cambio a ${e.foco ? `«${e.foco}»` : `la página «${e.nombre}»`} de La escala, o pregúntale lo que sabe de la cuenta. Por ejemplo:`,
+  ejemplos: ["Enfócalo más en el reto principal de Ventas.", "¿Qué se dijo de esto en las reuniones?"],
+  cierre: `Cada cambio te lo muestra con el antes y el después: tú lo aplicas, y nada se publica solo. El chip solo dice a qué parte va un cambio; ${
+    e.foco ? `con su ✕ pides sobre toda la página «${e.nombre}».` : "con su ✕ lo quitas, y lo que pidas cambiar va al Resumen."
+  }`,
+});
+
 /** El chat vacío abierto desde «Responder con Nexus» (24 nov): la pregunta entera, y adónde va lo que se responde. */
 const vacioDeLaRespuesta = (p: PreguntaParaResponder) => ({
   intro: `${p.equipo} · ${p.dimension}: ${p.pregunta}`,
@@ -499,11 +546,15 @@ export default function HablarConNexus() {
   const [aviso, setAviso] = useState<EstadoDelAviso>("abierto");
   // Cada «Nexus» o «✨ Mejorar con IA» lleva el cursor a la caja, aunque el chat ya estuviera abierto.
   const [pedidoDeFoco, setPedidoDeFoco] = useState(0);
+  // Hay conversación: la preventa, para quien la puede cambiar (en la escala de la cuenta no hay; la exploración de un
+  // proyecto tampoco). Una sola regla: la usan el cajón y la cuenta regresiva de La escala.
+  const activo = lugar === "preventa" && puedeEditar;
   // Si la cuenta regresiva de La escala está en pantalla AHORA: al dejar la conversación, solo esa no vuelve a correr.
   const cuentaALaVista = useRef(false);
   const seVeLaCuenta = seVeLaCuentaDeLaEscala({
     chatAbierto: abierto,
-    enLaConversacion: !escala,
+    // Con el chip de La escala la conversación sigue a la vista en la preventa (25 nov); en la cuenta no hay conversación.
+    enLaConversacion: activo || !escala,
     notaGuardada: !!listo?.clave,
     revision: guardado ? { cambia: guardado.impacto.cambia, fallo: !!guardado.fallo } : null,
     aviso,
@@ -513,11 +564,23 @@ export default function HablarConNexus() {
   }, [seVeLaCuenta]);
   // La conversación vive acá y no en el cajón: cerrarlo no la borra.
   const [conversacion, setConversacion] = useState<ConversacionEnPantalla>(conversacionNueva);
+  /** Lo último aplicado de cada propuesta a La escala de la conversación, con su «Deshacer» (por vuelta; no va a la base). */
+  const [hechosDeLaEscala, setHechosDeLaEscala] = useState<Record<string, HechoEnLaEscala>>({});
+  /** Mientras se aplica (o se deshace) un cambio a La escala, la caja espera. */
+  const [aplicandoLaEscala, setAplicandoLaEscala] = useState(false);
+  /** Lo que salió mal al aplicar cada propuesta (por vuelta): sobrevive a cerrar el cajón (revisión del 25 nov). */
+  const [erroresDeLaEscala, setErroresDeLaEscala] = useState<Record<string, ErrorAlAplicar>>({});
+  // Si el cajón está abierto AHORA: una respuesta que llega con el cajón cerrado marca el botón «Nexus» (25 nov).
+  const abiertoAhora = useRef(abierto);
+  useEffect(() => {
+    abiertoAhora.current = abierto;
+    // Abrirlo es haberlo visto: el punto del botón se va.
+    if (abierto) marcarNexusSinLeer(exp.id, false);
+  }, [abierto, exp.id]);
   // La nota de la conversación que se ve: una revisión que vuelve tarde (ya se empezó otra) no la pisa.
   const viva = useRef<string | null>(null);
   // Si la persona ya empezó a escribir, la conversación guardada que llega tarde no la pisa.
   const tocada = useRef(false);
-  const activo = lugar === "preventa" && puedeEditar;
 
   // Al volver a la preventa: la última conversación de quien mira, con lo propuesto y lo que hizo con cada cambio.
   useEffect(() => {
@@ -560,8 +623,9 @@ export default function HablarConNexus() {
         // Desde La escala no se vuelve a la guía al quitar ese chip: la conversación queda sin chip.
         setGuia(null);
         setPregunta(null);
-        // Pasar al pedido de La escala deja la conversación: la cuenta regresiva que estaba a la vista no vuelve a correr.
-        setAviso((a) => avisoAlDejarLaConversacion(a, cuentaALaVista.current));
+        // En la escala de la cuenta (sin conversación) se pasa al pedido de un paso: la cuenta regresiva que estaba a la
+        // vista no vuelve a correr. En la preventa es la MISMA conversación (25 nov): no se deja nada.
+        if (!activo) setAviso((a) => avisoAlDejarLaConversacion(a, cuentaALaVista.current));
         setEscala(p.escala);
         setAbierto(true);
         // Con el chat ya abierto, el cursor va igual a la caja (otra sección de La escala).
@@ -587,6 +651,8 @@ export default function HablarConNexus() {
   const llenaAlEmpezar = llena && !listo && !conversacion.mensajes.length;
   /** La guía como chip (24 nov): solo con el permiso del chat de la cuenta, que es el que la cambia. */
   const conLaGuia = !!guia && conAsistente;
+  /** Con un chip de pedido (la guía o La escala) no se cuenta nada: las notas llenas no apagan la caja. */
+  const conChipDePedido = conLaGuia || !!escala;
 
   const revisar = async (conversacion: string, clave: string) => {
     const sinRevision: Guardado = { hechos: { estado: "apagados" }, impacto: { cambia: false, aviso: "" }, fallo: true };
@@ -679,12 +745,17 @@ export default function HablarConNexus() {
     setAviso((a) => avisoAlDejarLaConversacion(a, cuentaALaVista.current));
   };
 
-  // La misma cara que todos los chats (components/asistente/CajonDeNexus.tsx, 24 nov): con el lugar de La escala, el pedido de
-  // un cambio; sin él, la conversación. ⛔ La conversación queda MONTADA (escondida) mientras se ve el pedido: pasar a La
-  // escala y volver no pierde lo que se estaba mandando ni lo escrito en la caja (segunda revisión del 24 nov).
+  /** Lo aplicado a La escala se guarda por su propia ruta: el lienzo y la página de La escala se ponen al día. */
+  const alCambiarLaEscala = () => {
+    void recargar();
+    avisarQueNexusCambioLaEscala();
+  };
+
+  // La misma cara que todos los chats (components/asistente/CajonDeNexus.tsx, 24 nov). En la preventa, UNA conversación (25
+  // nov): La escala va como chip de la conversación. En la escala de la cuenta, sin conversación, el pedido de un paso.
   return (
     <>
-      {escala && (
+      {escala && !activo && (
         <PedirleANexus
           key={escala.lugar.pagina === "resumen" ? "resumen" : escala.lugar.areaId}
           abierto={abierto}
@@ -694,35 +765,34 @@ export default function HablarConNexus() {
           lugarNombre={escala.nombre}
           foco={escala.foco}
           onQuitarFoco={() => setEscala({ ...escala, foco: null })}
-          // Quitar la página vuelve a la conversación; en la escala de la cuenta no hay conversación a la que volver.
-          onQuitarLugar={activo ? () => setEscala(null) : undefined}
           ancho={ancho}
           onAncho={alternarAncho}
           pedidoDeFoco={pedidoDeFoco}
-          alCambiar={() => {
-            // Lo aplicado se guarda por su propia ruta: el lienzo y la página de La escala se ponen al día.
-            void recargar();
-            avisarQueNexusCambioLaEscala();
-          }}
+          alCambiar={alCambiarLaEscala}
         />
       )}
       {activo && (
         <PanelDeNexus
-          abierto={abierto && !escala}
+          abierto={abierto}
           onClose={cerrar}
+          // Siempre a la vista y entera (como en el pedido a La escala hasta el 25 nov): nada se guarda, aplica ni publica solo.
+          // «tú aplicas» no: la cuenta regresiva de La escala rehace el borrador si nadie la cancela (revisión del 25 nov).
+          garantia="Nexus propone; nada se publica solo."
           subtitulo={conAsistente ? "Preventa · cuéntale, pregúntale o pídele lo del cliente" : "Preventa · cuéntale o pregúntale lo del cliente"}
           ancho={ancho}
           onAncho={alternarAncho}
           pedidoDeFoco={pedidoDeFoco}
           // Sin el enlace «Tareas, siguiente paso o la guía» (Elías, 24 nov: «Quitarlo»): se pide en la misma caja, y el chat
           // vacío lo muestra con un ejemplo.
-          vacio={pregunta ? vacioDeLaRespuesta(pregunta) : conLaGuia ? VACIO_DE_LA_GUIA : conAsistente ? VACIO_CON_PEDIDOS : VACIO_DE_LA_PREVENTA}
+          vacio={pregunta ? vacioDeLaRespuesta(pregunta) : escala ? vacioDeLaEscala(escala) : conLaGuia ? VACIO_DE_LA_GUIA : conAsistente ? VACIO_CON_PEDIDOS : VACIO_DE_LA_PREVENTA}
           // Lleno, solo al empezar: a media conversación el aviso va junto al «Guardar» y la conversación sigue a la vista.
-          // Con la guía como chip no se cuenta nada (se le piden cambios a la guía): las notas llenas no apagan la caja.
+          // Con la guía o La escala como chip no se cuenta nada (se le piden cambios): las notas llenas no apagan la caja.
           aviso={
-            llenaAlEmpezar && !conLaGuia ? <Alert variant="warning">«Lo que sabes del cliente» ya tiene {MAX_LO_QUE_SABES} notas: quita una en la Preparación antes de contar otra.</Alert> : null
+            llenaAlEmpezar && !conChipDePedido ? <Alert variant="warning">«Lo que sabes del cliente» ya tiene {MAX_LO_QUE_SABES} notas: quita una en la Preparación antes de contar otra.</Alert> : null
           }
-          apagado={llenaAlEmpezar && !conLaGuia ? "«Lo que sabes del cliente» está lleno: quita una nota en la Preparación." : null}
+          apagado={
+            aplicandoLaEscala ? "Nexus está aplicando los cambios a La escala…" : llenaAlEmpezar && !conChipDePedido ? "«Lo que sabes del cliente» está lleno: quita una nota en la Preparación." : null
+          }
           urlDelTurno={`/api/sales/exploraciones/${exp.id}/nexus`}
           // Una sola conversación (24 nov): con el permiso del chat de la cuenta, tareas, siguiente paso y la guía se piden
           // en este mismo hilo; al aplicar, el lienzo vuelve a leer la guía y la página lo demás.
@@ -731,6 +801,57 @@ export default function HablarConNexus() {
           {...(guia && conLaGuia
             ? { lugar: "guia" as const, chip: { texto: `Sobre ${guia.etiqueta}`, alQuitar: () => setGuia(null) }, sugerencias: guia.sugerencias }
             : {})}
+          // «✨ Mejorar con IA» de La escala (25 nov): la parte como chip; solo dice a qué parte va un cambio. Su ✕ pide sobre
+          // toda la página; la de la página vuelve a la conversación sin chip.
+          {...(escala
+            ? {
+                chip: {
+                  texto: escala.foco ? `Sobre «${escala.foco}» · ${escala.nombre}` : `Sobre la página «${escala.nombre}» de La escala`,
+                  alQuitar: () => setEscala(escala.foco ? { ...escala, foco: null } : null),
+                  quitarLabel: escala.foco ? `Pedir sobre toda la página «${escala.nombre}»` : "Quitar el chip: lo que pidas cambiar va al Resumen",
+                },
+              }
+            : {})}
+          escala={escala ? { lugar: escala.lugar, foco: escala.foco } : null}
+          pintarLaEscala={(e: EscalaEnLaConversacion, cambiarLaPropuesta, ocupado) => (
+            <PropuestaDeLaEscala
+              exploracionId={exp.id}
+              lugar={e.lugar}
+              propuesta={e.propuesta}
+              estados={e.estados}
+              ponerEstados={(x) => {
+                cambiarLaPropuesta((a) => ({ ...a, estados: conLosEstados(a.estados, x) }));
+                anotarLaEscala(exp.id, conversacion.id, e.id, x);
+              }}
+              hecho={hechosDeLaEscala[e.id] ?? null}
+              ponerHecho={(h) =>
+                setHechosDeLaEscala((m) => {
+                  const n = { ...m };
+                  if (h) n[e.id] = h;
+                  else delete n[e.id];
+                  return n;
+                })
+              }
+              alCambiarLaPagina={alCambiarLaEscala}
+              alOcupado={setAplicandoLaEscala}
+              aplicandoAfuera={aplicandoLaEscala}
+              error={erroresDeLaEscala[e.id] ?? null}
+              ponerError={(x) =>
+                setErroresDeLaEscala((m) => {
+                  const n = { ...m };
+                  if (x) n[e.id] = x;
+                  else delete n[e.id];
+                  return n;
+                })
+              }
+              apagada={ocupado}
+            />
+          )}
+          ocupadoAfuera={aplicandoLaEscala}
+          alResponder={() => {
+            // Con el cajón cerrado, en vez de un aviso flotante, el punto rojo del botón «Nexus» (25 nov).
+            if (!abiertoAhora.current) marcarNexusSinLeer(exp.id, true);
+          }}
           // «Responder con Nexus» (24 nov): la pregunta como chip; lo próximo que escribe la persona la lleva adelante.
           {...(pregunta
             ? {

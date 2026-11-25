@@ -33,7 +33,7 @@ import { _olvidarElGastoDeNexus } from "@/lib/ai/tope-de-nexus-server";
 import { leerContenido } from "./esquemas";
 import type { ResumenGuardado } from "./resumen-de-la-escala";
 import { aplicarCambios, escalaParaExplorar } from "./servidor";
-import { aplicarEnLaEscala, deshacerEnLaEscala, leerLaEscalaParaNexus, proponerEnLaEscala } from "./escala-con-nexus-server";
+import { AGENTE_DE_PEDIRLE, antesDePedirleALaEscala, aplicarEnLaEscala, deshacerEnLaEscala, leerLaEscalaParaNexus, proponerEnLaEscala } from "./escala-con-nexus-server";
 import { historialDelResumen, huellaDelResumen } from "./versiones-del-resumen-server";
 import { historialDelArea } from "./versiones-del-area-server";
 import { guardarLaMejoraDeLosCasos } from "./versiones-del-caso-server";
@@ -149,11 +149,27 @@ describe("Pedirle a Nexus en La escala, en la base", () => {
     const { lectura } = await laTesis(d);
     const lugar = lectura.piezas.find((p) => p.agregar && p.seccion === "Puntos clave");
     expect(lugar, "el lugar para agregar un punto clave").toBeTruthy();
-    const r = await aplicarEnLaEscala(QUIEN, { ...d, lugar: RESUMEN_LUGAR, cambios: [{ clave: lugar!.clave, antes: null, despues: "El WhatsApp no deja registro" }] });
+    // Un punto nuevo va entero (25 nov): solo el título no se aplica, y no escribe nada.
+    const soloElTitulo = await aplicarEnLaEscala(QUIEN, { ...d, lugar: RESUMEN_LUGAR, cambios: [{ clave: lugar!.clave, antes: null, despues: "El WhatsApp no deja registro" }] });
+    expect(soloElTitulo).toMatchObject({ ok: false, status: 400 });
+    expect((await contenido(d.exploracionId)).c.resumenDeLaEscala?.puntos ?? []).toEqual([]);
+    const r = await aplicarEnLaEscala(QUIEN, {
+      ...d,
+      lugar: RESUMEN_LUGAR,
+      cambios: [{ clave: lugar!.clave, antes: null, despues: "Título: El WhatsApp no deja registro\nQué pasa: Los pedidos que entran por WhatsApp no quedan en ningún lado." }],
+    });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const puntos = (await contenido(d.exploracionId)).c.resumenDeLaEscala?.puntos ?? [];
-    expect(puntos.map((p) => [p.titulo, p.mano])).toEqual([["El WhatsApp no deja registro", true]]);
+    expect(puntos.map((p) => [p.titulo, p.texto, p.mano])).toEqual([["El WhatsApp no deja registro", "Los pedidos que entran por WhatsApp no quedan en ningún lado.", true]]);
+    // Aplicarlo otra vez no lo duplica (segunda revisión del 25 nov): ya hay uno igual.
+    const otraVez = await aplicarEnLaEscala(QUIEN, {
+      ...d,
+      lugar: RESUMEN_LUGAR,
+      cambios: [{ clave: lugar!.clave, antes: null, despues: "Título: El WhatsApp no deja registro\nQué pasa: Otra vez." }],
+    });
+    expect(otraVez).toMatchObject({ ok: false, status: 409 });
+    expect((await contenido(d.exploracionId)).c.resumenDeLaEscala?.puntos ?? []).toHaveLength(1);
 
     expect((await deshacerEnLaEscala(QUIEN, { ...d, lugar: RESUMEN_LUGAR, ...r.deshacer! })).ok).toBe(true);
     expect((await contenido(d.exploracionId)).c.resumenDeLaEscala?.puntos ?? []).toEqual([]);
@@ -161,12 +177,24 @@ describe("Pedirle a Nexus en La escala, en la base", () => {
     // Un paso nuevo del recorrido (la revisión del 23 nov: deshacerlo fallaba siempre).
     const { lectura: otra } = await laTesis(d);
     const paso = otra.piezas.find((p) => p.agregar && p.seccion === "Tu operación")!;
-    const conPaso = await aplicarEnLaEscala(QUIEN, { ...d, lugar: RESUMEN_LUGAR, cambios: [{ clave: paso.clave, antes: null, despues: "Facturación" }] });
+    const conPaso = await aplicarEnLaEscala(QUIEN, { ...d, lugar: RESUMEN_LUGAR, cambios: [{ clave: paso.clave, antes: null, despues: "Paso: Facturación\nQué pasa: La factura se arma a mano en Excel." }] });
     expect(conPaso.ok).toBe(true);
     if (!conPaso.ok) return;
-    expect((await contenido(d.exploracionId)).c.resumenDeLaEscala?.recorrido?.map((e) => e.nombre)).toEqual(["Facturación"]);
+    expect((await contenido(d.exploracionId)).c.resumenDeLaEscala?.recorrido?.map((e) => [e.nombre, e.texto, e.friccion])).toEqual([["Facturación", "La factura se arma a mano en Excel.", null]]);
     expect((await deshacerEnLaEscala(QUIEN, { ...d, lugar: RESUMEN_LUGAR, ...conPaso.deshacer! })).ok).toBe(true);
     expect((await contenido(d.exploracionId)).c.resumenDeLaEscala?.recorrido ?? []).toEqual([]);
+  });
+
+  it("antes de pedirle a La escala desde la conversación: el tope del día contado en la base y el largo (25 nov)", async () => {
+    const d = await sembrar();
+    expect(await antesDePedirleALaEscala(QUIEN.email, "Acóplalo a Fundatec")).toEqual({ ok: true });
+    expect(await antesDePedirleALaEscala(QUIEN.email, "x".repeat(1201))).toMatchObject({ ok: false, status: 400 });
+    await prisma.agentRun.createMany({ data: Array.from({ length: 19 }, () => ({ agentSlug: AGENTE_DE_PEDIRLE, clientId: d.clientId, status: "DONE" as const, triggeredByEmail: QUIEN.email })) });
+    expect(await antesDePedirleALaEscala(QUIEN.email)).toEqual({ ok: true });
+    await prisma.agentRun.create({ data: { agentSlug: AGENTE_DE_PEDIRLE, clientId: d.clientId, status: "DONE", triggeredByEmail: QUIEN.email } });
+    expect(await antesDePedirleALaEscala(QUIEN.email)).toMatchObject({ ok: false, status: 429 });
+    // Los de otra persona no cuentan.
+    expect(await antesDePedirleALaEscala("otra@prueba.test")).toEqual({ ok: true });
   });
 
   it("«Deshacer» choca si alguien cambió el Resumen después de Nexus, y no pisa", async () => {

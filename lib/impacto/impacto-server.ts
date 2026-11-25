@@ -13,6 +13,7 @@ import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { OMITIDO_POR_EL_TOPE } from "@/lib/ai/tope-de-nexus";
 import { topeDeNexusHoy } from "@/lib/ai/tope-de-nexus-server";
 import { prisma } from "@/lib/db/prisma";
+import { PREFIJO_DEL_IMPACTO } from "@/lib/agents/corridas-del-chat";
 import { antesDeLlamar, leerElImpacto, pedidoDelImpacto, SIN_IMPACTO, type EntregableParaElImpacto, type ImpactoDeLaNota, type NotaDelEquipo } from "./impacto";
 
 export interface DondeCorre {
@@ -38,7 +39,8 @@ export async function evaluarElImpacto(nota: NotaDelEquipo, entregable: Entregab
       clientId: d.clientId,
       projectId: d.projectId,
       status: "RUNNING",
-      stepLabel: `¿La nota cambia ${entregable.nombre}?`,
+      // El rótulo dice que es del chat: el feed de corridas no avisa de ella (lib/agents/corridas-del-chat.ts).
+      stepLabel: `${PREFIJO_DEL_IMPACTO}${entregable.nombre}?`,
       triggeredByEmail: d.email,
       filters: { modo: "impacto-del-contexto", entregable: d.entregable, ...d.filtros } as Prisma.InputJsonValue,
     },
