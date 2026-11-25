@@ -155,6 +155,7 @@ import { memoriaDelProyecto } from "@/lib/memoria";
 import { proyectoDeContextoDeLaEmpresa } from "./escala-de-la-cuenta";
 import { partirDeLoQueYaSabemos, reunionesDeTrabajoDeLaPreventa } from "./posicionar";
 import { fuentesParaPosicionar, type LoQueLeePosicionar } from "./posicionar-fuentes";
+import { MAX_LO_QUE_SABES } from "./lo-que-sabes";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { loConfirmadoParaLosCasos } from "./lo-que-confirmo-el-equipo-server";
 import {
@@ -211,6 +212,10 @@ interface LoQueLeyoLaCorrida {
    * sin hechos): se borra el anterior, que quedaría mostrándose como válido. undefined = falló o no se pidió: queda el anterior.
    */
   posicionamiento?: PosicionamientoDelProspecto | null;
+  /** «Ubicar»: las claves de las notas del equipo que leyó (25 nov). Va a la corrida (`CorridaDelAgente.notas`). */
+  notas?: string[];
+  /** «Ubicar»: cuándo las leyó (al empezar). Va a la corrida (`CorridaDelAgente.notasEn`). */
+  notasEn?: string;
   /** «Ubicar con las reuniones»: la tarjeta de cada dimensión. undefined = no trajo ninguna: queda la anterior. */
   tarjetasDeLaEscala?: TarjetasDeLaEscala;
 }
@@ -695,10 +700,12 @@ async function posicionarLaEscala(
     if (r.tarjetas) tarjetas = r.tarjetas;
   }
   await fase(runId, "Guardando lo propuesto…");
+  /* `notas` (25 nov): qué notas del equipo leyó y cuándo (la fila que leyó: lo guardado hasta ahí entró). Una nota nueva, o
+     editada después, avisa que hay que volver a ubicar. */
   const propuestos = await guardar(
     exploracionId,
     items,
-    { leyo: leido.fuentes.map((f) => f.etiqueta), leidas: { sesiones: [], hubspot: [], documentos: [] }, foto: null, ...(tarjetas ? { tarjetasDeLaEscala: tarjetas } : {}) },
+    { leyo: leido.fuentes.map((f) => f.etiqueta), leidas: { sesiones: [], hubspot: [], documentos: [] }, foto: null, notas: leido.notasLeidas, notasEn: fila.updatedAt.toISOString(), ...(tarjetas ? { tarjetasDeLaEscala: tarjetas } : {}) },
     { runId, modo: "posicionar", automatica: false },
   );
   await prisma.agentRun.update({
@@ -769,6 +776,8 @@ export async function loQueLeeUbicar(
     // Un prospecto: solo sus sesiones. Un cliente: sus sesiones primero (si hay) y la base de la empresa en resumen.
     ...(transcripciones && (conSesiones || !conLoQueYaSabemos) ? { reuniones: transcripciones } : {}),
     ...(conLoQueYaSabemos ? { conLaBase: true, fuera: estado.contenido.fuera } : {}),
+    // Lo que sabe el equipo (25 nov, Elías: «Puede fijar el nivel»): las notas de «Lo que sabes del cliente», N1, N2…
+    notas: { notas: estado.contenido.notas, autores: estado.contenido.autoresDeLasNotas, exploracionId },
   });
   const objetivo =
     opts.objetivo ??
@@ -1987,6 +1996,7 @@ async function guardar(
           leyo: leido.leyo.map((f) => f.slice(0, 200)).slice(0, 40),
           alimento: [...new Set(nuevas.map((it) => claveDelDestino(it.destino)))].slice(0, 120),
           automatica: corrida.automatica,
+          ...(leido.notas ? { notas: leido.notas.slice(0, MAX_LO_QUE_SABES), ...(leido.notasEn ? { notasEn: leido.notasEn } : {}) } : {}),
         },
       ].slice(-50),
     };

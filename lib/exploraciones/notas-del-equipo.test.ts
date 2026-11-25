@@ -8,7 +8,30 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { aplicarOperaciones, contenidoVacio, propuestaVacia, type EstadoDeExploracion, type Validez } from "./contenido";
 import { leerContenido, VALIDADOR_ESTRICTO } from "./esquemas";
-import { notasComoFuentes, quienLaEscribio, reunionesDeVerdad } from "./notas-del-equipo";
+import type Anthropic from "@anthropic-ai/sdk";
+import type { Letra } from "@/lib/escala/documento/tipos";
+import { areaDeLaCita, leerLaRespuesta, pedidoDePosicionar, REGLA_DE_LAS_NOTAS_EN_UBICAR, type ContextoDelPedido } from "./agente-pedido";
+import { prefijoDeLaRespuesta } from "./completar-el-diagnostico";
+import { esFuenteDelCliente, esHipotesisDeNivel, fusionarPropuestas, idDelItem, propuestaVigente, type ItemPropuesto } from "./contenido";
+import { ESCALA_DE_PRUEBA, estadoDePrueba } from "./escala-de-prueba.test-helpers";
+import { leerPropuesta } from "./esquemas";
+import { diaConAnio, diaCorto } from "./fechas";
+import type { Fuente } from "./fuentes-tipos";
+import { LARGO_ENTERO } from "./lo-que-sabes";
+import {
+  bloqueDeLasNotas,
+  esNotaEnUbicar,
+  GANA_LA_NOTA,
+  MAX_NOTAS_EN_UBICAR,
+  nivelesDeUnaNota,
+  nivelesSugeridosEnPalabras,
+  notasComoFuentes,
+  notasParaUbicar,
+  notasQueLeeUbicar,
+  quienLaEscribio,
+  reunionesDeVerdad,
+  ROTULO_DE_LA_NOTA,
+} from "./notas-del-equipo";
 import { citaVerificada, pedidoDelResumen, type ContextoDelResumen, type ReunionParaElResumen } from "./resumen-de-la-escala";
 import { piezasDeLaPagina, textoDeLasPiezas } from "./impacto-en-la-escala";
 
@@ -128,5 +151,235 @@ describe("los hitos de la escala se escriben en un solo lugar y nunca se reescri
     expect(quienEscribe.map((f) => f.replace(/\\/g, "/"))).toEqual(["lib/exploraciones/hitos-de-la-escala-server.ts"]);
     const s = readFileSync("lib/exploraciones/hitos-de-la-escala-server.ts", "utf8");
     expect(s).not.toMatch(/hitoDeLaEscala\.(update|upsert|delete)/);
+  });
+});
+
+// ── «Ubicar» lee las notas del equipo, y una nota puede fijar un nivel (25 nov, Elías: «Puede fijar el nivel») ─────
+
+/** Lo que devolvería Claude: un solo bloque con la herramienta. */
+function respuesta(input: Record<string, unknown>): Anthropic.Messages.Message {
+  return {
+    id: "msg_1",
+    type: "message",
+    role: "assistant",
+    model: "claude-sonnet-4-6",
+    content: [{ type: "tool_use", id: "tu_1", name: "proponer", input }],
+    stop_reason: "tool_use",
+    stop_sequence: null,
+    usage: { input_tokens: 1, output_tokens: 1 },
+  } as unknown as Anthropic.Messages.Message;
+}
+
+describe("las notas como fuentes de «Ubicar»", () => {
+  const nombreDe = (c: string) => (c === "liz@smarteamcr.com" ? "Liz Flores" : null);
+  const RESPUESTA = "Sobre Ventas · Datos (cómo registran hoy los contactos): Cada vendedor anota sus contactos en su propio Excel y nadie los sube al CRM.";
+
+  it("cada nota de «Lo que sabes» es una fuente N1, N2…, con su texto y «Nota del equipo · <persona>, <día>»", () => {
+    const r = notasParaUbicar(
+      { "sabido:mi0abcde123": RESPUESTA, "sabido:mi0abcdf999": "Pierden 40 mil al mes en cartera", "r1-test": "una nota de sesión no entra", "instrucciones:exploracion": "tampoco" },
+      { "sabido:mi0abcde123": { por: "liz@smarteamcr.com", en: "2026-11-25T15:00:00Z" } },
+      nombreDe,
+    );
+    expect(r.fuentes.map((f) => f.id)).toEqual(["N1", "N2"]);
+    expect(r.fuentes[0]).toEqual({
+      id: "N1",
+      etiqueta: `${ROTULO_DE_LA_NOTA} · Liz Flores, ${diaCorto("2026-11-25T15:00:00Z")}`,
+      // Para la IA, sin el nombre (revisión del 25 nov) y con el año, como las reuniones.
+      paraElAgente: `${ROTULO_DE_LA_NOTA}, ${diaConAnio("2026-11-25T15:00:00Z")}`,
+      texto: RESPUESTA,
+    });
+    // Sin autor: «Alguien del equipo», con el día de su clave.
+    expect(r.fuentes[1].etiqueta).toMatch(/^Nota del equipo · Alguien del equipo, \d+ \S+/);
+    expect(r.claves).toEqual(["sabido:mi0abcde123", "sabido:mi0abcdf999"]);
+    // Son de quien sabe, no del cliente, pero pueden respaldar un nivel (esFuenteDelCliente).
+    expect(r.fuentes.every((f) => esFuenteDelCliente(f.id) && esNotaEnUbicar(f.id))).toBe(true);
+    // La N0 de las notas de las sesiones (al leer una reunión) no es una nota de «Ubicar».
+    expect(esNotaEnUbicar("N0")).toBe(false);
+  });
+
+  it("lee las 12 más nuevas, cada una hasta su largo", () => {
+    const notas = Object.fromEntries(
+      Array.from({ length: 15 }, (_, i) => [`sabido:mi0a${String(i).padStart(4, "0")}xyz`, `Nota ${i} ${"x".repeat(i === 14 ? LARGO_ENTERO + 50 : 5)}`]),
+    );
+    const r = notasParaUbicar(notas, undefined, () => null);
+    expect(r.fuentes).toHaveLength(MAX_NOTAS_EN_UBICAR);
+    expect(r.claves[0]).toBe("sabido:mi0a0003xyz");
+    expect(r.fuentes.at(-1)!.texto).toHaveLength(LARGO_ENTERO);
+    expect(notasQueLeeUbicar(notas).map((n) => n.clave)).toEqual(r.claves);
+  });
+
+  describe("el pedido", () => {
+    const nota = notasParaUbicar({ "sabido:mi0abcde123": RESPUESTA }, { "sabido:mi0abcde123": { por: "liz@smarteamcr.com", en: "2026-11-25T15:00:00Z" } }, nombreDe).fuentes;
+    const ctx = (fuentes: Fuente[]): ContextoDelPedido & { objetivo: string } => ({
+      modo: "leer",
+      marco: "venta",
+      empresa: "TEC · AE",
+      industria: null,
+      escala: ESCALA_DE_PRUEBA,
+      areas: [],
+      conHipotesis: true,
+      perfil: null,
+      contenido: estadoDePrueba().contenido,
+      fuentes,
+      hoy: "2026-11-25T18:00:00.000Z",
+      objetivo: "la preventa",
+    });
+    const REUNION = { id: "S1", etiqueta: "Reunión del 22 oct 2026: Reportes", texto: "La cliente contó que arman los reportes de matrícula a mano cada semana en Excel." };
+
+    it("con una nota, dice qué es, que puede fijar un nivel y que pesa como en el Resumen", () => {
+      const p = pedidoDePosicionar(ctx([...nota, REUNION]));
+      expect(String(p.system)).toContain(REGLA_DE_LAS_NOTAS_EN_UBICAR.trim());
+      expect(String(p.system)).toContain("una nota puede fijar un nivel igual que lo que dijo el cliente en una reunión");
+      // La misma regla de peso que el Resumen (una sola frase en el código).
+      expect(String(p.system)).toContain(GANA_LA_NOTA);
+      expect(bloqueDeLasNotas(notasComoFuentes({ "sabido:mi0abcde123": RESPUESTA }, undefined, () => null))).toContain(GANA_LA_NOTA);
+      // Las formas que describe salen del código: el rótulo y la de una respuesta del chat.
+      expect(String(p.system)).toContain(`«${ROTULO_DE_LA_NOTA}, <día>»`);
+      expect(String(p.system)).toContain(prefijoDeLaRespuesta({ equipo: "<equipo>", dimension: "<parte>", pregunta: "<la pregunta>" }));
+      const cuerpo = String((p.messages[0] as { content: string }).content);
+      expect(cuerpo).toContain(`=== FUENTE N1: ${ROTULO_DE_LA_NOTA}, ${diaConAnio("2026-11-25T15:00:00Z")} ===`);
+      // Va primero y aparte de las reuniones.
+      expect(cuerpo.indexOf("=== FUENTE N1")).toBeLessThan(cuerpo.indexOf("=== FUENTE S1"));
+    });
+
+    it("⛔ la IA no recibe el nombre de quien escribió la nota: no lo puede escribir en un porqué ni en una tarjeta", () => {
+      const p = pedidoDePosicionar(ctx([...nota, REUNION]));
+      expect(JSON.stringify(p)).not.toContain("Liz Flores");
+      // Adentro sí: el rótulo de la fuente lo lleva, y es el que guarda la sugerencia.
+      expect(nota[0].etiqueta).toContain("Liz Flores");
+    });
+
+    it("⛔ una respuesta sobre un equipo no fija el nivel de otra área; decide el renglón de la frase citada", () => {
+      const escala = {
+        ...ESCALA_DE_PRUEBA,
+        areas: [
+          ESCALA_DE_PRUEBA.areas[0],
+          { ...ESCALA_DE_PRUEBA.areas[0], id: "2", nombre: "Marketing", dimensiones: ESCALA_DE_PRUEBA.areas[0].dimensiones.map((d) => ({ ...d, id: d.id.replace(/^1\./, "2.") })) },
+        ],
+      };
+      const leer = (texto: string, cita: string) => {
+        const fuentes = notasParaUbicar({ "sabido:mi0abcde123": texto }, undefined, () => null).fuentes;
+        const citada = [{ id: "N1", cita }];
+        return leerLaRespuesta(
+          respuesta({ niveles: [{ dimensionId: "1.3", nivel: "D", porQue: "x", fuentes: citada }, { dimensionId: "2.3", nivel: "D", porQue: "x", fuentes: citada }], hipotesis: [], tarjetas: [] }),
+          { ...ctx(fuentes), escala },
+          "run_1",
+        ).items.map((it) => (it.destino as { dimensionId: string }).dimensionId);
+      };
+      const EXCEL = "Cada vendedor anota sus contactos en su propio Excel y nadie los sube al CRM";
+      const MAILCHIMP = "Marketing no usa HubSpot para sus correos, todo va por Mailchimp desde hace dos años";
+      // La respuesta de Ventas fija Ventas, no Marketing.
+      expect(leer(RESPUESTA, EXCEL)).toEqual(["1.3"]);
+      expect(areaDeLaCita(RESPUESTA, EXCEL, escala)).toBe("1");
+      // Una nota suelta (no responde una pregunta) puede hablar de cualquier área.
+      expect(leer(`${EXCEL}.`, EXCEL)).toEqual(["1.3", "2.3"]);
+      // Caso A (revisión): un renglón suelto de Marketing junto a una respuesta de Ventas no queda como de Ventas.
+      const mezcla = `${MAILCHIMP}.\n${RESPUESTA}`;
+      expect(leer(mezcla, MAILCHIMP)).toEqual(["1.3", "2.3"]);
+      // Caso B (revisión): una respuesta de Ventas y otra de Marketing en la misma nota; la de Ventas sigue siendo de Ventas.
+      const dos = `${RESPUESTA}\nSobre Marketing · Datos (de dónde vienen los contactos): ${MAILCHIMP}.`;
+      expect(leer(dos, EXCEL)).toEqual(["1.3"]);
+      expect(leer(dos, MAILCHIMP)).toEqual(["2.3"]);
+      // Un equipo que no es un área, o una frase que no está, no se sabe: no se descarta.
+      expect(areaDeLaCita(`Sobre Dirección · Datos: ${EXCEL}`, EXCEL, escala)).toBeNull();
+      expect(areaDeLaCita(RESPUESTA, "algo que la nota no dice en ninguna parte", escala)).toBeNull();
+    });
+
+    it("sin notas, el pedido es el de siempre", () => {
+      const p = pedidoDePosicionar(ctx([REUNION]));
+      expect(String(p.system)).not.toContain("notas del equipo (N1");
+      const tool = p.tools![0] as { input_schema: { properties: { niveles: { description: string } } } };
+      expect(tool.input_schema.properties.niveles.description).toContain("SOLO con una frase del cliente");
+    });
+
+    it("⛔ un nivel puede salir de una nota: su evidencia dice que es una nota del equipo, no una reunión", () => {
+      // La misma lectura que «Ubicar» (agente.ts › leerLaRespuestaDeUbicar: esta, solo con los niveles).
+      const r = leerLaRespuesta(
+        respuesta({
+          niveles: [
+            {
+              dimensionId: "1.1",
+              nivel: "D",
+              evidencia: "x",
+              porQue: "Según una nota del equipo, cada vendedor lleva sus contactos en su Excel.",
+              fuentes: [{ id: "N1", cita: "Cada vendedor anota sus contactos en su propio Excel y nadie los sube al CRM" }],
+            },
+            // Lo que la nota no dice no pasa.
+            { dimensionId: "1.2", nivel: "F", evidencia: "x", porQue: "x", fuentes: [{ id: "N1", cita: "tienen un proceso documentado y medido" }] },
+          ],
+          hipotesis: [],
+          tarjetas: [],
+        }),
+        ctx([...nota, REUNION]),
+        "run_1",
+      );
+      expect(r.items).toHaveLength(1);
+      const [it1] = r.items;
+      expect(it1.valor).toMatchObject({ nivel: "D", fuente: "vendedor", evidencia: "Cada vendedor anota sus contactos en su propio Excel y nadie los sube al CRM" });
+      // Es evidencia (no una hipótesis por explorar) y de dónde sale dice quién y cuándo, como nota del equipo.
+      expect(esHipotesisDeNivel(it1)).toBe(false);
+      expect(it1.fuentes[0].etiqueta).toBe(`${ROTULO_DE_LA_NOTA} · Liz Flores, ${diaCorto("2026-11-25T15:00:00Z")}`);
+      expect(it1.fuentes[0].etiqueta).not.toMatch(/^Reunión/);
+      expect(r.descartadas).toBe(1);
+    });
+  });
+
+  it("la franja de sugerencias no dice «lo que dijo el cliente» de un nivel que sale de una nota", () => {
+    const nivel = (id: string, cita: boolean) => ({ destino: { tipo: "nivel" as const, dimensionId: "1.1" }, fuentes: [{ id, etiqueta: "x", ...(cita ? { cita: "frase" } : {}) }] });
+    expect(nivelesDeUnaNota([nivel("N1", true), nivel("S1", true), nivel("N2", false), nivel("N0", true)])).toBe(1);
+    expect(nivelesSugeridosEnPalabras(2, 0)).toBe("2 niveles con lo que dijo el cliente");
+    expect(nivelesSugeridosEnPalabras(3, 1)).toBe("3 niveles con evidencia (1 de una nota del equipo)");
+    expect(nivelesSugeridosEnPalabras(1, 1)).toBe("1 nivel con evidencia (de una nota del equipo)");
+    expect(nivelesSugeridosEnPalabras(2, 2)).toBe("2 niveles con evidencia (todos de una nota del equipo)");
+    expect(nivelesSugeridosEnPalabras(0, 0)).toBe("");
+  });
+
+  describe("⛔ lo confirmado no se pisa y lo descartado no vuelve", () => {
+    const deUnaNota = (nivel: Letra): ItemPropuesto => {
+      const destino = { tipo: "nivel" as const, dimensionId: "1.1" };
+      const valor = { nivel, fuente: "vendedor" as const, evidencia: "Cada vendedor anota sus contactos en su propio Excel" };
+      return {
+        id: idDelItem(destino, valor),
+        destino,
+        valor,
+        fuentes: [{ id: "N1", etiqueta: "Nota del equipo · Liz Flores, 25 nov", cita: valor.evidencia }],
+        corridaId: "r",
+        en: "2026-11-25T18:00:00Z",
+      };
+    };
+
+    it("el mismo nivel que el confirmado no se propone; otro distinto queda como sugerencia y lo confirmado sigue igual", () => {
+      const confirmado = { "1.1": { nivel: "I" as Letra, fuente: "reunion" as const, evidencia: "Lo dijo en la sesión" } };
+      const e = estadoDePrueba(confirmado);
+      expect(propuestaVigente({ ...e, propuesta: fusionarPropuestas(e, [deUnaNota("I")]) })).toEqual([]);
+      const conOtro = { ...e, propuesta: fusionarPropuestas(e, [deUnaNota("D")]) };
+      expect(propuestaVigente(conOtro).map((it) => (it.valor as { nivel: string }).nivel)).toEqual(["D"]);
+      expect(conOtro.contenido.chequeo).toEqual(confirmado);
+    });
+
+    it("uno que alguien descartó no vuelve por una nota", () => {
+      const it1 = deUnaNota("D");
+      const e = estadoDePrueba({}, { contenido: { ...estadoDePrueba().contenido, descartadas: [it1.id] } });
+      expect(propuestaVigente({ ...e, propuesta: fusionarPropuestas(e, [it1]) })).toEqual([]);
+    });
+  });
+
+  it("el servidor de «Ubicar» las suma y la corrida guarda cuáles leyó", () => {
+    const agente = readFileSync("lib/exploraciones/agente.ts", "utf8");
+    expect(agente).toMatch(/notas: \{ notas: estado\.contenido\.notas, autores: estado\.contenido\.autoresDeLasNotas, exploracionId \}/);
+    expect(agente).toMatch(/notas: leido\.notasLeidas/);
+    const fuentes = readFileSync("lib/exploraciones/posicionar-fuentes.ts", "utf8");
+    expect(fuentes).toMatch(/const fuentes: Fuente\[\] = \[\.\.\.notas\.fuentes,/);
+    // Una nota no es una reunión: no va a las reuniones de la corrida.
+    expect(fuentes).toMatch(/return \{ fuentes, sesionesUsadas: reuniones\.sesiones, notasLeidas: notas\.claves \}/);
+  });
+
+  it("lo que leyó cada corrida se lee del Json; sin el campo, no leyó ninguna", () => {
+    const corrida = { id: "r1", modo: "posicionar", en: "2026-11-25T18:00:00Z", propuestos: 1, leyo: [], alimento: [], automatica: false };
+    const leida = leerPropuesta({ corridas: [{ ...corrida, notas: ["sabido:mi0abcde123", 7], notasEn: "2026-11-25T17:58:00Z" }] }).corridas[0];
+    expect(leida.notas).toEqual(["sabido:mi0abcde123"]);
+    expect(leida.notasEn).toBe("2026-11-25T17:58:00Z");
+    expect(leerPropuesta({ corridas: [{ ...corrida, notas: [], notasEn: "no es una fecha" }] }).corridas[0].notasEn).toBeUndefined();
+    expect(leerPropuesta({ corridas: [corrida] }).corridas[0].notas).toBeUndefined();
   });
 });

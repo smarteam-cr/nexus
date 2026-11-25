@@ -13,11 +13,26 @@ import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+/* «Ubicar» de punta a punta (25 nov): la IA simulada responde lo que haría con una nota y se guarda lo que pide cada corrida
+   (para mirar qué le llegó). Nada más en este archivo llama a la IA. */
+const ia = vi.hoisted(() => ({ pedidos: [] as unknown[], respuesta: null as unknown }));
+vi.mock("@/lib/anthropic", async (original) => ({
+  ...(await original<typeof import("@/lib/anthropic")>()),
+  getAnthropic: () => ({
+    messages: {
+      create: async (pedido: unknown) => {
+        ia.pedidos.push(pedido);
+        return ia.respuesta;
+      },
+    },
+  }),
+}));
 
 import { prisma } from "@/lib/db/prisma";
 import { leerArchivoDeLaEscala } from "@/lib/escala/documento/archivos";
 import { parsearEscala } from "@/lib/escala/documento/parsear";
-import { loQueLeeUbicar } from "./agente";
+import { AGENTE_DE_LA_EXPLORACION, lanzarCorrida, loQueLeeUbicar } from "./agente";
+import { leerPropuesta } from "./esquemas";
 import { escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila, leerExploracion } from "./servidor";
 
 const texto = leerArchivoDeLaEscala("escala");
@@ -172,6 +187,29 @@ describe("«Fuera de la exploración» y el análisis de venta — DB real", { t
     expect(r.leido.sesionesUsadas).toEqual(["ae-reportes"]);
   });
 
+  it("⛔ las notas del equipo entran como N1 con quién las escribió, no son una reunión, y no traen de vuelta lo sacado (25 nov)", async () => {
+    const s = await sembrar("CLIENTE");
+    await prisma.teamMember.create({ data: { name: "Liz Flores", email: "liz@smarteamcr.com" } });
+    const lectura = await leerExploracion(s.exploracionId);
+    if (lectura.estado !== "ok") throw new Error("sin exploración");
+    const { aplicarCambios } = await import("./servidor");
+    const nota = "Sobre Admisiones · Datos (cómo registran hoy a los aspirantes): la Limpieza BBDD quedó a medias; cada gestora lleva su Excel.";
+    const r0 = await aplicarCambios(s.exploracionId, lectura.fila.version, [{ op: "nota", paso: "sabido:mi0abcde123", texto: nota }], general, { quienPide: "liz@smarteamcr.com" });
+    expect(r0.estado).toBe("ok");
+    const r = await leer(s.exploracionId, { fuera: ["meet:ae-limpieza"] });
+    const n1 = r.leido.fuentes.find((f) => f.id === "N1");
+    expect(n1?.etiqueta).toMatch(/^Nota del equipo · Liz Flores, /);
+    expect(n1?.texto).toBe(nota);
+    // Va primero, y no es una reunión: ni en las reuniones de la corrida ni entre las que lee.
+    expect(r.leido.fuentes[0].id).toBe("N1");
+    expect(r.leido.notasLeidas).toEqual(["sabido:mi0abcde123"]);
+    expect(r.leido.sesionesUsadas).toEqual(["ae-reportes"]);
+    expect((r.ctx.reuniones ?? []).some((x) => x.fuente === "N1")).toBe(false);
+    // Aunque la nota nombre la reunión sacada, su resumen no vuelve.
+    expect(r.leido.fuentes.some((f) => f.etiqueta.includes("Limpieza BBDD"))).toBe(false);
+    expect(r.hayDelCliente).toBe(true);
+  });
+
   it("una reunión de trabajo de la preventa de un cliente no la toma el análisis de venta; una de diagnóstico, sí", async () => {
     const s = await sembrar("CLIENTE");
     const { aplicarCambios } = await import("./servidor");
@@ -258,5 +296,105 @@ describe("una reunión de trabajo no se lee como sesión — DB real", { timeout
     expect(sinLeer.map((x) => x.id)).not.toContain("ae-reportes");
     const leer1 = await lanzarCorrida(s.exploracionId, "leer", { triggeredByEmail: "cse@smarteamcr.com", sesionId: "ae-reportes" });
     expect(leer1).toMatchObject({ ok: false, status: 409 });
+  });
+});
+
+describe("«Ubicar» con una nota del equipo, de punta a punta — DB real, IA simulada (25 nov)", { timeout: 60_000 }, () => {
+  const RESPUESTA = "Sobre Ventas · Datos (cómo registran hoy a los aspirantes): Cada gestora lleva sus aspirantes en su propio Excel y nadie los sube al CRM.";
+
+  it("⛔ la nota fija un nivel rotulado como nota, la IA no recibe el nombre, la corrida guarda qué leyó y la otra ficha no entra", async () => {
+    const s = await sembrar("CLIENTE");
+    await prisma.teamMember.create({ data: { name: "Liz Flores", email: "liz@smarteamcr.com" } });
+    const { aplicarCambios } = await import("./servidor");
+    const nota = async (exploracionId: string, clave: string, texto: string) => {
+      const l = await leerExploracion(exploracionId);
+      if (l.estado !== "ok") throw new Error("sin exploración");
+      const r = await aplicarCambios(exploracionId, l.fila.version, [{ op: "nota", paso: clave, texto }], general, { quienPide: "liz@smarteamcr.com" });
+      expect(r.estado).toBe("ok");
+    };
+    await nota(s.exploracionId, "sabido:mi0abcde123", RESPUESTA);
+    // La preventa de la OTRA ficha (TAE) con su propia nota: nunca entra a la de AE (invariante #1).
+    const deTae = await prisma.exploracionDeVenta.create({ data: { clientId: s.taeId, creadaPor: "cse@smarteamcr.com" }, select: { id: true } });
+    await nota(deTae.id, "sabido:mi0abcde999", "Nota de TAE: lo de TAE nunca puede entrar a la preventa de AE.");
+
+    ia.pedidos.length = 0;
+    ia.respuesta = {
+      id: "msg_1",
+      type: "message",
+      role: "assistant",
+      model: "claude-sonnet-4-6",
+      content: [
+        {
+          type: "tool_use",
+          id: "tu_1",
+          name: "proponer",
+          input: {
+            niveles: [
+              {
+                dimensionId: "1.3",
+                nivel: "D",
+                evidencia: "Cada gestora lleva sus aspirantes en su propio Excel",
+                porQue: "Según una nota del equipo, los aspirantes viven en el Excel de cada gestora.",
+                fuentes: [{ id: "N1", cita: "Cada gestora lleva sus aspirantes en su propio Excel y nadie los sube al CRM" }],
+              },
+            ],
+            hipotesis: [],
+            tarjetas: [],
+          },
+        },
+      ],
+      stop_reason: "tool_use",
+      stop_sequence: null,
+      usage: { input_tokens: 1, output_tokens: 1 },
+    };
+    const lanzada = await lanzarCorrida(s.exploracionId, "posicionar", { triggeredByEmail: "liz@smarteamcr.com" });
+    expect(lanzada.ok).toBe(true);
+    let run = null as Awaited<ReturnType<typeof prisma.agentRun.findFirst>>;
+    for (let i = 0; i < 200 && (!run || run.status === "RUNNING"); i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      run = await prisma.agentRun.findFirst({ where: { clientId: s.aeId, agentSlug: AGENTE_DE_LA_EXPLORACION }, orderBy: { createdAt: "desc" } });
+    }
+    expect(run?.status, String(run?.output)).toBe("DONE");
+
+    // Lo que le llegó a la IA: la nota de AE, sin el nombre de quien la escribió, y nada de TAE.
+    expect(ia.pedidos).toHaveLength(1);
+    const pedido = JSON.stringify(ia.pedidos[0]);
+    expect(pedido).toContain("Cada gestora lleva sus aspirantes en su propio Excel");
+    /* La nota llega UNA vez, como fuente N1 y sin quién la escribió: la memoria de la cuenta (A0, «Lo que confirmó el
+       equipo») ya no la repite con su autor (revisión del 25 nov). El nombre queda solo en la lista del equipo de Smarteam,
+       que el pedido ya traía para no tomarlo como gente del cliente, sin nada que lo ate a la nota. */
+    const desde = pedido.indexOf("=== FUENTE N1");
+    const bloqueN1 = pedido.slice(desde, pedido.indexOf("=== FUENTE", desde + 5));
+    expect(bloqueN1).toMatch(/^=== FUENTE N1: Nota del equipo, \d+ \S+ \d{4} ===/);
+    expect(bloqueN1).toContain("Cada gestora lleva sus aspirantes en su propio Excel");
+    expect(bloqueN1).not.toContain("Liz");
+    expect(pedido.split("Cada gestora lleva sus aspirantes en su propio Excel").length - 1).toBe(1);
+    expect(pedido.split("Liz Flores").length - 1).toBe(1);
+    expect(pedido).toContain("Equipo de Smarteam (no son del cliente): Liz Flores");
+    expect(pedido).not.toContain("Nota de TAE");
+
+    const fila = await prisma.exploracionDeVenta.findUniqueOrThrow({ where: { id: s.exploracionId }, select: { propuesta: true, contenido: true } });
+    const propuesta = leerPropuesta(fila.propuesta);
+    // La corrida guarda qué notas leyó y desde cuándo (lo que decide si hay que volver a ubicar).
+    const corrida = propuesta.corridas.at(-1)!;
+    expect(corrida.modo).toBe("posicionar");
+    expect(corrida.notas).toEqual(["sabido:mi0abcde123"]);
+    expect(Date.parse(corrida.notasEn ?? "")).toBeLessThanOrEqual(Date.parse(corrida.en));
+    // El nivel sale de la nota: evidencia (fuente «vendedor»), y adentro dice que es una nota del equipo, con quién.
+    const nivel = propuesta.items.find((it) => it.destino.tipo === "nivel" && it.destino.dimensionId === "1.3");
+    expect(nivel?.valor).toMatchObject({ nivel: "D", fuente: "vendedor" });
+    expect(nivel?.fuentes[0].etiqueta).toMatch(/^Nota del equipo · Liz Flores, /);
+    // Una nota no es una reunión: no va a las reuniones de la corrida.
+    expect(run?.sourceSessionIds.some((id) => id.includes("sabido") || id.startsWith("nota:"))).toBe(false);
+    // Lo confirmado sigue igual: «Ubicar» solo propone.
+    expect((fila.contenido as { chequeo?: object }).chequeo ?? {}).toEqual({});
+    // Ya la leyó: la línea no la cuenta como pendiente y el aviso de arriba no pide volver a ubicar (con un Resumen de antes).
+    const { lasNotasNuevas } = await import("./completar-el-diagnostico");
+    const { leerContenido } = await import("./esquemas");
+    const contenido = leerContenido(fila.contenido);
+    const despues = lasNotasNuevas({ notas: contenido.notas, autores: contenido.autoresDeLasNotas, corridas: propuesta.corridas, resumenDesde: "2026-01-01T00:00:00.000Z", enLaPreventa: true });
+    expect(despues.sinUbicar.total).toBe(0);
+    expect(despues.delResumen.total).toBe(1);
+    expect(despues.ubicarPrimero).toBe(false);
   });
 });

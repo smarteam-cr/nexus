@@ -7,6 +7,8 @@ import "server-only";
  *   · lo que dijo o hizo el cliente — respalda un nivel (`esFuenteDelCliente`):
  *       T (el test) y H (su actividad en HubSpot), V0 (el handoff), Q0 (los cuestionarios) y S (las reuniones que ya se
  *       leyeron, en resumen: su minuta y sus notas, por el chokepoint; primero las que alguien unió a una sesión);
+ *   · lo que sabe el equipo — también respalda un nivel desde el 25 nov (Elías: «Puede fijar el nivel»): N1, N2… (las notas
+ *       de «Lo que sabes del cliente», con quién las escribió; notas-del-equipo.ts › `notasParaUbicar`);
  *   · lo que sirve para entender — nunca respalda un nivel:
  *       G (las ventas ganadas), B (las propuestas, con servicios y licencias aparte), J0 (las tareas abiertas, por la
  *       puerta de Tareas), R0 (el cronograma), A0 y A1 (la memoria de la cuenta y del proyecto, por el cargador de
@@ -26,6 +28,8 @@ import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { fuentesDeHubspotSinMarcar, reunionesEnResumen } from "./fuentes";
 import { fuentesDelProyecto } from "./fuentes-del-proyecto";
 import type { Fuente } from "./fuentes-tipos";
+import type { AutorDeLaNota } from "./contenido";
+import { notasParaUbicar, notasQueLeeUbicar } from "./notas-del-equipo";
 import { textoDeLaPropuesta, textoDeLasTareas, textoDeLasVentas, textoDelCronograma, type VentaParaElTexto } from "./posicionar";
 
 const seguro = <T,>(p: Promise<T>, vacio: T, que: string): Promise<T> =>
@@ -122,6 +126,20 @@ export interface LoQueLeePosicionar {
   fuentes: Fuente[];
   /** Las reuniones que leyó (en resumen): van a la corrida, no se marcan como leídas. */
   sesionesUsadas: string[];
+  /** Las claves de las notas del equipo que leyó (25 nov): van a la corrida (`CorridaDelAgente.notas`). */
+  notasLeidas: string[];
+}
+
+/**
+ * Los nombres de quienes escribieron las notas, por su correo (el equipo de Smarteam). La usan «Ubicar» y el Resumen
+ * (resumen-de-la-escala-server.ts): una sola búsqueda, el mismo nombre en los dos. Sin el nombre, «Alguien del equipo».
+ */
+export async function nombresDeLosAutores(autores: Readonly<Record<string, AutorDeLaNota>> | undefined): Promise<(correo: string) => string | null> {
+  const correos = [...new Set(Object.values(autores ?? {}).flatMap((a) => (a.por ? [a.por.toLowerCase()] : [])))];
+  if (!correos.length) return () => null;
+  const filas = await prisma.teamMember.findMany({ where: { email: { in: correos, mode: "insensitive" } }, select: { email: true, name: true } });
+  const nombres = new Map(filas.map((m) => [m.email.toLowerCase(), m.name.trim()]));
+  return (correo) => nombres.get(correo.toLowerCase()) || null;
 }
 
 /**
@@ -148,12 +166,31 @@ export async function fuentesParaPosicionar(o: {
   conLaBase?: boolean;
   /** Las claves (`meet:<id>`) que alguien sacó con «Fuera de la exploración»: la base en resumen no las vuelve a traer. */
   fuera?: readonly string[];
+  /**
+   * Las notas de la exploración (25 nov, Elías: «Puede fijar el nivel»): las de «Lo que sabes del cliente» van como
+   * fuentes `N1`, `N2`… (notas-del-equipo.ts › `notasParaUbicar`), primero y aparte de las reuniones.
+   */
+  notas?: { notas: Readonly<Record<string, string>>; autores?: Readonly<Record<string, AutorDeLaNota>>; exploracionId: string };
 }): Promise<LoQueLeePosicionar> {
   const real = o.projectId && !o.esContenedor ? o.projectId : null;
-  const [hubspot, delProyecto, cuenta, proyecto, ventas, propuestas, tareas, cronograma, reuniones] = await Promise.all([
+  const [notas, hubspot, delProyecto, cuenta, proyecto, ventas, propuestas, tareas, cronograma, reuniones] = await Promise.all([
+    o.notas && notasQueLeeUbicar(o.notas.notas).length
+      ? seguro(
+          nombresDeLosAutores(o.notas.autores).then((nombreDe) => notasParaUbicar(o.notas!.notas, o.notas!.autores, nombreDe)),
+          // Sin los nombres, igual se leen: «Alguien del equipo».
+          notasParaUbicar(o.notas.notas, o.notas.autores, () => null),
+          "quién escribió las notas",
+        )
+      : Promise.resolve({ fuentes: [] as Fuente[], claves: [] as string[] }),
     seguro(fuentesDeHubspotSinMarcar({ clientId: o.clientId, companyId: o.companyId, escala: o.escala }), [] as Fuente[], "HubSpot"),
     real ? seguro(fuentesDelProyecto(real, o.clientId, { conMemoria: false }), [] as Fuente[], "el proyecto") : Promise.resolve([] as Fuente[]),
-    seguro(memoriaDeLaCuenta(o.clientId, { lector: "escala", projectId: real }).then((m) => m.texto), "", "la memoria de la cuenta"),
+    /* Con las notas de la exploración como fuentes N, la memoria no las repite (con su autor y con «no respaldan un nivel»):
+       en «Lo que confirmó el equipo» quedan las de las otras preventas de la empresa (revisión del 25 nov). */
+    seguro(
+      memoriaDeLaCuenta(o.clientId, { lector: "escala", projectId: real, sinNotasDeLaPreventa: o.notas?.exploracionId ?? null }).then((m) => m.texto),
+      "",
+      "la memoria de la cuenta",
+    ),
     real ? seguro(memoriaDelProyecto(real, { lector: "escala" }).then((m) => m.texto), "", "la memoria del proyecto") : Promise.resolve(""),
     seguro(ventasDeLaEmpresa(o.clientId), [] as VentaParaElTexto[], "las ventas"),
     seguro(propuestasDeLaEmpresa(o.clientId), [] as string[], "las propuestas"),
@@ -176,7 +213,8 @@ export async function fuentesParaPosicionar(o: {
   ]);
 
   const f = FUENTES_DE_POSICIONAR;
-  const fuentes: Fuente[] = [...delProyecto, ...reuniones.fuentes, ...hubspot];
+  // Lo que sabe el equipo va primero (pesa más que una reunión si chocan), y aparte: no es una reunión.
+  const fuentes: Fuente[] = [...notas.fuentes, ...delProyecto, ...reuniones.fuentes, ...hubspot];
   const textoVentas = textoDeLasVentas(ventas, o.ventaId);
   if (textoVentas) fuentes.push({ id: `${f.ventas}1`, etiqueta: "Las ventas ganadas (lo que compró; no dice cómo lo usa)", texto: textoVentas });
   propuestas
@@ -187,5 +225,5 @@ export async function fuentesParaPosicionar(o: {
   if (cronograma) fuentes.push({ id: f.cronograma, etiqueta: "El cronograma del proyecto (implementarlo no es que ya funcione)", texto: cronograma.slice(0, 4_000) });
   if (cuenta.trim()) fuentes.push({ id: f.memoriaDeLaCuenta, etiqueta: "Lo que Nexus ya sabe de la cuenta (lo escribió Smarteam; no lo dijo el cliente)", texto: cuenta.slice(0, 8_000) });
   if (proyecto.trim()) fuentes.push({ id: f.memoriaDelProyecto, etiqueta: "Lo que Nexus ya sabe del proyecto (lo escribió Smarteam; no lo dijo el cliente)", texto: proyecto.slice(0, 8_000) });
-  return { fuentes, sesionesUsadas: reuniones.sesiones };
+  return { fuentes, sesionesUsadas: reuniones.sesiones, notasLeidas: notas.claves };
 }

@@ -70,11 +70,11 @@ import { esHipotesisDeNivel, type DestinoDePropuesta, type ItemPropuesto } from 
 import type { AreaDelLienzo, DimensionDelLienzo, EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { fraseDelFreno, ordenParaExplorar, partesParaExplorar } from "@/lib/exploraciones/equipos-de-la-escala";
 import { abrirNexusEnLaPreventa } from "@/lib/exploraciones/abrir-nexus";
-import { respuestaDe } from "@/lib/exploraciones/completar-el-diagnostico";
+import { lasNotasNuevas, respuestaDe, ultimaUbicacion } from "@/lib/exploraciones/completar-el-diagnostico";
+import { nivelesDeUnaNota, nivelesSugeridosEnPalabras } from "@/lib/exploraciones/notas-del-equipo";
 import { diaCorto } from "@/lib/exploraciones/fechas";
 import { chequeoDelMapa, cuentaDelArea, fraseDeLaCuenta, loQueLaFrena, type PosicionEnElMapa } from "@/lib/exploraciones/mapa";
 import { cortadasQueSeLeenEnteras, lineaDeLaEscala, marcasQueCambiaron } from "@/lib/exploraciones/linea-de-la-escala";
-import { partirDeLoQueYaSabemos } from "@/lib/exploraciones/posicionar";
 import AccesoALaEscala from "./AccesoALaEscala";
 import PublicarLaEscala from "./PublicarLaEscala";
 import ListaQueSeAnima from "./ListaQueSeAnima";
@@ -87,8 +87,8 @@ import { BotonUsarTodas, FilaSugerida } from "./Propuestas";
 import PreparacionParaEngagement from "./PreparacionParaEngagement";
 import { QueVaPrimero } from "./QueVaPrimero";
 import { useAreasDeLaEscala } from "./useAreasDeLaEscala";
-import { useCorrida } from "./useCorrida";
 import { useSesiones } from "./useSesiones";
+import { useUbicarLaEscala } from "./useUbicarLaEscala";
 import { ConTarjetas, PreguntaParaLlevar, useLlevarALaSesion, type DimensionDeLaTarjeta } from "./TarjetaDelRadar";
 import { DetalleDeDimension } from "./DetalleDeLaDimension";
 import PaginaDeLaEscala from "./PaginaDeLaEscala";
@@ -155,18 +155,13 @@ function AreaFuera({ area, onSumar }: { area: AreaDelLienzo; onSumar: () => void
  * Desde la noche del 24 nov (Elías con TEC · AE) va DEBAJO de la página, no arriba: arriba quedan «Publicado…» y «Acceso».
  */
 function LineaDeLaUbicacion() {
-  const { exp, puedeEditar, proyectosDeLaEmpresa } = useLienzo();
+  const { exp, puedeEditar } = useLienzo();
   const { pestanas } = useSesiones();
-  const { corrida, corriendo, lanzando, lanzar } = useCorrida();
-  const ultima = [...exp.estado.propuesta.corridas].reverse().find((c) => c.modo === "posicionar");
   /* La preventa de un cliente (24 nov) parte de lo que ya sabemos: el botón lo dice mientras no haya sesiones de
-     diagnóstico, y se elige el proyecto que se lee como contexto (su handoff, cuestionarios y cronograma). */
-  const conLoQueYaSabemos = !exp.projectId && partirDeLoQueYaSabemos(exp.empresa.kind);
-  // De `useLienzo` y no de `exp`: la respuesta de un cambio no trae la lista (revisión del 24 nov).
-  const proyectos = conLoQueYaSabemos ? proyectosDeLaEmpresa : [];
-  const [proyectoId, setProyectoId] = useState<string | null | undefined>(undefined);
-  // Sugerido: el proyecto activo más nuevo de la empresa (el primero de la lista).
-  const contexto = proyectoId === undefined ? (proyectos[0]?.id ?? null) : proyectoId;
+     diagnóstico, y se elige el proyecto que se lee como contexto. La elección la comparte el aviso de arriba del Resumen
+     (25 nov, `useUbicarLaEscala`): los dos botones lanzan el mismo pedido. */
+  const { conLoQueYaSabemos, proyectos, contexto, elegir, ubicar, corriendo, lanzando, ubicando } = useUbicarLaEscala();
+  const ultima = ultimaUbicacion(exp.estado.propuesta.corridas);
   const reunionesDeLaLinea = pestanas.flatMap((p) => (p.reunion && !p.noSeHizo ? [{ ...p.reunion, ...(conLoQueYaSabemos && p.sesion?.deLoQueYaSabemos ? { deTrabajo: true as const } : {}) }] : []));
   const linea = lineaDeLaEscala({
     reuniones: reunionesDeLaLinea,
@@ -176,10 +171,18 @@ function LineaDeLaUbicacion() {
     // Las reuniones largas que ese Resumen leyó cortadas (24 nov): rehacerlo las lee enteras.
     cortadas: cortadasQueSeLeenEnteras(exp.estado.contenido.resumenDeLaEscala),
     // Otro trabajo del agente (leer una reunión, la guía) no ubica la escala: la frase no cambia, solo el botón espera.
-    ubicando: corriendo && corrida?.modo === "posicionar",
+    ubicando,
     conLoQueYaSabemos,
     // D4: si cambió la clase de una reunión después de armar el Resumen, «Lo que hicimos» dice la cuenta de antes.
     marcasCambiadas: marcasQueCambiaron(exp.estado.contenido.resumenDeLaEscala?.hicimos.sesiones, reunionesDeLaLinea),
+    // Las notas del equipo que «Ubicar» no leyó la última vez (25 nov): una nota puede fijar un nivel.
+    notasSinUbicar: lasNotasNuevas({
+      notas: exp.estado.contenido.notas,
+      autores: exp.estado.contenido.autoresDeLasNotas,
+      corridas: exp.estado.propuesta.corridas,
+      resumenDesde: null,
+      enLaPreventa: true,
+    }).sinUbicar,
   });
   return (
     <div role="status" aria-label="Cómo se ubicó la escala" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-secondary">
@@ -193,7 +196,7 @@ function LineaDeLaUbicacion() {
             valor={contexto ?? SIN_PROYECTO}
             disabled={corriendo || lanzando}
             opciones={[...proyectos.map((x) => ({ value: x.id, label: x.nombre })), { value: SIN_PROYECTO, label: "Sin un proyecto", hint: "Solo las reuniones y la memoria" }]}
-            onElegir={(v) => setProyectoId(v === SIN_PROYECTO ? null : v)}
+            onElegir={(v) => elegir(v === SIN_PROYECTO ? null : v)}
           />
         </span>
       )}
@@ -207,10 +210,10 @@ function LineaDeLaUbicacion() {
             corriendo && linea.estado !== "ubicando"
               ? "Nexus está trabajando en esta preventa: cuando termine, puedes ubicar la escala."
               : conLoQueYaSabemos
-                ? "El agente lee las sesiones (primero las de diagnóstico) y lo que ya sabemos de la empresa: sus reuniones con Smarteam en resumen, la memoria y el proyecto que elijas. Ubica Ventas, Marketing y Servicio: lo que dijo el cliente con su cita, y lo demás como hipótesis por explorar. Nada se confirma solo."
-                : "El agente lee las transcripciones de las sesiones y ubica Ventas, Marketing y Servicio: lo que dijo el cliente con su cita, y lo demás como hipótesis por explorar. Nada se confirma solo."
+                ? "El agente lee las sesiones (primero las de diagnóstico) y lo que ya sabemos de la empresa: sus reuniones con Smarteam en resumen, la memoria, el proyecto que elijas y las notas del equipo. Ubica Ventas, Marketing y Servicio: lo que dijo el cliente o una nota del equipo, con su cita, y lo demás como hipótesis por explorar. Nada se confirma solo."
+                : "El agente lee las transcripciones de las sesiones y las notas del equipo, y ubica Ventas, Marketing y Servicio: lo que dijo el cliente o una nota del equipo, con su cita, y lo demás como hipótesis por explorar. Nada se confirma solo."
           }
-          onClick={() => void lanzar("posicionar", conLoQueYaSabemos ? { proyectoDeContexto: contexto } : {})}
+          onClick={() => void ubicar()}
         >
           {linea.boton.etiqueta}
         </Button>
@@ -243,9 +246,11 @@ function SugerenciasDeLaEscala() {
   const todas = [...conEvidencia, ...porExplorar];
   if (!todas.length) return null;
   const niveles = conEvidencia.filter((it) => it.destino.tipo === "nivel").length;
+  // Desde el 25 nov un nivel puede salir de una nota del equipo: la franja no dice «lo que dijo el cliente» de esos.
+  const deUnaNota = nivelesDeUnaNota(conEvidencia);
   const otras = conEvidencia.length - niveles;
   const partes = [
-    niveles ? `${niveles} ${niveles === 1 ? "nivel" : "niveles"} con lo que dijo el cliente` : null,
+    niveles ? nivelesSugeridosEnPalabras(niveles, deUnaNota) : null,
     porExplorar.length ? `${porExplorar.length} por explorar` : null,
     otras ? `${otras} ${otras === 1 ? "cambio" : "cambios"} más (áreas, qué explorar, con qué se mide)` : null,
   ].filter((x): x is string => !!x);

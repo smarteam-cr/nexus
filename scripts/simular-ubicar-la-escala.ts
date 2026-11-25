@@ -12,6 +12,9 @@
  *     de trabajo (lo que ya sabemos), como «Reuniones de trabajo sugeridas».
  *   - Con --como-prospecto: como si la ficha fuera un prospecto (lo de antes del 24 nov: solo las sesiones, sin la base).
  *   - Con --reuniones: las reuniones de la empresa con texto, por el chokepoint, con cuánto habló el cliente en cada una.
+ *   - Con --nota "<texto>" (25 nov): suma una nota de «Lo que sabes del cliente», solo en memoria, como la que deja
+ *     «Responder con Nexus» («Sobre Admisiones · Datos (…): …»). Se puede repetir. `--nota-de <correo>`: quién la
+ *     escribió (sin él, «Alguien del equipo»). `--sin-notas`: sin ninguna nota, ni las guardadas (lo de antes del 25 nov).
  *
  *   npx tsx scripts/simular-ubicar-la-escala.ts --exploracion cmvil2i8v04rt06pg12clzis4 --llamar
  */
@@ -74,6 +77,23 @@ async function main() {
     ];
     console.log(`  + ${deLaEmpresa.length} sesiones sumadas solo en memoria`);
   }
+  // Las notas del equipo (25 nov): las guardadas, las de --nota en memoria, o ninguna con --sin-notas.
+  const notasNuevas = process.argv.flatMap((x, i) => (x === "--nota" && process.argv[i + 1] ? [process.argv[i + 1]] : []));
+  if (process.argv.includes("--sin-notas")) {
+    estado.contenido.notas = Object.fromEntries(Object.entries(estado.contenido.notas).filter(([k]) => !k.startsWith("sabido:")));
+    console.log("  − sin las notas del equipo (como antes del 25 nov)");
+  }
+  if (notasNuevas.length) {
+    const { claveNuevaDeLoQueSabes } = await import("@/lib/exploraciones/lo-que-sabes");
+    const por = arg("--nota-de") ?? null;
+    const ahora = Date.now();
+    notasNuevas.forEach((texto, i) => {
+      const clave = claveNuevaDeLoQueSabes(ahora + i);
+      estado.contenido.notas = { ...estado.contenido.notas, [clave]: texto };
+      estado.contenido.autoresDeLasNotas = { ...(estado.contenido.autoresDeLasNotas ?? {}), [clave]: { por, en: new Date(ahora + i).toISOString() } };
+    });
+    console.log(`  + ${notasNuevas.length === 1 ? "1 nota del equipo sumada" : `${notasNuevas.length} notas del equipo sumadas`} solo en memoria`);
+  }
   const escala = escalaDeLaExploracion(escalaVig.general, estado);
 
   const t0 = Date.now();
@@ -99,7 +119,9 @@ async function main() {
     const v = valor(it.valor);
     const x = nombre(it.destino.dimensionId);
     const cita = it.fuentes.map((f) => `${f.id}${f.cita ? ` «${f.cita.slice(0, 200)}»` : ""}`).join(" · ");
-    const linea = `${it.destino.dimensionId} ${x?.d.nombre ?? ""} → ${v.nivel}${v.fuente === "hipotesis" ? " (por explorar)" : ""}${NL}        ${cita}${NL}        porque: ${(v.porQue ?? "").slice(0, 220)}`;
+    // Lo que se ve adentro en «de dónde sale» (25 nov): el rótulo de la fuente con cita; una nota dice «Nota del equipo · …».
+    const deDonde = it.fuentes.find((f) => f.cita)?.etiqueta ?? it.fuentes.map((f) => f.etiqueta).join(" · ");
+    const linea = `${it.destino.dimensionId} ${x?.d.nombre ?? ""} → ${v.nivel}${v.fuente === "hipotesis" ? " (por explorar)" : ` (fuente: ${v.fuente})`}${NL}        ${cita}${NL}        de dónde sale: ${deDonde.slice(0, 120)}${NL}        porque: ${(v.porQue ?? "").slice(0, 220)}`;
     porArea.set(x?.a.nombre ?? "?", [...(porArea.get(x?.a.nombre ?? "?") ?? []), linea]);
   }
   for (const [area, lineas] of porArea) {
@@ -107,7 +129,14 @@ async function main() {
     for (const l of lineas) console.log(`    ${l}`);
   }
   const conCita = r.items.filter((it) => it.destino.tipo === "nivel" && valor(it.valor).fuente !== "hipotesis").length;
-  console.log(`${NL}  ${conCita} niveles con cita · ${r.items.length - conCita} por explorar · ${r.descartadas} descartados · ${r.tarjetas ? Object.keys(r.tarjetas.porDimension).length : 0} tarjetas`);
+  const deUnaNota = r.items.filter((it) => it.destino.tipo === "nivel" && valor(it.valor).fuente !== "hipotesis" && it.fuentes.some((f) => f.cita && /^N[1-9]/.test(f.id))).length;
+  console.log(`${NL}  ${conCita} niveles con cita (${deUnaNota} de una nota del equipo) · ${r.items.length - conCita} por explorar · ${r.descartadas} descartados · ${r.tarjetas ? Object.keys(r.tarjetas.porDimension).length : 0} tarjetas`);
+  // Lo confirmado no se pisa (25 nov): cómo quedaría lo propuesto contra lo que ya está, con la misma regla que al guardar.
+  const { fusionarPropuestas, propuestaVigente } = await import("@/lib/exploraciones/contenido");
+  const fusion = fusionarPropuestas(estado, r.items);
+  const vigentes = propuestaVigente({ ...estado, propuesta: fusion }).filter((it) => it.destino.tipo === "nivel");
+  const confirmados = Object.keys(estado.contenido.chequeo).length;
+  console.log(`  al guardar: ${vigentes.length} niveles sugeridos vigentes · ${confirmados} confirmados (no se tocan) · ${estado.contenido.descartadas.length} descartados (no vuelven)`);
 }
 
 /** Las reuniones de la empresa con texto (por el chokepoint) y cuánto habló el cliente en cada una. */

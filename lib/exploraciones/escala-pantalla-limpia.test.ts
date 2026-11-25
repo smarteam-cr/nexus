@@ -78,12 +78,16 @@ describe("2 · arriba, una sola línea", () => {
 
   it("la línea de arriba sale del cálculo puro, con el botón de siempre («posicionar»)", () => {
     expect(paso).toContain("lineaDeLaEscala({");
-    // Desde el 24 nov, en la preventa de un cliente, con el proyecto de contexto («Ubicar con lo que ya sabemos»).
-    expect(paso).toContain('lanzar("posicionar", conLoQueYaSabemos ? { proyectoDeContexto: contexto } : {})');
+    /* Desde el 24 nov, en la preventa de un cliente, con el proyecto de contexto («Ubicar con lo que ya sabemos»). Desde el
+       25 nov el pedido vive en `useUbicarLaEscala`: lo comparten la línea y el aviso de arriba del Resumen. */
+    const ubicar = fs.readFileSync(path.join(process.cwd(), "components", "exploraciones", "useUbicarLaEscala.ts"), "utf8").replace(/\r\n/g, "\n");
+    expect(ubicar).toContain('lanzar("posicionar", conLoQueYaSabemos ? { proyectoDeContexto: contexto } : {})');
+    expect(paso).toContain("onClick={() => void ubicar()}");
     // Desde la noche del 24 nov va debajo de la página (escala-sin-resumen.test.ts), solo en la preventa.
     expect(paso).toContain('linea={lugar === "preventa" ? <LineaDeLaUbicacion /> : null}');
     // Solo «Ubicar» cambia la frase a «ubicando»; otro trabajo del agente solo hace esperar al botón.
-    expect(paso).toContain('ubicando: corriendo && corrida?.modo === "posicionar"');
+    expect(ubicar).toContain('ubicando: corriendo && corrida?.modo === "posicionar"');
+    expect(paso).toMatch(/lineaDeLaEscala\(\{[\s\S]{0,600}\n {4}ubicando,\n/);
   });
 
   it("se fueron la fila de los tres pasos, el objetivo, lo explorado y «Armado el…»", () => {

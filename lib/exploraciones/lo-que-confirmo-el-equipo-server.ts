@@ -29,13 +29,15 @@ const HECHOS_POR_NOTA = 12;
 
 /**
  * Lo que confirmó el equipo de esta empresa, la nota más nueva primero, cortado para `alcance`. Vacío si no hay.
- * Incluye la preventa desde la que se lee: los casos de uso no leen sus notas por otro lado.
+ * Incluye la preventa desde la que se lee: los casos de uso no leen sus notas por otro lado. `sinLaPreventa` (25 nov): la
+ * que ya manda sus notas aparte, como fuentes que se citan («Ubicar», notas-del-equipo.ts › `notasParaUbicar`): no se
+ * repiten acá con su autor y con la regla de que no respaldan un nivel.
  */
-export async function loQueConfirmoElEquipo(clientId: string, alcance: AlcanceDelEquipo): Promise<NotaConfirmada[]> {
+export async function loQueConfirmoElEquipo(clientId: string, alcance: AlcanceDelEquipo, o: { sinLaPreventa?: string | null } = {}): Promise<NotaConfirmada[]> {
   if (!clientId || !modeloDisponible(prisma.exploracionDeVenta)) return [];
   try {
     const filas = await prisma.exploracionDeVenta.findMany({
-      where: { clientId, ...DE_LA_PREVENTA },
+      where: { clientId, ...DE_LA_PREVENTA, ...(o.sinLaPreventa ? { id: { not: o.sinLaPreventa } } : {}) },
       orderBy: { updatedAt: "desc" },
       take: MAX_PREVENTAS,
       select: { id: true, clientId: true, contenido: true, archivadaEn: true },

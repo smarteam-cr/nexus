@@ -9,7 +9,10 @@
  * y propone los niveles). Lo que dice, en este orden:
  *   1. Nexus la está ubicando ahora (otro trabajo del agente en la preventa no cambia la frase: el botón espera).
  *   2. Nunca se ubicó: con reuniones que leer, que falta hacerlo; sin ninguna, que no hay qué leer todavía.
- *   3. Hay reuniones de después de la última vez que se ubicó: cuántas, y el botón dice «Actualizar».
+ *   3. Hay reuniones de después de la última vez que se ubicó: cuántas, y el botón dice «Actualizar». Desde el 25 nov
+ *      también las notas de «Lo que sabes del cliente» que «Ubicar» no leyó (`notasSinUbicar`): una nota puede fijar
+ *      un nivel («Hay 1 respuesta que todavía no se usó para ubicar la escala: puede cambiar un nivel.»). No dice «nueva»:
+ *      después del deploy, una nota de octubre nunca se leyó, pero no es nueva.
  *   4. La escala está al día pero el Resumen se armó antes de alguna reunión, o leyó cortadas reuniones largas antes de que
  *      se leyeran enteras (24 nov, `cortadasQueSeLeenEnteras`): se rehace con «Rehacer con IA», en el Resumen (el botón de
  *      esta línea no lo arma: no se le suma un segundo botón).
@@ -31,6 +34,7 @@
  * leída.
  */
 import type { ReunionMalLeida } from "@/lib/external/pagina-del-resumen";
+import { cuantasNotas } from "./completar-el-diagnostico";
 import { diaConAnio, diaCorto } from "./fechas";
 import { REUNIONES_QUE_LEE_UBICAR, sirveParaUbicar } from "./posicionar";
 
@@ -116,6 +120,11 @@ export function lineaDeLaEscala(o: {
   conLoQueYaSabemos?: boolean;
   /** Las reuniones que cambiaron de clase después de armar el Resumen (`marcasQueCambiaron`). */
   marcasCambiadas?: number;
+  /**
+   * Las notas de «Lo que sabes del cliente» que «Ubicar» no leyó la última vez (25 nov, completar-el-diagnostico.ts ›
+   * `notasSinUbicar` + `contarLasNotas`): una nota puede fijar un nivel, así que cuentan como algo nuevo.
+   */
+  notasSinUbicar?: { total: number; respuestas: number };
 }): LineaDeLaEscala {
   const conTexto = o.reuniones.filter((r) => sirveParaUbicar(r) && !Number.isNaN(Date.parse(r.fecha)));
   // Sin ninguna sesión de diagnóstico, la preventa de un cliente se ubica con lo que ya sabemos (la base de la empresa).
@@ -163,17 +172,30 @@ export function lineaDeLaEscala(o: {
   );
   const nuevasReuniones = conTexto.filter((r) => despuesDe(r.fecha, ubicada) || (leidasEntonces.length > 0 && hoy.has(r) && !laLeyo(r)));
   const nuevas = nuevasReuniones.length;
-  if (nuevas > 0) {
+  // Las notas que «Ubicar» no leyó (25 nov): una nota puede fijar un nivel.
+  const notas = o.notasSinUbicar?.total ? cuantasNotas(o.notasSinUbicar) : "";
+  // «que todavía no se usó para ubicar»: después del deploy, una nota de octubre no es «nueva», pero nunca se leyó.
+  const sinUsar = notas ? `${notas} que todavía no se ${o.notasSinUbicar!.total === 1 ? "usó" : "usaron"} para ubicar` : "";
+  if (nuevas > 0 || notas) {
     // Sobre una base de trabajo, una sesión de diagnóstico se nombra como tal (24 nov).
     const deDiagnostico = !!o.conLoQueYaSabemos && nuevasReuniones.every((r) => !r.deTrabajo);
-    const cuantas = deDiagnostico
-      ? nuevas === 1
-        ? "Hay 1 sesión de diagnóstico nueva"
-        : `Hay ${nuevas} sesiones de diagnóstico nuevas`
-      : nuevas === 1
-        ? "Hay 1 reunión nueva"
-        : `Hay ${nuevas} reuniones nuevas`;
-    return { estado: "nuevas", texto: `${cuantas} desde que se ubicó la escala, el ${diaCorto(ubicada)}.`, boton: { etiqueta: "Actualizar", fuerte: true } };
+    const cuantas = !nuevas
+      ? ""
+      : deDiagnostico
+        ? nuevas === 1
+          ? "1 sesión de diagnóstico nueva"
+          : `${nuevas} sesiones de diagnóstico nuevas`
+        : nuevas === 1
+          ? "1 reunión nueva"
+          : `${nuevas} reuniones nuevas`;
+    return {
+      estado: "nuevas",
+      texto: nuevas
+        ? `Hay ${cuantas} desde que se ubicó la escala, el ${diaCorto(ubicada)}${sinUsar ? `, y ${sinUsar}la` : ""}.`
+        : `Hay ${sinUsar} la escala: ${o.notasSinUbicar!.total === 1 ? "puede" : "pueden"} cambiar un nivel.`,
+      // Solo notas: el mismo nombre que el botón del aviso de arriba del Resumen («Volver a ubicar»), que hace lo mismo.
+      boton: nuevas ? { etiqueta: "Actualizar", fuerte: true } : { ...volver, fuerte: true },
+    };
   }
   const leidas = leidasEnteras.length || (leidasEntonces.length ? 0 : Math.min(conTexto.length, REUNIONES_QUE_LEE_UBICAR));
   const resumen = o.resumenEn;

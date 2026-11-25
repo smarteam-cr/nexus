@@ -10,5 +10,10 @@ export interface Fuente {
   id: string;
   /** Cómo la ve el vendedor: «Reunión del 1 oct: Revisión del diagnóstico». */
   etiqueta: string;
+  /**
+   * Cómo la nombra el pedido a la IA, si no es la etiqueta (25 nov): una nota del equipo va sin el nombre de quien la
+   * escribió (notas-del-equipo.ts › `notasParaUbicar`). Lo lee `pedidoDePosicionar`.
+   */
+  paraElAgente?: string;
   texto: string;
 }

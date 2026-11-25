@@ -38,6 +38,7 @@ import {
   type TipoDeCasilla,
 } from "./casillas";
 import { MAX_FRASE } from "@/lib/smarteam/posicionamiento";
+import { MAX_LO_QUE_SABES } from "./lo-que-sabes";
 import { MAX_ACTIVIDADES_POR_CASO, MAX_VECES } from "@/lib/casos-de-uso/armado";
 import { LARGO_DE_UNA_LINEA_DE_CAMBIOS, MAX_LINEAS_DE_CAMBIOS, VEREDICTOS_DE_LA_REVISION } from "@/lib/casos-de-uso/personalizar";
 import { MAX_CASOS_EN_EL_ORDEN, MAX_LARGO_DEL_PORQUE_DEL_ORDEN, MAX_LARGO_DEL_TITULO } from "@/lib/casos-de-uso/orden";
@@ -1431,6 +1432,9 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
         leyo: listaDeTextos(c.leyo, 40),
         alimento: listaDeTextos(c.alimento, 120),
         automatica: c.automatica === true,
+        // Las notas que leyó «Ubicar» (25 nov). Sin el campo, ninguna: se distingue de una lista vacía.
+        ...(Array.isArray(c.notas) ? { notas: listaDeTextos(c.notas, MAX_LO_QUE_SABES) } : {}),
+        ...(typeof c.notasEn === "string" && Number.isFinite(Date.parse(c.notasEn)) ? { notasEn: c.notasEn } : {}),
       }))
       .slice(-50);
   }

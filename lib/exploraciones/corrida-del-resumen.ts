@@ -117,7 +117,8 @@ export type AvisoDelResumen =
   | { tipo: "detenida" }
   | { tipo: "falta"; fallo: string | null }
   | { tipo: "fallo"; id: string; error: string }
-  | { tipo: "nuevas"; titulo: string }
+  /** `ubicar`: alguna de esas notas tampoco la leyó «Ubicar» y puede cambiar un nivel: el paso es volver a ubicar. */
+  | { tipo: "nuevas"; titulo: string; ubicar?: true }
   | null;
 
 /**
@@ -125,6 +126,9 @@ export type AvisoDelResumen =
  * cuándo; mientras arranca, la corrida de la foto es la de antes y no da ni fase ni reloj), no se sabe en qué va (la red
  * se cortó), detenida (no late: ofrecer otra), falta armarlo (con el último fallo, si lo hubo), el fallo de rehacerlo (solo
  * si es de DESPUÉS del Resumen que hay y nadie lo cerró) y las notas nuevas que no leyó.
+ * `ubicarPrimero` (25 nov): alguna de esas notas nuevas tampoco la leyó «Ubicar» (completar-el-diagnostico.ts ›
+ * `notasSinUbicar`). Una nota puede fijar un nivel, así que el aviso ofrece primero volver a ubicar y, cuando «Ubicar» ya
+ * las leyó, rehacer el Resumen: un solo botón por vez, en ese orden.
  */
 export function queDiceElAviso(o: {
   resumenEn: string | null;
@@ -133,6 +137,7 @@ export function queDiceElAviso(o: {
   sinSaber: boolean;
   nuevas: string | null;
   cerrado: string | null;
+  ubicarPrimero?: boolean;
 }): AvisoDelResumen {
   const { corrida: c } = o;
   const viva = c?.estado === "RUNNING" && !c.detenida ? c : null;
@@ -143,7 +148,8 @@ export function queDiceElAviso(o: {
   const fallo = c?.estado === "ERROR" && c.id !== o.cerrado && despuesDelResumen ? c : null;
   if (!o.resumenEn) return { tipo: "falta", fallo: fallo?.error ?? null };
   if (fallo) return { tipo: "fallo", id: fallo.id, error: fallo.error ?? ERROR_SIN_MOTIVO };
-  return o.nuevas ? { tipo: "nuevas", titulo: o.nuevas } : null;
+  if (!o.nuevas) return null;
+  return o.ubicarPrimero ? { tipo: "nuevas", titulo: o.nuevas, ubicar: true } : { tipo: "nuevas", titulo: o.nuevas };
 }
 
 // ── El seguimiento (sin React: se prueba con la red y el reloj simulados) ─────
