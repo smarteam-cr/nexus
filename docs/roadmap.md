@@ -9,12 +9,12 @@
      Cómo se regenera: la skill regenerar-roadmap. -->
 ```ejecutivo
 {
- "corte": "2026-11-24",
- "produccion": "a9aa565d",
+ "corte": "2026-11-25",
+ "produccion": "7db1a943",
  "arriba": [
-  "En producción desde el 24 nov: un solo chat «Nexus» con una sola conversación en la preventa, La escala de un cliente con lo que ya sabemos, un Resumen de La escala que no pierde cifras, las franjas del kickoff y los CSE ven las propuestas.",
-  "En curso: nada corriendo; el Resumen de Centauro quedó rehecho como borrador, sin publicar.",
-  "Te espera: revisar con Marco el borrador de Centauro, la pregunta 118 de la moneda, usar lo propuesto en TEC · AE y la pregunta 99 del conector."
+  "En producción desde el 25 nov: La escala sin Resumen (plantilla, aviso y «Responder con Nexus»), un Resumen que no se cuelga y la página del chat «Nexus»; del 24 nov, un solo chat, La escala con lo que ya sabemos y las franjas del kickoff.",
+  "En curso: nada corriendo.",
+  "Te espera: armar y volver a publicar el Resumen de TEC · AE, revisar con Marco el borrador de Centauro y las preguntas 119 (las notas en los niveles), 118 (la moneda) y 99 (el conector)."
  ],
  "iniciativas": [
   {
@@ -110,7 +110,7 @@
    "nombre": "La escala y el diagnóstico",
    "color": "escala",
    "estado": "en-curso",
-   "donde": "El Resumen de Centauro se rehízo como borrador con las cifras que antes se perdían; falta revisarlo con Marco y usar lo propuesto en TEC · AE.",
+   "donde": "Sin Resumen, La escala ya muestra la plantilla y lo que falta, con «Responder con Nexus»; falta armar el Resumen de TEC · AE y revisar Centauro con Marco.",
    "hecho": [
     "La escala ubica a cada empresa por equipo e industria, con un radar, un Resumen que el cliente ve y su historia en el tiempo.",
     "El test del diagnóstico vive en Nexus, con su página de resultados en dinero y la escalera de niveles, igual a la curva de la app vieja.",
@@ -142,7 +142,8 @@
     112,
     115,
     116,
-    118
+    118,
+    119
    ],
    "ramas": [
     {
@@ -712,8 +713,8 @@
      regenera: la skill regenerar-roadmap. Lo hecho nuevo entra SOLO acá, con su «tema»; el Resumen lo toma de aquí. -->
 ```linea
 {
- "hoy": "2026-11-24",
- "produccion": "a9aa565d",
+ "hoy": "2026-11-25",
+ "produccion": "7db1a943",
  "temasHechoHasta": "2026-10-29",
  "iniciativas": [
   {
@@ -2059,6 +2060,34 @@
    "commits": [
     "fccfc064"
    ]
+  },
+  {
+   "fecha": "2026-11-25",
+   "iniciativa": "escala",
+   "titulo": "La escala sin Resumen: plantilla, aviso y lo que falta con Nexus",
+   "que": "Sin Resumen se ve la plantilla con «Falta armar el Resumen» y su botón; la línea de «Ubicada…» baja y sale «Dónde está hoy». «Para completar el diagnóstico» trae cada pregunta con «Responder con Nexus». El Resumen se arma por detrás y ya no se cuelga si la IA no contesta.",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "si",
+   "tema": 5,
+   "preguntas": [
+    119
+   ],
+   "commits": [
+    "fb48d489"
+   ]
+  },
+  {
+   "fecha": "2026-11-25",
+   "iniciativa": "reuniones",
+   "titulo": "El chat «Nexus» documentado: qué le puedes pedir",
+   "que": "Una página en Documentación dice, lugar por lugar, qué le puedes contar, preguntar y pedir al chat, qué guarda y sus límites. El chat vacío trae «¿Qué puedo pedirte?», que la abre. Una prueba avisa si el chat aprende algo que la página no nombra.",
+   "paraQuien": "Todo el equipo",
+   "prod": "si",
+   "tema": 2,
+   "commits": [
+    "8b5ee76f",
+    "d52d236a"
+   ]
   }
  ],
  "sigue": [
@@ -2077,12 +2106,24 @@
   {
    "iniciativa": "escala",
    "titulo": "TEC · AE: usar lo propuesto y armar su Resumen",
-   "que": "La preventa de AE quedó ubicada con 4 reuniones de trabajo y el proyecto como contexto, sin publicar. Revisas lo propuesto (la preventa vieja se armó con reuniones de TAE), eliges los equipos y armas el Resumen.",
+   "que": "La escala ya muestra la plantilla con «Falta armar el Resumen». Ármalo, completa lo que falta con «Responder con Nexus» y vuelve a «Publicar»: hoy el cliente ve la versión sin Resumen.",
    "paraQuien": "Customer Success",
    "estado": "te-toca",
    "tema": 5,
    "preguntas": [
-    116
+    116,
+    119
+   ]
+  },
+  {
+   "iniciativa": "escala",
+   "titulo": "Que «Ubicar» lea las notas del equipo",
+   "que": "Lo que respondes con «Responder con Nexus» ya cambia el Resumen, pero no los niveles. Espera tu respuesta a cuánto pesa una nota del equipo.",
+   "paraQuien": "Ventas y Customer Success",
+   "estado": "te-toca",
+   "tema": 5,
+   "preguntas": [
+    119
    ]
   },
   {
@@ -2519,7 +2560,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "Todo está en producción (a9aa565d, 24 nov): un solo chat «Nexus» con una sola conversación en la preventa, La escala de un cliente con lo que ya sabemos y un Resumen de La escala que no pierde cifras, las franjas del kickoff. Lo próximo: Centauro con Marco, la moneda de las cifras (118) y TEC · AE.",
+ "dondeVamos": "Todo está en producción (7db1a943, 25 nov): La escala sin Resumen con «Responder con Nexus», un Resumen que no se cuelga y la página del chat «Nexus». Lo próximo: el Resumen de TEC · AE, Centauro con Marco y las preguntas 119 y 118.",
  "temas": [
   {
    "n": 4,
@@ -2643,7 +2684,8 @@
     112,
     115,
     116,
-    118
+    118,
+    119
    ]
   },
   {
@@ -3290,7 +3332,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `a9aa565d` (todo `main`) desde el 24 nov: un Resumen de La escala que no pierde las cifras de la empresa, las franjas del kickoff, un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y reuniones enteras, La escala de un cliente con lo que ya sabemos, la pantalla limpia de La escala, el registro de los cambios de base, Hablar con Nexus (etapas 0 y 1), el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
+| Producción | Corre `7db1a943` (todo `main`) desde el 25 nov: La escala sin Resumen con «Responder con Nexus», la página del chat «Nexus» en Documentación, un Resumen de La escala que no pierde las cifras de la empresa, las franjas del kickoff, un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y reuniones enteras, La escala de un cliente con lo que ya sabemos, la pantalla limpia de La escala, el registro de los cambios de base, Hablar con Nexus (etapas 0 y 1), el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
 | Por desplegar | Nada. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | Por datos de antes, ninguno nuevo (28 oct): 16 reuniones colgadas de proyectos de otro cliente (INV1) y 9 tareas que citan una reunión de otro cliente (INV42), las que ordena el plan de dominio compartido; el pipeline de Secure Title (INV11: 2 proyectos y 6 en una etapa desconocida); «TEC- AE» fusionada en HubSpot (INV13 e INV54: ya solo ella, kölbi quedó bien); una reunión de Meet leída antes de ocurrir (INV16a), y el corte de cartera de hace 96 días (INV32). |
 | Pruebas | 30 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 83 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
@@ -3431,6 +3473,7 @@ Sin esto, algo sigue mal o no se puede validar:
 116. ✓ **La escala de un cliente con lo que ya sabemos (TEC · AE).** Plan con D1 a D4 (lo recomendado). **Tu respuesta (24 nov):** «ejecútalo de forma autónoma hasta el final para poder ver esto en producción… mandémoslo a producción».
 117. ✓ **Preventas y propuestas compartidas entre Customer Success y Ventas.** Juan Carlos pidió ver las propuestas de sus clientes; los CSE ya trabajaban las preventas desde el 6 oct, pero no veían Propuestas. ¿Se les enciende «Ventas / Propuestas › Acceder al área» (también ven Pipeline, SICOP y los montos) o solo las propuestas? **Tu respuesta (24 nov):** «Encender el área». Editar sigue siendo de Ventas. Con esto se descarta que la preventa de un cliente pida además acceso a la empresa.
 118. **La escala · una cifra de dinero sin moneda.** Si en la reunión nadie dijo la moneda, Nexus la quita: la cuenta del 85 de Centauro sale «1.190 al mes en clientes que se van», sin dólares. Al confirmarla, ¿puede salir así al cliente, o confirmar debería pedirte la moneda?
+119. **La escala · las notas del equipo en los niveles.** Lo que respondes con «Responder con Nexus» queda como nota y cambia el texto del Resumen, pero «Ubicar», lo que fija el nivel de cada equipo, todavía no lee las notas. Propuesta: que las lea, con quién las escribió, y que una nota solo pueda dejar una parte «por explorar»; el nivel lo sigue fijando solo lo que dijo el cliente. ¿Va así?
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
