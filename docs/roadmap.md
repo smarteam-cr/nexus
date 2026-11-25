@@ -10,10 +10,10 @@
 ```ejecutivo
 {
  "corte": "2026-11-24",
- "produccion": "ad14da4f",
+ "produccion": "a9aa565d",
  "arriba": [
-  "En producción desde el 24 nov: un solo chat «Nexus» con una sola conversación en la preventa, La escala de un cliente con lo que ya sabemos, un Resumen de La escala que no pierde cifras y los CSE ven las propuestas.",
-  "En curso: el arreglo de las franjas del kickoff está listo y espera tu OK para subirlo; el Resumen de Centauro quedó rehecho como borrador.",
+  "En producción desde el 24 nov: un solo chat «Nexus» con una sola conversación en la preventa, La escala de un cliente con lo que ya sabemos, un Resumen de La escala que no pierde cifras, las franjas del kickoff y los CSE ven las propuestas.",
+  "En curso: nada corriendo; el Resumen de Centauro quedó rehecho como borrador, sin publicar.",
   "Te espera: revisar con Marco el borrador de Centauro, la pregunta 118 de la moneda, usar lo propuesto en TEC · AE y la pregunta 99 del conector."
  ],
  "iniciativas": [
@@ -713,7 +713,7 @@
 ```linea
 {
  "hoy": "2026-11-24",
- "produccion": "ad14da4f",
+ "produccion": "a9aa565d",
  "temasHechoHasta": "2026-10-29",
  "iniciativas": [
   {
@@ -2047,17 +2047,21 @@
     "561f4a84",
     "3da9b1cd"
    ]
+  },
+  {
+   "fecha": "2026-11-24",
+   "iniciativa": "cs",
+   "titulo": "Las franjas del kickoff se escriben y se ven bien",
+   "que": "En «Sesiones y horarios», lo escrito en una franja ya no se borra y agregar varias seguidas ya no deja solo la primera. Una franja vacía se ve vacía y no se arrastra. Los guardados de un mismo bloque salen en orden en todos los documentos. Lo reportó Juan Carlos.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 11,
+   "commits": [
+    "fccfc064"
+   ]
   }
  ],
  "sigue": [
-  {
-   "iniciativa": "cs",
-   "titulo": "Las franjas del kickoff se escriben y se ven bien",
-   "que": "Listo en main: lo escrito en una franja ya no se borra y una franja vacía se ve vacía y no se arrastra. Espera tu OK para subirlo; después Juan Carlos recarga la página.",
-   "paraQuien": "Customer Success",
-   "estado": "te-toca",
-   "tema": 11
-  },
   {
    "iniciativa": "escala",
    "titulo": "Revisar con Marco el Resumen nuevo de Centauro",
@@ -2515,7 +2519,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "Todo está en producción (ad14da4f, 24 nov): un solo chat «Nexus» con una sola conversación en la preventa, La escala de un cliente con lo que ya sabemos y un Resumen de La escala que no pierde cifras. Lo próximo: Centauro con Marco, la moneda de las cifras (118) y TEC · AE.",
+ "dondeVamos": "Todo está en producción (a9aa565d, 24 nov): un solo chat «Nexus» con una sola conversación en la preventa, La escala de un cliente con lo que ya sabemos y un Resumen de La escala que no pierde cifras, las franjas del kickoff. Lo próximo: Centauro con Marco, la moneda de las cifras (118) y TEC · AE.",
  "temas": [
   {
    "n": 4,
@@ -3286,7 +3290,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `ad14da4f` (todo `main`) desde el 24 nov: un Resumen de La escala que no pierde las cifras de la empresa, un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y reuniones enteras, La escala de un cliente con lo que ya sabemos, la pantalla limpia de La escala, el registro de los cambios de base, Hablar con Nexus (etapas 0 y 1), el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
+| Producción | Corre `a9aa565d` (todo `main`) desde el 24 nov: un Resumen de La escala que no pierde las cifras de la empresa, las franjas del kickoff, un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y reuniones enteras, La escala de un cliente con lo que ya sabemos, la pantalla limpia de La escala, el registro de los cambios de base, Hablar con Nexus (etapas 0 y 1), el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
 | Por desplegar | Nada. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | Por datos de antes, ninguno nuevo (28 oct): 16 reuniones colgadas de proyectos de otro cliente (INV1) y 9 tareas que citan una reunión de otro cliente (INV42), las que ordena el plan de dominio compartido; el pipeline de Secure Title (INV11: 2 proyectos y 6 en una etapa desconocida); «TEC- AE» fusionada en HubSpot (INV13 e INV54: ya solo ella, kölbi quedó bien); una reunión de Meet leída antes de ocurrir (INV16a), y el corte de cartera de hace 96 días (INV32). |
 | Pruebas | 30 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 83 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
