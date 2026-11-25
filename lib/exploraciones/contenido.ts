@@ -512,6 +512,17 @@ export interface CorridaDelAgente {
   alimento: string[];
   /** La lanzó una reunión nueva, sin que nadie apretara el botón. */
   automatica: boolean;
+  /**
+   * «Ubicar» (25 nov): las claves de las notas de «Lo que sabes del cliente» que leyó (`sabido:<id>`). Una nota que no está
+   * acá, o que se editó después, es nueva para «Ubicar» (completar-el-diagnostico.ts › `notasSinUbicar`). Sin el campo (una
+   * corrida de antes del 25 nov, o de otro modo), no leyó ninguna.
+   */
+  notas?: string[];
+  /**
+   * Cuándo leyó esas notas (ISO, al empezar): una nota editada mientras «Ubicar» corría se leyó con el texto de antes, y
+   * cuenta como nueva (revisión del 25 nov). Sin el campo, cuenta desde `en`.
+   */
+  notasEn?: string;
 }
 
 /**

@@ -77,6 +77,8 @@ import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { VALIDADOR_ESTRICTO } from "./esquemas";
 import { diaConAnio, diaYHora } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
+import { esNotaEnUbicar, GANA_LA_NOTA, ROTULO_DE_LA_NOTA } from "./notas-del-equipo";
+import { equiposDeLasRespuestas, prefijoDeLaRespuesta } from "./completar-el-diagnostico";
 import { EQUIPOS, type ClaveDeEquipo } from "./equipos";
 import { CUMPLIMIENTOS, MAX_PARA_LA_PROXIMA, type Cumplimiento } from "./despues-de-la-sesion";
 import {
@@ -761,25 +763,48 @@ export function equipoDeLasFuentes(ctx: Pick<ContextoDelPedido, "reuniones">): (
 /**
  * K11: ¿la dimensión es de otra área que la del equipo que lo dijo? Sí cuando TODAS las fuentes con cita son reuniones con
  * un equipo cuya área está en la escala y ninguna es el área de la dimensión. Con una fuente que no es de un equipo (una
- * nota, el test, una reunión con la empresa entera) no se descarta: ahí sí puede haber hablado de cualquier área.
+ * nota suelta, el test, una reunión con la empresa entera) no se descarta: ahí sí puede haber hablado de cualquier área.
+ * En una nota del equipo (25 nov) decide el RENGLÓN de la frase citada (`areaDeLaCita`): si es la respuesta a una pregunta
+ * de La escala («Sobre Ventas · Datos (…): …»), es de ese equipo, como una reunión con él; lo que respondió sobre Ventas no
+ * fija el nivel de Marketing. Un renglón suelto de la misma nota puede hablar de cualquier área (revisión del 25 nov: el
+ * chat junta en una nota todo lo que se contó, y la nota entera no es de un solo equipo).
  */
-export function dimensionDeOtroEquipo(ctx: Pick<ContextoDelPedido, "reuniones" | "escala">): (dimensionId: string, fuentes: readonly FuenteCitada[]) => boolean {
+export function dimensionDeOtroEquipo(ctx: Pick<ContextoDelPedido, "reuniones" | "escala"> & Partial<Pick<ContextoDelPedido, "fuentes">>): (dimensionId: string, fuentes: readonly FuenteCitada[]) => boolean {
   const areaDeLaFuente = new Map<string, string>();
   for (const r of ctx.reuniones ?? []) {
     const area = r.equipo ? areaDelEquipo(r.equipo, ctx.escala) : null;
     if (area) areaDeLaFuente.set(r.fuente, area.id);
   }
-  if (!areaDeLaFuente.size) return () => false;
+  const notas = new Map((ctx.fuentes ?? []).filter((f) => esNotaEnUbicar(f.id)).map((f) => [f.id, f.texto]));
+  if (!areaDeLaFuente.size && !notas.size) return () => false;
+  const areaDe = (f: FuenteCitada): string | null => {
+    const texto = notas.get(f.id);
+    if (texto !== undefined) return f.cita ? areaDeLaCita(texto, f.cita, ctx.escala) : null;
+    return areaDeLaFuente.get(f.id) ?? null;
+  };
   return (dimensionId, fuentes) => {
     const areaDeLaDimension = ctx.escala.areas.find((a) => a.dimensiones.some((d) => d.id === dimensionId))?.id;
     const conCita = fuentes.filter((f) => f.cita);
     const base = conCita.length ? conCita : fuentes;
     if (!areaDeLaDimension || !base.length) return false;
     return base.every((f) => {
-      const area = areaDeLaFuente.get(f.id);
+      const area = areaDe(f);
       return !!area && area !== areaDeLaDimension;
     });
   };
+}
+
+/**
+ * El área de la escala de la que habla una frase citada de una nota del equipo (25 nov): la del renglón donde está, si ese
+ * renglón es la respuesta a una pregunta de La escala («Sobre <equipo> · <parte> (…): …», completar-el-diagnostico.ts ›
+ * `equiposDeLasRespuestas`), por el nombre que le da la escala de la empresa al área (o el general). null si la frase está
+ * en un renglón suelto, si no se encuentra o si el equipo no es un área: ahí no se sabe y no se descarta.
+ */
+export function areaDeLaCita(texto: string, cita: string, escala: Pick<EscalaDelLienzo, "areas">): string | null {
+  const renglon = texto.split(/\r?\n/).find((l) => citaVerificable(cita, l));
+  const [equipo] = renglon ? equiposDeLasRespuestas(renglon) : [];
+  if (!equipo) return null;
+  return escala.areas.find((a) => [a.nombre, a.nombreGeneral].some((n) => n && normalizarTexto(n) === normalizarTexto(equipo)))?.id ?? null;
 }
 
 /** Las reuniones que se leen y lo que se planeó preguntar en la más reciente (solo si había una guía de antes). */
@@ -1888,6 +1913,20 @@ export const FUENTES_DE_POSICIONAR = {
   memoriaDelProyecto: "A1",
 } as const;
 
+/** Cómo se le describe a la IA una respuesta de «Responder con Nexus»: la misma forma que escribe el chat. */
+const FORMA_DE_UNA_RESPUESTA = `${prefijoDeLaRespuesta({ equipo: "<equipo>", dimension: "<parte>", pregunta: "<la pregunta>" })}<la respuesta>`;
+
+/**
+ * Lo que dice el pedido de «Ubicar» sobre las notas del equipo (25 nov, Elías: «Puede fijar el nivel»; DECISIONS «“Ubicar”
+ * lee las notas del equipo»). Solo va si alguna fuente es una nota (`esNotaEnUbicar`). Las formas salen del código: el
+ * rótulo de la nota (`ROTULO_DE_LA_NOTA`, sin el nombre de quien la escribió: la IA no lo recibe) y la de una respuesta
+ * (`prefijoDeLaRespuesta`). La regla de peso es la del Resumen (`GANA_LA_NOTA`).
+ */
+export const REGLA_DE_LAS_NOTAS_EN_UBICAR = `
+- Las notas del equipo (N1, N2…, «${ROTULO_DE_LA_NOTA}, <día>») son lo que sabe alguien de Smarteam y lo contó en Nexus: lo que respondió a una pregunta de La escala («${FORMA_DE_UNA_RESPUESTA}») o algo que sabe del cliente. No son palabras del cliente, pero cuentan como evidencia: una nota puede fijar un nivel igual que lo que dijo el cliente en una reunión, con su frase copiada tal cual de la nota. Una respuesta habla del equipo y de la parte que nombra: no fija el nivel de otra área.
+- Pesan más que las reuniones: ${GANA_LA_NOTA}, aunque la reunión sea más reciente (si algo cambió, el equipo corrige la nota).
+- En porQue y en las tarjetas, una nota es «una nota del equipo»: nunca escribas el nombre de nadie de Smarteam.`;
+
 /**
  * El pedido de «Actualizar escala» (La cuenta › La escala): SOLO los niveles, cada uno con la frase del cliente que lo
  * respalda y su porqué. Lee todo lo que Nexus sabe de la cuenta, pero respalda un nivel solo con lo que el cliente dijo
@@ -1899,6 +1938,8 @@ export const FUENTES_DE_POSICIONAR = {
 export function pedidoDePosicionar(ctx: ContextoDelPedido & { objetivo: string }): Anthropic.Messages.MessageCreateParamsNonStreaming {
   const ids = ctx.fuentes.map((f) => f.id);
   const dims = dimensionesEnJuego(ctx).map(({ d }) => d.id);
+  // Lo que sabe el equipo (25 nov, notas-del-equipo.ts › `notasParaUbicar`): sin notas, el pedido es el de siempre.
+  const hayNotas = ctx.fuentes.some((f) => esNotaEnUbicar(f.id));
   const tool: Anthropic.Messages.Tool = {
     name: NOMBRE_DE_LA_HERRAMIENTA,
     description: "Propone el nivel de cada dimensión que las fuentes dejan ver. Llámala una sola vez.",
@@ -1907,13 +1948,18 @@ export function pedidoDePosicionar(ctx: ContextoDelPedido & { objetivo: string }
       properties: {
         niveles: {
           type: "array",
-          description: "El nivel por mejor ajuste, SOLO con una frase del cliente que lo respalde, copiada tal cual. Ante la duda entre dos, el más bajo.",
+          description: hayNotas
+            ? "El nivel por mejor ajuste, SOLO con una frase que lo respalde, copiada tal cual: del cliente o de una nota del equipo (N). Ante la duda entre dos, el más bajo."
+            : "El nivel por mejor ajuste, SOLO con una frase del cliente que lo respalde, copiada tal cual. Ante la duda entre dos, el más bajo.",
           items: {
             type: "object",
             properties: {
               dimensionId: { type: "string", enum: dims.length ? dims : ["1.1"] },
               nivel: { type: "string", enum: [...NIVELES] },
-              evidencia: { type: "string", description: "La frase del cliente que lo respalda, tal cual." },
+              evidencia: {
+                type: "string",
+                description: hayNotas ? "La frase que lo respalda, tal cual: la del cliente o la de la nota del equipo." : "La frase del cliente que lo respalda, tal cual.",
+              },
               riesgo: { type: "boolean", description: "true si lo que dijo deja ver que un riesgo de la dimensión está activo." },
               porQue: { type: "string", description: "Por qué ese nivel, en una o dos frases llanas, con las palabras de su industria. Sin identificadores de la escala." },
               fuentes: FUENTES_SCHEMA(ids.length ? ids : ["E0"]),
@@ -1978,7 +2024,7 @@ Reglas estrictas:
 - Las fechas: lo de antes de hoy ya ocurrió. Si una fuente vieja y una reciente se contradicen, vale la reciente.
 - No vuelvas a proponer lo que ya está confirmado igual (abajo). Si lo confirmado quedó viejo, proponer otro nivel está bien: di por qué en porQue.
 - El porQue en español neutro, en tercera persona sobre el cliente, sin identificadores de la escala.
-- Si no tienes nada con respaldo, manda la lista vacía. Es la respuesta correcta muchas veces.${
+- Si no tienes nada con respaldo, manda la lista vacía. Es la respuesta correcta muchas veces.${hayNotas ? REGLA_DE_LAS_NOTAS_EN_UBICAR : ""}${
     ctx.conHipotesis
       ? `
 - Ubicas las TRES áreas (Ventas, Marketing y Servicio), no solo la que se eligió: si en las reuniones salió algo de Marketing, Marketing también se ubica aunque no esté en juego, como hipótesis si no hay una frase de su propio equipo.
@@ -1999,7 +2045,7 @@ Reglas estrictas:
     `=== LO QUE YA ESTÁ CONFIRMADO ===\n${confirmadoComoTexto(ctx)}\n\n` +
     `=== LA ESCALA (${ctx.areas.length ? "las áreas en juego" : "las tres áreas"}) ===\n${escalaComoTexto(ctx)}\n\n` +
     bloqueDeLasReuniones({ reuniones: ctx.reuniones, escala: ctx.escala }) +
-    ctx.fuentes.map((x) => `=== FUENTE ${x.id}: ${x.etiqueta} ===\n${x.texto}`).join("\n\n");
+    ctx.fuentes.map((x) => `=== FUENTE ${x.id}: ${x.paraElAgente ?? x.etiqueta} ===\n${x.texto}`).join("\n\n");
   return {
     model: MODELO_DE_LA_EXPLORACION,
     max_tokens: ctx.conHipotesis ? 16000 : 6000,

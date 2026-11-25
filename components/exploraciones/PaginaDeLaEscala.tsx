@@ -64,8 +64,9 @@ import HistorialDelResumen from "./HistorialDelResumen";
 import { BotonDelHistorial } from "@/components/versiones/HistorialDeVersiones";
 import { avisarQueLaEscalaCambio } from "./escala-al-dia";
 import { useFalloCerrado, useResumenEnCurso } from "./useResumenEnCurso";
+import { useUbicarLaEscala } from "./useUbicarLaEscala";
 import { cuantoLleva, MINUTOS_SIN_LATIDO, queDiceElAviso, type AvisoDelResumen as AvisoDelResumenEnPantalla } from "@/lib/exploraciones/corrida-del-resumen";
-import { leidoHasta, notasNuevasDesde, tituloDeLasNuevas } from "@/lib/exploraciones/completar-el-diagnostico";
+import { lasNotasNuevas, leidoHasta, tituloDeLasNuevas } from "@/lib/exploraciones/completar-el-diagnostico";
 import { DetalleDeDimension, useMarcarNivel } from "./DetalleDeLaDimension";
 import { abrirNexusEnLaPreventa, EVENTO_LA_ESCALA_CAMBIO_CON_NEXUS } from "@/lib/exploraciones/abrir-nexus";
 import { NOMBRE_DEL_BOTON } from "@/lib/pedirle-a-nexus/contrato";
@@ -289,8 +290,9 @@ function useAhora(activo: boolean): number {
  * Arriba del Resumen, lo que hay que hacer con él (24 nov, Elías con TEC · AE). Qué dice lo decide `queDiceElAviso`
  * (lib/exploraciones/corrida-del-resumen.ts, con su prueba); acá solo se pinta: «Falta armar el Resumen» con su botón;
  * mientras Nexus lo arma, en qué va (la fase REAL) y cuánto lleva; si no se sabe en qué va o la corrida no late, cómo
- * seguir; si falló, por qué; con notas que el Resumen no leyó, «Rehacer con IA». Un solo botón de la IA a la vista: cuando
- * este aviso trae el suyo, la fila de abajo no repite «Rehacer con IA».
+ * seguir; si falló, por qué; con notas que el Resumen no leyó, «Rehacer con IA» (y, si «Ubicar» tampoco las leyó, antes
+ * «Volver a ubicar»: una nota puede fijar un nivel, 25 nov). Un solo botón de la IA a la vista: cuando este aviso trae el
+ * suyo, la fila de abajo no repite «Rehacer con IA».
  */
 function AvisoDelResumen({
   aviso,
@@ -300,6 +302,8 @@ function AvisoDelResumen({
   onArmar,
   onMirar,
   onCerrar,
+  ubicar,
+  nivelesPorUsar,
 }: {
   aviso: AvisoDelResumenEnPantalla;
   hayResumen: boolean;
@@ -308,6 +312,10 @@ function AvisoDelResumen({
   onArmar: () => void;
   onMirar: () => void;
   onCerrar: (id: string) => void;
+  /** «Volver a ubicar» (25 nov, `useUbicarLaEscala`): el mismo pedido que el botón de la línea de debajo de la página. */
+  ubicar: { onUbicar: () => void; lanzando: boolean; corriendo: boolean; ubicando: boolean };
+  /** Hay niveles que propuso «Ubicar» y nadie usó: rehacer el Resumen ahora contaría los de antes. */
+  nivelesPorUsar: boolean;
 }) {
   const ahora = useAhora(aviso?.tipo === "corriendo");
   if (!aviso) return null;
@@ -361,16 +369,47 @@ function AvisoDelResumen({
         </Alert>
       );
     case "nuevas":
+      /* Una nota puede fijar un nivel (25 nov): si «Ubicar» tampoco la leyó, el paso es volver a ubicar; el Resumen, después.
+         Un solo botón por vez (`queDiceElAviso` › `ubicarPrimero`). */
+      if (aviso.ubicar)
+        return (
+          <Alert
+            variant="info"
+            title={aviso.titulo}
+            action={
+              puedeEditar ? (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  loading={ubicar.lanzando}
+                  disabled={ubicar.corriendo}
+                  title={ubicar.corriendo && !ubicar.ubicando ? "Nexus está trabajando en esta preventa: cuando termine, puedes ubicar la escala." : undefined}
+                  onClick={ubicar.onUbicar}
+                >
+                  {ubicar.ubicando ? "Ubicando…" : "Volver a ubicar"}
+                </Button>
+              ) : undefined
+            }
+          >
+            {ubicar.ubicando
+              ? "Nexus está ubicando la escala con lo que contaron. Cuando termine, usa lo que proponga arriba y rehaz el Resumen."
+              : "Lo que cuenta el equipo puede cambiar el nivel de una parte: primero vuelve a ubicar la escala y usa lo que proponga; después, rehaz el Resumen. Nada se confirma ni se publica solo."}
+          </Alert>
+        );
       return (
         <Alert variant="info" title={aviso.titulo} action={boton("Rehacer con IA", onArmar)}>
           El Resumen las lee cuando lo rehaces. Lo escrito a mano se queda y nada se publica solo.
+          {/* Lo que propuso «Ubicar» con esas notas todavía no está puesto: rehacer ahora contaría los niveles de antes. */}
+          {nivelesPorUsar && <span className="mt-0.5 block">Antes, usa o descarta arriba los niveles que propuso Nexus: el Resumen cuenta los que estén puestos.</span>}
         </Alert>
       );
   }
 }
 
 export default function PaginaDeLaEscala() {
-  const { exp, cambiar, puedeEditar, recargar, nombreDeNivel, guardando } = useLienzo();
+  const { exp, cambiar, puedeEditar, recargar, nombreDeNivel, guardando, lugar, mapa } = useLienzo();
+  // «Volver a ubicar» desde el aviso de arriba (25 nov): solo en la preventa, como la línea de debajo de la página.
+  const ubicacion = useUbicarLaEscala();
   const toast = useToast();
   const { pagina, error, otraVez } = usePagina(exp.id, exp.version);
   const descripciones = useDescripciones(exp.id, exp.version);
@@ -603,8 +642,19 @@ export default function PaginaDeLaEscala() {
        «Lo que sabes del cliente» que llegaron después de que su corrida empezó a leer. */
     // Desde cuándo leyó: la corrida que lo armó (la última que terminó bien, si es la de este Resumen); si no, cuándo se armó.
     const laQueLoArmo = terminadaDelResumen && terminadaDelResumen.id === exp.estado.contenido.resumenDeLaEscala?.agentRunId ? { estado: "DONE", empezo: terminadaDelResumen.empezo } : null;
-    const nuevas = res.at ? tituloDeLasNuevas(notasNuevasDesde(exp.estado.contenido.notas, exp.estado.contenido.autoresDeLasNotas, leidoHasta(res.at, laQueLoArmo))) : null;
-    const aviso = queDiceElAviso({ resumenEn: res.at, corrida: corridaDelResumen, lanzando: lanzandoElResumen, sinSaber: sinSaberDelResumen, nuevas, cerrado: falloCerrado });
+    /* Si alguna de esas notas tampoco la leyó «Ubicar» (25 nov): una nota puede fijar un nivel, así que primero se vuelve a
+       ubicar y después se rehace el Resumen (`lasNotasNuevas`, con su prueba). */
+    const { delResumen, ubicarPrimero } = lasNotasNuevas({
+      notas: exp.estado.contenido.notas,
+      autores: exp.estado.contenido.autoresDeLasNotas,
+      corridas: exp.estado.propuesta.corridas,
+      resumenDesde: res.at ? leidoHasta(res.at, laQueLoArmo) : null,
+      enLaPreventa: lugar === "preventa",
+    });
+    const nuevas = tituloDeLasNuevas(delResumen);
+    // Niveles que propuso «Ubicar» (con evidencia) y nadie usó: el Resumen cuenta los que están puestos.
+    const nivelesPorUsar = Object.values(mapa.posiciones).some((p) => p.porRevisar);
+    const aviso = queDiceElAviso({ resumenEn: res.at, corrida: corridaDelResumen, lanzando: lanzandoElResumen, sinSaber: sinSaberDelResumen, nuevas, cerrado: falloCerrado, ubicarPrimero });
     // El aviso con su propio botón de la IA: la fila de abajo no lo repite («IA arriba, una sola vez»).
     const avisoConBoton = aviso?.tipo === "nuevas" || aviso?.tipo === "detenida";
     // Los equipos que ve el cliente, con su nivel: lo único con datos de la plantilla.
@@ -626,6 +676,8 @@ export default function PaginaDeLaEscala() {
             onArmar={() => void armar()}
             onMirar={() => void mirarElResumen()}
             onCerrar={setFalloCerrado}
+            ubicar={{ onUbicar: () => void ubicacion.ubicar(), lanzando: ubicacion.lanzando, corriendo: ubicacion.corriendo, ubicando: ubicacion.ubicando }}
+            nivelesPorUsar={nivelesPorUsar}
           />
           {res.at && (
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">

@@ -65,6 +65,7 @@ import { leerLoLeido } from "./lo-leido";
 import { perdidaDeLaEscala, perdidaParaElAgente } from "./perdida-de-la-escala";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import { notasComoFuentes, reunionesDeVerdad } from "./notas-del-equipo";
+import { nombresDeLosAutores } from "./posicionar-fuentes";
 import {
   comoSeLeyo,
   conIdsDeLaCorrida,
@@ -327,11 +328,7 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
   /* Lo que sabe el equipo (21 nov, notas-del-equipo.ts): cada nota de «Lo que sabes del cliente» como una fuente N1, N2…,
      después de las reuniones (así R1, R2… no cambian), con quién la escribió. Pesa más que una reunión. */
   const autores = estado.contenido.autoresDeLasNotas;
-  const correos = [...new Set(Object.values(autores ?? {}).flatMap((a) => (a.por ? [a.por.toLowerCase()] : [])))];
-  const nombres = correos.length
-    ? new Map((await prisma.teamMember.findMany({ where: { email: { in: correos, mode: "insensitive" } }, select: { email: true, name: true } })).map((m) => [m.email.toLowerCase(), m.name.trim()]))
-    : new Map<string, string>();
-  reuniones.push(...notasComoFuentes(estado.contenido.notas, autores, (c) => nombres.get(c) || null));
+  reuniones.push(...notasComoFuentes(estado.contenido.notas, autores, await nombresDeLosAutores(autores)));
 
   const delCliente = new Set(sesiones.flatMap((x) => x.quienes ?? []));
   /* Ningún nombre puede salir; salvo el de la empresa («Centauro» no es una persona aunque sea el nombre de la sala), y los

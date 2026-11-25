@@ -21,6 +21,23 @@ describe("la línea de arriba de La escala", () => {
     expect(l.boton).toEqual({ etiqueta: "Volver a ubicar con las reuniones", fuerte: false });
   });
 
+  it("⛔ una respuesta que «Ubicar» no leyó: ya no está al día, puede cambiar un nivel (25 nov)", () => {
+    const l = linea({ notasSinUbicar: { total: 1, respuestas: 1 } });
+    expect(l.estado).toBe("nuevas");
+    // No dice «nueva»: después del deploy, una nota de octubre nunca se leyó, pero no es nueva.
+    expect(l.texto).toBe("Hay 1 respuesta que todavía no se usó para ubicar la escala: puede cambiar un nivel.");
+    // El mismo nombre que el botón del aviso de arriba, que hace lo mismo.
+    expect(l.boton).toEqual({ etiqueta: "Volver a ubicar con las reuniones", fuerte: true });
+    expect(linea({ notasSinUbicar: { total: 2, respuestas: 1 } }).texto).toBe("Hay 2 notas que todavía no se usaron para ubicar la escala: pueden cambiar un nivel.");
+    // Con reuniones nuevas, las dos cosas.
+    expect(linea({ reuniones: [...ANTES, meet("2026-11-21T15:00:00.000Z")], notasSinUbicar: { total: 1, respuestas: 1 } }).texto).toBe(
+      `Hay 1 reunión nueva desde que se ubicó la escala, el ${diaCorto(UBICADA)}, y 1 respuesta que todavía no se usó para ubicarla.`,
+    );
+    // Sin notas, como siempre; y sin haber ubicado nunca, la frase de siempre (al ubicar las lee).
+    expect(linea({ notasSinUbicar: { total: 0, respuestas: 0 } }).estado).toBe("alDia");
+    expect(linea({ ubicadaEn: null, notasSinUbicar: { total: 1, respuestas: 1 } }).estado).toBe("sinUbicar");
+  });
+
   it("una reunión de después de ubicarla: lo dice y el botón es «Actualizar»", () => {
     const l = linea({ reuniones: [...ANTES, meet("2026-11-21T15:00:00.000Z")] });
     expect(l.estado).toBe("nuevas");

@@ -6185,6 +6185,11 @@ retos, copiados casi palabra por palabra de la investigación de su industria en
   rotulada «lo dijo <persona>». Llega también a lo que ve el cliente (rotulada solo adentro): el vendedor decide antes
   de publicar. La ficha de HubSpot, el sitio e internet siguen sin alcanzar. Ver «El contexto del equipo cambia el
   entregable» (21 nov), con la escalera de peso.
+- *Enmienda (25 nov, Elías: «Puede fijar el nivel»; pregunta 119 del roadmap):* esa nota también FIJA el nivel de una
+  parte, no solo pesa en el Resumen. «Ubicar» lee las notas de «Lo que sabes del cliente» (con las respuestas de
+  «Responder con Nexus») como fuentes `N1`, `N2`…, y un nivel puede salir de una de ellas con su cita, igual que de lo que
+  dijo el cliente en una reunión. Adentro, de dónde sale dice «Nota del equipo · <persona>, <día>»: no se presenta como
+  palabra del cliente. Al cliente nunca le llega quién la escribió. Ver «“Ubicar” lee las notas del equipo» (25 nov).
 - **Sin esa base, la dimensión queda sin nivel** y la guía la pregunta en la reunión. Sin nada del cliente, el
   agente tampoco propone qué explorar a fondo. Supera lo del 2026-10-01 («las hipótesis son el mapa»): siguen
   siendo el mapa, pero solo las que tienen una pista.
@@ -9618,7 +9623,8 @@ tareas, el cronograma ni la memoria, y que un cliente sin proyecto ni preventa n
   el cronograma.
 - **Sin una pista del cliente no hay nivel, igual que siempre**: las fuentes nuevas (G ventas, B propuestas, J0 tareas,
   R0 cronograma, A0 y A1 la memoria) no cuentan en `esFuenteDelCliente`. Comprar algo no es usarlo, e implementarlo no es
-  que ya funcione. Sin ninguna fuente del cliente, el agente no llama al modelo y lo dice.
+  que ya funcione. Sin ninguna fuente del cliente, el agente no llama al modelo y lo dice. *(25 nov: las notas del equipo
+  de la exploración, `N1`, `N2`…, cuentan como pista; ver «“Ubicar” lee las notas del equipo».)*
 - **Sobre qué se ubica, y con qué venta** (`objetivosParaUbicar`, puro): cada proyecto (vivos primero, después los
   terminados), la preventa viva y siempre «La cuenta entera». La venta sugerida de un proyecto es la de su mismo trato de
   HubSpot; de la preventa y la cuenta, la más reciente. Se cambia en la pantalla.
@@ -14683,7 +14689,8 @@ error»); para un prospecto, esa regla sigue igual.
   por el chokepoint, la memoria, las tareas, las ventas y, si se elige, el proyecto de contexto con su handoff, kickoff,
   cuestionarios y cronograma). Con sesiones, lee las dos cosas: primero sus transcripciones enteras y después la base en
   resumen, sin repetir ninguna y con los ids que siguen (`reunionesEnResumen` con `excepto` y `desde`). Siguen las
-  hipótesis y las tarjetas, y las tres áreas; la regla «sin una pista del cliente no hay nivel» no cambia. El pedido dice
+  hipótesis y las tarjetas, y las tres áreas; la regla «sin una pista del cliente no hay nivel» no cambia (*enmendada el
+  25 nov:* una nota del equipo también es pista y puede fijar un nivel; ver «“Ubicar” lee las notas del equipo»). El pedido dice
   qué es una reunión de trabajo y que lo que Smarteam explicó o configuró ahí no es un nivel (`reglaDeLoQueYaSabemos`:
   `solo` sin sesiones de diagnóstico, `ademas` con alguna, y entonces ellas pesan más, salvo que una reunión de trabajo más
   nueva cuente que algo cambió). Lo que alguien sacó con «Fuera de la exploración» no vuelve por la base.
@@ -14837,13 +14844,94 @@ limpia del 24 nov.
     signos de pregunta:* el chat lee como consulta lo que tiene forma de pregunta. Si la persona pregunta en vez de contar,
     el chat responde como siempre. La caja deja lugar para el prefijo (el mensaje entero no pasa los 4.000 caracteres).
     *Lo aceptado:* con una conversación a medias, la respuesta se suma a esa misma nota (va marcada con su pregunta).
-- **Pendiente, sin construir: «Ubicar» no lee estas notas.** `loQueLeeUbicar` › `fuentesParaPosicionar` no arma ninguna
+- ~~**Pendiente, sin construir: «Ubicar» no lee estas notas.**~~ *Hecho el 25 nov* (Elías: una nota puede fijar el nivel):
+  ver «“Ubicar” lee las notas del equipo». Lo de entonces: `loQueLeeUbicar` › `fuentesParaPosicionar` no arma ninguna
   fuente N, aunque el pedido nombra «las notas del equipo (N)» entre lo que respalda un nivel, y `bloqueDeInstrucciones`
   solo lleva las instrucciones adicionales. Una respuesta cambia el Resumen, no los niveles. Propuesta: sumarlas a
   «Ubicar» como fuentes N1, N2…, con quién las escribió (como `notasComoFuentes`), y que Elías decida si una nota del
   equipo puede fijar un nivel o solo dejarlo por explorar.
 - **No se escondió nada:** lo que estaba a la vista sigue, en otro lugar (la lista, en el cierre de la sesión del 24 nov).
 - **Datos y SQL:** sin SQL; la ruta del Resumen suma su GET.
+
+## «Ubicar» lee las notas del equipo, y una nota puede fijar un nivel (2026-11-25, TEC · AE)
+
+Elías, 25 nov (pregunta 119 del roadmap): «Puede fijar el nivel». Lo que el equipo cuenta en el chat «Nexus» de la
+preventa, y lo que responde con «Responder con Nexus» en «Para completar el diagnóstico», ya pesaba en el Resumen (21 nov),
+pero los niveles no se movían: «Ubicar» no leía las notas. Enmienda «Preventa: sin una pista del cliente, no hay
+diagnóstico» (7 oct) y su repetición en «La escala de un cliente con lo que ya sabemos» (24 nov), corregidas en su lugar.
+
+- **«Ubicar» recibe las notas como fuentes propias** (`notasParaUbicar`, lib/exploraciones/notas-del-equipo.ts; las suma
+  `fuentesParaPosicionar`): cada nota de «Lo que sabes del cliente» de ESTA exploración (`sabido:<id>`; las 12 más nuevas,
+  hasta 1.500 caracteres cada una, como en el Resumen) es una fuente `N1`, `N2`…. Van primero y aparte de las reuniones: no
+  son una reunión ni cuentan como una (ni en las reuniones de la corrida, `sourceSessionIds`, ni en la línea de
+  «Ubicada…»). El pedido dice qué son: lo que sabe alguien de Smarteam, no una cita del cliente. Valen en toda exploración
+  que se ubica (la preventa, un proyecto, la cuenta). Las notas de las OTRAS preventas de la empresa siguen llegando como
+  contexto en la memoria de la cuenta (A0, «Lo que confirmó el equipo», 23 nov): no fijan un nivel.
+- **Dos rótulos, y el nombre no viaja a la IA** (revisión del 25 nov): el de adentro, «Nota del equipo · <persona>, <día>»
+  (`etiqueta`, con quién la escribió por `autoresDeLasNotas` y el nombre del equipo, `nombresDeLosAutores`, la misma
+  búsqueda que el Resumen; sin autor, «Alguien del equipo»), y el del pedido, «Nota del equipo, <día con año>»
+  (`Fuente.paraElAgente`, sin nombre). *Por qué:* la IA escribe también la tarjeta de cada parte («cómo está»), que una
+  persona puede pasar a la página del cliente: lo que no sabe no lo escribe. El pedido le pide además no nombrar a nadie
+  de Smarteam en el porqué ni en las tarjetas. **La nota llega una sola vez:** la memoria de la cuenta (A0, «Lo que
+  confirmó el equipo», 23 nov) traía las notas de TODAS las preventas de la empresa con su autor y con «no respalda un
+  nivel»; para «Ubicar» deja fuera las de su propia preventa (`memoriaDeLaCuenta` con `sinNotasDeLaPreventa`, que llega a
+  `loQueConfirmoElEquipo` como `sinLaPreventa`), que ya van como N. *Lo que queda:* el nombre de alguien del equipo sigue
+  en la lista de Smarteam que el pedido ya traía (para no tomarlo como gente del cliente), sin nada que lo ate a la nota.
+- **Una nota puede fijar un nivel**, con su frase copiada de la nota y la verificación de siempre (`citaVerificable`).
+  Pesa más que una reunión, con la MISMA regla que el Resumen: si una nota y una reunión se contradicen, gana la nota
+  (`GANA_LA_NOTA`, una sola frase en el código), aunque la reunión sea más reciente: el pedido lo dice explícito porque la
+  regla de las fechas («vale la reciente») chocaba; si algo cambió, el equipo corrige la nota. El nivel queda con la fuente
+  «vendedor» (evidencia: la misma clase que lo que marca una persona), sin un valor nuevo de fuente. *Lo aceptado:* al
+  usarlo, el nivel confirmado ya no dice que salió de una nota: en la foto y el historial de la escala, y en lo que leen
+  los agentes, dice «Lo marcó el vendedor» (`ETIQUETA_DE_LA_FUENTE`), como cualquier nivel que marca una persona.
+- **Una respuesta es de su equipo** (revisión del 25 nov): la frase citada de una nota que está en el renglón de una
+  respuesta a una pregunta de La escala («Sobre Ventas · Datos (…): …», `equiposDeLasRespuestas`) es de esa área, como una
+  reunión con ese equipo (K11, `dimensionDeOtroEquipo` › `areaDeLaCita`): no fija el nivel de otra área. Decide el
+  RENGLÓN de la frase y no la nota entera: el chat junta en una nota todo lo que se contó, y una nota con una respuesta de
+  Ventas y una frase suelta sobre Marketing no es toda de Ventas. Un renglón suelto, o un equipo que no es un área, puede
+  hablar de cualquiera. Para las hipótesis no corre (lo mismo que con las reuniones).
+- **De dónde sale, adentro:** la sugerencia guarda el rótulo de la nota con su frase («Nota del equipo · Elías González,
+  25 nov · «…»»), en la lista de sugerencias y en su «ver de dónde sale»; nunca se presenta como una reunión. La franja de
+  arriba cuenta cuántos niveles salen de una nota («2 niveles con evidencia (1 de una nota del equipo)»), y el globito del
+  botón dice que lee las notas. **Afuera no llega el nombre:** la página del cliente lee solo el nivel
+  (escala-para-el-cliente.ts) y la descripción de cada equipo, que sí lee el porqué, descarta un texto que nombra a alguien
+  de Smarteam (`descripcionValida`).
+- **Lo confirmado no se pisa y lo descartado no vuelve:** lo que propone «Ubicar» pasa por `fusionarPropuestas`, como
+  siempre: el mismo nivel que el confirmado no se propone, otro distinto queda como sugerencia hasta que una persona lo usa,
+  y uno descartado no vuelve. Lo que alguien sacó con «Fuera de la exploración» son reuniones: una nota no las trae de
+  vuelta (la base las sigue saltando).
+- **Qué notas leyó cada corrida** (`CorridaDelAgente.notas` y `notasEn`, en el Json de la propuesta, sin SQL): las claves de
+  las notas que leyó esa corrida de «Ubicar» y cuándo las leyó (el `updatedAt` de la fila que leyó: lo guardado hasta ahí
+  entró). Una nota es nueva para «Ubicar» si la última vez no la leyó o se editó después de que la leyó (`notasSinUbicar`,
+  lib/exploraciones/completar-el-diagnostico.ts): una editada mientras «Ubicar» corría cuenta, como en el Resumen con
+  `leidoHasta`. Una corrida de antes de este cambio no leyó ninguna.
+- **Un solo botón, por pasos** (lo más simple para «que también ofrezca volver a ubicar»; lo decide `lasNotasNuevas`, puro y
+  con prueba): con respuestas que el Resumen no leyó, el aviso de arriba dice «Hay N respuestas nuevas». Si «Ubicar» tampoco
+  las leyó, dice que lo que cuenta el equipo puede cambiar el nivel de una parte y su botón es «Volver a ubicar» (el mismo
+  pedido que el botón de la línea, con el mismo proyecto de contexto: `useUbicarLaEscala` sobre
+  lib/exploraciones/contexto-de-ubicar.ts); cuando «Ubicar» ya las leyó, vuelve a «Rehacer con IA» y, si quedaron niveles
+  propuestos sin usar, dice que se usen o descarten antes. Nunca los dos a la vez: primero los niveles, después el Resumen
+  que los cuenta. Solo en la preventa y si ya se ubicó alguna vez (si no, la línea dice que falta ubicarla y el aviso no
+  la contradice ni esconde «Rehacer con IA»). La línea de debajo de la página también lo dice: «Hay 1 respuesta que todavía
+  no se usó para ubicar la escala: puede cambiar un nivel.», con su botón «Volver a ubicar…» en primario: el MISMO nombre
+  que el de arriba, porque hace lo mismo (con reuniones nuevas sigue «Actualizar»). Los dos a la vista a la vez es a
+  propósito: el de arriba está junto al Resumen y el de abajo junto a «Para completar el diagnóstico», donde se responde.
+  No dice «nueva»: después del deploy, toda
+  preventa con notas y una «Ubicar» de antes lo va a decir una vez, y esas notas no son nuevas, nunca se leyeron. *Se
+  descartó* un botón que haga las dos cosas: lo que propone «Ubicar» espera a que una persona lo use, y el Resumen armado en
+  seguida contaría los niveles de antes. *Lo aceptado:* mientras el aviso ofrece «Volver a ubicar», la fila de abajo no
+  ofrece «Rehacer con IA» (un solo botón de la IA a la vista); quien quiera solo el Resumen ubica primero.
+- **En la preventa de un prospecto** el botón sigue pidiendo al menos una reunión con texto: «Ubicar con las reuniones»
+  promete reuniones, y con solo notas no se ubica.
+- **Medido (simulacro, 25 nov, TEC · AE, solo lectura; `scripts/simular-ubicar-la-escala.ts --nota "<texto>"`, la nota
+  solo en memoria, con el proyecto «AE | SMARTLOOP» de contexto):** AE no tiene ninguna nota guardada todavía. Sin nota:
+  3 niveles con cita y 14 por explorar (US$ 0,35); «Matrículas ganadas y perdidas» de Admisiones quedaba Inicial por
+  explorar. Con una respuesta de ejemplo («Sobre Admisiones · Matrículas ganadas y perdidas (…): No lo registran. Cuando
+  un aspirante no paga la boleta, la gestora lo marca como perdido sin ningún motivo…»): esa parte pasa a Inicial CON
+  evidencia, citada de la nota, con de dónde sale «Nota del equipo · Alguien del equipo, 25 nov» y un porqué que dice
+  «una nota del equipo» sin nombre; 3 con cita (1 de la nota) y 10 por explorar (US$ 0,35, el mismo costo: la nota suma
+  unos 300 caracteres). Lo demás varía lo normal entre dos corridas. Los 13 niveles confirmados no se tocan.
+- **Datos y SQL:** sin SQL; nada se escribió en producción.
 
 ## Una empresa con varias unidades: cada unidad es una ficha (2026-11-07)
 

@@ -37,6 +37,17 @@ export function cuandoSeAgrego(clave: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * Cuándo se escribió una nota (ISO): lo que guardó el servidor (`contenido.autoresDeLasNotas[clave].en`); si no está o no
+ * se entiende, el instante de su clave. null sin ninguno. La única regla: la usan el rótulo de la nota en el Resumen y en
+ * «Ubicar» (notas-del-equipo.ts) y lo que cuenta como nuevo (completar-el-diagnostico.ts).
+ */
+export function cuandoSeEscribioLaNota(clave: string, autor: { en?: string | null } | null | undefined): string | null {
+  if (autor?.en && Number.isFinite(Date.parse(autor.en))) return autor.en;
+  const ms = cuandoSeAgrego(clave);
+  return ms === null ? null : new Date(ms).toISOString();
+}
+
 /** Lo que sabe el equipo, de lo más viejo a lo más nuevo, sin las vacías. */
 export function loQueSabeElEquipo(notas: Readonly<Record<string, string>>): { clave: string; texto: string }[] {
   return Object.entries(notas)
