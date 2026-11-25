@@ -96,7 +96,15 @@ describe("2 · arriba del Resumen: «Falta armar el Resumen» y en qué va", () 
 
   it("el aviso pinta lo que decide `queDiceElAviso` (lib, con su prueba): la fase, el reloj sin anunciarse, cómo seguir", () => {
     const aviso = pagina.slice(pagina.indexOf("function AvisoDelResumen("), pagina.indexOf("export default function PaginaDeLaEscala"));
-    expect(pagina).toContain("const aviso = queDiceElAviso({ resumenEn: res.at, corrida: corridaDelResumen, lanzando: lanzandoElResumen, sinSaber: sinSaberDelResumen, nuevas, cerrado: falloCerrado });");
+    expect(pagina).toContain(
+      "const aviso = queDiceElAviso({ resumenEn: res.at, corrida: corridaDelResumen, lanzando: lanzandoElResumen, sinSaber: sinSaberDelResumen, nuevas, cerrado: falloCerrado, ubicarPrimero });",
+    );
+    // Con respuestas que «Ubicar» tampoco leyó (25 nov): primero «Volver a ubicar», el mismo pedido que la línea.
+    const nuevas = aviso.slice(aviso.indexOf('case "nuevas":'));
+    expect(nuevas).toMatch(/if \(aviso\.ubicar\)[\s\S]{0,1200}onClick=\{ubicar\.onUbicar\}[\s\S]{0,200}"Volver a ubicar"/);
+    expect(pagina).toContain("ubicar={{ onUbicar: () => void ubicacion.ubicar(),");
+    // Lo decide `lasNotasNuevas` (con su prueba): solo en la preventa, y desde lo que leyó el Resumen que hay.
+    expect(pagina).toMatch(/lasNotasNuevas\(\{[\s\S]{0,300}resumenDesde: res\.at \? leidoHasta\(res\.at, laQueLoArmo\) : null,\s*enLaPreventa: lugar === "preventa",/);
     for (const tipo of ["corriendo", "sin-saber", "detenida", "falta", "fallo", "nuevas"]) expect(aviso, tipo).toContain(`case "${tipo}":`);
     // El reloj no se anuncia cada segundo (el Alert es una región viva): solo la fase.
     expect(aviso).toMatch(/<span className="tabular-nums" aria-hidden="true">\s*· lleva \{cuantoLleva\(aviso\.desde, ahora\)\}/);

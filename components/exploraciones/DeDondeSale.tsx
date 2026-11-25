@@ -14,6 +14,9 @@
  *
  * `noSostiene`: la cifra se cambió a mano y la cita ya no la dice (queda para corregirla con lo que dijo la empresa); el
  * ícono va en ámbar.
+ *
+ * Desde el 25 nov va PEGADO AL FINAL del texto que sostiene, en su mismo renglón (la `cola` de TextoEditableDeLaPagina,
+ * que lo une a la última palabra; Elías: caía debajo de cada línea).
  */
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";

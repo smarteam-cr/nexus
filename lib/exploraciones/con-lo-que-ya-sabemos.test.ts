@@ -24,6 +24,7 @@ import {
 } from "./resumen-de-la-escala";
 import { sugerirReunionesDeTrabajo } from "./reuniones-de-trabajo";
 import { partirDeLoQueYaSabemos, reunionesParaUbicar } from "./posicionar";
+import { contextoElegido, contextoParaUbicar, elegirElContexto, suscribirseAlContexto } from "./contexto-de-ubicar";
 
 describe("partirDeLoQueYaSabemos", () => {
   it("la preventa de un cliente parte de lo que ya sabemos; la de un prospecto, de sus reuniones", () => {
@@ -273,10 +274,37 @@ describe("lo que cazó la revisión del 24 nov", () => {
 
   it("⛔ el selector del contexto no se pierde al primer cambio: vive aparte de `exp`", () => {
     const paso = leer("components", "exploraciones", "PasoEscala.tsx");
-    expect(paso).toMatch(/const \{ exp, puedeEditar, proyectosDeLaEmpresa \} = useLienzo\(\)/);
+    // Desde el 25 nov la lista y la elección viven en `useUbicarLaEscala` (la comparten la línea y el aviso del Resumen).
+    const ubicar = leer("components", "exploraciones", "useUbicarLaEscala.ts");
+    expect(ubicar).toMatch(/const \{ exp, proyectosDeLaEmpresa \} = useLienzo\(\)/);
+    expect(paso).toMatch(/const \{ conLoQueYaSabemos, proyectos, contexto, elegir, ubicar, corriendo, lanzando, ubicando \} = useUbicarLaEscala\(\)/);
     expect(paso).not.toMatch(/exp\.proyectosDeLaEmpresa/);
+    expect(ubicar).not.toMatch(/exp\.proyectosDeLaEmpresa/);
     const lienzo = leer("components", "exploraciones", "LienzoDeExploracion.tsx");
     expect(lienzo).toMatch(/if \(data\.exploracion\.proyectosDeLaEmpresa\) setProyectosDeLaEmpresa\(data\.exploracion\.proyectosDeLaEmpresa\)/);
+  });
+
+  it("⛔ el botón de arriba y la línea de abajo ubican con el MISMO proyecto de contexto (25 nov)", () => {
+    const proyectos = [{ id: "p-activo" }, { id: "p-terminado" }];
+    // Nadie eligió: el sugerido (el primero, el activo más nuevo), para los dos.
+    expect(contextoParaUbicar(contextoElegido("exp-a"), proyectos)).toBe("p-activo");
+    // Lo que se elige abajo lo ve cualquier otro que lea esta exploración (el aviso de arriba), y se le avisa.
+    let avisos = 0;
+    const soltar = suscribirseAlContexto(() => avisos++);
+    elegirElContexto("exp-a", null);
+    expect(contextoParaUbicar(contextoElegido("exp-a"), proyectos)).toBeNull();
+    elegirElContexto("exp-a", "p-terminado");
+    expect(contextoParaUbicar(contextoElegido("exp-a"), proyectos)).toBe("p-terminado");
+    expect(avisos).toBe(2);
+    soltar();
+    // Es de cada exploración: otra sigue con el sugerido.
+    expect(contextoParaUbicar(contextoElegido("exp-b"), proyectos)).toBe("p-activo");
+    // Los dos botones pasan por el mismo hook, y el hook manda ese contexto en el pedido.
+    const ubicar = leer("components", "exploraciones", "useUbicarLaEscala.ts");
+    expect(ubicar).toContain("useSyncExternalStore(suscribirseAlContexto, () => contextoElegido(exp.id), sinElegir)");
+    expect(ubicar).toContain("const elegir = (id: string | null) => elegirElContexto(exp.id, id);");
+    expect(leer("components", "exploraciones", "PasoEscala.tsx")).toContain("onElegir={(v) => elegir(v === SIN_PROYECTO ? null : v)}");
+    expect(leer("components", "exploraciones", "PaginaDeLaEscala.tsx")).toContain("const ubicacion = useUbicarLaEscala();");
   });
 
   it("⛔ leer la cuenta pide acceso a la empresa: «Ubicar» de un cliente y las reuniones sugeridas", () => {

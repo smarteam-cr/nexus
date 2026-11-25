@@ -185,7 +185,7 @@ async function leerAuditoria(clientId: string): Promise<AuditoriaDeLaMemoria | n
 async function cargarDatosDeLaCuenta(
   clientId: string,
   q: QueCargar,
-  opts: { proyectoActualId: string | null; sinPartes: ReadonlySet<ClaveDeParte>; alcance: AlcanceDeMemoria },
+  opts: { proyectoActualId: string | null; sinPartes: ReadonlySet<ClaveDeParte>; alcance: AlcanceDeMemoria; sinNotasDeLaPreventa?: string | null },
 ): Promise<DatosDeLaCuenta | null> {
   const [cliente, procesos, entrega, fueraDeAlcance, preventa, auditoria, hechos, personasYTickets, notasDelEquipo, comunicaciones, compromisosDeLaCuenta, equipo] = await Promise.all([
     seguro(
@@ -222,7 +222,7 @@ async function cargarDatosDeLaCuenta(
     q.compromisosDeLaCuenta && !opts.sinPartes.has("compromisosDeLaCuenta")
       ? seguro("los compromisos de la cuenta", () => compromisosDeLaCuentaParaAgentes(clientId, TOPES_DE_LA_MEMORIA.compromisosDeLaCuenta), [])
       : Promise.resolve([]),
-    q.equipo && !opts.sinPartes.has("equipo") ? seguro("lo que confirmó el equipo", () => loQueConfirmoElEquipo(clientId, opts.alcance), []) : Promise.resolve([]),
+    q.equipo && !opts.sinPartes.has("equipo") ? seguro("lo que confirmó el equipo", () => loQueConfirmoElEquipo(clientId, opts.alcance, { sinLaPreventa: opts.sinNotasDeLaPreventa }), []) : Promise.resolve([]),
   ]);
   if (!cliente) return null;
   return {
@@ -305,11 +305,20 @@ function partesExcluidas(sinPartes: readonly ClaveDeParte[] | undefined, tambien
 
 export async function memoriaDeLaCuenta(
   clientId: string,
-  opts: { lector: LectorDeMemoria; projectId?: string | null; tambienLeer?: readonly ClaveDeParte[] },
+  /**
+   * `sinNotasDeLaPreventa` (25 nov): «Ubicar» manda las notas de su preventa aparte, como fuentes que se citan; en «Lo que
+   * confirmó el equipo» van solo las de las otras preventas de la empresa.
+   */
+  opts: { lector: LectorDeMemoria; projectId?: string | null; tambienLeer?: readonly ClaveDeParte[]; sinNotasDeLaPreventa?: string | null },
 ): Promise<MemoriaArmada> {
   const c = consumidorDeLaMemoria(opts.lector);
   const sinPartes = partesExcluidas(c.sinPartes, opts.tambienLeer);
-  const datos = await cargarDatosDeLaCuenta(clientId, queCargar(c.alcance), { proyectoActualId: opts.projectId ?? null, sinPartes, alcance: c.alcance });
+  const datos = await cargarDatosDeLaCuenta(clientId, queCargar(c.alcance), {
+    proyectoActualId: opts.projectId ?? null,
+    sinPartes,
+    alcance: c.alcance,
+    sinNotasDeLaPreventa: opts.sinNotasDeLaPreventa ?? null,
+  });
   if (!datos) return VACIA;
   return armarMemoriaDeLaCuenta(datos, {
     alcance: c.alcance,

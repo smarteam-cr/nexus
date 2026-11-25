@@ -120,6 +120,17 @@ describe("qué dice el aviso de arriba del Resumen", () => {
     expect(queDiceElAviso({ ...base, resumenEn: "2026-11-24T21:00:00.000Z", corrida: hecha(), nuevas: "Hay 2 respuestas nuevas" })).toEqual({ tipo: "nuevas", titulo: "Hay 2 respuestas nuevas" });
     expect(queDiceElAviso({ ...base, resumenEn: "2026-11-24T21:00:00.000Z", corrida: hecha() })).toBeNull();
   });
+
+  it("⛔ si «Ubicar» tampoco las leyó, el paso es volver a ubicar; un solo botón por vez (25 nov)", () => {
+    const conResumen = { ...base, resumenEn: "2026-11-24T21:00:00.000Z", corrida: hecha(), nuevas: "Hay 1 respuesta nueva" };
+    expect(queDiceElAviso({ ...conResumen, ubicarPrimero: true })).toEqual({ tipo: "nuevas", titulo: "Hay 1 respuesta nueva", ubicar: true });
+    // Cuando «Ubicar» ya las leyó, vuelve «Rehacer con IA».
+    expect(queDiceElAviso({ ...conResumen, ubicarPrimero: false })).toEqual({ tipo: "nuevas", titulo: "Hay 1 respuesta nueva" });
+    // Sin nada nuevo para el Resumen, no hay aviso (lo dice la línea de debajo de la página).
+    expect(queDiceElAviso({ ...conResumen, nuevas: null, ubicarPrimero: true })).toBeNull();
+    // Sin Resumen, falta armarlo: lo de ubicar no lo tapa.
+    expect(queDiceElAviso({ ...base, ubicarPrimero: true })).toEqual({ tipo: "falta", fallo: null });
+  });
 });
 
 /** Una red de mentira: lo que responde el GET va saliendo de una lista; el reloj no espera. */
