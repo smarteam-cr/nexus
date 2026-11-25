@@ -22,6 +22,12 @@
  * en el servidor la parte de Nexus que trabaja la cuenta y vuelve al MISMO hilo como una lista (lib/chat-de-nexus/lista.ts)
  * con sus casillas y «Aplicar» (`POST <urlDelTurno>/aplicar`): el servidor la lee de la vuelta, nunca de acá. Una lista
  * que la siguiente lleva (o suelta) se apaga; la aplicada dice lo que dejó.
+ *
+ * UN SOLO CONTEXTO (25 nov, Elías probando TEC · AE): un cambio a la página de La escala también es una vuelta de ESTA
+ * conversación. «✨ Mejorar con IA» de una sección abre el cajón con esa parte como chip (`escala`): el chip solo dice a qué
+ * parte va un cambio, y se puede preguntar de la cuenta y conversar igual. La propuesta vuelve al hilo con su vuelta y la
+ * pinta el lugar (`pintarLaEscala`); lo que se hace con ella queda en el mensaje (`cambiarLaEscala`). Cada respuesta que
+ * llega avisa al lugar (`alResponder`): con el cajón cerrado, el botón «Nexus» lleva un punto rojo en vez de un aviso.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert } from "@/components/ui";
@@ -31,6 +37,7 @@ import { devolverALaCaja } from "@/lib/asistente/caja";
 import { notaDeLaConversacion, paraContarComoNota, paraPreguntar, paraSeguirDespuesDeGuardar, TOPES, type ResultadoDelTurno } from "@/lib/chat-de-nexus/conversacion";
 import type { MensajeGuardado } from "@/lib/chat-de-nexus/guardada";
 import { conLaListaAplicada, conLaListaNueva, cuerpoDeLaVuelta, seGuardaComoNota, type ListaEnLaConversacion } from "@/lib/chat-de-nexus/lista";
+import { textoDeLaEscala, type DondeEnLaEscala, type EscalaEnLaConversacion } from "@/lib/chat-de-nexus/escala-en-la-conversacion";
 import type { CitaDeLaRespuesta, RespuestaDeNexus } from "@/lib/chat-de-nexus/respuesta";
 import { textoDelBoton, tituloDeLaLista } from "@/lib/nexus-chat/textos";
 import TextoConFormato from "./TextoConFormato";
@@ -170,6 +177,8 @@ export interface PanelDeNexusProps {
   onClose: () => void;
   /** De qué se habla, debajo de «Nexus» («Preventa · …»). */
   subtitulo: string;
+  /** Lo que se le garantiza, entero en su propia línea debajo del subtítulo («Nexus propone, tú aplicas; nada se publica.»). */
+  garantia?: string;
   /** Fijo arriba del hilo. Hoy la preventa no lo llena: el enlace «Tareas, siguiente paso o la guía» se quitó el 24 nov. */
   arriba?: ReactNode;
   ancho: "normal" | "amplio";
@@ -215,8 +224,8 @@ export interface PanelDeNexusProps {
    * Con la guía, lo que se escribe es un pedido sobre ella (`pedir`), como con el chip de La escala.
    */
   lugar?: "guia";
-  /** Lo que se mejora, como chip sobre la caja, con su ✕ para volver a la conversación de siempre. */
-  chip?: { texto: string; alQuitar: () => void };
+  /** Lo que se mejora, como chip sobre la caja, con su ✕ (y lo que hace la ✕, para el lector de pantalla). */
+  chip?: { texto: string; alQuitar: () => void; quitarLabel?: string };
   /** Pedidos listos para mandar, en botones sobre la caja (con la caja vacía). Un clic llena la caja; no la manda. */
   sugerencias?: readonly string[];
   /** Se aplicó una lista de la cuenta: el lugar vuelve a leer lo que cambió (la guía, las tareas). */
@@ -228,12 +237,27 @@ export interface PanelDeNexusProps {
    */
   prefijo?: string;
   alUsarElPrefijo?: () => void;
+  /**
+   * El chip de La escala (25 nov): a qué página y sección va un cambio. Viaja en cada envío; lo que no es pregunta ni pedido
+   * de la cuenta es un cambio a esa parte. Sin esto, un cambio a la página (si lo hay) va al Resumen.
+   */
+  escala?: DondeEnLaEscala | null;
+  /**
+   * Cómo se ve una propuesta a La escala en el hilo (la pinta el lugar). `cambiar` actualiza ese mensaje; `ocupado`: Nexus
+   * piensa o aplica una lista (revisión del 25 nov: un «Aplicar» entretanto se perdía cuando llegaba la respuesta).
+   */
+  pintarLaEscala?: (e: EscalaEnLaConversacion, cambiar: (f: (e: EscalaEnLaConversacion) => EscalaEnLaConversacion) => void, ocupado: boolean) => ReactNode;
+  /** Llegó la respuesta de una vuelta (cualquiera): con el cajón cerrado, el lugar lo marca en su botón. */
+  alResponder?: () => void;
+  /** El lugar está aplicando algo (un cambio a La escala): «Nueva conversación» y los botones esperan, como con una lista. */
+  ocupadoAfuera?: boolean;
 }
 
 export default function PanelDeNexus({
   abierto,
   onClose,
   subtitulo,
+  garantia,
   arriba,
   ancho,
   onAncho,
@@ -258,6 +282,10 @@ export default function PanelDeNexus({
   alAplicar,
   prefijo,
   alUsarElPrefijo,
+  escala = null,
+  pintarLaEscala,
+  alResponder,
+  ocupadoAfuera = false,
 }: PanelDeNexusProps) {
   const { id: conversacion, mensajes } = c;
   const setMensajes = (m: MensajeEnPantalla[]) => alCambiar({ id: conversacion, mensajes: m });
@@ -277,7 +305,7 @@ export default function PanelDeNexus({
   useEffect(() => {
     conversacionDeAhora.current = c;
   }, [c]);
-  const ocupado = pensando || !!aplicando;
+  const ocupado = pensando || !!aplicando || ocupadoAfuera;
 
   /**
    * Una vuelta: `t` va al final de `base`. `modo`: «contar», lo último se cuenta aunque tenga forma de pregunta («Guardarlo
@@ -293,33 +321,45 @@ export default function PanelDeNexus({
     if (modo === "normal") setTexto("");
     setPensando(true);
     setError(null);
+    /**
+     * Lo de AHORA, cuando vuelve la respuesta (revisión del 25 nov): mientras Nexus pensaba, la persona pudo aplicar o
+     * descartar un cambio de una propuesta de antes; armar la respuesta sobre la foto del envío lo volvía a «pendiente».
+     */
+    const sobreLoDeAhora = () => {
+      const a = conversacionDeAhora.current;
+      return a.id === conversacion && a.mensajes.length === conLaPersona.length ? a.mensajes : conLaPersona;
+    };
     try {
       const r = await fetch(urlDelTurno, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // El cuerpo lo arma una función pura y probada (lib/chat-de-nexus/lista.ts › `cuerpoDeLaVuelta`).
-        body: JSON.stringify(cuerpoDeLaVuelta({ conversacion, mensajes: conLaPersona, modo, pedidosDeLaCuenta, lugar, soltar })),
+        body: JSON.stringify(cuerpoDeLaVuelta({ conversacion, mensajes: conLaPersona, modo, pedidosDeLaCuenta, lugar, soltar, escala })),
       });
       const j = (await r.json().catch(() => null)) as { turno?: ResultadoDelTurno; error?: string; aviso?: string } | null;
       if (!r.ok || !j?.turno) throw new Error(j?.error ?? "Nexus no pudo responder. Inténtalo de nuevo.");
       setAvisoDelMes(j.aviso ?? null);
       const turno = j.turno;
       if (turno.tipo === "pregunta") {
-        setMensajes([...conLaPersona, { de: "nexus", texto: turno.preguntas.join("\n") }]);
+        setMensajes([...sobreLoDeAhora(), { de: "nexus", texto: turno.preguntas.join("\n") }]);
       } else if (turno.tipo === "cortesia") {
         // Un «gracias» o un «ok»: ni va a la nota ni se ofrece guardarlo.
-        const conLaCortesia = conLaPersona.map((m, i) => (i === conLaPersona.length - 1 ? { ...m, es: "cortesia" as const } : m));
+        const conLaCortesia = sobreLoDeAhora().map((m, i) => (i === conLaPersona.length - 1 ? { ...m, es: "cortesia" as const } : m));
         setMensajes([...conLaCortesia, { de: "nexus", es: "cortesia", texto: turno.texto }]);
       } else if (turno.tipo === "respuesta") {
         // «¿Era una pregunta?»: recién con la respuesta en la mano el lugar olvida lo que iba a guardarse. Si fallaba
         // antes, lo propuesto seguía a la vista con su «Guardar».
         if (modo === "preguntar") alVolverAConversar?.();
         // Lo que preguntó no va a la nota; la respuesta no cuenta como una ronda de preguntas.
-        const conLaConsulta = conLaPersona.map((m, i) => (i === conLaPersona.length - 1 ? { ...m, es: "consulta" as const } : m));
+        const conLaConsulta = sobreLoDeAhora().map((m, i) => (i === conLaPersona.length - 1 ? { ...m, es: "consulta" as const } : m));
         setMensajes([...conLaConsulta, { de: "nexus", es: "respuesta", texto: turno.respuesta.texto, respuesta: turno.respuesta }]);
       } else if (turno.tipo === "lista") {
         // Un pedido de la cuenta: lo pedido no va a la nota, y la lista queda en el hilo con su «Aplicar».
-        setMensajes(conLaListaNueva(conLaPersona, turno.lista));
+        setMensajes(conLaListaNueva(sobreLoDeAhora(), turno.lista));
+      } else if (turno.tipo === "escala") {
+        // Un cambio a La escala (25 nov): lo pedido no va a la nota, y la propuesta queda en el hilo, con su vuelta.
+        const conElCambio = sobreLoDeAhora().map((m, i) => (i === conLaPersona.length - 1 ? { ...m, es: "cambio" as const } : m));
+        setMensajes([...conElCambio, { de: "nexus", es: "escala", texto: textoDeLaEscala(turno.escala), vuelta: turno.escala.id, escala: turno.escala }]);
       } else if (turno.tipo === "listo") {
         // No leyó: nada se guarda como nota (podía ser una pregunta), y el texto vuelve a la caja.
         if (turno.sinLeer) throw new Error("Nexus no pudo leerlo esta vez. Vuelve a intentarlo: no se guardó nada.");
@@ -327,6 +367,7 @@ export default function PanelDeNexus({
       }
       setContadoAMano(modo === "contar");
       if (conPrefijo) alUsarElPrefijo?.();
+      alResponder?.();
     } catch (e) {
       // Lo que escribió no se pierde: vuelve a la caja (o, al contarlo como nota, la respuesta vuelve a su lugar).
       setMensajes(antes);
@@ -397,6 +438,18 @@ export default function PanelDeNexus({
     }
   };
 
+  /**
+   * Cambia la propuesta a La escala de la vuelta `vuelta` (lo aplicado, lo descartado) sobre la conversación de AHORA. El
+   * ref se pone al día enseguida: dos cambios seguidos no se pisan.
+   */
+  const cambiarLaEscala = (vuelta: string, f: (e: EscalaEnLaConversacion) => EscalaEnLaConversacion) => {
+    const ahora = conversacionDeAhora.current;
+    if (ahora.id !== conversacion) return;
+    const nueva = { id: ahora.id, mensajes: ahora.mensajes.map((m) => (m.es === "escala" && m.vuelta === vuelta && m.escala ? { ...m, escala: f(m.escala) } : m)) };
+    conversacionDeAhora.current = nueva;
+    alCambiar(nueva);
+  };
+
   const reiniciar = () => {
     setTexto("");
     setError(null);
@@ -417,6 +470,7 @@ export default function PanelDeNexus({
       cajaRef={cajaRef}
       ariaLabel="Nexus · conversación"
       subtitulo={subtitulo}
+      garantia={garantia}
       arriba={arriba}
       ancho={ancho}
       onAncho={onAncho}
@@ -431,7 +485,7 @@ export default function PanelDeNexus({
       pie={
         <>
         {chip ? (
-          <ChipDeNexus onQuitar={chip.alQuitar} quitarLabel="Volver a la conversación de siempre">
+          <ChipDeNexus onQuitar={chip.alQuitar} quitarLabel={chip.quitarLabel ?? "Volver a la conversación de siempre"}>
             {chip.texto}
           </ChipDeNexus>
         ) : null}
@@ -451,8 +505,18 @@ export default function PanelDeNexus({
           setTexto={setTexto}
           onEnviar={() => void enviar()}
           enviarApagado={pensando || !texto.trim()}
-          placeholder={prefijo ? "Lo que sabes de esto…" : lugar === "guia" ? "Pídele un cambio a la guía…" : mensajes.length ? "Tu respuesta, u otra pregunta…" : "Cuéntale o pregúntale algo del cliente…"}
-          ariaLabel={lugar === "guia" ? "Lo que le pides a Nexus sobre la guía" : mensajes.length ? "Tu mensaje" : "Lo que le cuentas o le preguntas a Nexus"}
+          placeholder={
+            prefijo
+              ? "Lo que sabes de esto…"
+              : lugar === "guia"
+                ? "Pídele un cambio a la guía…"
+                : escala
+                  ? "Pídele un cambio a esta parte, o pregúntale algo…"
+                  : mensajes.length
+                    ? "Tu respuesta, u otra pregunta…"
+                    : "Cuéntale o pregúntale algo del cliente…"
+          }
+          ariaLabel={lugar === "guia" ? "Lo que le pides a Nexus sobre la guía" : escala ? "Lo que le pides o preguntas a Nexus" : mensajes.length ? "Tu mensaje" : "Lo que le cuentas o le preguntas a Nexus"}
           apagada={cajaApagada}
           // Con el prefijo de «Responder con Nexus», lo que la persona escribe deja lugar para él: el mensaje entero no puede
           // pasar el tope del servidor (revisión del 24 nov: volvía «Cuerpo inválido» sin decir por qué).
@@ -470,7 +534,10 @@ export default function PanelDeNexus({
         <ol className="flex flex-col gap-3" aria-label="La conversación">
           {mensajes.map((m, i) => (
             <li key={i}>
-              {m.lista ? (
+              {m.escala && pintarLaEscala ? (
+                // Una propuesta a La escala (25 nov): la pinta el lugar, con su «Aplicar» y su «Deshacer».
+                <div className="space-y-2">{pintarLaEscala(m.escala, (f) => cambiarLaEscala(m.escala!.id, f), ocupado)}</div>
+              ) : m.lista ? (
                 <>
                   <LaLista l={m.lista} aplicando={aplicando === m.lista.id} apagado={ocupado || !!apagado} onAplicar={(d) => void aplicarLista(m.lista!, d)} />
                   {/* Lo que se leyó como pedido y se quería contar: un clic lo cuenta (y la lista, si está viva, ya no va). */}

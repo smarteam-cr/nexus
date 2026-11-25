@@ -658,6 +658,13 @@ describe("4 · se edita en su lugar y «Rehacer con IA» no pisa lo escrito", ()
     expect(ok(editarElResumen(g, "etapa:s1:friccion", "", o)).recorrido?.[0].friccion).toBeNull();
     expect(ok(editarElResumen(g, "etapa:s1", null, o)).recorrido?.map((e) => e.id)).toEqual(["s2", "s3"]);
     expect(ok(editarElResumen(g, "etapa:nuevo", "Renovación", o)).recorrido?.[3]).toMatchObject({ nombre: "Renovación", mano: true });
+    // Con sus partes (Nexus, 25 nov), el paso nace entero: qué pasa ahí y lo que se traba.
+    expect(ok(editarElResumen(g, "etapa:nuevo", "Renovación", { ...o, campos: { texto: "El cliente renueva por correo.", friccion: "Nadie avisa antes." } })).recorrido?.[3]).toMatchObject({
+      nombre: "Renovación",
+      texto: "El cliente renueva por correo.",
+      friccion: "Nadie avisa antes.",
+      mano: true,
+    });
     expect(ok(editarElResumen(g, "op:o2:nombre", "Éxito del cliente", o)).operativas?.[1]).toMatchObject({ nombre: "Éxito del cliente", nombreMano: true });
     expect(ok(editarElResumen(g, "op:o2:bien:nuevo", "Tienes videos y manuales.", o)).operativas?.[1].bien).toHaveLength(2);
     expect(ok(editarElResumen(g, "op:o2:reto:t1", null, o)).operativas?.[1].retos).toEqual([]);

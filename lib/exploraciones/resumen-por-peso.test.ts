@@ -337,6 +337,33 @@ describe("guardar, editar, rehacer y pintar", () => {
     expect([enLaPagina.estado, enLaPagina.porConfirmar]).toEqual(["declarado", undefined]);
   });
 
+  it("la cifra grande toma la cita de una cifra de un equipo, solo si esa cita dice su número (25 nov, «solo en el chat»)", () => {
+    const r = editarElResumen(guardado(), "negocio:tamano:nuevo", "4800 clientes en la cartera", { ...EDITAR, citasDe: "op:o1:cifra:c1" });
+    if (!r.ok) throw new Error(r.error);
+    expect(r.resumen.negocio?.tamano?.[0]).toMatchObject({ texto: "4800 clientes en la cartera", mano: true, citas: [CITA_MARCO] });
+    // Con la cita, sale al cliente (sin ella, una cifra escrita no sale: la vara del 9 nov).
+    expect(pagina(r.resumen, false).tamano).toMatchObject({ valor: "4800", rotulo: "clientes en la cartera" });
+    const sinLaCita = editarElResumen(guardado(), "negocio:tamano:nuevo", "4800 clientes en la cartera", EDITAR);
+    if (!sinLaCita.ok) throw new Error(sinLaCita.error);
+    expect(pagina(sinLaCita.resumen, false).tamano).toBeNull();
+    // Un número que la cita no dice no se escribe; ni la cita de una cifra que ya no está; ni otra parte que no sea la cifra grande.
+    expect(editarElResumen(guardado(), "negocio:tamano:nuevo", "5000 clientes", { ...EDITAR, citasDe: "op:o1:cifra:c1" }).ok).toBe(false);
+    expect(editarElResumen(guardado(), "negocio:tamano:nuevo", "4800 clientes", { ...EDITAR, citasDe: "op:o1:cifra:c9" }).ok).toBe(false);
+    expect(editarElResumen(guardado(), "negocio:vende:nuevo", "4800 clientes", { ...EDITAR, citasDe: "op:o1:cifra:c1" }).ok).toBe(false);
+  });
+
+  it("un punto nuevo con sus partes nace entero: lo que explica y su equipo (25 nov, desde Nexus)", () => {
+    const entero = editarElResumen(guardado(), "punto:nuevo", "Sin reporte por gestor", { ...EDITAR, campos: { texto: "Nadie ve cuánto cobra cada gestor.", areaId: "3" } });
+    if (!entero.ok) throw new Error(entero.error);
+    expect(entero.resumen.puntos?.[1]).toMatchObject({ titulo: "Sin reporte por gestor", texto: "Nadie ve cuánto cobra cada gestor.", areaId: "3", mano: true, citas: [] });
+    // Un equipo que no es de la escala no entra: no se agrega nada.
+    expect(editarElResumen(guardado(), "punto:nuevo", "Sin reporte", { ...EDITAR, campos: { texto: "X", areaId: "9" } }).ok).toBe(false);
+    // A mano (sin partes), como siempre: solo el título.
+    const aMano = editarElResumen(guardado(), "punto:nuevo", "Sin reporte", EDITAR);
+    if (!aMano.ok) throw new Error(aMano.error);
+    expect(aMano.resumen.puntos?.[1]).toMatchObject({ titulo: "Sin reporte", texto: "", areaId: null });
+  });
+
   it("un punto se agrega, se cambia y se quita en su lugar; quitado, no vuelve al rehacer", () => {
     const nuevo = editarElResumen(guardado(), "punto:nuevo", "Sin reporte por gestor", EDITAR);
     if (!nuevo.ok) throw new Error(nuevo.error);

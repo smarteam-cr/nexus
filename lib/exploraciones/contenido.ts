@@ -41,7 +41,7 @@ import type { PosicionamientoDelProspecto } from "./posicionamiento";
 import type { TarjetasDeLaEscala } from "./tarjetas-de-la-escala";
 import { firmaDelArea, TOPE_DE_LA_DESCRIPCION_A_MANO, type DescripcionGuardada } from "./descripcion-de-la-escala";
 import type { ClaveDeEquipo } from "./equipos";
-import { editarElResumen, type ResumenGuardado } from "./resumen-de-la-escala";
+import { editarElResumen, type CamposDelItemNuevo, type ResumenGuardado } from "./resumen-de-la-escala";
 import type { ResumenAnterior } from "./resumen-anterior";
 import type { ActividadDelCaso, CasosAnteriores, LugarEnElPlan, ParaVentas, ValorDeVenta } from "@/lib/casos-de-uso/armado";
 import { vuelveASugeridos, type Personalizacion, type RevisionDeLosCasos } from "@/lib/casos-de-uso/personalizar";
@@ -1180,8 +1180,13 @@ export type Operacion =
   | { op: "textoDelRadar"; dimensionId: string; valor: TextoDelRadar | null }
   /** El contexto de un área para el agente de la descripción; no lo ve el cliente (null o vacío: se quita). */
   | { op: "contextoDeLaEscala"; areaId: string; texto: string | null }
-  /** Un texto del Resumen de la escala, editado en su lugar (`editarElResumen`, ./resumen-de-la-escala.ts). null: se quita o vuelve al de los datos. */
-  | { op: "resumenDeLaEscala"; clave: string; texto: string | null }
+  /**
+   * Un texto del Resumen de la escala, editado en su lugar (`editarElResumen`, ./resumen-de-la-escala.ts). null: se quita o
+   * vuelve al de los datos. `campos` (25 nov): las demás partes de un ítem NUEVO de varias partes (un punto clave, un paso),
+   * para que nazca entero de una vez (lo usa Nexus; la edición a mano agrega solo el título y completa después).
+   * `citasDe` (25 nov): la cifra grande toma la cita de esa cifra de un equipo (`op:<área>:cifra:<id>`), si la sostiene.
+   */
+  | { op: "resumenDeLaEscala"; clave: string; texto: string | null; campos?: CamposDelItemNuevo; citasDe?: string }
   /** Un texto fijo de la página del cliente (lib/external/textos-de-la-pagina.ts). null: vuelve el de siempre; "": no sale. */
   | { op: "textoDeLaPagina"; clave: string; texto: string | null }
   | { op: "casoDeUso"; useCaseId: string; valor: CasoDeUsoElegido | null }
@@ -1825,6 +1830,8 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
         firmaDe: (a) => firmaDelArea(c.chequeo, a, { ...estado, escalaVersion: validez.escalaVersion }),
         areas: validez.areas,
         en: quien.en,
+        campos: op.campos,
+        citasDe: op.citasDe,
       });
       if (!r.ok) return r;
       return { ok: true, estado: { ...estado, contenido: { ...c, resumenDeLaEscala: r.resumen } } };

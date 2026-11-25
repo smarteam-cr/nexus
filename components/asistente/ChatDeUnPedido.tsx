@@ -9,44 +9,25 @@
  * (./CajonDeNexus.tsx): el pedido se escribe en la caja de abajo, se ve en el hilo como el mensaje de la persona, y la
  * propuesta llega debajo, con «Aplicar» y «Descartar» (`children`, en `PropuestaEnElHilo`). Quien monta corre el pedido y
  * aplica; este componente solo es la cara.
+ *
+ * Una propuesta que llega con el chat cerrado se nota por el punto rojo del botón (`PuntoDePropuesta`), sin aviso flotante
+ * (25 nov, Elías: «en vez de un aviso, un punto rojo», lo mismo que el botón «Nexus» de la preventa). Hasta ese día salía
+ * además «La propuesta de Nexus está lista: ábrela en «Mejorar con IA».».
  */
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Alert, useToast } from "@/components/ui";
+import { useRef, useState, type ReactNode } from "react";
+import { Alert } from "@/components/ui";
 import { devolverALaCaja } from "@/lib/asistente/caja";
 import CajonDeNexus, { Burbuja, CajaDeNexus, ChatVacio, ChipDeNexus, Pensando } from "./CajonDeNexus";
 
-/** El aviso cuando la propuesta llega con el chat cerrado (Nexus tarda de 20 a 60 s y el chat se puede cerrar mientras). */
-export const AVISO_DE_PROPUESTA_LISTA = "La propuesta de Nexus está lista: ábrela en «Mejorar con IA».";
-
 /**
- * Lo que llama quien monta cuando llega la propuesta: si el chat está cerrado AHORA (no en el render en que se mandó el
- * pedido) y el botón sigue en pantalla, avisa con `AVISO_DE_PROPUESTA_LISTA` (el botón, además, lleva `PuntoDePropuesta`).
- * Si la persona ya se fue de esa pantalla, no avisa: no habría dónde abrirla (segunda revisión del 24 nov).
+ * El punto rojo en el botón que abre el chat mientras hay algo de Nexus sin ver y el chat está cerrado (25 nov: en vez de
+ * un aviso flotante). Lo usan los «Mejorar con IA» de un pedido y el botón «Nexus» de la preventa.
  */
-export function useAvisoDePropuestaLista(abierto: boolean): () => void {
-  const toast = useToast();
-  const abiertoRef = useRef(abierto);
-  const montado = useRef(false);
-  useEffect(() => {
-    abiertoRef.current = abierto;
-  }, [abierto]);
-  useEffect(() => {
-    montado.current = true;
-    return () => {
-      montado.current = false;
-    };
-  }, []);
-  return useCallback(() => {
-    if (montado.current && !abiertoRef.current) toast.success(AVISO_DE_PROPUESTA_LISTA);
-  }, [toast]);
-}
-
-/** El punto en el botón «Mejorar con IA» mientras hay una propuesta sin revisar y el chat está cerrado. */
-export function PuntoDePropuesta() {
+export function PuntoDePropuesta({ texto = "hay una propuesta de Nexus para revisar" }: { texto?: string }) {
   return (
     <>
-      <span aria-hidden="true" className="h-2 w-2 rounded-full bg-brand" />
-      <span className="sr-only">(hay una propuesta de Nexus para revisar)</span>
+      <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-danger-ink" />
+      <span className="sr-only">({texto})</span>
     </>
   );
 }

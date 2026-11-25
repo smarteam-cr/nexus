@@ -45,13 +45,14 @@ describe("⭐ todos los chats montan el mismo marco", () => {
     }
   });
 
-  it("⛔ la propuesta de un pedido que llega con el chat cerrado se avisa, y pedir otra no borra la de antes", () => {
+  it("⛔ la propuesta de un pedido que llega con el chat cerrado se nota en el botón, y pedir otra no borra la de antes", () => {
     /* Revisión del 24 nov: la ventana vieja no se cerraba mientras Nexus pensaba; el chat sí. Sin aviso, la propuesta
-       quedaba escondida; y borrarla al pedir otra hacía pagar dos veces si el segundo pedido fallaba. */
+       quedaba escondida; y borrarla al pedir otra hacía pagar dos veces si el segundo pedido fallaba. Desde el 25 nov
+       (Elías: «en vez de un aviso, un punto rojo») se nota solo por el punto del botón, sin aviso flotante. */
     for (const f of ["components/ai/DocumentAssist.tsx", "components/roles/RoleWorkspace.tsx", "components/exploraciones/PasoCasosDeUso.tsx"]) {
       const src = codigo(f);
       expect(src, `${f}: el botón no avisa que hay una propuesta`).toContain("<PuntoDePropuesta />");
-      expect(src, `${f}: la propuesta llega callada con el chat cerrado`).toContain("avisarSiEstaCerrado();");
+      expect(src, `${f}: volvió el aviso flotante`).not.toContain("avisarSiEstaCerrado");
       const i = src.search(/const (submit|submitAssist|pedir) = async/);
       expect(i, `${f}: no encuentro la función que pide`).toBeGreaterThan(-1);
       const resto = src.slice(i);
@@ -61,8 +62,25 @@ describe("⭐ todos los chats montan el mismo marco", () => {
     }
   });
 
-  it("el aviso de «propuesta lista» sale solo con el chat cerrado y el botón todavía en pantalla", () => {
-    expect(codigo("components/asistente/ChatDeUnPedido.tsx")).toContain("if (montado.current && !abiertoRef.current) toast.success(AVISO_DE_PROPUESTA_LISTA);");
+  it("⛔ con el chat cerrado, un punto rojo en el botón y ningún aviso flotante (25 nov, Elías)", () => {
+    const pedido = codigo("components/asistente/ChatDeUnPedido.tsx");
+    expect(pedido).not.toMatch(/toast\./);
+    expect(pedido).toContain('className="h-2 w-2 shrink-0 rounded-full bg-danger-ink"');
+    // El botón «Nexus» de la preventa lleva el mismo punto, y la conversación lo marca cuando responde con el cajón cerrado.
+    expect(codigo("components/exploraciones/BotonDeNexus.tsx")).toContain("<PuntoDeNexus exploracionId={exploracionId} />");
+    expect(codigo("components/exploraciones/HablarConNexus.tsx")).toContain("if (!abiertoAhora.current) marcarNexusSinLeer(exp.id, true);");
+    expect(codigo("components/exploraciones/HablarConNexus.tsx")).toContain("if (abierto) marcarNexusSinLeer(exp.id, false);");
+    expect(codigo("components/chat-de-nexus/PanelDeNexus.tsx")).toContain("alResponder?.();");
+  });
+
+  it("⛔ en la preventa, «✨ Mejorar con IA» de La escala abre LA conversación con la parte como chip (25 nov, un solo contexto)", () => {
+    const cajon = codigo("components/exploraciones/HablarConNexus.tsx");
+    // El pedido de un paso queda solo para La escala de la cuenta, donde no hay conversación.
+    expect(cajon).toContain("{escala && !activo && (");
+    // La conversación no se esconde al abrir desde La escala: es la misma.
+    expect(cajon).not.toContain("abierto={abierto && !escala}");
+    expect(cajon).toContain("escala={escala ? { lugar: escala.lugar, foco: escala.foco } : null}");
+    expect(cajon).toContain("<PropuestaDeLaEscala");
   });
 
   it("⛔ en los cuatro chats, un envío que falla no pisa lo escrito mientras Nexus pensaba", () => {

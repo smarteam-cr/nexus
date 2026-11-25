@@ -70,8 +70,9 @@ import { lasNotasNuevas, leidoHasta, tituloDeLasNuevas } from "@/lib/exploracion
 import { DetalleDeDimension, useMarcarNivel } from "./DetalleDeLaDimension";
 import { abrirNexusEnLaPreventa, EVENTO_LA_ESCALA_CAMBIO_CON_NEXUS } from "@/lib/exploraciones/abrir-nexus";
 import { NOMBRE_DEL_BOTON } from "@/lib/pedirle-a-nexus/contrato";
+import { PuntoDeNexus } from "./BotonDeNexus";
 import HistorialDelArea from "./HistorialDelArea";
-import { conLoQueCuestaDelArea, piezasDelArea, piezasDelResumen, type LugarEnLaEscala, type PiezaDeLaEscala } from "@/lib/exploraciones/escala-con-nexus";
+import { conLoQueCuestaDelArea, esDeLoQueHicimos, piezasDelArea, piezasDelResumen, type LugarEnLaEscala, type PiezaDeLaEscala } from "@/lib/exploraciones/escala-con-nexus";
 import { esDeLaSeccion } from "@/lib/external/secciones-de-la-escala";
 
 /** Lo que responde la ruta de la descripción (la sesión que la hizo): de dónde sale la de cada área. */
@@ -256,6 +257,8 @@ function TextoFijo({ o, guardar }: { o: EdicionDeUnTextoFijo; guardar: (clave: s
       vacio="+ Escribir"
       max={MAX_TEXTO_DE_LA_PAGINA}
       etiqueta={o.etiqueta}
+      // Las cifras de «Lo que hicimos» las cambia solo una persona (Elías, 25 nov: la IA no): escritas a mano, se marcan.
+      origen={cambiado && esDeLoQueHicimos(o.clave) ? "Lo escribió tu equipo." : null}
       quitar={cambiado ? "Volver al texto de siempre" : null}
       acciones={
         o.quitar
@@ -541,6 +544,8 @@ export default function PaginaDeLaEscala() {
     puedeEditar && piezasDeAqui.length ? (
       <Button size="sm" variant="secondary" onClick={() => abrirNexusEnLaPreventa({ exploracionId: exp.id, escala: { lugar: lugarDeAqui, nombre: nombreDeAqui, foco: null } })}>
         {NOMBRE_DEL_BOTON}
+        {/* Lo que Nexus propuso con el cajón cerrado (25 nov): un punto rojo, en vez de un aviso flotante. */}
+        <PuntoDeNexus exploracionId={exp.id} />
       </Button>
     ) : null;
 

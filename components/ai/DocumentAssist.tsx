@@ -17,7 +17,7 @@
 import { useState, type CSSProperties } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import ChatDeUnPedido, { PuntoDePropuesta, useAvisoDePropuestaLista } from "@/components/asistente/ChatDeUnPedido";
+import ChatDeUnPedido, { PuntoDePropuesta } from "@/components/asistente/ChatDeUnPedido";
 import { Burbuja } from "@/components/asistente/CajonDeNexus";
 import PropuestaDeSecciones from "@/components/ai/PropuestaDeSecciones";
 import { useChatDeSeccion } from "@/components/asistente/chat-de-seccion";
@@ -82,8 +82,6 @@ export default function DocumentAssist({
      workspace, que sí los tiene (`useEjecutarOperacionesDelChat`). Dejarlo acá habría hecho que el
      chat mandara operaciones a un segundo modelo que espera prosa. */
 
-  const avisarSiEstaCerrado = useAvisoDePropuestaLista(open);
-
   /* ⚠ La propuesta de antes NO se borra al pedir otra: se esconde mientras Nexus piensa y, si el pedido nuevo falla,
      vuelve (con su pedido). Pedirla de nuevo cuesta 40 s y la IA. */
   const submit = async (instruction: string): Promise<boolean> => {
@@ -100,8 +98,7 @@ export default function DocumentAssist({
       });
       setResult(r);
       setSelected(new Set(Object.keys(r.proposal)));
-      // Llegó con el chat cerrado (se puede cerrar mientras piensa): se avisa, y el botón lleva su punto.
-      avisarSiEstaCerrado();
+      // Si llegó con el chat cerrado (se puede cerrar mientras piensa), el botón lleva su punto rojo (25 nov: sin aviso flotante).
       return true;
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Nexus no pudo proponer. Prueba de nuevo.");

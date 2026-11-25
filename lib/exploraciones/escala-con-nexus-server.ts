@@ -45,7 +45,20 @@ import { NOMBRES_DE_LO_INTERNO, revisarLaPropuesta, type PropuestoCrudo } from "
 import { voseoDelResumen } from "./resumen-de-la-escala";
 import { inicioDelDiaCr } from "@/lib/ai/presupuesto";
 import type { EstadoDeExploracion } from "./contenido";
-import { conLoQueCuestaDelArea, guiaDeLaPieza, nombreDelLugar, operacionDelCambio, piezasDelArea, piezasDeLaSeccion, piezasDelResumen, type LugarEnLaEscala, type PiezaDeLaEscala } from "./escala-con-nexus";
+import {
+  conLoQueCuestaDelArea,
+  guiaDeLaPieza,
+  leerLaPiezaNueva,
+  revisarLoDeLaPagina,
+  yaEstaEnLaPagina,
+  nombreDelLugar,
+  operacionConSuCita,
+  piezasDelArea,
+  piezasDeLaSeccion,
+  piezasDelResumen,
+  type LugarEnLaEscala,
+  type PiezaDeLaEscala,
+} from "./escala-con-nexus";
 import { paginaParaElCse, type PaginaParaElCse } from "./escala-para-el-cliente-server";
 import { bloqueDeLoQueConfirmoElEquipo, paraElAlcance } from "./lo-que-confirmo-el-equipo";
 import { loQueConfirmoElEquipo } from "./lo-que-confirmo-el-equipo-server";
@@ -57,6 +70,20 @@ import { seRehaceElResumen } from "./resumen-de-la-escala-server";
 
 /** Lo que dice Nexus al llegar al tope por persona del día. */
 export const topeDePedidos = () => `Hoy ya le hiciste ${PEDIDOS_POR_DIA} pedidos a Nexus, el tope del día. Mañana sigues.`;
+
+/**
+ * Lo que se sabe sin la IA antes de pedirle un cambio a la página (25 nov, desde la conversación): el tope de pedidos del día
+ * de la persona y el del mes de Nexus conversando. Si no se puede, la vuelta de la conversación no se gasta.
+ */
+export async function antesDePedirleALaEscala(email: string, pedido?: string): Promise<{ ok: true } | Falla> {
+  // La caja de la conversación acepta más que un pedido a La escala: lo de más no se corta en silencio (segunda revisión).
+  if (pedido !== undefined && pedido.trim().length > MAX_PEDIDO)
+    return { ok: false, status: 400, error: `Un cambio a La escala va hasta ${MAX_PEDIDO.toLocaleString("es-CR")} caracteres: acórtalo y vuelve a mandarlo.` };
+  const tope = await topeDeNexusHoy();
+  if (tope.estado === "agotado") return { ok: false, status: 429, error: mensajeDelTope(tope) };
+  const deHoy = await prisma.agentRun.count({ where: { agentSlug: AGENTE_DE_PEDIRLE, triggeredByEmail: email, createdAt: { gte: inicioDelDiaCr(new Date()) } } });
+  return deHoy >= PEDIDOS_POR_DIA ? { ok: false, status: 429, error: topeDePedidos() } : { ok: true };
+}
 
 /** El slug de la corrida y el origen del medidor (dentro del tope de Nexus conversando: lib/ai/tope-de-nexus.ts). */
 export const AGENTE_DE_PEDIRLE = "pedirle-a-nexus";
@@ -118,9 +145,12 @@ export const REGLAS_DE_PEDIRLE = `Eres Nexus, el asistente de Smarteam. Mejoras 
 
 Cada sección del documento es UNA PIEZA de la página, con su clave, dónde está, lo que dice y lo que acepta. Para cambiar una pieza devuelve su clave con {"texto": "<el texto nuevo, completo>"}.
 - Para QUITAR una pieza que «se puede quitar», devuelve {"texto": "", "quitar": "si"}. Sin "quitar", un texto vacío no cambia nada.
-- Para AGREGAR una pieza nueva, escribe en la pieza marcada «lugar para AGREGAR» de esa lista (una por lista).
+- Para AGREGAR una pieza nueva, escribe en la pieza marcada «lugar para AGREGAR» de esa lista (una por lista). Si es un ítem ENTERO (un punto clave, un paso del recorrido), escribe todas sus partes, un renglón por parte con su nombre adelante («Título: …», «Qué pasa: …», «Equipo: …»): sin una parte obligatoria no se agrega.
+- Si piden agregar sin decir qué («agrega uno más»), agrega lo que más pesa y todavía no está en esa lista, sacado de la página (también del resto de la página, si te lo damos) o de lo que el equipo confirmó, con sus palabras; nunca de lo que sabes de la industria. Si no hay de dónde sacarlo, no agregues y dilo en "__reasoning".
 - Cambia SOLO lo que el pedido pide, lo mínimo que lo cumple. Si señala una pieza, empieza por ella.
-- NUNCA inventes cifras, nombres de sistemas ni fechas: usa solo lo que dice la página, lo que el equipo confirmó (abajo) y lo que diga el pedido. Si el pedido trae una cifra, úsala tal cual.
+- NUNCA inventes cifras, nombres de sistemas ni fechas: usa solo lo que dice la página, lo que el equipo confirmó (abajo) y lo que diga el pedido (o lo que la persona dijo antes en la conversación). Si el pedido trae una cifra, úsala tal cual: las cifras de la página (la cifra grande del problema principal, las de cada equipo) se cambian como cualquier texto.
+- Las cifras de «Lo que hicimos» (cuántas reuniones o sesiones, cuánto tiempo de conversación, cuántas personas de su equipo, qué áreas) NO son piezas: las cambia una persona a mano, haciendo clic en ellas arriba del Resumen. Si el pedido pide cambiarlas, no propongas nada (ni las escribas en otra pieza) y dilo en "__reasoning".
+- Si cambias el problema principal y la cifra grande de al lado ya no habla de él, propón cambiarla también: con una cifra de un equipo que ya está en la página y habla del problema nuevo (con su mismo número y su unidad: su cita viaja con ella), o con la que dice el pedido. Si no hay ninguna, déjala y dilo en "__reasoning"; nunca la inventes.
 - LO INTERNO de la venta (${NOMBRES_DE_LO_INTERNO}) va en la página SOLO si el pedido lo pide con todas sus letras: entonces escríbelo con las palabras del pedido, sin agregar nada y sin reescribir el resto de la pieza (agrégalo o cámbialo donde va), y dilo en "__reasoning" (el cliente lo verá al publicar). Si el pedido no lo nombra, o pide que no esté, nunca lo escribas. Cualquier otra cosa de la venta que no sea del cliente (lo que se negocia, lo que opina una persona de la empresa), tampoco.
 - Las piezas «la escribió el equipo» las cambias solo si el pedido las nombra o es imposible cumplirlo sin ellas.
 - Respeta el largo de cada pieza. Frases cortas y concretas, sin superlativos ni signos de exclamación.
@@ -137,7 +167,18 @@ const ESQUEMA_DE_LA_PIEZA = { type: "object", properties: { texto: { type: "stri
  * botón del encabezado de cada sección, lib/external/secciones-de-la-escala.ts). Con foco, al modelo le llegan solo las
  * piezas de esa sección: no puede cambiar otra cosa. Si la sección ya no tiene piezas en este lugar, 409.
  */
-export async function proponerEnLaEscala(quien: QuienPide, d: DocumentoDeLaEscala & { pedido: string; foco?: string | null }): Promise<{ ok: true; propuesta: PropuestaDeNexus } | Falla> {
+export async function proponerEnLaEscala(
+  quien: QuienPide,
+  d: DocumentoDeLaEscala & {
+    pedido: string;
+    foco?: string | null;
+    /**
+     * Desde la conversación del chat «Nexus» (25 nov, un solo contexto): lo hablado antes del pedido (para entender
+     * «acóplalo más a otro reto» o «ponla») y lo que dijo la PERSONA antes (sus cifras valen como las del pedido).
+     */
+    antes?: { hablado: string; dichoPorLaPersona: string };
+  },
+): Promise<{ ok: true; propuesta: PropuestaDeNexus; nombre: string } | Falla> {
   const pedido = d.pedido.replace(/\s+/g, " ").trim().slice(0, MAX_PEDIDO);
   if (!pedido) return { ok: false, status: 400, error: "Escribe qué quieres que Nexus cambie." };
   const tope = await topeDeNexusHoy();
@@ -182,8 +223,21 @@ export async function proponerEnLaEscala(quien: QuienPide, d: DocumentoDeLaEscal
         systemPrompt: REGLAS_DE_PEDIRLE,
         // La página (o la sección pedida) va UNA vez: cada pieza es una sección del núcleo, con lo que acepta en su guía.
         sections: piezas.map((p) => ({ key: p.clave, label: `${p.seccion} › ${p.nombre}`, brief: guiaDeLaPieza(p), schema: ESQUEMA_DE_LA_PIEZA, currentData: { texto: p.valor ?? "", quitar: "" } })),
-        instruction: foco ? `${pedido}\n\n(Lo pidió desde la sección «${foco}» de la página: solo están sus partes y solo esas se cambian.)` : pedido,
-        context: bloque ? `Lo que el equipo confirmó de ${lectura.empresa} y SÍ puede ir al cliente:\n${bloque}` : undefined,
+        instruction: [
+          d.antes?.hablado ? `LO QUE SE HABLÓ ANTES EN LA CONVERSACIÓN (para entender el pedido; no es un pedido):\n${d.antes.hablado}\n\nEL PEDIDO:` : null,
+          pedido,
+          foco ? `(Lo pidió desde la sección «${foco}» de la página: solo están sus partes y solo esas se cambian.)` : null,
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+        context:
+          [
+            bloque ? `Lo que el equipo confirmó de ${lectura.empresa} y SÍ puede ir al cliente:\n${bloque}` : null,
+            // Desde una sección, el resto de la página va para leer (25 nov: «agrega un ítem más» no tenía de dónde sacarlo).
+            foco ? restoDeLaPagina(lectura.piezas, foco) : null,
+          ]
+            .filter(Boolean)
+            .join("\n\n") || undefined,
         brandVoice: true,
         maxWebSearches: 0,
         permitirVacia: true,
@@ -199,7 +253,9 @@ export async function proponerEnLaEscala(quien: QuienPide, d: DocumentoDeLaEscal
     });
     // La revisión mira SOLO las piezas que vio el modelo: una clave de otra sección no llega. Las cifras que ya están en la
     // página sí valen aunque sean de otra sección (`pagina`): lo que el cliente ya ve no es inventado.
-    const revisado = revisarLaPropuesta({ piezas, pagina: lectura.piezas, propuesto, pedido, delCliente, interno, voseo: voseoDelResumen });
+    const revisado = revisarLaPropuesta({ piezas, pagina: lectura.piezas, propuesto, pedido, dichoAntes: d.antes?.dichoPorLaPersona, delCliente, interno, voseo: voseoDelResumen });
+    // Lo que el código sabe de esta página: ítems enteros, «Lo que hicimos» a mano y la cifra grande con su cita.
+    revisarLoDeLaPagina(revisado, piezas, lectura.piezas);
     // Lo que «Aplicar todo» puede aplicar de una vez: lo que pasa del tope se dice, no se esconde.
     const sobran = revisado.cambios.splice(MAX_CAMBIOS);
     for (const c of sobran) revisado.descartados.push({ clave: c.clave, nombre: c.nombre, texto: c.despues ?? "(quitarla)", motivo: `Son más de ${MAX_CAMBIOS} cambios de una vez: pide este aparte.` });
@@ -211,13 +267,29 @@ export async function proponerEnLaEscala(quien: QuienPide, d: DocumentoDeLaEscal
       corrida: run.id,
     };
     await prisma.agentRun.update({ where: { id: run.id }, data: { status: "DONE", output: JSON.stringify(propuesta) } });
-    return { ok: true, propuesta };
+    return { ok: true, propuesta, nombre: lectura.lugar };
   } catch (e) {
     const mensaje = e instanceof Error ? e.message : String(e);
     console.error("[escala-con-nexus] la propuesta no salió:", mensaje);
     await prisma.agentRun.update({ where: { id: run.id }, data: { status: "ERROR", output: JSON.stringify({ error: mensaje }) } }).catch(() => {});
     return { ok: false, status: 502, error: `Nexus no pudo proponer (${mensaje}). Vuelve a intentarlo.` };
   }
+}
+
+/** Cuánto del resto de la página lee el modelo cuando el pedido es de una sección. */
+const LARGO_DEL_RESTO = 6_000;
+
+/**
+ * El resto de la página, para leer, cuando el pedido es de una sección (25 nov): lo que el cliente ve fuera de esa sección
+ * (sin lo que el sistema le esconde), una línea por pieza. No se cambia: las piezas que se cambian son las de la sección.
+ */
+function restoDeLaPagina(piezas: readonly PiezaDeLaEscala[], foco: string): string | null {
+  const de = new Set(piezasDeLaSeccion(piezas, foco).map((p) => p.clave));
+  const lineas = piezas.filter((p) => !de.has(p.clave) && p.valor && !p.noLaVeElCliente).map((p) => `- ${p.seccion} › ${p.nombre}: ${p.valor!.replace(/\s+/g, " ").trim()}`);
+  if (!lineas.length) return null;
+  let t = lineas.join("\n");
+  if (t.length > LARGO_DEL_RESTO) t = `${t.slice(0, LARGO_DEL_RESTO).trimEnd()}…`;
+  return `El resto de la página, para leer (NO se cambia desde esta sección):\n${t}`;
 }
 
 const igual = (a: string | null | undefined, b: string | null | undefined) => (a ?? "").replace(/\s+/g, " ").trim() === (b ?? "").replace(/\s+/g, " ").trim();
@@ -252,9 +324,22 @@ export async function aplicarEnLaEscala(
       choques,
     };
 
+  // Un ítem nuevo de varias partes se aplica entero o no se aplica (25 nov): el texto se vuelve a leer acá, no se confía en
+  // lo que mande el navegador.
+  for (const c of d.cambios) {
+    const p = porClave.get(c.clave)!;
+    if (p.campos && c.despues) {
+      const l = leerLaPiezaNueva(p.campos, c.despues);
+      if (!l.ok) return { ok: false, status: 400, error: `${p.nombre}: ${l.motivo}` };
+      // Aplicarlo dos veces lo agregaba dos veces (revisión del 25 nov).
+      if (yaEstaEnLaPagina(lectura.piezas, p, c.despues)) return { ok: false, status: 409, error: `${p.nombre}: ya hay uno igual en la página. No se aplicó nada.` };
+    }
+  }
+
   const escala = await escalaParaExplorar();
   if (escala.estado !== "ok") return { ok: false, status: 503, error: "La escala no está publicada en Nexus: sin ella no se puede validar el cambio." };
-  const operaciones = d.cambios.map((c) => operacionDelCambio(porClave.get(c.clave)!, c.despues));
+  // La cifra grande tomada de una cifra de un equipo lleva su cita (25 nov), buscada otra vez contra la página de ahora.
+  const operaciones = d.cambios.map((c) => operacionConSuCita(porClave.get(c.clave)!, lectura.piezas, c.despues));
   // El MISMO camino que la edición a mano. La fila tiene que seguir como estaba al leerla.
   const r = await aplicarCambios(d.exploracionId, lectura.version, operaciones, escala.general, { quienPide: quien.email, sinCambiosDesde: lectura.leidaEn });
   if (r.estado === "no-existe") return noExiste();

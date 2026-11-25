@@ -15,6 +15,10 @@
  * Con `pedir`, lo último se toma como pedido («Hazlo»); con `lugar: "guia"`, el cajón se abrió desde la guía. La lista se
  * aplica con `POST …/nexus/aplicar`. Todo eso solo con `listas: true` (la pantalla sabe mostrar la lista): un cajón que no
  * lo manda sigue igual que antes.
+ *
+ * UN SOLO CONTEXTO (25 nov): un cambio a la página de La escala también entra por acá y vuelve como `turno.tipo = "escala"`
+ * (la propuesta por pieza, que se aplica por la ruta de la página: …/escala/nexus). `escala`: el chip de «✨ Mejorar con IA»
+ * (la página y la sección a la que va un cambio). Pide lo mismo que la vuelta: poder cambiar la preventa.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -24,6 +28,7 @@ import { guardAccessToClient } from "@/lib/auth/api-guards";
 import { guardDeLaExploracion } from "@/lib/exploraciones/guardia";
 import { vueltaEnLaPreventa } from "@/lib/exploraciones/nexus-en-la-preventa-server";
 import { quienPideLaCuenta } from "@/lib/nexus-chat/http-server";
+import { LugarEnLaEscalaSchema } from "@/lib/exploraciones/escala-con-nexus-esquemas";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -58,6 +63,8 @@ const CuerpoSchema = z.object({
   listas: z.literal(true).optional(),
   /** «Guardarlo como nota» debajo de una lista viva (con `contar`): esa lista ya no va. */
   soltar: z.string().max(60).optional(),
+  /** El chip de La escala (25 nov): a qué página y sección va un cambio. Sin él, un cambio a la página va al Resumen. */
+  escala: z.object({ lugar: LugarEnLaEscalaSchema, foco: z.string().max(400).nullable() }).optional(),
 });
 
 export async function POST(req: NextRequest, { params }: Ctx) {
@@ -75,6 +82,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const r = await vueltaEnLaPreventa(id, c.conversacion, mensajes, guard.email, puedeVerLaCuenta, {
     contar: c.contar,
     preguntar: c.preguntar,
+    escala: c.escala ?? null,
     ...(c.listas ? { pedir: c.pedir, lugar: c.lugar, soltar: c.soltar, quienPideLaCuenta } : {}),
   });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });

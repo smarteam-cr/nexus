@@ -79,7 +79,7 @@ import { claveDeInstrucciones, MAX_NOTA_DE_SESION, textoDeLaLectura } from "@/li
 import LecturaDelConsultor from "./LecturaDelConsultor";
 import { aplicarMejora, diferenciaDeActividades, MAX_LARGO_DE_LA_INSTRUCCION, resumenDeLaMejora, type PropuestaDeMejora } from "@/lib/casos-de-uso/mejorar";
 import Link from "next/link";
-import ChatDeUnPedido, { PuntoDePropuesta, useAvisoDePropuestaLista } from "@/components/asistente/ChatDeUnPedido";
+import ChatDeUnPedido, { PuntoDePropuesta } from "@/components/asistente/ChatDeUnPedido";
 import { Burbuja, PropuestaEnElHilo } from "@/components/asistente/CajonDeNexus";
 import { Alert, Badge, IconButton, Select, Selector, useToast } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -499,7 +499,6 @@ function MejorarConIA({ id, caso }: { id: string; caso: CasoDeUsoElegido }) {
   const [aplicando, setAplicando] = useState(false);
   /** Lo que pasó con la propuesta, en el hilo («Listo: …», «Descartaste…»). */
   const [hecho, setHecho] = useState<string | null>(null);
-  const avisarSiEstaCerrado = useAvisoDePropuestaLista(abierto);
   if (!armado) return null;
   const acts = actividadesDe(id, caso, armado);
 
@@ -529,8 +528,7 @@ function MejorarConIA({ id, caso }: { id: string; caso: CasoDeUsoElegido }) {
       }
       setPropuesta({ p: data.propuesta, base: acts, instruccion: texto });
       setElegidas(new Set());
-      // Llegó con el chat cerrado: se avisa, y el botón lleva su punto.
-      avisarSiEstaCerrado();
+      // Si llegó con el chat cerrado, el botón lleva su punto rojo (25 nov: sin aviso flotante).
       return true;
     } catch {
       setError("No se pudo pedir la mejora. Revisa tu conexión.");

@@ -3667,6 +3667,30 @@ const quitar = (g: ResumenGuardado, claves: readonly string[]): ResumenGuardado 
 type Resultado = { ok: true; resumen: ResumenGuardado } | { ok: false; error: string };
 
 /**
+ * Las demás partes de un ítem NUEVO de varias partes (25 nov, Elías: «agrega un ítem más» dejó un punto clave con solo su
+ * título): lo que explica un punto y su equipo, o qué pasa en un paso y lo que se traba. Con ellas nace entero; sin ellas,
+ * como en la edición a mano (solo el título, y lo demás se escribe después en su lugar).
+ */
+export interface CamposDelItemNuevo {
+  texto?: string;
+  areaId?: string | null;
+  friccion?: string | null;
+}
+
+/**
+ * La cifra grande (el tamaño del negocio) con la cita de una cifra de un equipo (25 nov, Elías: «solo en el chat»): Nexus la
+ * propone al replantear el problema principal, y su cita viaja con ella. Solo si esa cita dice todos los números del texto
+ * nuevo: si no, no se escribe. `citasDe`: `op:<área>:cifra:<id>`.
+ */
+function conLasCitasDe(g: ResumenGuardado, citasDe: string, texto: string): { ok: true; citas: CitaDelResumen[] } | { ok: false; error: string } {
+  const m = /^op:([\w-]+):cifra:([\w-]+)$/.exec(citasDe);
+  const fuente = m ? (g.operativas ?? []).find((x) => x.id === m[1])?.cifras.find((x) => x.id === m[2]) : undefined;
+  if (!fuente?.citas.length) return { ok: false, error: "La cifra de donde sale ya no está en el Resumen." };
+  if (cifrasDeMas(texto, fuente.citas.map((c) => c.texto).join(" ")).length) return { ok: false, error: "Ese número no está en la cita de la cifra de donde sale." };
+  return { ok: true, citas: fuente.citas.map((c) => ({ ...c })) };
+}
+
+/**
  * Una lista de piezas con cita: `id` «nuevo» agrega una escrita a mano; sin texto, quita (y recuerda que se quitó); con
  * texto, la cambia. Si el texto nuevo trae un número que su cita no dice, la cita se va (queda el origen).
  */
@@ -3694,7 +3718,12 @@ function editarUnaLista<T extends PiezaDelResumen>(
  * Aplica una edición. `texto` null o vacío: quita (una pieza, un dato, una etapa, un área) o vuelve al de los datos (lo
  * que hicimos, el por qué). Lo editado queda `mano`. Devuelve el resumen nuevo o por qué no.
  */
-export function editarElResumen(g: ResumenGuardado, clave: string, crudo: string | null, o: { firmaDe: (areaId: string) => string; areas: ReadonlySet<string>; en: string }): Resultado {
+export function editarElResumen(
+  g: ResumenGuardado,
+  clave: string,
+  crudo: string | null,
+  o: { firmaDe: (areaId: string) => string; areas: ReadonlySet<string>; en: string; campos?: CamposDelItemNuevo; citasDe?: string },
+): Resultado {
   if (!CLAVE_DEL_RESUMEN.test(clave)) return { ok: false, error: "No se reconoce ese texto del Resumen." };
   const texto = crudo?.replace(/[ \t]+/g, " ").trim() ?? "";
   // El botón «Quitar…» del cuadro manda null con la clave del campo (`op:o1:cifra:c2:texto`): quita la pieza entera.
@@ -3782,7 +3811,16 @@ export function editarElResumen(g: ResumenGuardado, clave: string, crudo: string
         };
       const r = editarUnaLista(g.negocio?.[tipoDelNegocio] ?? [], b, texto, () => aMano("n"), "pieza", `negocio:${tipoDelNegocio}`);
       if (!r.ok) return r;
-      return { ok: true, resumen: quitar({ ...g, negocio: { ...g.negocio, [tipoDelNegocio]: r.lista } }, r.quitadas) };
+      let lista = r.lista;
+      // La cifra grande con la cita de la cifra de un equipo de donde sale (25 nov).
+      if (o.citasDe && texto) {
+        if (tipoDelNegocio !== "tamano") return { ok: false, error: "Solo la cifra grande toma la cita de otra cifra." };
+        const c = conLasCitasDe(g, o.citasDe, texto);
+        if (!c.ok) return c;
+        const id = b === "nuevo" ? lista[lista.length - 1]?.id : b;
+        lista = lista.map((x) => (x.id === id ? { ...x, citas: c.citas } : x));
+      }
+      return { ok: true, resumen: quitar({ ...g, negocio: { ...g.negocio, [tipoDelNegocio]: lista } }, r.quitadas) };
     }
     case "punto": {
       const puntos = g.puntos ?? [];
@@ -3790,8 +3828,13 @@ export function editarElResumen(g: ResumenGuardado, clave: string, crudo: string
         if (!texto) return { ok: true, resumen: g };
         if (puntos.length >= MAX_POR_LISTA) return { ok: false, error: `Ya hay ${MAX_POR_LISTA} puntos: quita uno antes de agregar otro.` };
         if (texto.length > TOPE_DEL_TITULO_DEL_PUNTO) return { ok: false, error: `El título pasa de ${TOPE_DEL_TITULO_DEL_PUNTO} caracteres.` };
-        // Uno nuevo nace con su título; lo que explica se escribe después, en su lugar.
-        return { ok: true, resumen: { ...g, puntos: [...puntos, { id: nuevoId("k"), titulo: texto, texto: "", areaId: null, citas: [], mano: true }] } };
+        // A mano nace con su título y lo que explica se escribe después, en su lugar. Con sus partes (Nexus, 25 nov), entero:
+        // lo que explica y su equipo (solo uno de la página).
+        const explica = o.campos?.texto?.replace(/[ \t]+/g, " ").trim() ?? "";
+        if (explica.length > TOPE_A_MANO) return { ok: false, error: `Lo que explica el punto pasa de ${TOPE_A_MANO} caracteres.` };
+        const areaId = o.campos?.areaId && o.areas.has(o.campos.areaId) ? o.campos.areaId : null;
+        if (o.campos?.areaId && !areaId) return { ok: false, error: `El área ${o.campos.areaId} no existe.` };
+        return { ok: true, resumen: { ...g, puntos: [...puntos, { id: nuevoId("k"), titulo: texto, texto: explica, areaId, citas: [], mano: true }] } };
       }
       const p = puntos.find((x) => x.id === a);
       if (!p) return { ok: false, error: "Ese punto ya no está." };
@@ -3810,7 +3853,11 @@ export function editarElResumen(g: ResumenGuardado, clave: string, crudo: string
       if (a === "nuevo") {
         if (!texto) return { ok: true, resumen: g };
         if (etapas.length >= MAX_POR_LISTA) return { ok: false, error: `Ya hay ${MAX_POR_LISTA} etapas: quita una antes de agregar otra.` };
-        return { ok: true, resumen: { ...g, recorrido: [...etapas, { id: nuevoId("s"), nombre: texto.slice(0, TOPE_DE_UN_NOMBRE), quien: null, texto: "", friccion: null, citas: [], mano: true }] } };
+        // Con sus partes (Nexus, 25 nov), entera: qué pasa ahí y lo que se traba.
+        const queSucede = o.campos?.texto?.replace(/[ \t]+/g, " ").trim() ?? "";
+        const traba = o.campos?.friccion?.replace(/[ \t]+/g, " ").trim() || null;
+        if (queSucede.length > TOPE_A_MANO || (traba?.length ?? 0) > TOPE_A_MANO) return { ok: false, error: `El paso pasa de ${TOPE_A_MANO} caracteres.` };
+        return { ok: true, resumen: { ...g, recorrido: [...etapas, { id: nuevoId("s"), nombre: texto.slice(0, TOPE_DE_UN_NOMBRE), quien: null, texto: queSucede, friccion: traba, citas: [], mano: true }] } };
       }
       const e = etapas.find((x) => x.id === a);
       if (!e) return { ok: false, error: "Esa etapa ya no está." };

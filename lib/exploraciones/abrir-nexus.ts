@@ -11,6 +11,10 @@
  * completar el diagnóstico» en La escala), abre la MISMA conversación con esa pregunta, su equipo y su parte como chip: lo
  * primero que escribe la persona sale con «Sobre <equipo> · <parte> (…): » adelante (completar-el-diagnostico.ts) y,
  * guardado, queda como nota de «Lo que sabes del cliente». Sin chip, es la conversación de siempre.
+ *
+ * UN SOLO CONTEXTO (25 nov, Elías probando TEC · AE): con `escala` el cajón abre LA MISMA conversación; el chip solo dice a
+ * qué parte de la página va un cambio (se puede preguntar de la cuenta y conversar igual). Y lo que Nexus contesta con el
+ * cajón cerrado no sale como aviso flotante: el botón «Nexus» lleva un punto rojo hasta que se abre (`marcarNexusSinLeer`).
  */
 import type { PreguntaParaResponder } from "./completar-el-diagnostico";
 import type { LugarEnLaEscala } from "./escala-con-nexus";
@@ -58,4 +62,25 @@ export const EVENTO_LA_ESCALA_CAMBIO_CON_NEXUS = "nexus:la-escala-cambio";
 
 export function avisarQueNexusCambioLaEscala(): void {
   window.dispatchEvent(new Event(EVENTO_LA_ESCALA_CAMBIO_CON_NEXUS));
+}
+
+/**
+ * Lo que Nexus contestó con el cajón cerrado (25 nov): por exploración, hasta que la persona lo abre. Vive en el módulo,
+ * como el pedido recordado: el botón lo lee con `useSyncExternalStore` (la misma respuesta mientras no cambia).
+ */
+const SIN_LEER = new Set<string>();
+const EVENTO_SIN_LEER = "nexus:sin-leer";
+
+export function marcarNexusSinLeer(exploracionId: string, sinLeer: boolean): void {
+  if (SIN_LEER.has(exploracionId) === sinLeer) return;
+  if (sinLeer) SIN_LEER.add(exploracionId);
+  else SIN_LEER.delete(exploracionId);
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(EVENTO_SIN_LEER));
+}
+
+export const nexusSinLeer = (exploracionId: string): boolean => SIN_LEER.has(exploracionId);
+
+export function suscribirANexusSinLeer(avisar: () => void): () => void {
+  window.addEventListener(EVENTO_SIN_LEER, avisar);
+  return () => window.removeEventListener(EVENTO_SIN_LEER, avisar);
 }

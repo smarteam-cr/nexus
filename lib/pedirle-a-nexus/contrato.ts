@@ -73,6 +73,13 @@ export interface CambioPropuesto {
   respaldo?: string[];
   /** Cuántas oraciones más lo nombran y no entraron en `respaldo` (la pantalla dice «y N más»). */
   respaldoDeMas?: number;
+  /**
+   * La cifra grande sale de una cifra de un equipo de la página, con su cita (25 nov): cuál y lo que dice su cita. Solo para
+   * verlo: al aplicar, el servidor lo vuelve a buscar.
+   */
+  desde?: { nombre: string; cita: string };
+  /** Una cifra que ninguna cita de las reuniones sostiene: el cliente no la ve hasta corregirla con lo que dijo la empresa. */
+  sinCita?: true;
 }
 
 /** El aviso de un cambio que trae algo interno (24 nov): lo ve el cliente cuando alguien publique. */

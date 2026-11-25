@@ -12,8 +12,9 @@
  * Un solo panel derecho a la vez: abrir el chat cierra el Feedback, y abrir el Feedback cierra el chat.
  */
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { PuntoDePropuesta } from "@/components/asistente/ChatDeUnPedido";
 import type { AcuerdoDelChat, ChipDelChat, ResultadoDeAplicar, RotulosDelChat } from "@/components/asistente/ChatDelAsistente";
 import { useFeedback } from "@/components/feedback/FeedbackProvider";
 import { usePanelFlotante } from "@/components/ui/usePanelFlotante";
@@ -80,6 +81,13 @@ export function ChatDeNexus({
   const base = `/api/nexus-chat/${encodeURIComponent(clientId)}`;
   const [montado, setMontado] = useState(false);
   const [abierto, setAbierto] = useState(false);
+  // Una respuesta que llegó con el cajón cerrado (25 nov): el botón lleva un punto rojo hasta que se abre, en vez del aviso
+  // «Listo: Chat de Nexus de …» (lib/agents/corridas-del-chat.ts).
+  const [sinLeer, setSinLeer] = useState(false);
+  const abiertoAhora = useRef(abierto);
+  useEffect(() => {
+    abiertoAhora.current = abierto;
+  }, [abierto]);
   const [borrador, setBorrador] = useState<{ texto: string; n: number } | null>(null);
   const [pedidoDeFoco, setPedidoDeFoco] = useState(0);
   const [ancho, setAncho] = useState<"normal" | "amplio">("normal");
@@ -114,6 +122,8 @@ export function ChatDeNexus({
       if (feedback?.abierto) feedback.alternar();
       setMontado(true);
       setAbierto(true);
+      // Abrirlo es haberlo visto: el punto del botón se va.
+      setSinLeer(false);
       if (texto) setBorrador((b) => ({ texto, n: (b?.n ?? 0) + 1 }));
       setPedidoDeFoco((n) => n + 1);
       void cargarResumen();
@@ -273,6 +283,7 @@ export function ChatDeNexus({
           <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12z" />
         </svg>
         Nexus
+        {sinLeer && <PuntoDePropuesta texto="Nexus te respondió" />}
       </button>}
       {montado ? (
         <ChatDelAsistente
@@ -301,6 +312,9 @@ export function ChatDeNexus({
               : undefined
           }
           sugerencias={desdeLaGuia ? sugerencias : undefined}
+          alResponder={() => {
+            if (!abiertoAhora.current) setSinLeer(true);
+          }}
         />
       ) : null}
     </>

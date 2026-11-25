@@ -285,6 +285,8 @@ export function cuerpoDeLaVuelta(o: {
   pedidosDeLaCuenta: boolean;
   lugar?: "guia";
   soltar?: string;
+  /** El chip de La escala (25 nov): a qué página y sección va un cambio. Solo en un envío normal. */
+  escala?: { lugar: { pagina: "resumen" } | { pagina: "area"; areaId: string }; foco: string | null } | null;
 }): Record<string, unknown> {
   const mensajes = o.mensajes.map(({ de, texto, es, vuelta }) => ({ de, texto, ...(es ? { es } : {}), ...(vuelta ? { vuelta } : {}) }));
   const ultimo = o.mensajes[o.mensajes.length - 1];
@@ -294,5 +296,6 @@ export function cuerpoDeLaVuelta(o: {
     mensajes,
     ...(o.pedidosDeLaCuenta ? { listas: true, ...(o.lugar ? { lugar: o.lugar } : {}), ...(o.soltar ? { soltar: o.soltar } : {}), ...(pedir ? { pedir: true } : {}) } : {}),
     ...(o.modo === "contar" ? { contar: true } : o.modo === "preguntar" ? { preguntar: true } : {}),
+    ...(o.escala && o.modo === "normal" ? { escala: o.escala } : {}),
   };
 }

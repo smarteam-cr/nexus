@@ -16834,7 +16834,8 @@ todavía: cada etapa arranca cuando él lo dice.
     le cuenta a Nexus no va a HubSpot (decisión del 22 nov) y va a «Lo que sabes del cliente». El servidor lo decide por el
     chip (una preventa de esa cuenta, `focoDelChip` en la ruta del chat), no la pantalla. En la ficha sigue igual.
   - **El chip del lugar:** «✨ Mejorar con IA» de La escala abre el cajón con el lugar como chip (el Resumen, un área o una
-    pieza). Con el chip, lo que se escribe es un pedido de cambio a la página y la propuesta por pieza, con «Aplicar» y
+    pieza). (*Enmendado el 25 nov:* en la preventa el chip solo dice a qué parte va un cambio, en LA conversación; ver «Un
+    solo contexto en el chat «Nexus» de La escala».) Con el chip, lo que se escribe es un pedido de cambio a la página y la propuesta por pieza, con «Aplicar» y
     «Aplicar todo», se ve dentro del cajón; quitar el chip vuelve a la conversación. **El panel al lado de la página se
     retiró:** no quedan los dos. En la escala de la cuenta, donde no hay conversación, el cajón abre solo con el chip.
     Cerrar el cajón no pierde el pedido: lo pedido, la propuesta, lo aplicado, lo descartado y el «Deshacer» quedan
@@ -17395,7 +17396,7 @@ de la tarjeta de un caso de uso.
     no volvió, tampoco»): decir «la dejaste a la vista» sin que nadie la viera escondía que La escala había quedado vieja.
   - Volver el foco al cerrar no mueve la página (`preventScroll`): al pasar a La escala saltaba arriba.
   - Un «Mejorar con IA» de un pedido se puede cerrar mientras Nexus piensa (la ventana vieja no se cerraba): la propuesta
-    que llega con el chat cerrado se avisa, si el botón sigue en pantalla, y el botón lleva un punto. Pedir otra no borra
+    que llega con el chat cerrado se nota por el punto del botón (*enmendado el 25 nov:* rojo y sin el aviso flotante). Pedir otra no borra
     la de antes hasta que llega la nueva. *Lo que no cubre:* si la persona se va de esa pantalla mientras Nexus piensa (otro
     paso de la preventa, otro artefacto, otro puesto), la propuesta se pierde; guardarla como la de La escala es un paso aparte.
   - Lo que se escribe mientras Nexus piensa no se pierde si el envío falla, en los cuatro chats (`devolverALaCaja`,
@@ -17515,3 +17516,122 @@ había conversado allá.
   un deploy, o el 3004 contra producción, podrían aplicar dos veces lo que no es una tarea); con «Lo que sabes del cliente»
   lleno la caja se apaga también para pedir; los permisos se probaron con un super admin, no con alguien de Ventas; nadie
   abrió el cajón en pantalla (el preview no está logueado).
+
+## Un solo contexto en el chat «Nexus» de La escala, sin avisos y con ítems enteros (2026-11-25, TEC · AE)
+
+Elías probó La escala de TEC · AE en producción el 25 nov y mandó ocho puntos; estos son los del chat (1, 2, 6, 7 y 8).
+Hasta ese día, detrás del cajón «Nexus» de la preventa había DOS chats: la conversación (contar, preguntar y pedir lo de la
+cuenta) y, al abrir desde «✨ Mejorar con IA» de La escala, el pedido de un paso (components/exploraciones/PedirleANexus.tsx:
+un pedido, una propuesta). *Enmienda* «El chip del lugar» de la etapa 2 del plan maestro («con el chip, lo que se escribe
+es un pedido de cambio a la página») y, en «Un solo chat «Nexus»», el aviso de la propuesta que llega con el chat cerrado.
+
+- **Un solo contexto (punto 1).** «¿Qué información tienes sobre el problema principal del TEC AE?», escrito desde «Mejorar
+  con IA», respondía «Nexus no propone cambios… no pide ningún cambio». Ahora «✨ Mejorar con IA» abre LA conversación de la
+  preventa con la parte como chip, y el chip solo dice A QUÉ PARTE va un cambio. Lo decide el código cuando es seguro
+  (`comoSeLee`, lib/chat-de-nexus/conversacion.ts): con el chip, un pedido de la cuenta sigue siendo eso, un «gracias» se
+  contesta corto, una pregunta de verdad se responde con las citas de siempre, y todo lo demás (también una pregunta que
+  empieza con una orden: «¿Me lo acortas?», «¿Puedes cambiar la cifra?») es un cambio a esa parte. Sin chip, desde «Nexus»
+  de arriba, una orden de cambiar sobre una parte de la página que se nombra («Cambia el titular…», «Agrega un punto
+  clave…», `pideUnCambioALaPagina`) es un cambio al Resumen, solo si hay Resumen armado; lo dudoso lo decide el modelo que ya
+  clasificaba, con una quinta salida (`{"tipo":"cambio"}`). Entre una parte de la página y algo de la cuenta,
+  gana lo que se nombra primero después de la orden: «Agrega un punto clave sobre las tareas manuales» es la página y
+  «Agrega una tarea para revisar el resumen» es una tarea (dos vueltas de revisión del 25 nov). Después de una propuesta a
+  la página, una orden sin parte nombrada («Simplifícalo», «Redáctalo más corto») sigue con ella en vez de leerse como
+  pregunta; si nombra la cuenta («Agrégalo como tarea», «Ponlo en la guía»), lo decide el modelo, también con el chip. Los cambios siguen igual: Nexus propone, la persona aplica, nada
+  se publica solo (la misma ruta y la misma revisión: lib/exploraciones/escala-con-nexus-server.ts).
+  *Por qué el código y no el modelo con el chip:* con el chip la persona ya dijo dónde quiere el cambio; lo único que
+  hay que separar es la pregunta, y una pregunta se reconoce por su forma.
+- **La conversación no se parte (punto 6).** La causa: cada «Mejorar con IA» abría su propio hilo (uno por sección, y en
+  cada uno solo el último pedido: el anterior desaparecía), así que después de aplicar, el pedido siguiente se veía en otra
+  conversación. Ahora la propuesta es una vuelta más del MISMO hilo (`turno.tipo = "escala"`,
+  lib/chat-de-nexus/escala-en-la-conversacion.ts): queda en su vuelta con lo que propuso, vuelve al recargar en su mensaje
+  y por su vuelta (como las listas de la cuenta), y lo que la persona hace con cada cambio («Aplicar», «Descartar»,
+  «Deshacer») se anota en esa vuelta (`PATCH …/nexus/conversacion` con `vuelta` y `estadosDeLaEscala`). El modelo que
+  propone lee SOLO el ida y vuelta de los cambios a la página (lo que la persona pidió cambiar y lo que Nexus le propuso:
+  «acóplalo más a otro reto» o «simplifícalo» se entienden), y las cifras que la persona dijo en esos pedidos valen como las
+  del pedido (`dichoAntes`, lib/pedirle-a-nexus/veracidad.ts). *Por qué solo eso (revisión del 25 nov):* lo que Nexus
+  respondió de la cuenta sale de las reuniones y de las notas internas, y lo que la persona contó para la nota puede ser
+  interno; el código corta las cifras, las palabras de lo interno y las frases copiadas de una nota, pero no una paráfrasis
+  («el gerente de TI frena el proyecto» llegaba como un cambio normal). Lo que se aplica entretanto no se pierde: la
+  respuesta que llega se arma sobre la conversación de ese momento, y los botones de una propuesta esperan mientras Nexus
+  piensa (antes, un punto clave aplicado mientras tanto volvía a «pendiente» y se podía agregar dos veces). La propuesta en el hilo es una sola pieza para los dos
+  lugares (components/exploraciones/PropuestaDeLaEscala.tsx). PedirleANexus queda solo para La escala de la ficha del
+  cliente, donde no hay conversación.
+- **Sin avisos que molestan (punto 2).** Cada mensaje dejaba una o dos corridas, y el vigilante de corridas de la app
+  avisaba de cada una abajo a la derecha («Listo: Nexus responde sobre la cuenta de TEC · AE · Ver», «Listo: Hablar con
+  Nexus…»), con «Ver» llevando a la ficha del cliente. Las corridas del chat salen del feed de corridas (`sinLasDelChat`,
+  lib/agents/corridas-del-chat.ts, en /api/agent-runs): la vuelta y la respuesta de la preventa (por su rótulo: comparten el
+  agente de la exploración con agentes de verdad), el chat de la cuenta (`nexus-chat`), La escala (`pedirle-a-nexus`) y la
+  revisión de si una nota cambia La escala (su resultado es la cuenta regresiva del chat). Con el cajón cerrado, en vez de un
+  aviso, un punto rojo en el botón «Nexus» hasta que se abre: en la preventa (`marcarNexusSinLeer`,
+  lib/exploraciones/abrir-nexus.ts), en la ficha del cliente y, en La escala de la ficha (sin conversación), en «✨ Mejorar
+  con IA» de toda la página (`PuntoDeNexus`). *Coherencia:* los «Mejorar con IA» de un solo pedido
+  (artefactos, perfil de un puesto, actividades de un caso) avisaban también con un aviso flotante cuando la propuesta
+  llegaba con el chat cerrado; ahora solo con el punto del botón, que pasa a rojo (`PuntoDePropuesta`). Los chats de los
+  documentos, del cronograma y de Tareas no dejaban corridas: nunca avisaron.
+- **Las cifras (punto 7).** Elías: la tarjeta de «Lo que hicimos» (las reuniones, el tiempo, las personas, las áreas) NO la
+  cambia la IA, solo una persona a mano. Ya se editaba a mano (textos fijos de la página); escrita a mano, la página interna
+  la marca «Lo escribió tu equipo.» (`esDeLoQueHicimos`). Nexus no la tiene como pieza, la regla del modelo le dice que la
+  rechace y lo explique, y el código descarta un cambio que escribe una de esas cifras en otra pieza
+  (`cifrasDeLoQueHicimos`: «parte de 12 reuniones de trabajo conjunto» en un párrafo, como pasó el 25 nov), también si
+  cambia una que la pieza ya tenía; un dato del cliente («Ventas hace 3 reuniones de trabajo a la semana») no lo es. Las demás cifras
+  (la cifra grande del problema principal, las de cada equipo) son piezas y se cambian cuando se pide, con la vara de
+  siempre: el número tiene que estar en la página, en el pedido (o en lo que dijo la persona antes) o en lo confirmado para
+  el cliente.
+  **La cifra grande al replantear el problema principal, solo en el chat** (Elías, 25 nov, por la coordinadora: «Solo en
+  el chat»). Si Nexus cambia el problema principal y la cifra de al lado ya no habla de él, propone como cifra grande una
+  cifra de un equipo que ya está en la página, pasó la verificación del Resumen y habla del problema nuevo, y su cita viaja
+  con ella; si ninguna sirve, lo dice y no inventa. Lo decide el código, al proponer y otra vez al aplicar
+  (`fuenteDeLaCifraGrande`, lib/exploraciones/escala-con-nexus.ts): el texto nuevo tiene exactamente los números de una
+  cifra de un equipo que el cliente ve, y su cita dice todos esos números; entonces la operación copia esa cita a la cifra
+  grande (`citasDe`, `editarElResumen`), y la propuesta muestra de dónde sale y su cita. Si la cita que la cifra grande ya
+  tiene dice el número nuevo («Unas 620 personas» sobre «son 620 personas»), se queda con la suya (`citaDeLaCifraGrande`). *Por qué la cita tiene que viajar:*
+  una cifra escrita sin una cita que la sostenga no sale al cliente (la vara del 9 nov); sin esto, la cifra grande nueva
+  desaparecía de la página del cliente. Si el número sale del pedido y ninguna cita lo dice, la propuesta lo avisa («el
+  cliente no la verá hasta corregirla con lo que dijo la empresa»). **«Rehacer con IA» no cambia:** la cifra grande sigue
+  siendo el tamaño del negocio que dijo la empresa (15 nov) y el Resumen sigue descartando la cifra de un área (Cicadex,
+  16 nov). *Lo que no hace:* no busca en las reuniones una cifra nueva; solo usa las que el Resumen ya verificó.
+- **Un ítem nuevo sale entero (punto 8).** «agrega un ítem más» en «Lo más crítico hoy» dejó solo el título («Seguimiento
+  sin etapas definidas»): el lugar para agregar era un solo texto y la edición crea el punto con el título. Las listas cuyo
+  ítem tiene varias partes tienen ahora un lugar para agregar COMPUESTO (`campos`, lib/exploraciones/escala-con-nexus.ts):
+  un punto clave (título, qué pasa y qué consecuencia tiene, y su equipo, de los de la página o «Toda la empresa») y un paso
+  del recorrido (nombre, qué pasa ahí y, si se sabe, lo que se traba). Nexus escribe un renglón por parte con su nombre
+  adelante, el código lo lee (`leerLaPiezaNueva`, que tolera las negritas, una parte partida en dos renglones y el nombre
+  de un equipo a medias si calza con uno solo) al proponer y otra vez al aplicar, y sin una parte obligatoria no llega (se
+  ve en lo descartado, con el porqué). Uno con el mismo título que otro de la página tampoco (`yaEstaEnLaPagina`: aplicarlo
+  dos veces lo agregaba dos veces). Se escribe con UNA operación con todas sus partes (`resumenDeLaEscala` con
+  `campos`, `editarElResumen`). Las demás listas son de un solo texto (los retos de cada equipo y lo que los causa, quién es
+  quién, quiénes son, lo que ya funciona, lo que falta validar, los párrafos, las etiquetas): su ítem nuevo ya salía entero.
+  Una cifra nueva de un equipo no se puede agregar (no tiene lugar). Un ítem que agrega Nexus no lleva cita, como uno escrito
+  a mano. Desde una sección, el modelo lee además el resto de la página (solo para leer): «agrega un ítem más» sin decir
+  cuál agrega lo que más pesa y no está en la lista, sacado de la página o de lo confirmado, nunca de la industria. La
+  edición a mano no cambia (agrega el título y lo demás se escribe en su lugar).
+- **Antes → después, en la preventa:**
+
+  | Antes | Después |
+  |---|---|
+  | «✨ Mejorar con IA» abría el pedido de un paso de esa sección (su hilo, su «Nueva conversación», sus ejemplos) | Abre la conversación con la sección como chip; «Nueva conversación» es la de la conversación |
+  | Un hilo por sección, con el último pedido | Un hilo para todo: cada pedido y su propuesta quedan |
+  | La ✕ de la página volvía a la conversación, y cancelaba la cuenta regresiva de La escala | La ✕ quita el chip; no se deja la conversación (la cuenta regresiva sigue a la vista) |
+  | «Nexus propone, tú aplicas; nada se publica.» solo en el pedido a La escala | «Nexus propone; nada se publica solo.» en la conversación de la preventa, siempre a la vista («tú aplicas» no: la cuenta regresiva de La escala rehace el borrador si nadie la cancela) |
+  | Ejemplos del pedido: «Cambia el titular…», «Agrega un punto clave…» | Con el chip: «Enfócalo más en el reto principal de Ventas.», «¿Qué se dijo de esto en las reuniones?» |
+  | Lo aplicado y su «Deshacer» recordados por sección mientras la página estuviera abierta | La propuesta y lo hecho con cada cambio vuelven al recargar; el «Deshacer» de lo último aplicado, mientras la página esté abierta (después, el historial de versiones) |
+  | Avisos «Listo: …» abajo a la derecha por cada mensaje | Ninguno; con el cajón cerrado, punto rojo en «Nexus» |
+- **Lo que no cambia:** La escala de la ficha del cliente sigue con el pedido de un paso; la revisión de lo propuesto
+  (cifras, lo interno, lo escrito a mano), «Aplicar», «Aplicar todo», el choque con otra persona, el historial y «Deshacer»;
+  el tope de 20 pedidos al día (ahora cada pedido cuenta además como una de las 12 vueltas de la conversación; uno frenado
+  por ese tope, o por pasar de 1.200 caracteres, no gasta la vuelta: si lo decidió el modelo, la vuelta queda medida y no
+  cuenta). Mientras se aplica un cambio a La escala, la caja y «Nueva conversación» esperan.
+- **Lo que no queda garantizado:** que el modelo lea bien lo dudoso sin chip (se midió con frases escritas a mano, no con
+  conversaciones reales); con un «Guardar» pendiente arriba, la caja espera también para pedir un cambio a La escala
+  («Termina lo de arriba»); cerrar el cajón y salir de la pantalla mientras Nexus piensa no deja punto ni aviso (la
+  respuesta queda en la conversación guardada; en la ficha, igual), y una respuesta que se cuelga ya no sale como «se
+  cortó»; el punto rojo vive en el navegador (al recargar se va); con el chip, lo que se cuenta («Tienen 3 sedes») se toma
+  como un cambio a esa parte; sin chip, un cambio que sigue a una propuesta de un área va al Resumen; «el siguiente paso del
+  recorrido» se lee como el siguiente paso de la cuenta (para un paso del recorrido, se nombra el paso); nadie abrió el cajón
+  en pantalla (el preview no está logueado). Probado contra la base (nexus_test): la propuesta vuelve al recargar con lo
+  hecho, otra persona u otra preventa no la anota, el tope de pedidos no gasta una vuelta y el filtro del feed deja afuera
+  solo lo del chat. Probado con el modelo real, con una página como la de TEC · AE en la
+  base local: «agrega un ítem más» trajo el punto entero y sacado de la página; «reuniones que trabajamos juntos, pon 12» no
+  propuso nada y explicó que se cambia a mano; «acóplalo más al reto de la integración con Fundatec» cambió solo el problema
+  principal.

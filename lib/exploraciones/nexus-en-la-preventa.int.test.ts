@@ -82,15 +82,44 @@ vi.mock("@/lib/ai/contexto-de-corrida", async (original) => {
   };
 });
 
+/**
+ * La mano de La escala (25 nov, un solo contexto): el contrato de la página es de mentira acá (su base real pide la escala
+ * publicada y el Resumen armado; lo prueba escala-con-nexus.int.test.ts). Se anota con qué se llamó.
+ */
+const PROPUESTA_DE_LA_ESCALA = {
+  pedido: "x",
+  cambios: [
+    { clave: "r/negocio:tesis:n1", nombre: "El problema principal (la tesis)", seccion: "El problema principal", antes: "Meta no jala datos.", despues: "Fundatec no sincroniza.", aMano: false, agregar: false },
+    { clave: "r/punto:nuevo", nombre: "Un punto clave nuevo, entero", seccion: "Puntos clave", antes: null, despues: "Título: X\nQué pasa: Y", aMano: false, agregar: true },
+  ],
+  descartados: [],
+  nota: "Lo acoplé a Fundatec.",
+  corrida: null,
+};
+const pedidosALaEscala: Array<{ pedido: string; foco: string | null; antes?: { hablado: string; dichoPorLaPersona: string } }> = [];
+let topeDeLaEscala: { ok: true } | { ok: false; status: number; error: string } = { ok: true };
+vi.mock("./escala-con-nexus-server", async (original) => {
+  const real = await original<typeof import("./escala-con-nexus-server")>();
+  return {
+    ...real,
+    proponerEnLaEscala: async (_q: unknown, d: { pedido: string; foco?: string | null; antes?: { hablado: string; dichoPorLaPersona: string } }) => {
+      pedidosALaEscala.push({ pedido: d.pedido, foco: d.foco ?? null, antes: d.antes });
+      return { ok: true, propuesta: { ...PROPUESTA_DE_LA_ESCALA, pedido: d.pedido }, nombre: "Resumen" };
+    },
+    antesDePedirleALaEscala: async () => topeDeLaEscala,
+  };
+});
+
 import { prisma } from "@/lib/db/prisma";
 import { esDeNexusConversando } from "@/lib/ai/tope-de-nexus";
+import { sinLasDelChat } from "@/lib/agents/corridas-del-chat";
 import { tomarHilo } from "@/lib/nexus-chat/candado-server";
 import { hechosFueraDeSuCliente } from "@/lib/invariantes/hechos";
 import { olvidarHechosMirado } from "@/lib/seguimiento/hechos-server";
 import { MODO_DEL_CHAT } from "@/lib/chat-de-nexus/conversacion-server";
 import { TOPES } from "@/lib/chat-de-nexus/conversacion";
 import { PREGUNTAS_POR_DIA } from "@/lib/chat-de-nexus/respuesta";
-import { alGuardarLaNota, aplicarEnLaPreventa, cerrarEnLaPreventa, conversacionEnLaPreventa, estadosEnLaPreventa, vueltaEnLaPreventa } from "./nexus-en-la-preventa-server";
+import { alGuardarLaNota, aplicarEnLaPreventa, cerrarEnLaPreventa, conversacionEnLaPreventa, estadosDeLaEscalaEnLaPreventa, estadosEnLaPreventa, vueltaEnLaPreventa } from "./nexus-en-la-preventa-server";
 import { hechosDeLasNotas } from "./hechos-de-las-notas-server";
 import { RESPUESTA_SIN_ACCESO } from "@/lib/chat-de-nexus/guardada";
 import { leerArchivoDeLaEscala } from "@/lib/escala/documento/archivos";
@@ -122,6 +151,8 @@ beforeEach(() => {
   contextos.length = 0;
   fallaLaRespuesta = false;
   pedidos.length = 0;
+  pedidosALaEscala.length = 0;
+  topeDeLaEscala = { ok: true };
 });
 
 async function sembrar() {
@@ -379,6 +410,108 @@ describe("la conversación guardada no cruza de persona ni de preventa", () => {
     expect(await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO)).toBeNull();
     // Los hechos siguen saliendo del «listo» del servidor: anotar no rompió la vuelta.
     expect(await prisma.hechoDeReunion.count({ where: { exploracionId: id } })).toBe(1);
+  });
+});
+
+describe("un solo contexto: La escala en la misma conversación (25 nov, TEC · AE)", () => {
+  const CHIP = { lugar: { pagina: "resumen" as const }, foco: "El problema principal" };
+
+  it("con el chip, una pregunta se responde y un pedido de cambio deja su propuesta en la vuelta; al volver, la conversación la trae", async () => {
+    const { id, clientId } = await sembrar();
+    await prisma.firefliesSession.create({
+      data: { id: "ses-escala", title: "Diagnóstico", date: new Date("2026-11-10T15:00:00Z"), participants: ["ana@centauro.test"], resolvedClientId: clientId, transcript: "Ana Mora: La cobranza la hacemos a mano con un Excel." },
+    });
+    const pregunta = { de: "persona" as const, texto: "¿Qué información tienes sobre el problema principal?" };
+    const r1 = await vueltaEnLaPreventa(id, CONVERSACION, [pregunta], EMAIL, CON_ACCESO, { escala: CHIP });
+    expect(r1.ok && r1.turno.tipo).toBe("respuesta");
+    expect(pedidosALaEscala).toHaveLength(0);
+    if (!r1.ok || r1.turno.tipo !== "respuesta") return;
+    const conLaRespuesta = [{ ...pregunta, es: "consulta" as const }, { de: "nexus" as const, es: "respuesta" as const, texto: r1.turno.respuesta.texto }];
+    const pedido = { de: "persona" as const, texto: "Acóplalo más al reto de Fundatec" };
+    const r2 = await vueltaEnLaPreventa(id, CONVERSACION, [...conLaRespuesta, pedido], EMAIL, CON_ACCESO, { escala: CHIP });
+    if (!r2.ok || r2.turno.tipo !== "escala") throw new Error(`esperaba escala: ${JSON.stringify(r2)}`);
+    expect(r2.turno.escala).toMatchObject({ lugar: { pagina: "resumen" }, foco: "El problema principal", nombre: "Resumen", estados: {} });
+    // ⛔ A quien escribe la página no le llega lo que Nexus respondió de la cuenta (salió de una reunión).
+    expect(pedidosALaEscala[0]).toMatchObject({ pedido: "Acóplalo más al reto de Fundatec", foco: "El problema principal", antes: { hablado: "", dichoPorLaPersona: "" } });
+    const c = await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO);
+    expect(c?.mensajes.map((m) => [m.de, m.es ?? null])).toEqual([
+      ["persona", "consulta"],
+      ["nexus", "respuesta"],
+      ["persona", "cambio"],
+      ["nexus", "escala"],
+    ]);
+    expect(c?.mensajes[3].escala).toMatchObject({ id: r2.turno.escala.id, propuesta: { cambios: PROPUESTA_DE_LA_ESCALA.cambios } });
+  });
+
+  it("lo hecho con cada cambio vuelve al recargar; otra persona y otra preventa no lo pueden anotar", async () => {
+    const { id, clientId } = await sembrar();
+    const r = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: "Acóplalo más al reto de Fundatec" }], EMAIL, CON_ACCESO, { escala: CHIP });
+    if (!r.ok || r.turno.tipo !== "escala") throw new Error("esperaba escala");
+    const vuelta = r.turno.escala.id;
+    expect((await estadosDeLaEscalaEnLaPreventa(id, CONVERSACION, vuelta, EMAIL, { "r/negocio:tesis:n1": "aplicado", "r/punto:nuevo": "descartado", "r/inventada": "aplicado" })).ok).toBe(true);
+    // Deshacer deja lo aplicado otra vez pendiente.
+    expect((await estadosDeLaEscalaEnLaPreventa(id, CONVERSACION, vuelta, EMAIL, { "r/negocio:tesis:n1": "pendiente" })).ok).toBe(true);
+    expect((await estadosDeLaEscalaEnLaPreventa(id, CONVERSACION, vuelta, "marco@smarteam.test", { "r/punto:nuevo": "aplicado" })).ok).toBe(false);
+    await prisma.exploracionDeVenta.update({ where: { id }, data: { archivadaEn: new Date() } });
+    const hermana = (await prisma.exploracionDeVenta.create({ data: { clientId, creadaPor: EMAIL }, select: { id: true } })).id;
+    expect((await estadosDeLaEscalaEnLaPreventa(hermana, CONVERSACION, vuelta, EMAIL, { "r/punto:nuevo": "aplicado" })).ok).toBe(false);
+    await prisma.exploracionDeVenta.update({ where: { id: hermana }, data: { archivadaEn: new Date() } });
+    await prisma.exploracionDeVenta.update({ where: { id }, data: { archivadaEn: null } });
+    const c = await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO);
+    expect(c?.mensajes[1].escala?.estados).toEqual({ "r/punto:nuevo": "descartado" });
+  });
+
+  it("cuando el modelo decide que era un cambio y el tope lo frena, la vuelta queda medida pero no cuenta (segunda revisión)", async () => {
+    const { id } = await sembrar();
+    topeDeLaEscala = { ok: false, status: 429, error: "Hoy ya le hiciste 20 pedidos a Nexus, el tope del día. Mañana sigues." };
+    siguiente = { tipo: "cambio" };
+    // Con el chip, lo que nombra la cuenta lo decide el modelo: acá dice «cambio».
+    const r = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: "Ponlo en la guía de la escala" }], EMAIL, CON_ACCESO, { escala: CHIP });
+    expect(r).toMatchObject({ ok: false, status: 429 });
+    const corridas = await prisma.agentRun.findMany({ where: { triggeredByEmail: EMAIL }, select: { status: true, filters: true } });
+    expect(corridas).toHaveLength(1);
+    expect(corridas[0]).toMatchObject({ status: "ERROR", filters: { modo: "chat-de-nexus-frenada" } });
+    // No cuenta como vuelta de la conversación: la siguiente sigue con las 12.
+    siguiente = { tipo: "pregunta", preguntas: ["¿De qué mes?"] };
+    const sigue = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: NOTA }], EMAIL, CON_ACCESO);
+    expect(sigue.ok && sigue.quedan).toBe(TOPES.turnosPorConversacion - 1);
+  });
+
+  it("sin chip, un cambio a la página solo si hay Resumen armado; con el tope de pedidos del día, no se gasta una vuelta", async () => {
+    const { id } = await sembrar();
+    // Sin Resumen armado no hay página que cambiar: «Cambia el titular…» no va a La escala.
+    siguiente = { tipo: "pregunta", preguntas: ["¿A qué te refieres?"] };
+    const sin = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: "Cambia el titular a algo sobre Fundatec" }], EMAIL, CON_ACCESO);
+    expect(sin.ok && sin.turno.tipo).not.toBe("escala");
+    expect(pedidosALaEscala).toHaveLength(0);
+    // Con el chip y el tope del día cumplido: 429 sin corrida nueva.
+    topeDeLaEscala = { ok: false, status: 429, error: "Hoy ya le hiciste 20 pedidos a Nexus, el tope del día. Mañana sigues." };
+    const antes = await prisma.agentRun.count({ where: { triggeredByEmail: EMAIL } });
+    const frenado = await vueltaEnLaPreventa(id, "conv-tope", [{ de: "persona", texto: "Acóplalo más al reto de Fundatec" }], EMAIL, CON_ACCESO, { escala: CHIP });
+    expect(frenado).toMatchObject({ ok: false, status: 429 });
+    expect(await prisma.agentRun.count({ where: { triggeredByEmail: EMAIL } })).toBe(antes);
+  });
+});
+
+describe("las corridas del chat no van al feed de corridas, y las demás sí (25 nov)", () => {
+  it("⛔ deja afuera la vuelta, la respuesta, el chat de la cuenta, La escala y la revisión de una nota; nunca una corrida con agente o rótulo vacío", async () => {
+    const { clientId } = await sembrar();
+    const corrida = (agentSlug: string | null, stepLabel: string | null) => ({ agentSlug, stepLabel, clientId, status: "DONE" as const, triggeredByEmail: EMAIL });
+    await prisma.agentRun.createMany({
+      data: [
+        corrida("exploracion-de-venta", "Hablar con Nexus"),
+        corrida("exploracion-de-venta", "Nexus responde sobre la cuenta"),
+        corrida("nexus-chat", "Chat de Nexus"),
+        corrida("pedirle-a-nexus", "Pedirle a Nexus · La escala › Resumen"),
+        corrida("exploracion-de-venta", "¿La nota cambia La escala?"),
+        corrida("exploracion-de-venta", "Armar el Resumen de La escala"),
+        corrida("handoff", null),
+        corrida(null, "Un agente sin slug"),
+        corrida(null, null),
+      ],
+    });
+    const quedan = await prisma.agentRun.findMany({ where: { AND: [{ triggeredByEmail: EMAIL }, sinLasDelChat()] }, select: { agentSlug: true, stepLabel: true } });
+    expect(quedan.map((r) => `${r.agentSlug ?? "-"}|${r.stepLabel ?? "-"}`).sort()).toEqual(["-|-", "-|Un agente sin slug", "exploracion-de-venta|Armar el Resumen de La escala", "handoff|-"]);
   });
 });
 

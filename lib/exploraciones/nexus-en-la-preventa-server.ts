@@ -21,6 +21,10 @@
  * las notas de la cuenta (van a HubSpot; lo que se cuenta va a «Lo que sabes del cliente»). Pide lo mismo que pedía ese
  * chat: `asistente.read` y acceso a la empresa (lo decide la ruta: `QuienPideLaCuenta`). «Aplicar» es
  * `aplicarEnLaPreventa`: la lista se lee de la vuelta y se aplica por la capa de operaciones, con el permiso de cada una.
+ *
+ * UN SOLO CONTEXTO (Elías, 25 nov): un cambio a la página de La escala es otra mano de ESTA conversación
+ * (`manoDeLaEscala`, el contrato de la página: ./escala-con-nexus-server.ts › `proponerEnLaEscala`, con lo hablado antes).
+ * El chip de «✨ Mejorar con IA» (`escala`) solo dice a qué parte va el cambio; sin chip, un cambio va al Resumen.
  */
 import "server-only";
 import type { TeamMember } from "@prisma/client";
@@ -33,9 +37,11 @@ import {
   conversacionGuardada,
   correrUnaVuelta,
   guardarLosEstados,
+  guardarLosEstadosDeLaEscala,
   ultimoTurnoListo,
   type AplicadoEnLaConversacion,
   type PedirALaCuenta,
+  type PedirALaEscala,
   type VueltaDeNexus,
 } from "@/lib/chat-de-nexus/conversacion-server";
 import { hablaDeLaGuia } from "@/lib/chat-de-nexus/lista";
@@ -60,6 +66,8 @@ import { impactoDeLaNotaEnLaEscala, laEscalaComoEntregable, type ImpactoEnLaEsca
 import { textoDeLasPiezas } from "./impacto-en-la-escala";
 import { reunionesDeLaCuenta } from "./fuentes";
 import { esClaveDeLoQueSabes, loQueSabeElEquipo } from "./lo-que-sabes";
+import { antesDePedirleALaEscala, proponerEnLaEscala } from "./escala-con-nexus-server";
+import { loHabladoAntes, loQueDijoLaPersonaAntes, type DondeEnLaEscala } from "@/lib/chat-de-nexus/escala-en-la-conversacion";
 import { destinosDeLaPreventa, esCasillaParaNexus } from "./nexus-en-la-preventa";
 import { estadoDesdeFila, leerExploracion, type FilaDeExploracion } from "./servidor";
 
@@ -83,7 +91,8 @@ export async function contextoParaNexus(fila: FilaDeExploracion, estado: EstadoD
   ]
     .filter(Boolean)
     .join("\n\n");
-  return { donde: "la preventa", empresa: fila.client.name, contexto, destinos: destinosDeLaPreventa(estado.contenido) };
+  // Con el Resumen armado hay una página que cambiar: lo dudoso también puede ser un cambio a ella (25 nov).
+  return { donde: "la preventa", empresa: fila.client.name, contexto, destinos: destinosDeLaPreventa(estado.contenido), conLaEscala: escala.armado };
 }
 
 /**
@@ -206,6 +215,23 @@ function manoDeLaCuenta(fila: FilaDeExploracion, email: string, quien: { persona
 }
 
 /**
+ * La mano de La escala en la preventa (25 nov): el contrato de la página, con el lugar que puso el chip (sin chip, el Resumen
+ * entero), lo hablado antes en esta conversación y las cifras que la persona dijo antes. La cuenta sale de la fila: el
+ * modelo nunca la elige. No escribe nada.
+ */
+function manoDeLaEscala(fila: FilaDeExploracion, email: string, donde: DondeEnLaEscala | null): PedirALaEscala {
+  const lugar = donde?.lugar ?? { pagina: "resumen" as const };
+  const foco = donde?.foco ?? null;
+  return async ({ pedido, mensajes }) => {
+    const r = await proponerEnLaEscala(
+      { email },
+      { clientId: fila.clientId, exploracionId: fila.id, lugar, foco, pedido, antes: { hablado: loHabladoAntes(mensajes), dichoPorLaPersona: loQueDijoLaPersonaAntes(mensajes) } },
+    );
+    return r.ok ? { ok: true, escala: { lugar, nombre: r.nombre, foco, propuesta: r.propuesta } } : r;
+  };
+}
+
+/**
  * La acción 3: una vuelta de la conversación (preguntar, responder, decir adónde va cada cosa o, desde el 24 nov, preparar
  * un pedido de la cuenta). `puedeVerLaCuenta`: si quien conversa tiene acceso a la empresa (la ruta lo pregunta con
  * `guardAccessToClient`); sin él, una pregunta se responde sin leer sus reuniones. `quienPideLaCuenta`: quién puede pedir
@@ -219,7 +245,16 @@ export async function vueltaEnLaPreventa(
   mensajes: MensajeDeLaConversacion[],
   email: string,
   puedeVerLaCuenta: (clientId: string) => Promise<boolean>,
-  o: { contar?: boolean; preguntar?: boolean; pedir?: boolean; lugar?: "guia"; soltar?: string; quienPideLaCuenta?: QuienPideLaCuenta } = {},
+  o: {
+    contar?: boolean;
+    preguntar?: boolean;
+    pedir?: boolean;
+    lugar?: "guia";
+    soltar?: string;
+    quienPideLaCuenta?: QuienPideLaCuenta;
+    /** El chip de La escala (25 nov): a qué parte va un cambio. Sin él, un cambio a la página va al Resumen. */
+    escala?: DondeEnLaEscala | null;
+  } = {},
 ): Promise<VueltaDeNexus> {
   const p = await laPreventa(exploracionId);
   if (!p.ok) return p;
@@ -238,6 +273,11 @@ export async function vueltaEnLaPreventa(
     valorValido,
     leerLaCuenta: async () => fuentesDeLaCuenta(p.fila, p.estado, await puedeVerLaCuenta(p.fila.clientId).catch(() => false)),
     ...(quien ? { pedirALaCuenta: manoDeLaCuenta(p.fila, email, quien, o.lugar), antesDePedir: () => topeDeHoy(email) } : {}),
+    // Un solo contexto (25 nov): con el chip de La escala, lo que no es pregunta es un cambio a esa parte; sin chip, solo si
+    // hay Resumen armado (y lo seguro, o lo que decida el modelo). Pide el mismo permiso que la vuelta: cambiar la preventa.
+    pedirALaEscala: manoDeLaEscala(p.fila, email, o.escala ?? null),
+    antesDeCambiar: (pedido) => antesDePedirleALaEscala(email, pedido),
+    escala: o.escala ? "chip" : contexto.conLaEscala ? "pagina" : null,
     donde: { agentSlug: AGENTE_DE_LA_EXPLORACION, superficie: "preventa", clientId: p.fila.clientId, projectId: null, email, filtros: filtrosDe(exploracionId) },
   });
 }
@@ -352,6 +392,14 @@ export async function estadosEnLaPreventa(exploracionId: string, conversacion: s
   if (!p.ok) return p;
   const ok = await guardarLosEstados(email, p.fila.clientId, conversacion, filtrosDe(exploracionId), estados);
   return ok ? { ok: true } : { ok: false, status: 404, error: "Esa conversación no terminó en cambios tuyos en esta preventa." };
+}
+
+/** Lo que la persona hizo con los cambios de una propuesta a La escala de su conversación (25 nov). */
+export async function estadosDeLaEscalaEnLaPreventa(exploracionId: string, conversacion: string, vuelta: string, email: string, estados: Record<string, unknown>): Promise<Hecho> {
+  const p = await laPreventa(exploracionId);
+  if (!p.ok) return p;
+  const ok = await guardarLosEstadosDeLaEscala(email, p.fila.clientId, conversacion, filtrosDe(exploracionId), vuelta, estados);
+  return ok ? { ok: true } : { ok: false, status: 404, error: "Esa propuesta no es de tu conversación en esta preventa." };
 }
 
 /** «Nueva conversación»: la de ahora queda cerrada para quien la tuvo, y al volver el cajón arranca vacío. */

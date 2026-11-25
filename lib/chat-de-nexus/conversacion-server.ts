@@ -16,6 +16,10 @@
  *
  * No escribe nada del lugar: ni la nota ni las tarjetas. Eso lo hace la pantalla por su camino de siempre, y los hechos
  * los escribe su único escritor (lib/seguimiento/hechos-server.ts).
+ *
+ * UN SOLO CONTEXTO (25 nov): un cambio a la página de La escala es una vuelta más (`pedirALaEscala`, la pone el lugar). La
+ * propuesta queda en la vuelta con su texto (`escala`, `textoDeLaEscala`) y lo que la persona hace con cada cambio, en sus
+ * `estados` (`guardarLosEstadosDeLaEscala`). Proponer no escribe nada; aplicar va por la ruta de la página de siempre.
  */
 import "server-only";
 import type { Prisma } from "@prisma/client";
@@ -40,6 +44,7 @@ import {
   type ResultadoDelTurno,
 } from "./conversacion";
 import { estadosValidos, leerLaSalida, reconstruirLaConversacion, type AnotacionesDeLaVuelta, type ConversacionGuardada, type SalidaDeLaVuelta } from "./guardada";
+import { estadosParaGuardar, leerLaEscalaGuardada, textoDeLaEscala, type EscalaEnLaConversacion } from "./escala-en-la-conversacion";
 import {
   estadosDeLasListas,
   leerListaGuardada,
@@ -52,7 +57,14 @@ import {
 } from "./lista";
 import { leerLaRespuesta, pedidoDeLaRespuesta, PREGUNTAS_POR_DIA, type FuenteDeLaCuenta, type LoQueQuedoAfuera, type RespuestaDeNexus } from "./respuesta";
 import { tomarHilo } from "@/lib/nexus-chat/candado-server";
+import { ETIQUETAS_DEL_CHAT } from "@/lib/agents/corridas-del-chat";
 import { sinMarcadores } from "@/lib/nexus-chat/textos";
+
+/**
+ * Una vuelta que el modelo leyó como un cambio a La escala y frenó su tope (25 nov): queda medida pero no cuenta como vuelta
+ * de la conversación ni vuelve al recargar.
+ */
+export const MODO_DE_LA_VUELTA_FRENADA = "chat-de-nexus-frenada";
 
 /** El modo de la corrida de una vuelta: lo que cuentan los topes y lo que busca `ultimoTurnoListo`. */
 export const MODO_DEL_CHAT = "chat-de-nexus";
@@ -125,6 +137,18 @@ export type PedirALaCuenta = (p: {
 }) => Promise<{ ok: true; lista: ListaPreparada } | { ok: false; status: number; error: string }>;
 
 /**
+ * LA MANO DE LA ESCALA (25 nov, un solo contexto): lo que el lugar hace con un cambio a la página de La escala. En la
+ * preventa, el contrato de la página (lib/exploraciones/escala-con-nexus-server.ts › `proponerEnLaEscala`), con lo hablado
+ * antes en esta conversación. No escribe nada: devuelve la propuesta. `ok: false`: no se pudo (el tope de pedidos del día,
+ * la página que cambió); la vuelta no queda y lo escrito vuelve a la caja.
+ */
+export type PedirALaEscala = (p: {
+  pedido: string;
+  /** La conversación con el pedido al final. */
+  mensajes: MensajeDeLaConversacion[];
+}) => Promise<{ ok: true; escala: Omit<EscalaEnLaConversacion, "id" | "estados"> } | { ok: false; status: number; error: string }>;
+
+/**
  * El candado de una conversación: lo toman el pedido y «Aplicar», el mismo de la ficha (lib/nexus-chat/candado-server.ts,
  * en memoria: una sola instancia). Un «Aplicar» mientras la mano de la cuenta piensa no deja que esa mano vuelva a
  * proponer lo que se acaba de aplicar.
@@ -153,7 +177,8 @@ async function responder(o: { pregunta: string; mensajes: MensajeDeLaConversacio
       clientId: donde.clientId,
       projectId: donde.projectId,
       status: "RUNNING",
-      stepLabel: "Nexus responde sobre la cuenta",
+      // El rótulo dice que es del chat: el feed de corridas no avisa de ella (lib/agents/corridas-del-chat.ts).
+      stepLabel: ETIQUETAS_DEL_CHAT.respuesta,
       triggeredByEmail: donde.email,
       filters: { modo: MODO_DE_LA_RESPUESTA, superficie: donde.superficie, conversacion: o.conversacion, ...donde.filtros } as Prisma.InputJsonValue,
     },
@@ -195,6 +220,17 @@ export async function correrUnaVuelta(o: {
   /** La mano de la cuenta del lugar (en la preventa, el chat de la cuenta). Sin ella, un pedido se responde como pregunta. */
   pedirALaCuenta?: PedirALaCuenta;
   /**
+   * La mano de La escala del lugar (25 nov). Sin ella no hay cambios a la página: lo que lo parece se lee como antes. `escala`:
+   * «chip», el chat se abrió desde «✨ Mejorar con IA» de La escala; «pagina», sin chip pero con la página para cambiar.
+   */
+  pedirALaEscala?: PedirALaEscala;
+  escala?: "chip" | "pagina" | null;
+  /**
+   * Antes de gastar la vuelta en un cambio a La escala: el tope de pedidos del día y el largo (como `antesDePedir`). Si lo
+   * decidió el modelo, la vuelta ya se creó: frenada, deja de contar como vuelta (su gasto queda medido).
+   */
+  antesDeCambiar?: (pedido: string) => Promise<{ ok: true } | { ok: false; status: number; error: string }>;
+  /**
    * «Guardarlo como nota» debajo de una lista de la cuenta (con `contar`): esa lista (su vuelta) ya no va. Queda «soltada»
    * antes de contar, así no se arrastra al pedido siguiente.
    */
@@ -208,7 +244,7 @@ export async function correrUnaVuelta(o: {
   const { contexto, mensajes, conversacion, donde } = o;
   // Lo seguro lo decide el código (`comoSeLee`); lo dudoso, el modelo con la conversación a la vista. Un lugar sin la mano
   // de la cuenta no tiene pedidos: lo que el código ve como pedido lo decide el modelo (contar o preguntar).
-  const leida = comoSeLee(mensajes, { contar: o.contar, preguntar: o.preguntar, pedir: o.pedir });
+  const leida = comoSeLee(mensajes, { contar: o.contar, preguntar: o.preguntar, pedir: o.pedir, escala: o.pedirALaEscala ? o.escala : null });
   const lectura = leida === "pedido" && !o.pedirALaCuenta ? "duda" : leida;
   const loUltimo = mensajes[mensajes.length - 1]?.texto.trim().slice(0, TOPES.largoDelMensaje) ?? "";
   const vueltas = await vueltasHastaAhora(donde.email, conversacion);
@@ -230,17 +266,23 @@ export async function correrUnaVuelta(o: {
     const r = await o.antesDePedir();
     if (!r.ok) return r;
   }
+  // Un cambio seguro a La escala frenado por su tope del día no se come una vuelta (revisión del 25 nov).
+  if (lectura === "cambio" && o.antesDeCambiar) {
+    const r = await o.antesDeCambiar(loUltimo);
+    if (!r.ok) return r;
+  }
 
+  const filtrosDeLaVuelta = { modo: MODO_DEL_CHAT, superficie: donde.superficie, conversacion, ...donde.filtros, ...(o.preguntar ? { boton: BOTON_ERA_UNA_PREGUNTA } : o.contar ? { boton: BOTON_GUARDARLO_COMO_NOTA } : o.pedir ? { boton: BOTON_ERA_UN_PEDIDO } : {}) };
   const run = await prisma.agentRun.create({
     data: {
       agentSlug: donde.agentSlug,
       clientId: donde.clientId,
       projectId: donde.projectId,
       status: "RUNNING",
-      stepLabel: "Hablar con Nexus",
+      stepLabel: ETIQUETAS_DEL_CHAT.vuelta,
       triggeredByEmail: donde.email,
       // `boton`: la vuelta salió de «¿Era una pregunta?» o de «Guardarlo como nota» (el conteo de «Uso de Nexus», 22 nov).
-      filters: { modo: MODO_DEL_CHAT, superficie: donde.superficie, conversacion, ...donde.filtros, ...(o.preguntar ? { boton: BOTON_ERA_UNA_PREGUNTA } : o.contar ? { boton: BOTON_GUARDARLO_COMO_NOTA } : o.pedir ? { boton: BOTON_ERA_UN_PEDIDO } : {}) } as Prisma.InputJsonValue,
+      filters: filtrosDeLaVuelta as Prisma.InputJsonValue,
       // Los mensajes de esta vuelta: de acá se reconstruye la conversación al volver (./guardada.ts).
       output: JSON.stringify({ mensajes }),
     },
@@ -255,6 +297,9 @@ export async function correrUnaVuelta(o: {
     } else if (lectura === "pedido") {
       // Un pedido seguro de la cuenta tampoco: lo prepara la mano de la cuenta con las palabras de la persona.
       turno = { tipo: "pedido", pedido: loUltimo };
+    } else if (lectura === "cambio") {
+      // Un cambio a La escala tampoco (25 nov): lo propone la mano de La escala con las palabras de la persona.
+      turno = { tipo: "cambio", pedido: loUltimo };
     } else {
       const respuesta = await conContextoDeIA(ia, () => getAnthropic().messages.create(pedidoDelTurno(contexto, mensajes, lectura)));
       turno = leerElTurno(respuesta, {
@@ -266,9 +311,12 @@ export async function correrUnaVuelta(o: {
       });
       // Un lugar sin la mano de la cuenta: lo que el modelo leyó como pedido se responde como pregunta.
       if (turno.tipo === "pedido" && !o.pedirALaCuenta) turno = { tipo: "consulta", pregunta: turno.pedido };
+      // Lo mismo con un cambio a La escala sin su mano (o sin página que cambiar).
+      if (turno.tipo === "cambio" && (!o.pedirALaEscala || !o.escala)) turno = { tipo: "consulta", pregunta: turno.pedido };
     }
-    // El pedido queda en la vuelta recién con su lista (abajo): si la mano no puede, la vuelta no queda.
-    if (turno.tipo !== "pedido") {
+    // El pedido (o el cambio) queda en la vuelta recién con su lista (o su propuesta, abajo): si la mano no puede, la vuelta
+    // no queda.
+    if (turno.tipo !== "pedido" && turno.tipo !== "cambio") {
       // `contado`: la persona eligió «Guardarlo como nota»; al volver, «¿Era una pregunta?» no reaparece.
       const salida: SalidaDeLaVuelta = { ...turno, mensajes, ...(o.contar && turno.tipo === "listo" ? { contado: true as const } : {}) };
       await prisma.agentRun.update({ where: { id: run.id }, data: { status: "DONE", output: JSON.stringify(salida) } });
@@ -284,6 +332,21 @@ export async function correrUnaVuelta(o: {
   if (turno.tipo === "pedido" && o.pedirALaCuenta) {
     const r = await pedirEnLaVuelta({ runId: run.id, pedido: turno.pedido, mensajes, conversacion, donde, pedirALaCuenta: o.pedirALaCuenta });
     return r.ok ? { ok: true, turno: { tipo: "lista", lista: r.lista }, quedan, ...conAviso } : r;
+  }
+  if (turno.tipo === "cambio" && o.pedirALaEscala) {
+    // Lo decidió el modelo (lo seguro ya se miró arriba): si el tope o el largo lo frenan, la vuelta deja de contar como
+    // vuelta de la conversación (segunda revisión del 25 nov); su llamada queda medida igual.
+    if (lectura !== "cambio" && o.antesDeCambiar) {
+      const antes = await o.antesDeCambiar(turno.pedido);
+      if (!antes.ok) {
+        await prisma.agentRun
+          .update({ where: { id: run.id }, data: { status: "ERROR", filters: { ...filtrosDeLaVuelta, modo: MODO_DE_LA_VUELTA_FRENADA } as Prisma.InputJsonValue, output: JSON.stringify({ error: antes.error, mensajes }) } })
+          .catch(() => {});
+        return antes;
+      }
+    }
+    const r = await cambiarEnLaVuelta({ runId: run.id, pedido: turno.pedido, mensajes, pedirALaEscala: o.pedirALaEscala });
+    return r.ok ? { ok: true, turno: { tipo: "escala", escala: r.escala }, quedan, ...conAviso } : r;
   }
 
   if (turno.tipo === "consulta") {
@@ -368,6 +431,40 @@ async function pedirEnLaVuelta(o: {
     return fallar(502, "Nexus no pudo preparar lo que pediste. Vuelve a intentarlo: no se cambió nada.", e instanceof Error ? e.message : String(e));
   } finally {
     soltar();
+  }
+}
+
+/**
+ * Un cambio a La escala en la vuelta `runId` (25 nov): la mano de La escala propone y la propuesta queda en la vuelta, con
+ * el texto que la nombra en la conversación. Si la mano no puede o falla, la vuelta queda en ERROR (cuenta en el tope, no
+ * vuelve al recargar) y lo escrito vuelve a la caja.
+ */
+async function cambiarEnLaVuelta(o: {
+  runId: string;
+  pedido: string;
+  mensajes: MensajeDeLaConversacion[];
+  pedirALaEscala: PedirALaEscala;
+}): Promise<{ ok: true; escala: EscalaEnLaConversacion } | { ok: false; status: number; error: string }> {
+  const fallar = async (status: number, error: string, detalle?: string) => {
+    await prisma.agentRun
+      .update({ where: { id: o.runId }, data: { status: "ERROR", output: JSON.stringify({ error: detalle ?? error, mensajes: o.mensajes }) } })
+      .catch(() => {});
+    return { ok: false as const, status, error };
+  };
+  try {
+    const r = await o.pedirALaEscala({ pedido: o.pedido, mensajes: o.mensajes });
+    if (!r.ok) return fallar(r.status, r.error);
+    const escala: EscalaEnLaConversacion = { id: o.runId, ...r.escala, estados: {} };
+    // Lo que queda en la vuelta: la propuesta (sin estados: se anotan aparte) y el texto que la nombra en la conversación.
+    const guardada = { id: escala.id, lugar: escala.lugar, nombre: escala.nombre, foco: escala.foco, propuesta: escala.propuesta };
+    await prisma.agentRun.update({
+      where: { id: o.runId },
+      data: { status: "DONE", output: JSON.stringify({ tipo: "escala", escala: guardada, textoDeLaEscala: textoDeLaEscala(escala), mensajes: o.mensajes }) },
+    });
+    return { ok: true, escala };
+  } catch (e) {
+    console.error("[chat-de-nexus] la mano de La escala no respondió", e);
+    return fallar(502, "Nexus no pudo proponer el cambio. Vuelve a intentarlo: no se cambió nada.", e instanceof Error ? e.message : String(e));
   }
 }
 
@@ -536,6 +633,27 @@ export async function guardarLosEstados(email: string, clientId: string, convers
   const s = leerLaSalida(v?.output);
   if (!v || !s || s.tipo !== "listo") return false;
   const estados = estadosValidos(s.cambios ?? [], pedidos);
+  if (Object.keys(estados).length) await anotarLaVuelta(v.id, { estados });
+  return true;
+}
+
+/**
+ * Lo que la persona hizo con los cambios de una propuesta a La escala («Aplicar», «Descartar», «Deshacer») queda en su
+ * vuelta `vuelta` (25 nov). Solo claves de esa propuesta; solo una vuelta de esta persona, en este lugar y en esta
+ * conversación. false si no es una.
+ */
+export async function guardarLosEstadosDeLaEscala(
+  email: string,
+  clientId: string,
+  conversacion: string,
+  filtros: Record<string, string>,
+  vuelta: string,
+  pedidos: Record<string, unknown>,
+): Promise<boolean> {
+  const v = await prisma.agentRun.findFirst({ where: { id: vuelta, ...deLaPersonaEn(email, clientId, filtros, conversacion), status: "DONE" }, select: { id: true, output: true } });
+  const e = leerLaEscalaGuardada(leerLaSalida(v?.output));
+  if (!v || !e) return false;
+  const estados = estadosParaGuardar(e.propuesta, pedidos);
   if (Object.keys(estados).length) await anotarLaVuelta(v.id, { estados });
   return true;
 }
