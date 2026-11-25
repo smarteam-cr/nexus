@@ -80,7 +80,8 @@ describe("2 · arriba, una sola línea", () => {
     expect(paso).toContain("lineaDeLaEscala({");
     // Desde el 24 nov, en la preventa de un cliente, con el proyecto de contexto («Ubicar con lo que ya sabemos»).
     expect(paso).toContain('lanzar("posicionar", conLoQueYaSabemos ? { proyectoDeContexto: contexto } : {})');
-    expect(paso).toContain('{lugar === "preventa" && <LineaDeArriba />}');
+    // Desde la noche del 24 nov va debajo de la página (escala-sin-resumen.test.ts), solo en la preventa.
+    expect(paso).toContain('linea={lugar === "preventa" ? <LineaDeLaUbicacion /> : null}');
     // Solo «Ubicar» cambia la frase a «ubicando»; otro trabajo del agente solo hace esperar al botón.
     expect(paso).toContain('ubicando: corriendo && corrida?.modo === "posicionar"');
   });
@@ -98,7 +99,8 @@ describe("2 · arriba, una sola línea", () => {
     for (const t of ["<PublicarLaEscala />", "<AccesoALaEscala />", '["pagina", "nodos"]']) expect(paso).toContain(t);
     expect(paso).toContain('nodos: "Comparar áreas"');
     expect(paso).toContain('pagina: "Como lo ve el cliente"');
-    for (const t of ["{res.at && botonDePedirle}", "<BotonDelHistorial", '"Rehacer con IA"', "{botonDePedirle}"]) expect(pagina).toContain(t);
+    // Desde el 24 nov la fila del Resumen entera va con `res.at` (sin Resumen, el aviso «Falta armar el Resumen»).
+    for (const t of ["{res.at && (", "<BotonDelHistorial", "Rehacer con IA", "{botonDePedirle}"]) expect(pagina).toContain(t);
     // Los avisos del Resumen (formato viejo, cifras que no salen) siguen.
     expect(pagina).toContain("Está armado con el formato del 9 nov");
     expect(pagina).toContain("Ninguna cifra sale al cliente");

@@ -85,6 +85,16 @@ function medirMessages(messages: Anthropic["messages"]): Anthropic["messages"] {
           const t0 = Date.now();
           const stream = (valor as (...a: unknown[]) => unknown).apply(target, args) as {
             on?: (evento: string, cb: (arg: unknown) => void) => unknown;
+            currentMessage?: ConUsage;
+          };
+          /* Lo que ya se gastó de una llamada que no terminó (24 nov): la entrada llega con `message_start`, y Anthropic la
+             cobra aunque la llamada se corte. Sin esto, la fila quedaba con costo 0 justo en las corridas más caras. */
+          const loGastado = () => {
+            try {
+              return stream.currentMessage?.usage;
+            } catch {
+              return undefined;
+            }
           };
           try {
             // `message` trae el Message completo al cerrar; dispara aunque nadie espere
@@ -101,6 +111,18 @@ function medirMessages(messages: Anthropic["messages"]): Anthropic["messages"] {
             stream.on?.("error", (e) => {
               registrarLlamada({
                 model,
+                usage: loGastado(),
+                durationMs: Date.now() - t0,
+                ok: false,
+                errorType: tipoDeError(e),
+              });
+            });
+            // Un stream que cortó quien llama (24 nov, `llamarConTope`: la IA no daba señal) no emite `error` sino
+            // `abort`: sin esto, la llamada colgada no dejaba su fila y no se veía en el gasto ni en el diagnóstico.
+            stream.on?.("abort", (e) => {
+              registrarLlamada({
+                model,
+                usage: loGastado(),
                 durationMs: Date.now() - t0,
                 ok: false,
                 errorType: tipoDeError(e),

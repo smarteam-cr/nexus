@@ -110,10 +110,9 @@ describe("⛔ sumar Marketing (con Ventas) no le cambia el alto al radar interno
 describe("⛔ la pantalla no vuelve a colgar de la elección lo que va debajo del radar (escaneo del texto)", () => {
   const fuente = readFileSync(join(process.cwd(), "components/exploraciones/PasoEscala.tsx"), "utf8");
 
-  it("«Lo que más frena a cada equipo» y «Para explorar más» no reciben las áreas elegidas", () => {
-    expect(fuente).toContain("<LoQueFrenaACadaEquipo />");
-    expect(fuente).toContain("<ParaExplorarMas />");
-    expect(fuente).not.toMatch(/<ParaExplorarMas\s+elegidas/);
+  it("«Para completar el diagnóstico» (antes «Lo que más frena a cada equipo» y «Para explorar más», 24 nov) no recibe las áreas elegidas", () => {
+    expect(fuente).toContain("<ParaCompletarElDiagnostico />");
+    expect(fuente).not.toMatch(/<ParaCompletarElDiagnostico\s+elegidas/);
   });
 
   it("el texto debajo del radar no depende de las otras áreas", () => {

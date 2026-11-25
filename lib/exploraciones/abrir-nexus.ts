@@ -7,8 +7,12 @@
  * lugar puesto como chip (el Resumen o un área, y la sección desde la que se pidió): lo que se escribe es un pedido de
  * cambio a la página, y la propuesta por pieza se ve adentro. Con `guia` (24 nov, una sola conversación: «Mejorar con IA»
  * de la guía), abre la MISMA conversación con la guía como chip y sus sugerencias: lo que se escribe es un pedido sobre la
- * guía, que prepara el chat de la cuenta con la guía a la vista. Sin chip, es la conversación de siempre.
+ * guía, que prepara el chat de la cuenta con la guía a la vista. Con `pregunta` (24 nov, «Responder con Nexus» de «Para
+ * completar el diagnóstico» en La escala), abre la MISMA conversación con esa pregunta, su equipo y su parte como chip: lo
+ * primero que escribe la persona sale con «Sobre <equipo> · <parte> (…): » adelante (completar-el-diagnostico.ts) y,
+ * guardado, queda como nota de «Lo que sabes del cliente». Sin chip, es la conversación de siempre.
  */
+import type { PreguntaParaResponder } from "./completar-el-diagnostico";
 import type { LugarEnLaEscala } from "./escala-con-nexus";
 
 export const EVENTO_ABRIR_NEXUS = "nexus:abrir-en-la-preventa";
@@ -41,6 +45,8 @@ export interface PedidoDeAbrirNexus {
   exploracionId: string;
   escala?: LugarDeLaEscalaEnElCajon;
   guia?: GuiaEnElCajon;
+  /** Una pregunta de La escala que la persona responde (24 nov): la conversación, con la pregunta como chip. */
+  pregunta?: PreguntaParaResponder;
 }
 
 export function abrirNexusEnLaPreventa(p: PedidoDeAbrirNexus): void {

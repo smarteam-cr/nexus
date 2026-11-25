@@ -4,34 +4,38 @@
  * PasoEscala — dónde parece estar cada equipo en la escala, y por qué.
  *
  * Tercera vuelta (2026-11-08, Elías con Centauro Solutions): «lo importante es que el vendedor VEA la escala, con los
- * nodos y el puntaje, exactamente como se ve en el diagnóstico de rendimiento». En este orden:
- *   1. Arriba, una línea que dice si hay algo nuevo que llevar a la escala, con «Ubicar con las reuniones» (solo la
- *      preventa: el agente lee las transcripciones de las sesiones y ubica las tres áreas con su evidencia, y lo que no
- *      tiene evidencia directa como hipótesis por explorar; 24 nov, `LineaDeArriba`), «Publicar» y «Acceso».
+ * nodos y el puntaje, exactamente como se ve en el diagnóstico de rendimiento». En este orden (el de la noche del 24 nov,
+ * Elías con TEC · AE):
+ *   1. Arriba, «Como lo ve el cliente» / «Comparar áreas» y, a la derecha, «Publicar» y «Acceso».
  *   2. Lo que sugiere el agente, en una franja: cuántas con evidencia y cuántas por explorar, «Pasar las N al mapa» y la
  *      lista solo si se pide. Sin «Usadas hoy» (el aviso de cada uso ya deshace).
- *   3. Dónde está hoy (desde el 24 nov sin la frase de lo explorado ni el objetivo: Elías, «demasiada información»): las
- *      tres áreas como botones que se
+ *   3. La página (sin el título «Dónde está hoy» desde el 24 nov, ni la frase de lo explorado ni el objetivo: Elías,
+ *      «demasiada información»). Debajo, la LÍNEA de cómo se ubicó la escala (`LineaDeLaUbicacion`, solo la preventa;
+ *      hasta el 24 nov iba arriba): si hay algo nuevo que llevar a la escala, con «Ubicar con las reuniones» (el agente lee
+ *      las transcripciones de las sesiones y ubica las tres áreas con su evidencia, y lo que no tiene evidencia directa
+ *      como hipótesis por explorar). Y debajo, «Para completar el diagnóstico» (`ParaCompletarElDiagnostico`).
+ *      En «Comparar áreas», las tres áreas como botones que se
  *      PRESIONAN (cuarta vuelta, 2026-11-08: «se pueden elegir varias, y se ven en el mismo radar, una sobre otra, cada
  *      una de un color»). Se ven con el RADAR DEL DIAGNÓSTICO (`RadarDeUnaEmpresa`, el mismo de la página del cliente:
  *      nodos, puntaje y nivel en el centro); la principal (la última elegida) lleva los nombres y el detalle, las otras
  *      van encima con su color. Un área con algo se ve aunque no esté en juego. (La rueda, la vista «Mapa», se quitó el 9
  *      nov: Elías pidió sacarla; lo que solo ella mostraba está en DECISIONS.) Al pasar el cursor por una dimensión sale su TARJETA (TarjetaDelRadar.tsx: cómo está y qué
  *      preguntar, con «Llevar a la sesión N»); tocarla abre la dimensión con sus cinco niveles.
- *      Debajo, «Lo que más frena a cada equipo» con el puente a «Casos de uso», y «Para explorar más» cada equipo,
- *      ordenados por hipótesis: ahí vive la lectura «Preparación para engagement avanzado» (en Marketing). Novena vuelta
- *      (8 nov): lo de debajo del radar no depende de las áreas elegidas (elegir Marketing ya no corre nada), se pueden
- *      soltar todas («Selecciona un departamento») y se fue «De dónde sale cada nivel» (Elías: «me parece irrelevante»).
+ *      Debajo, «Para completar el diagnóstico» (24 nov: junta «Lo que más frena a cada equipo», con el puente a «Casos de
+ *      uso», y «Para explorar más», ordenados por hipótesis, con la lectura «Preparación para engagement avanzado» en
+ *      Marketing; cada pregunta, con «Responder con Nexus» en la preventa). Novena vuelta (8 nov): lo de debajo del radar
+ *      no depende de las áreas elegidas (elegir Marketing ya no corre nada), se pueden soltar todas («Selecciona un
+ *      departamento») y se fue «De dónde sale cada nivel» (Elías: «me parece irrelevante»).
  *   4. Con qué se mide, qué va primero y el agente, al pie.
  * Se fue «Qué explorar en la próxima sesión»: la guía ya elige primero lo que no tiene evidencia, y cada dimensión
  * conserva «Explorarla a fondo».
  *
  * LA PÁGINA DEL CLIENTE, EDITABLE (8 nov; Elías: «la página de resultados debe verse igual externo que interno, pero
- * interno debe funcionar como un artefacto que se puede editar»): «Dónde está hoy» abre en «Como lo ve el cliente»
+ * interno debe funcionar como un artefacto que se puede editar»): la escala abre en «Como lo ve el cliente»
  * (PaginaDeLaEscala.tsx): la misma página pública, con los mismos datos, donde se edita en su lugar la descripción, lo que
  * dice cada tarjeta y el nivel de cada parte (arrastrándolo en el radar). La vista de antes sigue entera al lado:
  * «Comparar áreas» (el selector con ✓, las áreas superpuestas, las hipótesis sugeridas dibujadas y la tarjeta con
- * «Llevar a la sesión N»). Lo de debajo (lo que frena a cada equipo, para explorar más) es de las dos. Desde el 9 nov la
+ * «Llevar a la sesión N»). Lo de debajo («Para completar el diagnóstico») es de las dos. Desde el 9 nov la
  * página abre en su pestaña «Resumen» (la portada que presenta el vendedor) y no hay botón «Qué ve el cliente»: qué
  * equipos ve se elige en «Acceso».
  *
@@ -65,6 +69,9 @@ import type { ClaveDeCapa } from "@/lib/escala/documento/tipos";
 import { esHipotesisDeNivel, type DestinoDePropuesta, type ItemPropuesto } from "@/lib/exploraciones/contenido";
 import type { AreaDelLienzo, DimensionDelLienzo, EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { fraseDelFreno, ordenParaExplorar, partesParaExplorar } from "@/lib/exploraciones/equipos-de-la-escala";
+import { abrirNexusEnLaPreventa } from "@/lib/exploraciones/abrir-nexus";
+import { respuestaDe } from "@/lib/exploraciones/completar-el-diagnostico";
+import { diaCorto } from "@/lib/exploraciones/fechas";
 import { chequeoDelMapa, cuentaDelArea, fraseDeLaCuenta, loQueLaFrena, type PosicionEnElMapa } from "@/lib/exploraciones/mapa";
 import { cortadasQueSeLeenEnteras, lineaDeLaEscala, marcasQueCambiaron } from "@/lib/exploraciones/linea-de-la-escala";
 import { partirDeLoQueYaSabemos } from "@/lib/exploraciones/posicionar";
@@ -137,7 +144,7 @@ function AreaFuera({ area, onSumar }: { area: AreaDelLienzo; onSumar: () => void
   );
 }
 
-// ── 1 · La línea de arriba: si hay algo nuevo que llevar a la escala (solo la preventa) ──
+// ── 1 · La línea de la ubicación: si hay algo nuevo que llevar a la escala (solo la preventa) ──
 
 /**
  * UNA línea (24 nov; Elías: «lo único que hay que entender es si alguna parte tiene que actualizarse»): si hay reuniones
@@ -145,8 +152,9 @@ function AreaFuera({ area, onSumar }: { area: AreaDelLienzo; onSumar: () => void
  * ubica la escala con las TRANSCRIPCIONES de las sesiones (modo «posicionar», el mismo de «Actualizar escala» de la
  * cuenta): lo lanza una persona, nunca corre solo ni en cada visita. Lo que dice, en lib/exploraciones/linea-de-la-escala.ts.
  * Reemplaza la fila «1 Ubicar con las reuniones · 2 Confirmar en el mapa · 3 Armar el Resumen» y lo de «Dónde está hoy».
+ * Desde la noche del 24 nov (Elías con TEC · AE) va DEBAJO de la página, no arriba: arriba quedan «Publicado…» y «Acceso».
  */
-function LineaDeArriba() {
+function LineaDeLaUbicacion() {
   const { exp, puedeEditar, proyectosDeLaEmpresa } = useLienzo();
   const { pestanas } = useSesiones();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
@@ -174,7 +182,7 @@ function LineaDeArriba() {
     marcasCambiadas: marcasQueCambiaron(exp.estado.contenido.resumenDeLaEscala?.hicimos.sesiones, reunionesDeLaLinea),
   });
   return (
-    <div role="status" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-secondary">
+    <div role="status" aria-label="Cómo se ubicó la escala" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-secondary">
       <span className={cn("min-w-0", linea.boton.fuerte && "font-medium text-fg")}>{linea.texto}</span>
       {puedeEditar && proyectos.length > 0 && (
         <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
@@ -503,7 +511,7 @@ const NOMBRE_DE_LA_VISTA: Record<Vista, string> = { pagina: "Como lo ve el clien
 
 /**
  * El área principal (la de los nombres y el detalle): su nivel, el radar con las otras elegidas encima y la dimensión
- * abierta. Lo que la frena va debajo, con los otros equipos (`LoQueFrenaACadaEquipo`).
+ * abierta. Lo que la frena va debajo, con los otros equipos (`ParaCompletarElDiagnostico`).
  */
 function AreaConAlgo({
   area,
@@ -580,71 +588,163 @@ function AreaConAlgo({
   );
 }
 
-/**
- * Lo que más frena a cada equipo y el puente a «Casos de uso» (novena vuelta, 8 nov, Elías: «piensa en lo que necesita
- * ver una persona que haya explorado: dónde se posiciona el cliente en todas las escalas, en los departamentos, y cómo
- * eso se traduce en casos de uso»). Antes era «Por qué está ahí», arriba del radar y solo de la principal. Ahora va
- * debajo, con un renglón por equipo en juego o con algo (`areasDelResumen`): no depende de cuáles están elegidos, así
- * que elegir o soltar un área no lo cambia de alto.
- */
-/** Los equipos que se resumen debajo del radar: UNA regla para los dos bloques (en juego o con algo, elegidos o no). */
+/** Los equipos que se resumen debajo de la página: UNA regla para todo lo de abajo (en juego o con algo, elegidos o no). */
 function useAreasDelResumen(): AreaDelLienzo[] {
   const { exp, escala, mapa } = useLienzo();
   return areasDelResumen(escala.areas, exp.estado.areas, (a) => tieneAlgo(a, mapa.posiciones));
 }
 
-function LoQueFrenaACadaEquipo() {
-  const { exp, escala, mapa, nombreDeNivel, lugar, irA } = useLienzo();
-  const areas = useAreasDelResumen();
-  if (!areas.length) return null;
+/** Cuántas preguntas de un equipo se ven antes de «Ver N más». */
+const PREGUNTAS_A_LA_VISTA = 4;
+
+/**
+ * PARA COMPLETAR EL DIAGNÓSTICO (24 nov, Elías con TEC · AE: «un lugar para completar lo que falta»), debajo de la página.
+ * Junta lo que eran dos bloques:
+ *   · «Lo que más frena a cada equipo» (novena vuelta, 8 nov; antes «Por qué está ahí», arriba del radar): por equipo, su
+ *     nivel, lo que lo frena y cuánto tiene con evidencia, y en la preventa el puente «Ver los casos de uso →»;
+ *   · «Para explorar más» (cuarta vuelta, 8 nov): cada hipótesis con su pregunta y «Llevar a la sesión N», lo «sin dato» y
+ *     la lectura «Preparación para engagement avanzado» de Marketing.
+ * Desde el 24 nov cada parte por explorar O sin dato trae su pregunta (lo sin dato era una lista de nombres) y, en la
+ * preventa, «Responder con Nexus»: abre el MISMO chat «Nexus» de la derecha (una sola puerta, HablarConNexus.tsx) con esa
+ * pregunta, su equipo y su parte. Lo que se responde, guardado, es una nota de «Lo que sabes del cliente» y el Resumen la
+ * lee al rehacerse (`notasComoFuentes`); arriba de la página aparece «Hay N respuestas nuevas» con «Rehacer con IA». Una
+ * pregunta con respuesta lo dice (lib/exploraciones/completar-el-diagnostico.ts › `respuestaDe`). Primero los equipos con
+ * más hipótesis (Elías: «entre más hipótesis tiene un área, más se puede explorar»); no depende de las áreas elegidas en el
+ * radar (novena vuelta), así que elegir o soltar una no lo cambia de alto.
+ */
+function ParaCompletarElDiagnostico() {
+  const { exp, escala, mapa, nombreDeNivel, lugar, irA, puedeEditar } = useLienzo();
+  const cuentas = useAreasDeLaEscala();
+  const llevar = useLlevarALaSesion();
+  const deLaLista = useAreasDelResumen();
+  const [conTodas, setConTodas] = useState<ReadonlySet<string>>(() => new Set());
+  if (!deLaLista.length) return null;
+  const ids = new Set(deLaLista.map((a) => a.id));
+  const primero = ordenParaExplorar(cuentas.filter((c) => ids.has(c.id))).map((c) => c.id);
+  const orden = [...primero, ...deLaLista.map((a) => a.id).filter((id) => !primero.includes(id))];
+  const tarjetas = exp.estado.propuesta.tarjetasDeLaEscala?.porDimension ?? {};
+  // El chat de la preventa (HablarConNexus) solo existe ahí y para quien puede editar: en la cuenta no hay conversación.
+  const conNexus = lugar === "preventa" && puedeEditar;
   const nombreDeCapa = (c: string) => escala.capas.find((x) => x.clave === c)?.nombre ?? c;
+  const { notas, autoresDeLasNotas } = exp.estado.contenido;
+  const alternar = (id: string) =>
+    setConTodas((x) => {
+      const y = new Set(x);
+      if (y.has(id)) y.delete(id);
+      else y.add(id);
+      return y;
+    });
   return (
-    <section aria-label="Lo que más frena a cada equipo" className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-5">
+    <section aria-label="Para completar el diagnóstico" className="flex flex-col gap-3">
       <div className="flex flex-col gap-0.5">
-        <h4 className="text-sm font-semibold text-fg">Lo que más frena a cada equipo</h4>
-        <p className="text-xs text-fg-muted">La escala ubica a cada equipo en su capa más baja: subir lo que lo frena es lo que lo mueve.</p>
+        <h4 className="text-sm font-semibold text-fg">Para completar el diagnóstico</h4>
+        <p className="text-xs text-fg-muted">
+          Lo que más frena a cada equipo (la escala lo ubica en su capa más baja: subir eso es lo que lo mueve) y lo que falta saber de cada parte.
+          {conNexus ? " Responde con Nexus lo que ya sepas: queda como nota en «Lo que sabes del cliente» y el Resumen la lee al rehacerlo." : " Pregúntalo en la próxima reunión."}
+        </p>
       </div>
-      <ul className="flex flex-col divide-y divide-line">
-        {areas.map((area) => {
+      {/* Sin `etiqueta`: la sección de arriba ya se llama así (dos regiones con el mismo nombre, una dentro de la otra). */}
+      <ListaQueSeAnima ids={orden} espacio={3}>
+        {(id) => {
+          const area = escala.areas.find((a) => a.id === id);
+          if (!area) return null;
           const calculo = calculoDelArea(escala, area, mapa.posiciones);
-          if (!calculo) return null;
-          const frena = loQueLaFrena(calculo);
-          const cuenta = cuentaDelArea(calculo, mapa.posiciones);
-          const orden = exp.estado.areas.indexOf(area.id) + 1;
-          const dims = frena?.dimensiones.map((id) => area.dimensiones.find((d) => d.id === id)).filter((d): d is DimensionDelLienzo => !!d) ?? [];
+          const cuenta = calculo ? cuentaDelArea(calculo, mapa.posiciones) : null;
+          const frena = calculo ? loQueLaFrena(calculo) : null;
+          const dims = frena?.dimensiones.map((x) => area.dimensiones.find((d) => d.id === x)).filter((d): d is DimensionDelLienzo => !!d) ?? [];
+          const enJuego = exp.estado.areas.indexOf(area.id) + 1;
+          const { hipotesis, sinDato } = partesParaExplorar(area.dimensiones, (x) => mapa.posiciones[x]?.clase ?? null);
+          const preguntas = [...hipotesis.map((d) => ({ d, esHipotesis: true })), ...sinDato.map((d) => ({ d, esHipotesis: false }))];
+          const todas = conTodas.has(area.id);
           return (
-            <li key={area.id} className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0 sm:flex-row sm:items-baseline sm:gap-4">
-              <span className="inline-flex flex-shrink-0 items-center gap-2 text-sm font-semibold text-fg sm:w-[240px]">
-                <span className="h-3 w-3 flex-shrink-0 rounded-[3px]" style={{ background: colorDelArea(area.id) }} aria-hidden="true" />
-                {area.nombre}
-                {calculo.nivel ? (
-                  <span className="inline-flex items-center gap-1.5 font-medium">
-                    <span className={cn("h-2 w-2 rounded-full", PUNTO_DE_NIVEL[calculo.nivel])} aria-hidden="true" />
-                    {nombreDeNivel(calculo.nivel)}
-                    {calculo.puntaje !== null && <span className="text-xs font-normal tabular-nums text-fg-muted">{Math.round(calculo.puntaje)}/100</span>}
-                  </span>
-                ) : (
-                  <span className="text-xs font-normal text-fg-muted">sin ubicar</span>
-                )}
-              </span>
-              <span className="flex flex-col gap-0.5">
-                <span className="text-[13px] leading-[1.45] text-fg-secondary">
+            <div className="flex flex-col gap-2.5 rounded-xl border border-line bg-surface p-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h5 className="inline-flex flex-wrap items-center gap-2 text-sm font-semibold text-fg">
+                  <span className="h-3 w-3 flex-shrink-0 rounded-[3px]" style={{ background: colorDelArea(area.id) }} aria-hidden="true" />
+                  {area.nombre}
+                  {calculo?.nivel ? (
+                    <span className="inline-flex items-center gap-1.5 font-medium">
+                      <span className={cn("h-2 w-2 rounded-full", PUNTO_DE_NIVEL[calculo.nivel])} aria-hidden="true" />
+                      {nombreDeNivel(calculo.nivel)}
+                      {calculo.puntaje !== null && <span className="text-xs font-normal tabular-nums text-fg-muted">{Math.round(calculo.puntaje)}/100</span>}
+                    </span>
+                  ) : (
+                    <span className="text-xs font-normal text-fg-muted">sin ubicar</span>
+                  )}
+                </h5>
+                {/* Lo que decían los botones de las áreas (8 nov: en «Como lo ve el cliente» no hay botones). */}
+                <span className="text-xs text-fg-muted">
+                  {cuenta ? `${fraseDeLaCuenta(cuenta)} · ` : ""}
+                  {enJuego > 0 ? `${enJuego}.º en juego` : "salió en las reuniones"}
+                </span>
+              </div>
+              {calculo && (
+                <p className="text-[13px] leading-[1.45] text-fg-secondary">
                   {fraseDelFreno({
                     conNivel: !!calculo.nivel,
                     frena: frena ? { nombres: dims.map((d) => d.nombre), nivel: nombreDeNivel(frena.nivel), capa: nombreDeCapa(frena.capa) } : null,
                     faltan: calculo.faltan.length,
                   })}
-                </span>
-                {/* Lo que decían los botones de las áreas (8 nov: en «Como lo ve el cliente» no hay botones). */}
-                <span className="text-xs text-fg-muted">
-                  {fraseDeLaCuenta(cuenta)}
-                  {orden > 0 ? ` · ${orden}.º en juego` : " · salió en las reuniones"}
-                </span>
-              </span>
-            </li>
+                </p>
+              )}
+              {preguntas.length > 0 ? (
+                <ul className="flex flex-col gap-1.5">
+                  {(todas ? preguntas : preguntas.slice(0, PREGUNTAS_A_LA_VISTA)).map(({ d, esHipotesis }) => {
+                    const p = mapa.posiciones[d.id];
+                    const pregunta = tarjetas[d.id]?.preguntas[0] ?? d.pregunta;
+                    const respuesta = respuestaDe(notas, autoresDeLasNotas, area.nombre, d.nombre);
+                    return (
+                      <PreguntaParaLlevar
+                        key={d.id}
+                        pregunta={pregunta}
+                        dimensionId={d.id}
+                        llevar={llevar}
+                        encima={
+                          <span className="text-xs text-fg-secondary">
+                            <span className="tabular-nums text-fg-muted">{d.id}</span> <span className="font-semibold text-fg">{d.nombre}</span>
+                            {esHipotesis && p ? <span className="text-warn-ink"> · ○ {nombreDeNivel(p.nivel)}, por explorar</span> : <span className="text-fg-muted"> · sin dato todavía</span>}
+                          </span>
+                        }
+                        nota={
+                          respuesta ? (
+                            <span className="text-xs font-medium text-success-ink">✓ Respondida{respuesta.en ? ` el ${diaCorto(respuesta.en)}` : ""}: está en «Lo que sabes del cliente».</span>
+                          ) : null
+                        }
+                        otras={
+                          conNexus ? (
+                            <button
+                              type="button"
+                              onClick={() => abrirNexusEnLaPreventa({ exploracionId: exp.id, pregunta: { equipo: area.nombre, dimension: d.nombre, dimensionId: d.id, pregunta } })}
+                              className="text-xs font-semibold text-brand hover:underline"
+                            >
+                              {respuesta ? "Sumar algo con Nexus" : "Responder con Nexus"}
+                            </button>
+                          ) : null
+                        }
+                      />
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="text-xs text-fg-muted">Todas sus partes tienen evidencia: no falta nada que preguntar.</p>
+              )}
+              {preguntas.length > PREGUNTAS_A_LA_VISTA && (
+                <button type="button" onClick={() => alternar(area.id)} className="self-start text-xs font-semibold text-fg-secondary hover:text-fg hover:underline">
+                  {todas ? "Ver menos" : `Ver ${preguntas.length - PREGUNTAS_A_LA_VISTA} más`}
+                </button>
+              )}
+              {area.id === AREA_DEL_ENGAGEMENT && !!escala.preparacion && (
+                <details className="group rounded-lg border border-line">
+                  <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-fg-secondary hover:text-fg">Preparación para engagement avanzado</summary>
+                  <div className="px-1 pb-1">
+                    <PreparacionParaEngagement />
+                  </div>
+                </details>
+              )}
+            </div>
           );
-        })}
-      </ul>
+        }}
+      </ListaQueSeAnima>
       {lugar === "preventa" && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-info-line bg-info-surface px-3 py-2.5">
           <p className="flex items-start gap-2 text-[13px] leading-[1.45] text-fg">
@@ -660,98 +760,29 @@ function LoQueFrenaACadaEquipo() {
   );
 }
 
-const MAX_HIPOTESIS_A_LA_VISTA = 4;
-
-/**
- * «Para explorar más esta área» (cuarta vuelta, 2026-11-08): una sugerencia por cada equipo en juego o con algo que tiene
- * hipótesis o partes sin dato, ordenadas por hipótesis (Elías: «entre más hipótesis tiene un área, más se puede
- * explorar»). Desde la novena vuelta no depende de las áreas elegidas en el radar. Cada hipótesis con su primera pregunta
- * y «Llevar a la sesión N». La lectura «Preparación para engagement avanzado» (antes un bloque fijo debajo de «Con qué se
- * mide») vive en la de Marketing: es una lectura de Marketing.
- */
-function ParaExplorarMas() {
-  const { escala, mapa, exp, nombreDeNivel } = useLienzo();
-  const cuentas = useAreasDeLaEscala();
-  const llevar = useLlevarALaSesion();
-  /* Los equipos en juego o con algo, elegidos o no (novena vuelta): elegir Marketing hacía entrar su tarjeta, a veces
-     ANTES de la de Ventas (van por hipótesis), y corría lo de abajo. */
-  const deLaLista = useAreasDelResumen();
-  const ids = new Set(deLaLista.map((a) => a.id));
-  const enOrden = ordenParaExplorar(cuentas.filter((c) => ids.has(c.id)));
-  // Marketing (en juego o con algo) sin nada que explorar igual muestra su lectura de engagement.
-  const conEngagement = !!escala.preparacion && ids.has(AREA_DEL_ENGAGEMENT);
-  const lista = conEngagement && !enOrden.some((c) => c.id === AREA_DEL_ENGAGEMENT) ? [...enOrden, ...cuentas.filter((c) => c.id === AREA_DEL_ENGAGEMENT)] : enOrden;
-  const tarjetas = exp.estado.propuesta.tarjetasDeLaEscala?.porDimension ?? {};
-  /* Cada tarjeta entra creciendo y sale plegándose en su lugar: sumar o sacar un área no hace saltar la página (8 nov).
-     La que sale se dibuja con lo de siempre (ya no está elegida, pero sus datos siguen). */
-  return (
-    <ListaQueSeAnima ids={lista.map((c) => c.id)} espacio={3} etiqueta="Para explorar más">
-      {(id) => {
-        const c = cuentas.find((x) => x.id === id);
-        const area = escala.areas.find((a) => a.id === id);
-        if (!c || !area) return null;
-        const { hipotesis, sinDato } = partesParaExplorar(area.dimensiones, (id) => mapa.posiciones[id]?.clase ?? null);
-        const nHip = hipotesis.length;
-        return (
-          <div key={c.id} className="flex flex-col gap-2.5 rounded-xl border border-line bg-surface p-4">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h4 className="inline-flex items-center gap-1.5 text-sm font-semibold text-fg">
-                <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: colorDelArea(c.id) }} aria-hidden="true" />
-                Para explorar más {area.nombre}
-              </h4>
-              <span className="text-xs text-fg-muted">
-                {nHip} {nHip === 1 ? "hipótesis" : "hipótesis"} por confirmar{sinDato.length ? ` · ${sinDato.length} sin dato` : ""}
-              </span>
-            </div>
-            {hipotesis.length > 0 && (
-              <ul className="flex flex-col gap-1.5">
-                {hipotesis.slice(0, MAX_HIPOTESIS_A_LA_VISTA).map((d) => {
-                  const p = mapa.posiciones[d.id];
-                  const pregunta = tarjetas[d.id]?.preguntas[0] ?? d.pregunta;
-                  return (
-                    <li key={d.id} className="flex flex-col gap-1">
-                      <span className="text-[13px] text-fg-secondary">
-                        <span className="tabular-nums text-fg-muted">{d.id}</span> <span className="font-semibold text-fg">{d.nombre}</span>
-                        {p && <span className="text-warn-ink"> · ○ {nombreDeNivel(p.nivel)}, por explorar</span>}
-                      </span>
-                      <ul>
-                        <PreguntaParaLlevar pregunta={pregunta} dimensionId={d.id} llevar={llevar} />
-                      </ul>
-                    </li>
-                  );
-                })}
-                {hipotesis.length > MAX_HIPOTESIS_A_LA_VISTA && (
-                  <li className="text-xs text-fg-muted">
-                    Y {hipotesis.length - MAX_HIPOTESIS_A_LA_VISTA} más: pasa el cursor por su nodo en el radar para ver qué preguntar.
-                  </li>
-                )}
-              </ul>
-            )}
-            {sinDato.length > 0 && (
-              <p className="text-xs text-fg-muted">Sin dato todavía: {enLista(sinDato.map((d) => d.nombre))}.</p>
-            )}
-            {c.id === AREA_DEL_ENGAGEMENT && !!escala.preparacion && (
-              <details className="group rounded-lg border border-line">
-                <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-fg-secondary hover:text-fg">Preparación para engagement avanzado</summary>
-                <div className="px-1 pb-1">
-                  <PreparacionParaEngagement />
-                </div>
-              </details>
-            )}
-          </div>
-        );
-      }}
-    </ListaQueSeAnima>
-  );
-}
-
 /** El área cuya lectura es «Preparación para engagement avanzado» (lib/escala/preparacion.ts lee el nivel de Marketing). */
 const AREA_DEL_ENGAGEMENT = "2";
 
-function DondeEstaHoy() {
+/** «Como lo ve el cliente» / «Comparar áreas»: arriba de la página, sin título desde el 24 nov. */
+function ComoSeVe({ vista, onVista }: { vista: Vista; onVista: (v: Vista) => void }) {
+  return (
+    <div role="radiogroup" aria-label="Cómo se ve la escala" className="inline-flex gap-1">
+      {(["pagina", "nodos"] as const).map((v) => (
+        <button key={v} type="button" role="radio" aria-checked={vista === v} onClick={() => onVista(v)} className={vista === v ? BOTON_DE_HERRAMIENTA_ACTIVO : BOTON_DE_HERRAMIENTA}>
+          {NOMBRE_DE_LA_VISTA[v]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * La escala: la página (o «Comparar áreas»), debajo la línea de cómo se ubicó (`linea`, solo la preventa) y «Para
+ * completar el diagnóstico». Hasta el 24 nov se titulaba «Dónde está hoy» (Elías, con TEC · AE: «quitar»).
+ */
+function DondeEstaHoy({ vista, linea }: { vista: Vista; linea: ReactNode }) {
   const { exp, escala, mapa, cambiar, lugar, puedeEditar, guardando } = useLienzo();
   const enJuego = exp.estado.areas;
-  const [vista, setVista] = useState<Vista>("pagina");
   const [abierta, setAbierta] = useState<string | null>(null);
   const areas = useAreasDeLaEscala();
   // De entrada, la más explorada: la que tiene más con evidencia; si no, la primera en juego.
@@ -823,19 +854,10 @@ function DondeEstaHoy() {
   );
 
   return (
-    <section aria-label="Dónde está hoy" className="flex flex-col gap-3">
-      {/* Sin «Objetivo de la primera venta» ni la frase de lo explorado (24 nov, Elías: «demasiada información»): si hay
-          algo que actualizar lo dice la línea de arriba; dónde está cada equipo, la página y «Lo que más frena…». */}
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-[15px] font-semibold text-fg">Dónde está hoy</h3>
-        <div role="radiogroup" aria-label="Cómo se ve la escala" className="inline-flex gap-1">
-          {(["pagina", "nodos"] as const).map((v) => (
-            <button key={v} type="button" role="radio" aria-checked={vista === v} onClick={() => setVista(v)} className={vista === v ? BOTON_DE_HERRAMIENTA_ACTIVO : BOTON_DE_HERRAMIENTA}>
-              {NOMBRE_DE_LA_VISTA[v]}
-            </button>
-          ))}
-        </div>
-      </div>
+    <section aria-label="La escala" className="flex flex-col gap-3">
+      {/* Sin «Objetivo de la primera venta» ni la frase de lo explorado (24 nov, Elías: «demasiada información»), y sin el
+          título «Dónde está hoy» (24 nov, noche): si hay algo que actualizar lo dice la línea de debajo de la página; dónde
+          está cada equipo, la página y «Para completar el diagnóstico». */}
       {vista === "pagina" ? (
         <PaginaDeLaEscala />
       ) : (
@@ -887,8 +909,8 @@ function DondeEstaHoy() {
       )}
         </>
       )}
-      <LoQueFrenaACadaEquipo />
-      <ParaExplorarMas />
+      {linea}
+      <ParaCompletarElDiagnostico />
     </section>
   );
 }
@@ -897,20 +919,23 @@ function DondeEstaHoy() {
 export default function PasoEscala({ agente }: { agente?: ReactNode } = {}) {
   const { exp, lugar } = useLienzo();
   const hayAreas = exp.estado.areas.length > 0;
+  const [vista, setVista] = useState<Vista>("pagina");
   // El título y de qué va la pieza los pone el lienzo, como en las demás piezas.
   return (
     <div className="flex flex-col gap-5">
-      {lugar !== "proyecto" && (
-        <div className={cn("flex flex-wrap items-center gap-x-4 gap-y-2", lugar === "preventa" ? "justify-between" : "justify-end")}>
-          {lugar === "preventa" && <LineaDeArriba />}
+      {/* Arriba (24 nov, Elías con TEC · AE): cómo se ve la escala y, a la derecha, «Publicado…» y «Acceso». La línea de
+          cómo se ubicó la escala bajó: va debajo de la página, antes de «Para completar el diagnóstico». */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <ComoSeVe vista={vista} onVista={setVista} />
+        {lugar !== "proyecto" && (
           <div className="flex flex-wrap items-center justify-end gap-2">
             <PublicarLaEscala />
             <AccesoALaEscala />
           </div>
-        </div>
-      )}
+        )}
+      </div>
       <SugerenciasDeLaEscala />
-      <DondeEstaHoy />
+      <DondeEstaHoy vista={vista} linea={lugar === "preventa" ? <LineaDeLaUbicacion /> : null} />
       <ConQueSeMide />
       {hayAreas && (
         <div data-recorrido="preventa.escala.primero">

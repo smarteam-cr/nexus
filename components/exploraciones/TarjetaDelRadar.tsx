@@ -62,14 +62,48 @@ export function useLlevarALaSesion() {
   return { puede: lugar !== "cuenta" && puedeEditar, hayProxima: !!sesion, guardando, destino, estado, llevar, quitar };
 }
 
-/** Una pregunta con su botón «Llevar a la sesión N»; ya llevada, «✓ Va a la sesión N · Quitar». */
-export function PreguntaParaLlevar({ pregunta, dimensionId, llevar }: { pregunta: string; dimensionId: string; llevar: ReturnType<typeof useLlevarALaSesion> }) {
+/**
+ * Una pregunta con su botón «Llevar a la sesión N»; ya llevada, «✓ Va a la sesión N · Quitar». `encima`: una línea sobre la
+ * pregunta (de qué parte es); `otras`: más acciones, antes de «Llevar…» (24 nov: «Responder con Nexus» en «Para completar
+ * el diagnóstico»); `nota`: una línea debajo (que ya tiene respuesta).
+ */
+export function PreguntaParaLlevar({
+  pregunta,
+  dimensionId,
+  llevar,
+  encima,
+  otras,
+  nota,
+}: {
+  pregunta: string;
+  dimensionId: string;
+  llevar: ReturnType<typeof useLlevarALaSesion>;
+  encima?: ReactNode;
+  otras?: ReactNode;
+  nota?: ReactNode;
+}) {
   const estado = llevar.estado(pregunta);
+  const conLlevar = llevar.puede;
   return (
     <li className="flex flex-col gap-1 rounded-lg border border-line bg-surface-muted px-2.5 py-2">
+      {encima}
       <span className="text-[13px] font-medium leading-[1.45] text-fg">{pregunta}</span>
-      {llevar.puede &&
-        (!llevar.hayProxima ? (
+      {nota}
+      {(otras || conLlevar) && (
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {otras}
+          {conLlevar && <LlevarALaSesion pregunta={pregunta} dimensionId={dimensionId} llevar={llevar} estado={estado} />}
+        </span>
+      )}
+    </li>
+  );
+}
+
+/** «Llevar a la sesión N», o que ya va (con «Quitar» si se llevó desde la escala). */
+function LlevarALaSesion({ pregunta, dimensionId, llevar, estado }: { pregunta: string; dimensionId: string; llevar: ReturnType<typeof useLlevarALaSesion>; estado: "va" | "llevada" | "no" }) {
+  return (
+    <>
+      {(!llevar.hayProxima ? (
           <span className="text-xs text-fg-muted">Planea la próxima sesión en Exploración para llevarle preguntas.</span>
         ) : estado === "no" ? (
           <button
@@ -90,7 +124,7 @@ export function PreguntaParaLlevar({ pregunta, dimensionId, llevar }: { pregunta
             )}
           </span>
         ))}
-    </li>
+    </>
   );
 }
 

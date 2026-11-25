@@ -221,6 +221,13 @@ export interface PanelDeNexusProps {
   sugerencias?: readonly string[];
   /** Se aplicó una lista de la cuenta: el lugar vuelve a leer lo que cambió (la guía, las tareas). */
   alAplicar?: () => void;
+  /**
+   * Lo que se antepone a lo PRÓXIMO que mande la persona (24 nov, «Responder con Nexus» de La escala: «Sobre Ventas · Datos
+   * (…): »). Va en su mensaje, así lo lee Nexus, queda en la nota y sobrevive a recargar. Se usa una vez: al volver la
+   * vuelta, `alUsarElPrefijo` (el lugar lo quita). Si la vuelta falla, lo escrito vuelve a la caja sin él.
+   */
+  prefijo?: string;
+  alUsarElPrefijo?: () => void;
 }
 
 export default function PanelDeNexus({
@@ -249,6 +256,8 @@ export default function PanelDeNexus({
   chip,
   sugerencias,
   alAplicar,
+  prefijo,
+  alUsarElPrefijo,
 }: PanelDeNexusProps) {
   const { id: conversacion, mensajes } = c;
   const setMensajes = (m: MensajeEnPantalla[]) => alCambiar({ id: conversacion, mensajes: m });
@@ -276,9 +285,10 @@ export default function PanelDeNexus({
    * envío normal, lo escrito vuelve a la caja. `antes`: a qué vuelve si falla (al seguir después de guardar, con lo
    * guardado ya marcado: el lugar ya lo olvidó).
    */
-  const mandar = async (t: string, base: MensajeEnPantalla[], modo: "normal" | "contar" | "preguntar", antes: MensajeEnPantalla[] = mensajes, soltar?: string) => {
+  const mandar = async (t: string, base: MensajeEnPantalla[], modo: "normal" | "contar" | "preguntar", antes: MensajeEnPantalla[] = mensajes, soltar?: string, conPrefijo?: string) => {
     if (!t || pensando || aplicando) return;
-    const conLaPersona: MensajeEnPantalla[] = [...base, { de: "persona", texto: t }];
+    // El prefijo va en el mensaje (lo lee Nexus y queda en la nota); si la vuelta falla, a la caja vuelve lo escrito, sin él.
+    const conLaPersona: MensajeEnPantalla[] = [...base, { de: "persona", texto: conPrefijo ? `${conPrefijo}${t}` : t }];
     setMensajes(conLaPersona);
     if (modo === "normal") setTexto("");
     setPensando(true);
@@ -316,6 +326,7 @@ export default function PanelDeNexus({
         await alQuedarListo({ conversacion, nota: notaDeLaConversacion(conLaPersona), turno });
       }
       setContadoAMano(modo === "contar");
+      if (conPrefijo) alUsarElPrefijo?.();
     } catch (e) {
       // Lo que escribió no se pierde: vuelve a la caja (o, al contarlo como nota, la respuesta vuelve a su lugar).
       setMensajes(antes);
@@ -330,13 +341,13 @@ export default function PanelDeNexus({
   const enviar = () => {
     const t = texto.trim();
     if (apagado || aplicando) return;
-    if (!terminado) return mandar(t, mensajes, "normal");
+    if (!terminado) return mandar(t, mensajes, "normal", mensajes, undefined, prefijo);
     if (!alSeguir || !t || pensando) return;
     // Seguir después de guardar: lo guardado queda marcado y el lugar lo olvida.
     const base = paraSeguirDespuesDeGuardar(mensajes);
     setMensajes(base);
     alSeguir();
-    return mandar(t, base, "normal", base);
+    return mandar(t, base, "normal", base, undefined, prefijo);
   };
 
   /**
@@ -440,10 +451,12 @@ export default function PanelDeNexus({
           setTexto={setTexto}
           onEnviar={() => void enviar()}
           enviarApagado={pensando || !texto.trim()}
-          placeholder={lugar === "guia" ? "Pídele un cambio a la guía…" : mensajes.length ? "Tu respuesta, u otra pregunta…" : "Cuéntale o pregúntale algo del cliente…"}
+          placeholder={prefijo ? "Lo que sabes de esto…" : lugar === "guia" ? "Pídele un cambio a la guía…" : mensajes.length ? "Tu respuesta, u otra pregunta…" : "Cuéntale o pregúntale algo del cliente…"}
           ariaLabel={lugar === "guia" ? "Lo que le pides a Nexus sobre la guía" : mensajes.length ? "Tu mensaje" : "Lo que le cuentas o le preguntas a Nexus"}
           apagada={cajaApagada}
-          maxLength={TOPES.largoDelMensaje}
+          // Con el prefijo de «Responder con Nexus», lo que la persona escribe deja lugar para él: el mensaje entero no puede
+          // pasar el tope del servidor (revisión del 24 nov: volvía «Cuerpo inválido» sin decir por qué).
+          maxLength={TOPES.largoDelMensaje - (prefijo?.length ?? 0)}
           conDictado
           onErrorDeDictado={setError}
         />
