@@ -13,7 +13,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { createElement } from "react";
+import { createElement, Fragment } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ArribaDeLaEscala, enSuOrden } from "@/components/external/test/ArribaDeLaEscala";
@@ -700,7 +700,7 @@ describe("4 · se edita en su lugar y «Rehacer con IA» no pisa lo escrito", ()
         resumen: adentro,
         empresa: "Centauro Solutions",
         pestanas: [{ id: "resumen", nombre: "Resumen", href: "#" }],
-        edicion: { alElegir: () => {}, texto: (x) => x.valor, deDonde: (citas, d) => (d?.noSostiene ? `TENIA:${citas.length}` : `SALE:${citas.length}`) },
+        edicion: { alElegir: () => {}, texto: (x) => createElement(Fragment, null, x.valor, x.cola), deDonde: (citas, d) => (d?.noSostiene ? `TENIA:${citas.length}` : `SALE:${citas.length}`) },
       }),
     );
     expect(html).toContain("re-cifra-fuera");

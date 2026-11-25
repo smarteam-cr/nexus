@@ -23,8 +23,8 @@
  *      o «Falta un dato». Un equipo sin sesiones sale apagado, sin cifra ni botón;
  *   la banda oscura con lo que falta validar (sin nada que validar, no sale) y el pie con la fecha.
  * Lo que decide qué sale es `resumenParaLaPagina` (lib/exploraciones/resumen-de-la-escala.ts); acá solo se pinta. La
- * pantalla interna (components/exploraciones/PaginaDeLaEscala.tsx) pasa `edicion`: cada texto se edita en su lugar y debajo
- * de cada pieza va de dónde sale (las citas, que el cliente nunca ve). Lo que bajó de visibilidad el 15 nov (aprobado por
+ * pantalla interna (components/exploraciones/PaginaDeLaEscala.tsx) pasa `edicion`: cada texto se edita en su lugar y al final
+ * de cada pieza, en su mismo renglón, va de dónde sale (las citas, que el cliente nunca ve; hasta el 25 nov caía debajo). Lo que bajó de visibilidad el 15 nov (aprobado por
  * Elías en el artefacto): la ficha con el logo del cliente, los atajos, el texto largo de cada etapa, «Lo que le impide
  * rendir más» (va con los retos), el «por qué este nivel» (lo cuenta la página del área) y las partes del negocio que no
  * son la tesis, las etiquetas, el alcance ni el tamaño (siguen guardadas: sostienen la tesis).
@@ -87,9 +87,15 @@ const fechaLarga = (iso: string) => new Intl.DateTimeFormat("es-CR", { day: "num
 export interface EdicionDelResumen {
   /** Las pestañas y los «Ver diagnóstico de…» son botones: cambian de área sin salir de la pantalla. */
   alElegir: (id: string) => void;
-  /** Un texto que se edita en su lugar. `valor` null: la invitación (`vacio`). */
-  texto: (o: { clave: string; valor: string | null; vacio: string; etiqueta: string; tope: number; quitar?: string | null }) => ReactNode;
-  /** Debajo de una pieza, solo adentro: de dónde sale. `noSostiene`: la cita ya no dice la cifra. */
+  /**
+   * Un texto que se edita en su lugar. `valor` null: la invitación (`vacio`). `cola`: lo que va PEGADO AL FINAL del texto,
+   * en su mismo renglón (el ícono de de dónde sale, 25 nov): quien lo pinta lo pone ahí, editable o no.
+   */
+  texto: (o: { clave: string; valor: string | null; vacio: string; etiqueta: string; tope: number; quitar?: string | null; cola?: ReactNode }) => ReactNode;
+  /**
+   * Solo adentro: de dónde sale una pieza (el ícono (i) con sus citas). `noSostiene`: la cita ya no dice la cifra. Va como
+   * `cola` del texto que sostiene (25 nov, Elías: «debajo de cada línea, como un salto de línea feo»).
+   */
   deDonde?: (citas: readonly CitaDelResumen[], o?: { noSostiene?: boolean }) => ReactNode;
   /** Un texto fijo de la página (la bajada, los títulos, lo que hicimos, el pie), editable para esta empresa (16 nov). */
   fijo?: (o: EdicionDeUnTextoFijo) => ReactNode;
@@ -187,6 +193,7 @@ export default function ResumenDeLaEscalaVista({
   pestanas,
   edicion = null,
   textos = null,
+  vistaPrevia = false,
 }: {
   resumen: ResumenDeLaPagina;
   empresa: string | null;
@@ -199,6 +206,12 @@ export default function ResumenDeLaEscalaVista({
   edicion?: EdicionDelResumen | null;
   /** Los textos fijos cambiados para esta empresa (16 nov, lib/external/textos-de-la-pagina.ts). */
   textos?: TextosDeLaPagina | null;
+  /**
+   * La vista previa de una versión (25 nov, el historial de versiones, HistorialDelResumen.tsx): quieta y del alto de su
+   * contenido. Sin esto las secciones de abajo esperaban que se desplazara la VENTANA para aparecer (en el popup se
+   * desplaza el popup: quedaban escondidas) y la página medía al menos el alto de la pantalla: un gran blanco al final.
+   */
+  vistaPrevia?: boolean;
 }) {
   const nombreDeLaEmpresa = empresa || dominio || "";
   // Un equipo sin sesiones: su pestaña se ve deshabilitada y afuera no se abre (Elías, 11 nov).
@@ -236,13 +249,9 @@ export default function ResumenDeLaEscalaVista({
         {contenido}
       </a>
     );
-  /** Una pieza editable, con de dónde sale debajo (solo adentro). */
-  const pieza = (p: PiezaDeLaPagina, etiqueta: string, tope = TOPE_A_MANO) => (
-    <>
-      {texto({ clave: p.clave, valor: p.texto, vacio: "+ Escribir", etiqueta, tope, quitar: "Quitar" })}
-      {deDonde(p.citas)}
-    </>
-  );
+  /** Una pieza editable, con de dónde sale al final de su texto (solo adentro). */
+  const pieza = (p: PiezaDeLaPagina, etiqueta: string, tope = TOPE_A_MANO) =>
+    texto({ clave: p.clave, valor: p.texto, vacio: "+ Escribir", etiqueta, tope, quitar: "Quitar", cola: deDonde(p.citas) });
   /** La invitación a agregar una pieza a una lista (solo adentro). */
   const agregar = (l: ListaDeLaPagina, etiqueta: string, vacio: string, clase = "re-agregar") =>
     edicion && l.nueva ? (
@@ -314,7 +323,8 @@ export default function ResumenDeLaEscalaVista({
           {unidad && <span className="re-unidad">{unidad}</span>}
         </>
       )}
-      <b>{texto({ clave: `${c.clave}:texto`, valor: c.texto, vacio: "+ Qué significa", etiqueta: `Qué significa ${c.cifra}`, tope: TOPE_A_MANO, quitar: "Quitar esta cifra" })}</b>
+      {/* De dónde sale, al final de lo que significa la cifra (25 nov; antes, debajo de todo). */}
+      <b>{texto({ clave: `${c.clave}:texto`, valor: c.texto, vacio: "+ Qué significa", etiqueta: `Qué significa ${c.cifra}`, tope: TOPE_A_MANO, quitar: "Quitar esta cifra", cola: deDonde(c.citas, { noSostiene: !!c.noSale }) })}</b>
       <Estado
         estado={c.estado}
         nota={
@@ -329,7 +339,6 @@ export default function ResumenDeLaEscalaVista({
         </p>
       )}
       {c.noSale && <p className="re-aviso-interno">{c.noSale}</p>}
-      {deDonde(c.citas, { noSostiene: !!c.noSale })}
     </div>
     );
   };
@@ -434,11 +443,14 @@ export default function ResumenDeLaEscalaVista({
                 {costo.dePerdida ? (
                   <>
                     <span className="re-costo-monto">{costo.cifra}</span> {fijo(costo.dePerdida.nombreFijo, costo.texto, "Qué es la pérdida que validó la empresa", true)}
+                    {/* La pérdida de la preventa no trae citas (cifraDeLaPerdida): esto queda por si un día las trae. */}
+                    {deDonde(costo.citas, { noSostiene: !!costo.noSale })}
                   </>
                 ) : (
                   <>
                     <span className="re-costo-monto">{texto({ clave: `${costo.clave}:cifra`, valor: costo.cifra, vacio: "+ Cuánto cuesta", etiqueta: "Cuánto cuesta", tope: TOPE_DE_LA_CIFRA })}</span>{" "}
-                    {texto({ clave: `${costo.clave}:texto`, valor: costo.texto, vacio: "+ Qué es", etiqueta: `Qué es ${costo.cifra}`, tope: TOPE_A_MANO, quitar: "Quitar esta cifra" })}
+                    {/* De dónde sale, al final del titular (25 nov; antes, debajo de todo). */}
+                    {texto({ clave: `${costo.clave}:texto`, valor: costo.texto, vacio: "+ Qué es", etiqueta: `Qué es ${costo.cifra}`, tope: TOPE_A_MANO, quitar: "Quitar esta cifra", cola: deDonde(costo.citas, { noSostiene: !!costo.noSale }) })}
                   </>
                 )}
               </h4>
@@ -460,7 +472,6 @@ export default function ResumenDeLaEscalaVista({
                 </p>
               )}
               {costo.noSale && <p className="re-aviso-interno">{costo.noSale}</p>}
-              {deDonde(costo.citas, { noSostiene: !!costo.noSale })}
             </div>
           )}
           {tituloReto ? (
@@ -588,8 +599,8 @@ export default function ResumenDeLaEscalaVista({
   const nRecorrido = numero(conRecorrido && !!recorrido);
   const nEquipos = numero(resumen.tarjetas.length > 0);
   return (
-    <div className={`dr rd-v3 rd-s2 rd-ed re${edicion ? " rd-editable" : ""}`}>
-      <AnimacionesDelResultado className="rd rs" quieta={!!edicion}>
+    <div className={`dr rd-v3 rd-s2 rd-ed re${edicion ? " rd-editable" : ""}${vistaPrevia ? " rd-vista-previa" : ""}`}>
+      <AnimacionesDelResultado className="rd rs" quieta={!!edicion || vistaPrevia}>
         {/* Adentro, el recorrido guiado de la preventa señala las pestañas: la de cada área es la que tiene el radar. */}
         <div data-recorrido={edicion ? "preventa.escala.dimensiones" : undefined}>
           <ArribaDeLaEscala pestanas={pestanas} actual={PESTANA_DEL_RESUMEN} alElegir={edicion?.alElegir} editorial />
@@ -739,10 +750,13 @@ export default function ResumenDeLaEscalaVista({
                   {/* Sin un número al principio («Quinientos clientes»), sale como texto, sin la cifra en grande. */}
                   {tamano.valor && <span className="re-grande">{tamano.valor}</span>}
                   {/* Adentro se edita la frase entera («500 clientes activos»); afuera, el número en grande y su rótulo. */}
-                  <b>{edicion ? texto({ clave: tamano.clave, valor: [tamano.valor, tamano.rotulo].filter(Boolean).join(" "), vacio: "+ El tamaño del negocio", etiqueta: "El tamaño del negocio (número y unidad)", tope: TOPE_A_MANO, quitar: "Quitar" }) : tamano.rotulo}</b>
+                  <b>
+                    {edicion
+                      ? texto({ clave: tamano.clave, valor: [tamano.valor, tamano.rotulo].filter(Boolean).join(" "), vacio: "+ El tamaño del negocio", etiqueta: "El tamaño del negocio (número y unidad)", tope: TOPE_A_MANO, quitar: "Quitar", cola: deDonde(tamano.citas, { noSostiene: !!tamano.noSale }) })
+                      : tamano.rotulo}
+                  </b>
                   {tamano.valor && <Estado estado={tamano.estado} />}
                   {tamano.noSale && <p className="re-aviso-interno">{tamano.noSale}</p>}
-                  {deDonde(tamano.citas, { noSostiene: !!tamano.noSale })}
                 </div>
               ) : (
                 edicion &&
@@ -766,19 +780,24 @@ export default function ResumenDeLaEscalaVista({
               {fijo("titulo.puntos", "Lo más crítico hoy.", "Título de los puntos clave")}
             </h2>
             <ol className="re-puntos">
-              {puntos.map((p, i) => (
-                <li key={p.id}>
-                  <i aria-hidden="true">{i + 1}</i>
-                  <div>
-                    <h3>{texto({ clave: `${p.clave}:titulo`, valor: p.titulo, vacio: "+ El título", etiqueta: "Título del punto clave", tope: TOPE_DEL_TITULO_DEL_PUNTO, quitar: "Quitar este punto" })}</h3>
-                    {(p.texto || edicion) && (
-                      <div className="re-punto-texto">{texto({ clave: `${p.clave}:texto`, valor: p.texto || null, vacio: "+ Qué pasa y qué consecuencia tiene", etiqueta: `Qué explica «${p.titulo}»`, tope: TOPE_A_MANO })}</div>
-                    )}
-                    {p.areaNombre && <span className="re-punto-area">{p.areaNombre}</span>}
-                    {deDonde(p.citas)}
-                  </div>
-                </li>
-              ))}
+              {puntos.map((p, i) => {
+                // De dónde sale, al final de lo que explica el punto; sin explicación, al final del título (25 nov).
+                const deDondeDelPunto = deDonde(p.citas);
+                return (
+                  <li key={p.id}>
+                    <i aria-hidden="true">{i + 1}</i>
+                    <div>
+                      <h3>{texto({ clave: `${p.clave}:titulo`, valor: p.titulo, vacio: "+ El título", etiqueta: "Título del punto clave", tope: TOPE_DEL_TITULO_DEL_PUNTO, quitar: "Quitar este punto", cola: p.texto ? null : deDondeDelPunto })}</h3>
+                      {(p.texto || edicion) && (
+                        <div className="re-punto-texto">
+                          {texto({ clave: `${p.clave}:texto`, valor: p.texto || null, vacio: "+ Qué pasa y qué consecuencia tiene", etiqueta: `Qué explica «${p.titulo}»`, tope: TOPE_A_MANO, cola: p.texto ? deDondeDelPunto : null })}
+                        </div>
+                      )}
+                      {p.areaNombre && <span className="re-punto-area">{p.areaNombre}</span>}
+                    </div>
+                  </li>
+                );
+              })}
             </ol>
             {edicion && resumen.puntoNuevo && (
               <div key={`nuevo-${puntos.length}`} className="re-agregar">
@@ -804,6 +823,8 @@ export default function ResumenDeLaEscalaVista({
                 <ol className="re-pasos" style={{ ["--re-n" as string]: pasos.length }}>
                   {pasos.map((e) => {
                     const n = numeroDeLaTraba(e);
+                    // De dónde sale, al final del detalle del paso; sin detalle, al final de su nombre (25 nov).
+                    const deDondeDelPaso = deDonde(e.citas);
                     return (
                       <li key={e.id} className="re-paso">
                         <span className="re-icono">
@@ -814,12 +835,15 @@ export default function ResumenDeLaEscalaVista({
                             </i>
                           )}
                         </span>
-                        <h3>{texto({ clave: `${e.clave}:nombre`, valor: e.nombre, vacio: "+ El paso", etiqueta: "Nombre del paso", tope: TOPE_DE_UN_NOMBRE })}</h3>
+                        <h3>{texto({ clave: `${e.clave}:nombre`, valor: e.nombre, vacio: "+ El paso", etiqueta: "Nombre del paso", tope: TOPE_DE_UN_NOMBRE, cola: e.texto ? null : deDondeDelPaso })}</h3>
                         {e.quien && <span className="re-quien">{fijo(`paso.${e.id}.quien`, e.quien, `Quién hace ${e.nombre}`, false, true)}</span>}
-                        {(e.texto || edicion) && <span className="re-detalle">{texto({ clave: `${e.clave}:texto`, valor: e.texto || null, vacio: "+ Un detalle", etiqueta: `El detalle de ${e.nombre}`, tope: TOPE_A_MANO, quitar: "Quitar este paso" })}</span>}
+                        {(e.texto || edicion) && (
+                          <span className="re-detalle">
+                            {texto({ clave: `${e.clave}:texto`, valor: e.texto || null, vacio: "+ Un detalle", etiqueta: `El detalle de ${e.nombre}`, tope: TOPE_A_MANO, quitar: "Quitar este paso", cola: e.texto ? deDondeDelPaso : null })}
+                          </span>
+                        )}
                         {/* El traspaso al paso siguiente (24 nov): adentro se corrige o se quita aquí; afuera va en el dibujo de abajo. */}
                         {edicion && e.traspaso && <span className="re-detalle">{texto({ clave: `${e.clave}:traspaso`, valor: e.traspaso.texto, vacio: "+ Qué pasa al pasar al siguiente", etiqueta: `Qué pasa al pasar de ${e.nombre} al siguiente`, tope: TOPE_A_MANO, quitar: "Quitar el traspaso" })}</span>}
-                        {deDonde(e.citas)}
                       </li>
                     );
                   })}
@@ -830,13 +854,15 @@ export default function ResumenDeLaEscalaVista({
                   {pasos.length >= 2 && <div className="re-corchete" aria-hidden="true" />}
                   {continuos.map((e) => {
                     const n = numeroDeLaTraba(e);
+                    // De dónde sale, al final de lo que hace; sin eso, al final de su nombre (25 nov).
+                    const deDondeDelPaso = deDonde(e.citas);
                     return (
                       <div key={e.id} className="re-continuo-uno">
                         <span className="re-chip-continuo">
                           <Icono de={e.icono} />
                           {/* Dos que acompañan del mismo equipo (Soporte y Customer Success, los dos de Servicio): cada uno por su nombre. */}
                           {edicion
-                            ? texto({ clave: `${e.clave}:nombre`, valor: e.nombre, vacio: "+ El paso", etiqueta: "Nombre del paso que acompaña", tope: TOPE_DE_UN_NOMBRE })
+                            ? texto({ clave: `${e.clave}:nombre`, valor: e.nombre, vacio: "+ El paso", etiqueta: "Nombre del paso que acompaña", tope: TOPE_DE_UN_NOMBRE, cola: e.texto ? null : deDondeDelPaso })
                             : e.quien && continuos.filter((x) => x.quien === e.quien).length === 1
                               ? e.quien
                               : e.nombre}
@@ -846,8 +872,11 @@ export default function ResumenDeLaEscalaVista({
                             </i>
                           )}
                         </span>
-                        {(e.texto || edicion) && <div className="re-continuo-texto">{texto({ clave: `${e.clave}:texto`, valor: e.texto || null, vacio: "+ Qué hace mientras el cliente opera", etiqueta: `Qué hace ${e.nombre}`, tope: TOPE_A_MANO, quitar: "Quitar" })}</div>}
-                        {deDonde(e.citas)}
+                        {(e.texto || edicion) && (
+                          <div className="re-continuo-texto">
+                            {texto({ clave: `${e.clave}:texto`, valor: e.texto || null, vacio: "+ Qué hace mientras el cliente opera", etiqueta: `Qué hace ${e.nombre}`, tope: TOPE_A_MANO, quitar: "Quitar", cola: e.texto ? deDondeDelPaso : null })}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -932,12 +961,18 @@ export default function ResumenDeLaEscalaVista({
               {pendientes.map((p) => (
                   <li key={p.id}>
                     {/* Los que arma la página («Conversar con tu equipo de…») no los guarda el agente: se cambian como texto fijo. */}
+                    {/* De dónde sale, al final de lo que falta (25 nov; antes, en su propio renglón). Los que arma la página no
+                        traen citas. */}
                     <span>
-                      {p.clave
-                        ? texto({ clave: p.clave, valor: p.texto, vacio: "+ Lo que falta", etiqueta: "Lo que falta validar", tope: TOPE_A_MANO, quitar: "Quitar" })
-                        : fijo(`pendiente.${p.id}`, p.texto, "Lo que falta validar", true, true)}
+                      {p.clave ? (
+                        texto({ clave: p.clave, valor: p.texto, vacio: "+ Lo que falta", etiqueta: "Lo que falta validar", tope: TOPE_A_MANO, quitar: "Quitar", cola: deDonde(p.citas) })
+                      ) : (
+                        <>
+                          {fijo(`pendiente.${p.id}`, p.texto, "Lo que falta validar", true, true)}
+                          {deDonde(p.citas)}
+                        </>
+                      )}
                     </span>
-                    {deDonde(p.citas)}
                   </li>
                 ))}
             </ul>

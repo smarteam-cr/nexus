@@ -23,6 +23,8 @@ function VistaDeLaPagina({ pagina }: { pagina: PaginaParaElCse }) {
         fecha={pagina.fecha}
         pestanas={[{ id: PESTANA_DEL_RESUMEN, nombre: "Resumen", href: "#" }, ...pagina.areas.map((a) => ({ ...a, href: "#", oculta: !pagina.alCliente.includes(a.id) }))]}
         textos={pagina.textos}
+        // Quieta y del alto de su contenido (25 nov, Elías: «más grande de lo que debería, un gran espacio en blanco al final»).
+        vistaPrevia
       />
     </div>
   );
