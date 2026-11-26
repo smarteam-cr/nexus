@@ -34,13 +34,14 @@ import { PIEZA_CRONOGRAMA, PIEZA_TAREAS } from "./piezas";
 import { leerAcuerdo, marcaDeDesenlace, textoVisible } from "./acuerdo";
 import { textoDelDesenlace } from "./textos-del-acuerdo";
 import { estadosDeAcuerdo } from "./acuerdo-vivo";
+import { TOPES_DEL_CHAT } from "@/lib/nexus-chat/constantes";
 
 const piezaSchema = z.string().trim().min(1).max(60);
 
 const bodySchema = z.union([
   z.object({
     pieza: piezaSchema,
-    mensaje: z.string().trim().min(1).max(4000),
+    mensaje: z.string().trim().min(1).max(TOPES_DEL_CHAT.largoDelMensaje),
     /**
      * ⭐ La sección del chip, para MANDARLE SU CONTENIDO COMPLETO al modelo.
      *

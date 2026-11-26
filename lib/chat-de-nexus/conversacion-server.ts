@@ -34,11 +34,12 @@ import {
   esAlgoQueSeCuenta,
   leerElTurno,
   laDijoLaPersona,
-  loQueConto,
   loQueContoEnPedazos,
+  loQueQuedaEnLaNota,
   NO_SE_PUDO_LEER,
   pedidoDelTurno,
   porQueNoSigue,
+  primerasSinPartir,
   puedePreguntar,
   NADA_QUE_GUARDAR,
   RESPUESTA_A_LA_CORTESIA,
@@ -253,7 +254,7 @@ export async function correrUnaVuelta(o: {
   if (o.contar && !esAlgoQueSeCuenta(mensajes[mensajes.length - 1]?.texto ?? "")) return { ok: false, status: 400, error: UNA_PREGUNTA_NO_ES_UNA_NOTA };
   const leida = comoSeLee(mensajes, { contar: o.contar, preguntar: o.preguntar, pedir: o.pedir, escala: o.pedirALaEscala ? o.escala : null });
   const lectura = leida === "pedido" && !o.pedirALaCuenta ? "duda" : leida;
-  const loUltimo = mensajes[mensajes.length - 1]?.texto.trim().slice(0, TOPES.largoDelMensaje) ?? "";
+  const loUltimo = primerasSinPartir(mensajes[mensajes.length - 1]?.texto.trim() ?? "", TOPES.largoDelMensaje);
   const vueltas = await vueltasHastaAhora(donde.email, conversacion);
   // Un «gracias» o un «ok» solos: Nexus contesta corto, sin la IA, sin corrida y sin proponer guardar nada (22 nov).
   if (lectura === "cortesia") return { ok: true, turno: { tipo: "cortesia", texto: RESPUESTA_A_LA_CORTESIA }, quedan: Math.max(0, TOPES.turnosPorConversacion - vueltas.deLaConversacion) };
@@ -312,7 +313,8 @@ export async function correrUnaVuelta(o: {
       turno = leerElTurno(respuesta, {
         destinos: new Set(contexto.destinos.map((d) => d.clave)),
         valorValido: o.valorValido,
-        loQueDijo: loQueConto(mensajes),
+        // Lo que queda en la nota que se guarda (25 nov: un mensaje va hasta 15.000 y la nota hasta 4.000).
+        loQueDijo: loQueQuedaEnLaNota(mensajes),
         // Desde «Guardarlo como nota» no pregunta: ./conversacion.ts › pedidoDelTurno.
         puedePreguntar: !o.contar && puedePreguntar(mensajes),
         laPregunta: lectura === "duda" ? loUltimo : null,
@@ -426,7 +428,8 @@ async function pedirEnLaVuelta(o: {
     const previas = await listasDeLaConversacion(donde.email, donde.clientId, o.conversacion, donde.filtros);
     const r = await o.pedirALaCuenta({
       pedido: o.pedido,
-      ventana: ventanaParaLaCuenta(o.mensajes.slice(0, -1), previas, sinMarcadores),
+      // Con el pedido, que va entero, dentro del tope de lo que viaja de la conversación (25 nov).
+      ventana: ventanaParaLaCuenta(o.mensajes.slice(0, -1), previas, sinMarcadores, undefined, Math.max(0, TOPES.largoDeLaConversacion - o.pedido.length)),
       pendientes: listaPendiente(previas),
       agentRunId: runId,
     });

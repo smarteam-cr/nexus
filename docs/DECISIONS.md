@@ -14842,7 +14842,8 @@ limpia del 24 nov.
     chat, la nota se ve entera antes de «Guardar», sobrevive a recargar (va en la conversación guardada) y marca la
     pregunta como respondida (`respuestaDe`, en cualquier renglón: la nota junta todo lo que se contó sin guardar). *Sin
     signos de pregunta:* el chat lee como consulta lo que tiene forma de pregunta. Si la persona pregunta en vez de contar,
-    el chat responde como siempre. La caja deja lugar para el prefijo (el mensaje entero no pasa los 4.000 caracteres).
+    el chat responde como siempre. La caja deja lugar para el prefijo (el mensaje entero no pasa los 4.000 caracteres: el
+    tope de una nota, desde el 25 nov, cuando el de un mensaje subió a 15.000).
     *Lo aceptado:* con una conversación a medias, la respuesta se suma a esa misma nota (va marcada con su pregunta).
 - ~~**Pendiente, sin construir: «Ubicar» no lee estas notas.**~~ *Hecho el 25 nov* (Elías: una nota puede fijar el nivel):
   ver «“Ubicar” lee las notas del equipo». Lo de entonces: `loQueLeeUbicar` › `fuentesParaPosicionar` no arma ninguna
@@ -16614,6 +16615,33 @@ guarda sin un clic (ni la nota ni los cambios a las tarjetas). Convive con «Agr
   60 por persona en el día de Costa Rica (el corte de `inicioDelDiaCr`, el del presupuesto de IA); pasado el tope, 429 con
   qué hacer. Se cuentan y después se crea la corrida, sin bloqueo: dos pedidos juntos pueden pasarse por uno, y el id de
   la conversación lo pone el navegador; el tope del día acota el gasto.
+  *Enmienda del 25 nov (Elías; Marco se topó con el tope de un pedido a La escala):* lo que escribe la persona sube a
+  15.000 caracteres: un mensaje (`TOPES.largoDelMensaje`, eran 4.000) y un pedido a La escala (`MAX_PEDIDO`, eran 1.200).
+  Como cada mensaje vuelve a viajar en las vueltas siguientes (hasta 28), lo que va de la conversación al modelo tiene su
+  propio tope, 60.000 letras (`TOPES.largoDeLaConversacion`, `conTopeDeLaConversacion`): el último mensaje va siempre
+  entero y se recortan primero los más viejos (el del borde termina en «…»). Vale al contar, al responder una pregunta y
+  en la ventana de la mano de la cuenta; quien propone un cambio a La escala ya leía solo 3.000 letras de antes. La nota
+  que se guarda NO sube: su tope es el de una nota de la preventa (`TOPES.largoDeLaNota`, 4.000; una prueba lo pasa por
+  la validación de `op: "nota"`). Si lo contado pasa de ahí, la nota guarda mensajes ENTEROS (`piezasDeLaNota`): siempre
+  la respuesta de «Responder con Nexus» («Sobre Ventas · Datos (…): …», cuya caja sigue en ese tope: su renglón marca la
+  pregunta como respondida y le dice a «Ubicar» de qué área es), después los más nuevos, y del que queda en el borde, su
+  final, con «…» adelante; los de antes no van. Se ve antes de «Guardar». Lo que Nexus propone con eso (cambios y la
+  revisión de «nada que guardar») se revisa contra lo que QUEDA en la nota, mensaje por mensaje (`loQueQuedaEnLaNota`: un
+  «Unos 40» después de un acta larga sigue valiendo entero): un cambio o un hecho que cita lo que no entró no se propone ni
+  se guarda, porque la nota no lo respalda. Los cortes no parten un emoji (`primerasSinPartir`, `ultimasSinPartir`: medio
+  emoji no se guarda en la base). El resumen de una propuesta a La escala en la historia sigue en 1.200
+  (`TOPE_DEL_TEXTO`: es de Nexus, no de la persona). El chat de la ficha del cliente, los documentos, el cronograma y
+  Tareas siguen en 4.000 (`TOPES_DEL_CHAT.largoDelMensaje`, que ahora usan sus dos rutas y la página de ayuda).
+  *Lo aceptado:* un pedido largo a La escala (un acta pegada) cuenta ENTERO como lo pedido en la revisión de lo interno
+  (lib/pedirle-a-nexus/veracidad.ts): un tema interno que aparece en lo pegado cuenta como nombrado. Lo interno que la IA
+  escriba queda marcado «interno»: fuera de «Aplicar todo» y con la pregunta antes de aplicarse. *Lo que no queda
+  garantizado:* que una vuelta con 24 mensajes largos quede bajo el 1 MB que acepta nginx en producción (por la cuenta,
+  unos 400 KB; si pasa, el panel dice «Nexus no pudo responder»); el gasto con conversaciones largas (hasta 60.000 letras
+  más las fuentes en cada vuelta) y el peso de cada vuelta guardada (lleva la conversación entera); y volver a la versión
+  anterior: una conversación con un mensaje de más de 4.000 la rechaza («Cuerpo inválido») hasta «Nueva conversación».
+  *También aceptado:* una conversación de antes del deploy que juntó más de 4.000 letras sin guardar, cuya nota se guardó
+  con el corte de antes (el principio) y cuya página se cerró antes de anotarla, vuelve a ofrecer «Guardar» (la nota nueva
+  se arma distinto): guardarla deja una nota repetida.
 - **Si la IA falla** al leer lo que contaste, NO se guarda nada (podía ser una pregunta): el texto vuelve al cuadro con
   «Nexus no pudo leerlo esta vez». Si falla la revisión de La escala, el panel dice «No pude revisar si esto cambia La
   escala», nunca «no cambia».
@@ -17621,8 +17649,10 @@ es un pedido de cambio a la página») y, en «Un solo chat «Nexus»», el avis
 - **Lo que no cambia:** La escala de la ficha del cliente sigue con el pedido de un paso; la revisión de lo propuesto
   (cifras, lo interno, lo escrito a mano), «Aplicar», «Aplicar todo», el choque con otra persona, el historial y «Deshacer»;
   el tope de 20 pedidos al día (ahora cada pedido cuenta además como una de las 12 vueltas de la conversación; uno frenado
-  por ese tope, o por pasar de 1.200 caracteres, no gasta la vuelta: si lo decidió el modelo, la vuelta queda medida y no
-  cuenta). Mientras se aplica un cambio a La escala, la caja y «Nueva conversación» esperan.
+  por ese tope no gasta la vuelta: si lo decidió el modelo, la vuelta queda medida y no
+  cuenta). El freno por largo (eran 1.200 caracteres) ya no se dispara desde la conversación: desde el 25 nov un mensaje y
+  un pedido a La escala tienen el mismo tope, 15.000. Mientras se aplica un cambio a La escala, la caja y «Nueva
+  conversación» esperan.
 - **Lo que no queda garantizado:** que el modelo lea bien lo dudoso sin chip (se midió con frases escritas a mano, no con
   conversaciones reales); con un «Guardar» pendiente arriba, la caja espera también para pedir un cambio a La escala
   («Termina lo de arriba»); cerrar el cajón y salir de la pantalla mientras Nexus piensa no deja punto ni aviso (la

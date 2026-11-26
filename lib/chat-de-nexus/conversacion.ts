@@ -41,8 +41,24 @@ export const TOPES = {
   rondasDePreguntas: 2,
   /** Cuántas preguntas en una misma vuelta. */
   preguntasPorRonda: 2,
-  /** El largo de lo que escribe o dicta la persona en un mensaje. */
-  largoDelMensaje: 4_000,
+  /**
+   * El largo de lo que escribe o dicta la persona en un mensaje (Elías, 25 nov: de 4.000 a 15.000; Marco se topó con el
+   * tope de un pedido a La escala). Lo que viaja de la conversación al modelo tiene su propio tope (`largoDeLaConversacion`).
+   */
+  largoDelMensaje: 15_000,
+  /**
+   * El largo de la nota que se guarda al contar (`notaDeLaConversacion`): el de una nota de la preventa (la validación de
+   * `op: "nota"`, lib/exploraciones/esquemas.ts; una prueba la prueba con este número). Si lo contado pasa de ahí, la nota guarda
+   * mensajes enteros (siempre la respuesta de «Responder con Nexus», después los más nuevos: `piezasDeLaNota`), y la persona lo ve antes de
+   * «Guardar». Lo que se propone con lo contado se revisa contra lo que queda en la nota (`loQueQuedaEnLaNota`).
+   */
+  largoDeLaNota: 4_000,
+  /**
+   * Cuántas letras de la conversación viajan al modelo, como mucho (25 nov, con mensajes de 15.000: 28 mensajes podían ser
+   * 420.000 letras y dejar sin lugar a la página y a las reuniones). El último va siempre entero; se recortan primero los
+   * más viejos (`conTopeDeLaConversacion`).
+   */
+  largoDeLaConversacion: 60_000,
   /** Cuántos mensajes viajan (la persona y Nexus): dos por vuelta, con las 12 vueltas (eran 14 con 6). */
   mensajes: 28,
   /** Cuántos cambios propone como mucho. */
@@ -169,7 +185,7 @@ export function mensajesValidos(m: readonly MensajeDeLaConversacion[]): MensajeD
   const limpios = m
     .map((x) => ({
       de: x.de,
-      texto: x.texto.trim().slice(0, TOPES.largoDelMensaje),
+      texto: primerasSinPartir(x.texto.trim(), TOPES.largoDelMensaje),
       ...(x.es ? { es: x.es } : {}),
       ...(x.de === "nexus" && (x.es === "lista" || x.es === "escala") && typeof x.vuelta === "string" && x.vuelta ? { vuelta: x.vuelta.slice(0, 60) } : {}),
     }))
@@ -586,7 +602,8 @@ function loQueCuentaSinLasPreguntas(t: string, minimo = 2): string[] {
  * ¿lo anoto?» → «Usan SAP»). Una cita corta vale solo ENTERA (`laDijoLaPersona`): así «Unos 40» cuenta (cuarta revisión).
  */
 export function loQueContoEnPedazos(m: readonly MensajeDeLaConversacion[]): string[] {
-  const textos = loQueConto(m);
+  // Lo que queda en la nota: si se cortó, lo de antes del corte no respalda lo que se guarda.
+  const textos = loQueQuedaEnLaNota(m);
   const pedazos = textos.flatMap((t) => {
     const r = sinElEncabezadoDeLaRespuesta(t) ?? t;
     return [r, r.replace(/[¿?？]/g, " ").replace(/\s+/g, " ").trim(), ...r.split(/[¿?？\n]+|[.;:!,](?=\s)/).map((x) => x.trim())];
@@ -659,8 +676,90 @@ export function puedePreguntar(m: readonly MensajeDeLaConversacion[]): boolean {
  * La nota que se guarda: lo que dijo la persona, con sus palabras, renglón por renglón (lo que escribió primero y lo que
  * respondió). Nunca un resumen del modelo: la nota lleva «lo dijo <persona>» y tiene que ser cierto.
  */
-export function notaDeLaConversacion(m: readonly MensajeDeLaConversacion[], tope = TOPES.largoDelMensaje): string {
-  return loQueConto(m).join("\n").slice(0, tope);
+export function notaDeLaConversacion(m: readonly MensajeDeLaConversacion[], tope = TOPES.largoDeLaNota): string {
+  return piezasDeLaNota(loQueConto(m), tope)
+    .map((p) => (p.cortada ? `…${p.texto}` : p.texto))
+    .join("\n");
+}
+
+/**
+ * Lo que contó la persona TAL COMO QUEDA EN LA NOTA, para revisar las citas de lo que se propone con eso (25 nov): si la
+ * nota se cortó, lo de antes del corte no la respalda. Mensaje por mensaje (una respuesta corta, «Unos 40», vale entera:
+ * `laDijoLaPersona`), y del que quedó en el borde, su pedazo.
+ */
+export function loQueQuedaEnLaNota(m: readonly MensajeDeLaConversacion[]): string[] {
+  return piezasDeLaNota(loQueConto(m), TOPES.largoDeLaNota).map((p) => p.texto);
+}
+
+/**
+ * Los mensajes que entran en una nota de `tope` letras (con un renglón entre cada uno). Si no entra todo: la respuesta de
+ * «Responder con Nexus» («Sobre Ventas · Datos (…): …») va siempre entera, porque su renglón marca la pregunta como
+ * respondida y le dice a «Ubicar» de qué área es (segunda revisión de los topes); después, enteros los más nuevos, y del
+ * que queda en el borde, su final (`cortada`: la nota le pone «…» adelante). Los de antes no van.
+ */
+function piezasDeLaNota(conto: readonly string[], tope: number): Array<{ texto: string; cortada?: true }> {
+  if (conto.join("\n").length <= tope) return conto.map((texto) => ({ texto }));
+  const entran = new Map<number, { texto: string; cortada?: true }>();
+  let queda = tope;
+  const tomar = (i: number, texto: string, cortada?: true) => {
+    entran.set(i, cortada ? { texto, cortada } : { texto });
+    queda -= texto.length + (cortada ? 1 : 0) + (entran.size > 1 ? 1 : 0);
+  };
+  conto.forEach((t, i) => {
+    if (sinElEncabezadoDeLaRespuesta(t) !== null && t.length + (entran.size ? 1 : 0) <= queda) tomar(i, t);
+  });
+  for (let i = conto.length - 1; i >= 0 && queda > 0; i--) {
+    if (entran.has(i)) continue;
+    const t = conto[i];
+    if (t.length + (entran.size ? 1 : 0) <= queda) {
+      tomar(i, t);
+      continue;
+    }
+    // El del borde: su final, con «…» y, si hay otros, el renglón que lo separa.
+    const cabe = queda - 1 - (entran.size ? 1 : 0);
+    if (cabe >= 20) tomar(i, ultimasSinPartir(t, cabe).trimStart(), true);
+    break;
+  }
+  return [...entran.entries()].sort((a, b) => a[0] - b[0]).map(([, p]) => p);
+}
+
+/** Los primeros `n` caracteres sin partir un emoji (un par de UTF-16 a medias no se guarda en la base). */
+export function primerasSinPartir(t: string, n: number): string {
+  if (t.length <= n) return t;
+  const c = t.charCodeAt(n - 1);
+  return t.slice(0, c >= 0xd800 && c <= 0xdbff ? n - 1 : n);
+}
+
+/** Los últimos `n` caracteres sin partir un emoji. */
+export function ultimasSinPartir(t: string, n: number): string {
+  if (t.length <= n) return t;
+  const desde = t.length - n;
+  const c = t.charCodeAt(desde);
+  return t.slice(c >= 0xdc00 && c <= 0xdfff ? desde + 1 : desde);
+}
+
+/**
+ * Lo que viaja de una conversación a un modelo, dentro de `tope` letras (25 nov). El último mensaje va siempre entero; si no
+ * cabe todo, se recortan primero los más viejos: el que queda en el borde termina en «…» (si le quedan 200 letras o más) y
+ * los de antes no van. Sirve para mensajes y para los turnos de la mano de la cuenta.
+ */
+export function conTopeDeLaConversacion<T extends { texto: string }>(m: readonly T[], tope: number = TOPES.largoDeLaConversacion): T[] {
+  const total = m.reduce((s, x) => s + x.texto.length, 0);
+  if (total <= tope || m.length < 2) return [...m];
+  const ultimo = m[m.length - 1];
+  let queda = tope - ultimo.texto.length;
+  const antes: T[] = [];
+  for (let i = m.length - 2; i >= 0 && queda > 0; i--) {
+    const x = m[i];
+    if (x.texto.length <= queda) {
+      antes.unshift(x);
+      queda -= x.texto.length;
+      continue;
+    }
+    if (queda >= 200) antes.unshift({ ...x, texto: `${primerasSinPartir(x.texto, queda - 1).trimEnd()}…` });
+    break;
+  }
+  return [...antes, ultimo];
 }
 
 // ── El pedido ───────────────────────────────────────────────────────────────────
@@ -727,7 +826,9 @@ function bloqueDeLaConversacion(m: readonly MensajeDeLaConversacion[]): string {
             : x.es === "escala"
               ? "NEXUS (propuso cambios a La escala)"
               : "NEXUS";
-  return m.map((x) => `${quien(x)}: ${x.texto}`).join("\n\n");
+  return conTopeDeLaConversacion(m)
+    .map((x) => `${quien(x)}: ${x.texto}`)
+    .join("\n\n");
 }
 
 /**

@@ -531,8 +531,10 @@ export default function PanelDeNexus({
           ariaLabel={lugar === "guia" ? "Lo que le pides a Nexus sobre la guía" : escala ? "Lo que le pides o preguntas a Nexus" : mensajes.length ? "Tu mensaje" : "Lo que le cuentas o le preguntas a Nexus"}
           apagada={cajaApagada}
           // Con el prefijo de «Responder con Nexus», lo que la persona escribe deja lugar para él: el mensaje entero no puede
-          // pasar el tope del servidor (revisión del 24 nov: volvía «Cuerpo inválido» sin decir por qué).
-          maxLength={TOPES.largoDelMensaje - (prefijo?.length ?? 0)}
+          // pasar el tope del servidor (revisión del 24 nov: volvía «Cuerpo inválido» sin decir por qué). Y esa respuesta es
+          // una nota: su tope es el de una nota (25 nov, con el mensaje en 15.000). Si antes se contó otra cosa sin guardar,
+          // la nota guarda igual esta respuesta entera (lib/chat-de-nexus/conversacion.ts › piezasDeLaNota).
+          maxLength={prefijo ? TOPES.largoDeLaNota - prefijo.length : TOPES.largoDelMensaje}
           conDictado
           onErrorDeDictado={setError}
         />

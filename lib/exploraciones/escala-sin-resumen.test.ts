@@ -205,8 +205,9 @@ describe("5 · «Para completar el diagnóstico» y «Responder con Nexus»", ()
     expect(panel).toContain('{ de: "persona", texto: conPrefijo ? `${conPrefijo}${t}` : t }');
     expect(panel).toContain("if (conPrefijo) alUsarElPrefijo?.();");
     expect(panel).toContain("setTexto((x) => devolverALaCaja(t, x))");
-    // La caja deja lugar para el prefijo: el mensaje entero no pasa el tope del servidor.
-    expect(panel).toContain("maxLength={TOPES.largoDelMensaje - (prefijo?.length ?? 0)}");
+    // La caja deja lugar para el prefijo: el mensaje entero no pasa el tope del servidor, y la respuesta (una nota) no pasa
+    // el de una nota.
+    expect(panel).toContain("maxLength={prefijo ? TOPES.largoDeLaNota - prefijo.length : TOPES.largoDelMensaje}");
   });
 });
 

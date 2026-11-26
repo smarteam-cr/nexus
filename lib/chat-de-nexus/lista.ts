@@ -20,7 +20,7 @@
  *
  * ⛔ Las operaciones las lee el SERVIDOR de su vuelta: el navegador manda solo qué lista aplicar y qué desmarcó.
  */
-import { esCortesia, type MensajeDeLaConversacion } from "./conversacion";
+import { conTopeDeLaConversacion, esCortesia, TOPES, type MensajeDeLaConversacion } from "./conversacion";
 
 /** Un cambio de la cuenta como lo guarda la vuelta: la operación de la capa y su entrada, ya acotada a la cuenta. */
 export interface OperacionDeLaLista {
@@ -213,6 +213,8 @@ export function ventanaParaLaCuenta(
   listas: readonly ListaGuardada[],
   limpiar: (t: string) => string,
   tope = TURNOS_PARA_LA_CUENTA,
+  /** Cuántas letras, como mucho (25 nov): lo más viejo se recorta primero (`conTopeDeLaConversacion`). */
+  letras: number = TOPES.largoDeLaConversacion,
 ): Array<{ rol: "user" | "assistant"; texto: string }> {
   const deCadaMensaje = emparejarListas(mensajes, listas);
   const turnos: Array<{ rol: "user" | "assistant"; texto: string }> = [];
@@ -228,7 +230,7 @@ export function ventanaParaLaCuenta(
     if (ultimo && ultimo.rol === rol) ultimo.texto = `${ultimo.texto}\n\n${texto}`;
     else turnos.push({ rol, texto });
   });
-  const ultimos = turnos.slice(-tope);
+  const ultimos = conTopeDeLaConversacion(turnos.slice(-tope), letras);
   const desde = ultimos.findIndex((t) => t.rol === "user");
   return desde < 0 ? [] : ultimos.slice(desde);
 }

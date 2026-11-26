@@ -76,7 +76,8 @@ export const topeDePedidos = () => `Hoy ya le hiciste ${PEDIDOS_POR_DIA} pedidos
  * de la persona y el del mes de Nexus conversando. Si no se puede, la vuelta de la conversación no se gasta.
  */
 export async function antesDePedirleALaEscala(email: string, pedido?: string): Promise<{ ok: true } | Falla> {
-  // La caja de la conversación acepta más que un pedido a La escala: lo de más no se corta en silencio (segunda revisión).
+  // Desde el 25 nov la caja de la conversación y un pedido a La escala tienen el mismo tope (15.000): este freno no se
+  // dispara desde la conversación; queda por si un día vuelven a ser distintos (segunda revisión: no cortar en silencio).
   if (pedido !== undefined && pedido.trim().length > MAX_PEDIDO)
     return { ok: false, status: 400, error: `Un cambio a La escala va hasta ${MAX_PEDIDO.toLocaleString("es-CR")} caracteres: acórtalo y vuelve a mandarlo.` };
   const tope = await topeDeNexusHoy();

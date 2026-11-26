@@ -28,6 +28,7 @@ vi.mock("@/lib/ai/assist", () => ({ runDocumentAssist: vi.fn() }));
 
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { MAX_PEDIDO } from "@/lib/pedirle-a-nexus/contrato";
 import { runDocumentAssist } from "@/lib/ai/assist";
 import { _olvidarElGastoDeNexus } from "@/lib/ai/tope-de-nexus-server";
 import { leerContenido } from "./esquemas";
@@ -188,7 +189,8 @@ describe("Pedirle a Nexus en La escala, en la base", () => {
   it("antes de pedirle a La escala desde la conversación: el tope del día contado en la base y el largo (25 nov)", async () => {
     const d = await sembrar();
     expect(await antesDePedirleALaEscala(QUIEN.email, "Acóplalo a Fundatec")).toEqual({ ok: true });
-    expect(await antesDePedirleALaEscala(QUIEN.email, "x".repeat(1201))).toMatchObject({ ok: false, status: 400 });
+    expect(await antesDePedirleALaEscala(QUIEN.email, "x".repeat(MAX_PEDIDO))).toEqual({ ok: true });
+    expect(await antesDePedirleALaEscala(QUIEN.email, "x".repeat(MAX_PEDIDO + 1))).toMatchObject({ ok: false, status: 400 });
     await prisma.agentRun.createMany({ data: Array.from({ length: 19 }, () => ({ agentSlug: AGENTE_DE_PEDIRLE, clientId: d.clientId, status: "DONE" as const, triggeredByEmail: QUIEN.email })) });
     expect(await antesDePedirleALaEscala(QUIEN.email)).toEqual({ ok: true });
     await prisma.agentRun.create({ data: { agentSlug: AGENTE_DE_PEDIRLE, clientId: d.clientId, status: "DONE", triggeredByEmail: QUIEN.email } });

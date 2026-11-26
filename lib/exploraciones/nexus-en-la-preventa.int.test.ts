@@ -717,6 +717,19 @@ describe("lo seguro lo decide el código, lo dudoso el modelo, y nada se guarda 
     expect(await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO)).toBeNull();
   });
 
+  it("⛔ con un mensaje más largo que la nota, un cambio que cita lo de antes del corte no se propone (la nota no lo respalda)", async () => {
+    const { id } = await sembrar();
+    const texto = `Ojo: pierden unos 40 mil dólares al mes en cartera vencida. ${"a".repeat(6_000)} Tienen 3 sedes en Guatemala`;
+    siguiente = LISTO;
+    const v = await vueltaEnLaPreventa(id, `${CONVERSACION}-largo`, [{ de: "persona", texto }], EMAIL, CON_ACCESO);
+    if (!v.ok || v.turno.tipo !== "listo") throw new Error("esperaba un listo");
+    expect(v.turno.cambios).toEqual([]);
+    expect(v.turno.descartados).toBe(1);
+    // Con el mismo texto corto, el cambio sí se propone.
+    const corto = await vueltaEnLaPreventa(id, `${CONVERSACION}-corto`, [{ de: "persona", texto: "Ojo: pierden unos 40 mil dólares al mes en cartera vencida." }], EMAIL, CON_ACCESO);
+    expect(corto.ok && corto.turno.tipo === "listo" && corto.turno.cambios.length).toBe(1);
+  });
+
   it("«Guardarlo como nota» de algo corto que la persona sí dijo («¿Unos 40?» a La escala, «Usan SAP, ¿lo anoto?») se cuenta", async () => {
     const { id } = await sembrar();
     for (const [n, texto, cita] of [

@@ -158,7 +158,7 @@ export const PEDIDOS_POR_DIA = 20;
 /** Cómo se dice que nada de esto lo ve el cliente todavía. */
 export const AVISO_SIN_PUBLICAR = "Listo. Hay cambios que el cliente no ve: los verá cuando alguien publique.";
 
-/** El tope de un pedido. */
-export const MAX_PEDIDO = 1200;
+/** El tope de un pedido (Elías, 25 nov: de 1.200 a 15.000, el de un mensaje del chat; Marco se topó con el de antes). */
+export const MAX_PEDIDO = 15_000;
 /** Cuántos cambios se aplican de una vez, como mucho (una página entera de La escala cabe de sobra). */
 export const MAX_CAMBIOS = 40;
