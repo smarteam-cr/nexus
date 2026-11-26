@@ -88,6 +88,14 @@ corrió ya no queda arriba (ver «Esquema atrasado», abajo).
 que trae un cambio en `deploy.sh` corre con la versión VIEJA del script. Para ese deploy,
 primero `git pull --ff-only` a mano y después `bash scripts/deploy.sh`.
 
+⚠️ **El build muere sin mensaje, o el deploy se corta, y `dmesg -T | grep -i "out of memory"` muestra `node` o
+`next-server` muertos**: al VPS se le acabó la RAM (16 GB compartidos con unas 15 apps). El 25 nov el build llegó a 9 GB
+y el kernel mató el build, el Nexus de producción (se reinició solo) y la Mongo de otra app. Desde ese día el VPS tiene
+**8 GB de swap fijo** (`/swapfile`, en `/etc/fstab`, `vm.swappiness=10` en `/etc/sysctl.d/99-swap.conf`): con el swap el
+build va más lento en vez de matar apps. Para ver cuánto se usa: `free -m`. Para quitarlo: `swapoff /swapfile`, borrar
+la línea de `/etc/fstab` y el archivo. Si el deploy se lanza por SSH y la conexión se corta, deploy.sh sigue en el VPS:
+`nohup bash scripts/deploy.sh > /tmp/deploy-<sha>.log 2>&1 < /dev/null &` y mirar ese archivo.
+
 ⚠️ **«BUILD FALLO» con «JavaScript heap out of memory» en `npm run build`**: el chequeo de tipos de
 `next build` se quedó sin heap. El tope del BUILD vive en el `Dockerfile` (`NODE_OPTIONS` de la etapa
 builder, 6 GB desde el 2026-10-16); no es el de 2 GB del contenedor que corre. Mientras tanto el contenedor

@@ -10,11 +10,11 @@
 ```ejecutivo
 {
  "corte": "2026-11-25",
- "produccion": "7db1a943",
+ "produccion": "ed369ab6",
  "arriba": [
-  "En producción desde el 25 nov: La escala sin Resumen (plantilla, aviso y «Responder con Nexus»), un Resumen que no se cuelga y la página del chat «Nexus»; del 24 nov, un solo chat, La escala con lo que ya sabemos y las franjas del kickoff.",
+  "En producción desde el 25 nov: el chat «Nexus» de La escala en una sola conversación, sin avisos y con ítems enteros; «Ubicar» lee las notas del equipo; el (i) al final del texto y «Mejorar con IA» al pasar el cursor.",
   "En curso: nada corriendo.",
-  "Te espera: armar y volver a publicar el Resumen de TEC · AE, revisar con Marco el borrador de Centauro y las preguntas 119 (las notas en los niveles), 118 (la moneda) y 99 (el conector)."
+  "Te espera: probar La escala de TEC · AE con el chat, armar su Resumen, revisar Centauro con Marco y las preguntas 118 (la moneda) y 99 (el conector)."
  ],
  "iniciativas": [
   {
@@ -110,7 +110,7 @@
    "nombre": "La escala y el diagnóstico",
    "color": "escala",
    "estado": "en-curso",
-   "donde": "Sin Resumen, La escala ya muestra la plantilla y lo que falta, con «Responder con Nexus»; falta armar el Resumen de TEC · AE y revisar Centauro con Marco.",
+   "donde": "La escala se completa con el chat «Nexus» y las notas del equipo ya fijan niveles; falta armar el Resumen de TEC · AE y revisar Centauro con Marco.",
    "hecho": [
     "La escala ubica a cada empresa por equipo e industria, con un radar, un Resumen que el cliente ve y su historia en el tiempo.",
     "El test del diagnóstico vive en Nexus, con su página de resultados en dinero y la escalera de niveles, igual a la curva de la app vieja.",
@@ -714,7 +714,7 @@
 ```linea
 {
  "hoy": "2026-11-25",
- "produccion": "7db1a943",
+ "produccion": "ed369ab6",
  "temasHechoHasta": "2026-10-29",
  "iniciativas": [
   {
@@ -2088,6 +2088,57 @@
     "8b5ee76f",
     "d52d236a"
    ]
+  },
+  {
+   "fecha": "2026-11-25",
+   "iniciativa": "escala",
+   "titulo": "El chat «Nexus» en La escala: una conversación, cifras e ítems enteros",
+   "que": "«Mejorar con IA» y «Nexus» abren la misma conversación: se pregunta de la cuenta y se piden cambios. Sin avisos flotantes, un punto rojo en «Nexus». Un ítem nuevo llega entero. Las cifras de lo que hicimos juntos se cambian a mano; al replantear el problema, la cifra grande trae su cita.",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "si",
+   "tema": 5,
+   "commits": [
+    "63743dcf"
+   ]
+  },
+  {
+   "fecha": "2026-11-25",
+   "iniciativa": "escala",
+   "titulo": "La escala más limpia: el (i) al final y «Mejorar con IA» al pasar el cursor",
+   "que": "El (i) de las citas va al final de cada texto, en el mismo renglón. «Mejorar con IA» tiene un lugar fijo arriba a la derecha de cada sección y aparece al pasar el cursor. La vista previa del historial ya no deja blanco. La página del cliente no cambia.",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "si",
+   "tema": 5,
+   "commits": [
+    "16d40be5"
+   ]
+  },
+  {
+   "fecha": "2026-11-25",
+   "iniciativa": "escala",
+   "titulo": "«Ubicar» lee las notas del equipo y una nota puede fijar el nivel",
+   "que": "Lo que respondes con «Responder con Nexus» entra a «Ubicar» y puede fijar el nivel de una parte. Adentro dice «Nota del equipo · quien la escribió»; el cliente nunca ve el nombre. Arriba aparece «Volver a ubicar» cuando hay respuestas nuevas.",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "si",
+   "tema": 5,
+   "preguntas": [
+    119
+   ],
+   "commits": [
+    "cc1c06be"
+   ]
+  },
+  {
+   "fecha": "2026-11-25",
+   "iniciativa": "cronograma",
+   "titulo": "El cronograma vuelve a tener «Acceso» en su barra",
+   "que": "Como la Entrega: desde el cronograma se copia el enlace y la contraseña que el cliente usa para verlo, sin ir al Resumen del proyecto (RC Inmobiliaria).",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "commits": [
+    "829a18ee"
+   ],
+   "tema": 10
   }
  ],
  "sigue": [
@@ -2106,24 +2157,12 @@
   {
    "iniciativa": "escala",
    "titulo": "TEC · AE: usar lo propuesto y armar su Resumen",
-   "que": "La escala ya muestra la plantilla con «Falta armar el Resumen». Ármalo, completa lo que falta con «Responder con Nexus» y vuelve a «Publicar»: hoy el cliente ve la versión sin Resumen.",
+   "que": "Arma el Resumen, completa lo que falta con «Responder con Nexus» y «Volver a ubicar», y vuelve a «Publicar»: hoy el cliente ve la versión sin Resumen.",
    "paraQuien": "Customer Success",
    "estado": "te-toca",
    "tema": 5,
    "preguntas": [
-    116,
-    119
-   ]
-  },
-  {
-   "iniciativa": "escala",
-   "titulo": "Que «Ubicar» lea las notas del equipo",
-   "que": "Lo que respondes con «Responder con Nexus» ya cambia el Resumen, pero no los niveles. Espera tu respuesta a cuánto pesa una nota del equipo.",
-   "paraQuien": "Ventas y Customer Success",
-   "estado": "te-toca",
-   "tema": 5,
-   "preguntas": [
-    119
+    116
    ]
   },
   {
@@ -2158,6 +2197,13 @@
    "preguntas": [
     88
    ]
+  },
+  {
+   "iniciativa": "documentos",
+   "titulo": "Que el chat de los documentos pida el ítem entero",
+   "que": "En el kickoff y el diagnóstico, «agrega un ítem» todavía puede dejar solo el título. En La escala ya llega entero; falta decidir si en los documentos se exige igual o se deja completar después.",
+   "paraQuien": "Customer Success",
+   "estado": "por-hacer"
   },
   {
    "iniciativa": "nexus",
@@ -2560,7 +2606,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "Todo está en producción (7db1a943, 25 nov): La escala sin Resumen con «Responder con Nexus», un Resumen que no se cuelga y la página del chat «Nexus». Lo próximo: el Resumen de TEC · AE, Centauro con Marco y las preguntas 119 y 118.",
+ "dondeVamos": "Todo está en producción (ed369ab6, 25 nov): el chat «Nexus» de La escala en una sola conversación, «Ubicar» con las notas del equipo y La escala interna más limpia. Lo próximo: el Resumen de TEC · AE, Centauro con Marco y las preguntas 118 y 99.",
  "temas": [
   {
    "n": 4,
@@ -3332,7 +3378,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `7db1a943` (todo `main`) desde el 25 nov: La escala sin Resumen con «Responder con Nexus», la página del chat «Nexus» en Documentación, un Resumen de La escala que no pierde las cifras de la empresa, las franjas del kickoff, un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y reuniones enteras, La escala de un cliente con lo que ya sabemos, la pantalla limpia de La escala, el registro de los cambios de base, Hablar con Nexus (etapas 0 y 1), el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
+| Producción | Corre `ed369ab6` (todo `main`) desde el 25 nov: el chat «Nexus» de La escala en una sola conversación, «Ubicar» con las notas del equipo, La escala interna más limpia, La escala sin Resumen con «Responder con Nexus», la página del chat «Nexus» en Documentación, un Resumen de La escala que no pierde las cifras de la empresa, las franjas del kickoff, un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y reuniones enteras, La escala de un cliente con lo que ya sabemos, la pantalla limpia de La escala, el registro de los cambios de base, Hablar con Nexus (etapas 0 y 1), el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
 | Por desplegar | Nada. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | Por datos de antes, ninguno nuevo (28 oct): 16 reuniones colgadas de proyectos de otro cliente (INV1) y 9 tareas que citan una reunión de otro cliente (INV42), las que ordena el plan de dominio compartido; el pipeline de Secure Title (INV11: 2 proyectos y 6 en una etapa desconocida); «TEC- AE» fusionada en HubSpot (INV13 e INV54: ya solo ella, kölbi quedó bien); una reunión de Meet leída antes de ocurrir (INV16a), y el corte de cartera de hace 96 días (INV32). |
 | Pruebas | 30 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 83 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
@@ -3473,7 +3519,7 @@ Sin esto, algo sigue mal o no se puede validar:
 116. ✓ **La escala de un cliente con lo que ya sabemos (TEC · AE).** Plan con D1 a D4 (lo recomendado). **Tu respuesta (24 nov):** «ejecútalo de forma autónoma hasta el final para poder ver esto en producción… mandémoslo a producción».
 117. ✓ **Preventas y propuestas compartidas entre Customer Success y Ventas.** Juan Carlos pidió ver las propuestas de sus clientes; los CSE ya trabajaban las preventas desde el 6 oct, pero no veían Propuestas. ¿Se les enciende «Ventas / Propuestas › Acceder al área» (también ven Pipeline, SICOP y los montos) o solo las propuestas? **Tu respuesta (24 nov):** «Encender el área». Editar sigue siendo de Ventas. Con esto se descarta que la preventa de un cliente pida además acceso a la empresa.
 118. **La escala · una cifra de dinero sin moneda.** Si en la reunión nadie dijo la moneda, Nexus la quita: la cuenta del 85 de Centauro sale «1.190 al mes en clientes que se van», sin dólares. Al confirmarla, ¿puede salir así al cliente, o confirmar debería pedirte la moneda?
-119. **La escala · las notas del equipo en los niveles.** Lo que respondes con «Responder con Nexus» queda como nota y cambia el texto del Resumen, pero «Ubicar», lo que fija el nivel de cada equipo, todavía no lee las notas. Propuesta: que las lea, con quién las escribió, y que una nota solo pueda dejar una parte «por explorar»; el nivel lo sigue fijando solo lo que dijo el cliente. ¿Va así?
+119. ✓ **La escala · las notas del equipo en los niveles.** Lo que respondes con «Responder con Nexus» queda como nota y cambia el texto del Resumen, pero «Ubicar», lo que fija el nivel de cada equipo, todavía no lee las notas. Propuesta: que las lea, con quién las escribió, y que una nota solo pueda dejar una parte «por explorar»; el nivel lo sigue fijando solo lo que dijo el cliente. ¿Va así? **Tu respuesta (25 nov):** Puede fijar el nivel. *(Hecho: una nota del equipo puede fijar el nivel de una parte; adentro dice «Nota del equipo · quien la escribió», y el cliente nunca ve el nombre.)*
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
