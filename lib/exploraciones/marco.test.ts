@@ -284,6 +284,9 @@ describe("⛔ una exploración de proyecto no es una preventa", () => {
        mudan de ficha: la preventa va con su propuesta y la exploración de un proyecto va con su proyecto. Nunca las
        mezcla: cada una sigue a lo suyo (lib/sessions/separar-en-unidades.ts › destinosDePreventas). */
     "scripts/separar-en-unidades.ts",
+    /* «Unidades de negocio» (2026-11-26): las exploraciones de un proyecto que pasa a una unidad se mudan con él (la del
+       proyecto y, si la hay, la preventa que lo abrió). El simulacro de juntar cuenta solo las preventas (DE_LA_PREVENTA). */
+    "lib/clients/unidades-server.ts",
   ]);
   function archivos(dir: string): string[] {
     const abs = path.join(RAIZ, dir);

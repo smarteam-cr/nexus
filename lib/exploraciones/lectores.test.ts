@@ -111,7 +111,13 @@ type Destino =
    * (Elías: presentarle la escala). Lee SOLO por `escalaParaElCliente` (lib/exploraciones/escala-para-el-cliente-server.ts):
    * los niveles confirmados con evidencia, sin citas, porqués, fuentes ni lo interno.
    */
-  | "escala-al-cliente";
+  | "escala-al-cliente"
+  /**
+   * LAS UNIDADES DE UNA EMPRESA (2026-11-26, lib/clients/unidades-server.ts): al pasar un proyecto a una unidad nueva, sus
+   * exploraciones (y la propuesta que salió de una) se mudan de ficha con él; al simular juntar una unidad, se cuentan sus
+   * preventas. Solo ids, la ficha y conteos: nada de lo confirmado, lo propuesto ni lo interno.
+   */
+  | "mudanza-de-ficha";
 
 const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "lib/external/escala-view.ts": {
@@ -162,6 +168,14 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "ventas",
     motivo:
       "Los hechos de cada nota de «Lo que sabes del cliente» (21 nov), debajo de su nota: solo los de esta preventa y su cliente (hechosDeLasNotas). Internos, como las notas. Pantalla interna, con la guardia de la exploración.",
+  },
+  "lib/clients/unidades-server.ts": {
+    destino: "mudanza-de-ficha",
+    motivo: "«Unidades de negocio» (26 nov): muda de ficha las exploraciones de un proyecto que pasa a una unidad y cuenta las preventas de una unidad para el simulacro de juntar.",
+  },
+  "lib/clients/unidades.ts": {
+    destino: "mudanza-de-ficha",
+    motivo: "La lista de tablas que pasan con un proyecto a una unidad nombra «ExploracionDeVenta». No lee ninguna.",
   },
   "lib/invariantes/hechos.ts": {
     destino: "invariante-de-la-empresa",
@@ -601,6 +615,11 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     permitidas: /\benlacesDeLasBusquedas\b|\burlComparable\b|\bleerEmpresa\b|\bhoyEnCostaRica\b/,
     // Ninguna exploración: ni lo confirmado, ni la propuesta, ni el handoff, ni lo interno de la preventa.
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\bexploracionesDeVenta\b/,
+  },
+  "mudanza-de-ficha": {
+    permitidas: /\.exploracionDeVenta\.(findMany|count|updateMany)\(|"ExploracionDeVenta"/,
+    // Solo ids, la ficha y conteos: ni el contenido, ni la propuesta, ni el handoff, ni lo interno.
+    prohibidas: /@\/lib\/exploraciones\/|\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|contenido\s*:\s*true/,
   },
   "invariante-de-la-empresa": {
     // Solo de qué empresa es la preventa: `exploracion: { select: { clientId: true } }`.

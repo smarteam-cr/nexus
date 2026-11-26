@@ -372,10 +372,17 @@ export async function reResolverReunionesDe(
      * Teamnet y Sas», que es interna (Elías, 26 nov).
      */
     tambienLasDeLasFichas?: readonly string[];
+    /**
+     * Mirar también estas reuniones, por su id. Lo pide un cambio de las unidades de una empresa (lib/clients/unidades-server.ts):
+     * las de las fichas de la empresa y las de la gente del dominio que se suma o se quita, que no salen por el título.
+     */
+    tambienEstasReuniones?: readonly string[];
   },
 ): Promise<{ cambian: ReunionQueCambia[]; saltadas: ReunionQueCambia[]; hubspot: ReadonlyMap<string, HubspotCompanyLite> }> {
   const lista = [...new Set(correos.map((c) => c.trim().toLowerCase()).filter(Boolean))];
-  if (!lista.length && !o.todas) return { cambian: [], saltadas: [], hubspot: new Map() };
+  if (!lista.length && !o.todas && !o.tambienEstasReuniones?.length) {
+    return { cambian: [], saltadas: [], hubspot: new Map() };
+  }
   if (o.aplicar && o.ajustarFichas) throw new Error("Cambiar las fichas en memoria es solo para un simulacro.");
   const ctx = await buildCategorizeCtx(o.ajustarFichas);
   const confirmadasAntes = ctx.interlocutoresConfirmados ?? new Map<string, readonly string[]>();
@@ -405,6 +412,17 @@ export async function reResolverReunionesDe(
     if (o2.length) {
       for (const x of await prisma.firefliesSession.findMany({
         where: { OR: o2 },
+        select: { id: true, title: true, date: true, participants: true, manualClientId: true, resolvedClientId: true },
+      })) {
+        porId.set(x.id, x);
+      }
+    }
+  }
+  if (o.tambienEstasReuniones?.length && !o.todas) {
+    const ids = [...new Set(o.tambienEstasReuniones)].filter((id) => !porId.has(id));
+    for (let i = 0; i < ids.length; i += 1000) {
+      for (const x of await prisma.firefliesSession.findMany({
+        where: { id: { in: ids.slice(i, i + 1000) } },
         select: { id: true, title: true, date: true, participants: true, manualClientId: true, resolvedClientId: true },
       })) {
         porId.set(x.id, x);

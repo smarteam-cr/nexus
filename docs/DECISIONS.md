@@ -15059,6 +15059,36 @@ con proyectos (abajo). Plan, números y etapas: `docs/empresas-con-dominio-compa
   sale de `client.hubspotCompanyId` de su ficha, que es null, y lo de la empresa de HubSpot es de la principal (arriba). Por eso no puede armar la propuesta comercial hasta tener su
   propia empresa en HubSpot, y el paso lo dice. La propuesta manual (Propuestas › Nueva) sigue entrando por el dominio de
   HubSpot: elige siempre la principal.
+- **La pestaña «Unidades de negocio» de Información del cliente** (26 nov; diseño aprobado por Elías, con el estilo de
+  siempre de la app). Muestra la empresa de la ficha: la principal y sus unidades, o un grupo sin principal (Teamnet y
+  Stratosphere), con siglas, dominio, proyectos, reuniones y la gente confirmada de cada una. Lógica pura en
+  `lib/clients/unidades.ts`; servidor en `lib/clients/unidades-server.ts`; ruta `app/api/clients/[id]/unidades`.
+  - Crear una unidad, separarla y cambiarle siglas o dominio: todo Customer Success (y el Super Admin). Juntar: solo el
+    Super Admin o la CSL (Elías, 26 nov).
+  - El check «Esta empresa tiene varias unidades de negocio» no es una columna: está prendido cuando hay unidades. Prenderlo
+    sin agregar ninguna no guarda nada, y no se apaga mientras haya unidades.
+  - Todo cambio pasa por la vista previa: las reuniones las decide el resolver con las fichas como quedarán
+    (`reResolverReunionesDe` con `ajustarFichas`), y el guardado mueve solo lo que se vio (la huella). Si la cuenta da otra
+    después de escribir la ficha, se deshace la ficha antes de mover nada. *Por qué:* «nunca debe adivinar en silencio».
+  - Una reunión con un vínculo que puso una persona (o elegida para un documento) con un proyecto que queda en otra ficha
+    se queda donde está por defecto, asignada a mano; la persona puede dejarla ir o elegirle otra ficha. Si quedaría por
+    decidir, el guardado espera a que alguien elija su ficha. *Por qué:* mudarla soltaba ese vínculo, y con él la decisión.
+  - Al agregar una unidad se pueden pasar proyectos de la principal, desmarcados por defecto (Elías). Un proyecto pasa con
+    lo que cuelga de él (`SE_MUDAN_CON_EL_PROYECTO`, una prueba la compara con el esquema) y con sus reuniones: si una
+    suya, como principal o con un vínculo de una persona, no termina en la unidad, no pasa. Los vínculos secundarios que
+    puso Nexus de reuniones que se quedan se sueltan. *Por qué:* que ningún vínculo cruce de ficha (invariante 1).
+  - La cuenta de cobro de la unidad se elige después, en Cobranza: crear una unidad no toca la facturación (Elías).
+  - Juntar, en la pantalla, es solo el simulacro (qué pasaría a la principal). *Por qué:* borra la ficha de la unidad y no
+    se puede deshacer; lo aplica una persona con `scripts/merge-duplicate-clients.ts` (invariante 3 de CLAUDE.md).
+  - El grupo sin principal no es un dato nuevo: existe porque alguien está confirmado en las dos fichas
+    (`gruposDeLaGenteConfirmada`). Se suma o se deshace desde «Interlocutores».
+  - Lo que dejó la revisión del 26 nov: quien guarda tiene que abrir cada ficha que gana o pierde una reunión, las que
+    elige a mano y, al agregar, la principal. Una reunión de un proyecto que pasa que el resolver deja donde está sale en
+    la vista previa («Sigue donde está») para poder elegirle la unidad; si al elegirle otra ficha pierde un vínculo o un
+    documento que puso una persona, la fila lo dice antes de guardar. Una ficha que es de un grupo no pasa proyectos
+    (cambiaría cuál tiene el proyecto más antiguo, y con eso las reuniones de todo el grupo, sin vista previa). Si algo
+    falla después de pasar los proyectos, cada reunión de esos proyectos queda en la unidad como se vio (o se suelta su
+    vínculo de Nexus) y la pantalla dice «a medias» y pide avisar al equipo: editar la unidad no lo termina.
 
 ## El Resumen de la escala que ve el cliente, con sus datos rojos (2026-11-09)
 
