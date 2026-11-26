@@ -962,14 +962,16 @@ describe("9 · lo que pidió Elías al probarla (9 nov)", () => {
     const pagina = fs.readFileSync(path.join(RAIZ, "components/exploraciones/PaginaDeLaEscala.tsx"), "utf8");
     const resumen = pagina.slice(pagina.indexOf("if (enElResumen) {"), pagina.indexOf("const nivelesEnVivo"));
     const marco = resumen.indexOf("<ResumenDeLaEscalaVista");
-    // Desde el 24 nov el aviso (armarlo, en qué va, por qué falló) es `AvisoDelResumen`, que va antes del marco.
-    for (const control of ["<AvisoDelResumen", "Rehacer con IA", "no pasó la verificación ("]) {
+    // Desde el 24 nov el aviso (armarlo, en qué va, por qué falló) es `AvisoDelResumen`, que va antes del marco. Desde el
+    // 26 nov armarlo y rehacerlo es «Actualizar con Nexus», arriba del diagnóstico (PasoEscala): tampoco entra al marco.
+    expect(resumen).not.toContain("Rehacer con IA");
+    for (const control of ["<AvisoDelResumen", "no pasó la verificación ("]) {
       const donde = resumen.indexOf(control);
       expect(donde, control).toBeGreaterThan(-1);
       expect(donde, control).toBeLessThan(marco);
     }
     const aviso = pagina.slice(pagina.indexOf("function AvisoDelResumen("), pagina.indexOf("export default function PaginaDeLaEscala"));
-    for (const control of ["Armar el Resumen con IA", "Falta armar el Resumen", "Nexus está armando el Resumen"]) expect(aviso, control).toContain(control);
+    for (const control of ["Falta armar el Resumen", "Nexus está armando el Resumen"]) expect(aviso, control).toContain(control);
     expect(resumen).not.toMatch(/rs-barra|rd-btn/);
   });
 

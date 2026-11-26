@@ -91,7 +91,8 @@ describe("2 · arriba del Resumen: «Falta armar el Resumen» y en qué va", () 
     expect(aviso).toBeLessThan(marco);
     expect(resumen).toMatch(/\{res\.at \? \(\s*<ResumenDeLaEscalaVista[\s\S]*?\) : \(\s*<PlantillaDelResumenVista/);
     expect(pagina).toContain('title="Falta armar el Resumen"');
-    expect(pagina).toContain("Armar el Resumen con IA");
+    // Desde el 26 nov lo arma «Actualizar con Nexus», arriba del diagnóstico: el aviso no trae su botón.
+    expect(pagina).not.toContain("Armar el Resumen con IA");
   });
 
   it("el aviso pinta lo que decide `queDiceElAviso` (lib, con su prueba): la fase, el reloj sin anunciarse, cómo seguir", () => {
@@ -99,10 +100,11 @@ describe("2 · arriba del Resumen: «Falta armar el Resumen» y en qué va", () 
     expect(pagina).toContain(
       "const aviso = queDiceElAviso({ resumenEn: res.at, corrida: corridaDelResumen, lanzando: lanzandoElResumen, sinSaber: sinSaberDelResumen, nuevas, cerrado: falloCerrado, ubicarPrimero });",
     );
-    // Con respuestas que «Ubicar» tampoco leyó (25 nov): primero «Volver a ubicar», el mismo pedido que la línea.
+    // Con respuestas que «Ubicar» tampoco leyó (25 nov): lo dice; volver a ubicar primero lo hace cumplir «Actualizar con
+    // Nexus» (26 nov, validar-la-escala.test.ts).
     const nuevas = aviso.slice(aviso.indexOf('case "nuevas":'));
-    expect(nuevas).toMatch(/if \(aviso\.ubicar\)[\s\S]{0,1200}onClick=\{ubicar\.onUbicar\}[\s\S]{0,200}"Volver a ubicar"/);
-    expect(pagina).toContain("ubicar={{ onUbicar: () => void ubicacion.ubicar(),");
+    expect(nuevas).toContain('aviso.ubicar ? (ubicando ? "Nexus está ubicando la escala con lo que contaron." : "La escala todavía no las leyó.") : "El Resumen todavía no las leyó."');
+    expect(pagina).toContain("ubicando={ubicacion.ubicando}");
     // Lo decide `lasNotasNuevas` (con su prueba): solo en la preventa, y desde lo que leyó el Resumen que hay.
     expect(pagina).toMatch(/lasNotasNuevas\(\{[\s\S]{0,300}resumenDesde: res\.at \? leidoHasta\(res\.at, laQueLoArmo\) : null,\s*enLaPreventa: lugar === "preventa",/);
     for (const tipo of ["corriendo", "sin-saber", "detenida", "falta", "fallo", "nuevas"]) expect(aviso, tipo).toContain(`case "${tipo}":`);
@@ -112,13 +114,16 @@ describe("2 · arriba del Resumen: «Falta armar el Resumen» y en qué va", () 
     expect(aviso).toContain("La última vez que se pidió, no se pudo. {aviso.fallo}");
   });
 
-  it("⛔ un solo botón de la IA a la vista: con el suyo en el aviso, la fila de abajo no repite «Rehacer con IA»", () => {
-    expect(resumen).toContain('const avisoConBoton = aviso?.tipo === "nuevas" || aviso?.tipo === "detenida";');
-    expect(resumen).toMatch(/\{!avisoConBoton && \(\s*<Button size="sm" variant="secondary"[\s\S]{0,160}?Rehacer con IA/);
-    // El fallo no trae su propio «Volver a intentar»: el de la fila basta.
+  it("⛔ un solo botón de la IA, arriba del diagnóstico: ni el aviso ni la fila del Resumen traen el suyo (26 nov)", () => {
     const aviso = pagina.slice(pagina.indexOf("function AvisoDelResumen("), pagina.indexOf("export default function PaginaDeLaEscala"));
-    const fallo = aviso.slice(aviso.indexOf('case "fallo":'), aviso.indexOf('case "nuevas":'));
-    expect(fallo).not.toContain("boton(");
+    // El único botón del aviso es «Volver a mirar» (no es de la IA: vuelve a preguntar en qué va).
+    expect(aviso.match(/<Button/g)).toHaveLength(1);
+    expect(aviso).toContain('<Button size="sm" variant="secondary" onClick={onMirar}>Volver a mirar</Button>');
+    for (const t of ["Rehacer con IA", "Volver a ubicar", "Armar el Resumen con IA", "avisoConBoton"]) expect(resumen, t).not.toContain(t);
+    // El que queda: «Actualizar con Nexus» (PasoEscala), que decide `queHaceActualizar` (con su prueba).
+    const paso = codigo("components/exploraciones/PasoEscala.tsx");
+    expect(paso).toContain("const que = queHaceActualizar({");
+    expect(paso).toContain('{esperando ? "Nexus está actualizando…" : "Actualizar con Nexus"}');
   });
 
   it("el fallo cerrado no vuelve al cambiar de vista ni al recargar (se recuerda en este navegador, por exploración)", () => {
@@ -154,22 +159,20 @@ describe("3 y 4 · arriba la vista, «Publicado…» y «Acceso»; la línea de 
   const principal = paso.slice(paso.indexOf("export default function PasoEscala"));
   const escala = paso.slice(paso.indexOf("function DondeEstaHoy("), paso.indexOf("export default function PasoEscala"));
 
-  it("arriba: «Como lo ve el cliente» / «Comparar áreas» y, a la derecha, «Publicar» y «Acceso»; sin la línea", () => {
+  it("arriba de todo, qué falta validar (26 nov); después «Como lo ve el cliente» / «Comparar áreas», «Publicar» y «Acceso»", () => {
+    const arriba = principal.indexOf("<ArribaDelDiagnostico");
     const vista = principal.indexOf("<ComoSeVe");
-    expect(vista).toBeGreaterThan(-1);
+    expect(arriba).toBeGreaterThan(-1);
+    expect(arriba).toBeLessThan(vista);
     expect(vista).toBeLessThan(principal.indexOf("<PublicarLaEscala />"));
     expect(principal.indexOf("<AccesoALaEscala />")).toBeLessThan(principal.indexOf("<DondeEstaHoy"));
-    expect(principal).not.toContain("<LineaDeLaUbicacion />}");
-    expect(principal).toContain('linea={lugar === "preventa" ? <LineaDeLaUbicacion /> : null}');
+    expect(principal).toContain("<DondeEstaHoy vista={vista} />");
   });
 
-  it("⛔ la línea va DEBAJO de la página y antes de «Para completar el diagnóstico»", () => {
-    const vistaDeLaPagina = escala.indexOf("<PaginaDeLaEscala />");
-    const linea = escala.indexOf("{linea}");
-    const completar = escala.indexOf("<ParaCompletarElDiagnostico />");
-    expect(vistaDeLaPagina).toBeGreaterThan(-1);
-    expect(linea).toBeGreaterThan(vistaDeLaPagina);
-    expect(completar).toBeGreaterThan(linea);
+  it("⛔ la línea de la ubicación sube con «Actualizar con Nexus» (26 nov): debajo de la cabecera, solo en la preventa", () => {
+    expect(escala).not.toContain("{linea}");
+    expect(paso).toContain('return lugar === "preventa" ? <ArribaEnLaPreventa /> :');
+    expect(paso).toContain("debajo={<LineaDeLaUbicacion u={u} />}");
   });
 
   it("se fue el título «Dónde está hoy»; las dos vistas siguen", () => {
@@ -186,7 +189,7 @@ describe("5 · «Para completar el diagnóstico» y «Responder con Nexus»", ()
 
   it("junta lo de antes: lo que frena a cada equipo, las hipótesis Y lo sin dato, cada una con su pregunta y «Llevar a la sesión N»", () => {
     expect(completar).toContain("fraseDelFreno({");
-    expect(completar).toContain("fraseDeLaCuenta(cuenta)");
+    expect(completar).toContain("fraseDeLaValidacion(cuenta)");
     expect(completar).toContain("...sinDato.map((d) => ({ d, esHipotesis: false }))");
     expect(completar).toContain("<PreguntaParaLlevar");
     expect(completar).toContain("<PreparacionParaEngagement />");

@@ -14,8 +14,9 @@
  *      un nivel («Hay 1 respuesta que todavía no se usó para ubicar la escala: puede cambiar un nivel.»). No dice «nueva»:
  *      después del deploy, una nota de octubre nunca se leyó, pero no es nueva.
  *   4. La escala está al día pero el Resumen se armó antes de alguna reunión, o leyó cortadas reuniones largas antes de que
- *      se leyeran enteras (24 nov, `cortadasQueSeLeenEnteras`): se rehace con «Rehacer con IA», en el Resumen (el botón de
- *      esta línea no lo arma: no se le suma un segundo botón).
+ *      se leyeran enteras (24 nov, `cortadasQueSeLeenEnteras`): solo lo dice. Desde el 26 nov la línea no tiene botón (va
+ *      debajo de la cabecera de arriba del diagnóstico) y lo rehace «Actualizar con Nexus» cuando no queda nada por validar
+ *      (validar-la-escala.ts › `queHaceActualizar`, que también lee `estado` y `boton.fuerte` de esta línea).
  *   5. Al día: cuándo se ubicó y con cuántas reuniones.
  * Cuenta solo las reuniones que «Ubicar» lee (`sirveParaUbicar`: de Meet, con texto, ni cortadas ni de puertas adentro), y
  * de esas, las que leería hoy (las más nuevas, `REUNIONES_QUE_LEE_UBICAR`).
@@ -211,12 +212,13 @@ export function lineaDeLaEscala(o: {
     if (marcas > 0)
       return {
         estado: "resumenAtrasado",
-        texto: `El Resumen ${[antes, largas, clase].filter(Boolean).join(" y ")}: vuelve a ubicar la escala y rehaz el Resumen con IA.`,
+        // Sin «vuelve a ubicar… y rehaz…» (26 nov): ese orden lo hace cumplir «Actualizar con Nexus» (validar-la-escala.ts).
+        texto: `El Resumen ${[antes, largas, clase].filter(Boolean).join(" y ")}.`,
         boton: { ...volver, fuerte: true },
       };
     return {
       estado: "resumenAtrasado",
-      texto: `La escala está al día, pero el Resumen ${[antes, largas].filter(Boolean).join(" y ")}: rehazlo con IA en el Resumen${cortadas > 0 ? ` para que ${cortadas === 1 ? "la lea entera" : "las lea enteras"}` : ""}.`,
+      texto: `La escala está al día, pero el Resumen ${[antes, largas].filter(Boolean).join(" y ")}.`,
       boton: volver,
     };
   }

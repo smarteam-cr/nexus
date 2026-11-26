@@ -199,7 +199,8 @@ describe("el lote", () => {
     const deshecho = aplicarOperaciones(tocado.estado, [{ op: "deshacerUso", ids }]);
     expect(deshecho.ok).toBe(true);
     if (!deshecho.ok) return;
-    expect(deshecho.estado.contenido.chequeo["1.3"]).toEqual({ nivel: "E", fuente: "vendedor" });
+    // Marcado a mano: con quién lo validó (26 nov).
+    expect(deshecho.estado.contenido.chequeo["1.3"]).toMatchObject({ nivel: "E", fuente: "vendedor", validada: { en: expect.any(String) } });
     expect(deshecho.estado.areas).toEqual(["1"]);
     expect(deshecho.estado.contenido.usadas?.map((u) => u.id)).toEqual([nivel.id]);
   });

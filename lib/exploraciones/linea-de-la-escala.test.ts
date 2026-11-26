@@ -74,7 +74,7 @@ describe("la línea de arriba de La escala", () => {
     const resumenEn = "2026-11-11T12:00:00.000Z";
     const l = linea({ resumenEn });
     expect(l.estado).toBe("resumenAtrasado");
-    expect(l.texto).toBe("La escala está al día, pero el Resumen se armó antes de la última reunión: rehazlo con IA en el Resumen.");
+    expect(l.texto).toBe("La escala está al día, pero el Resumen se armó antes de la última reunión.");
     expect(l.boton.fuerte).toBe(false);
     // Lo de la escala va primero: con reuniones nuevas para ubicar, eso es lo que dice.
     expect(linea({ resumenEn, reuniones: [...ANTES, meet("2026-11-21T15:00:00.000Z")] }).estado).toBe("nuevas");
@@ -121,9 +121,9 @@ describe("las reuniones que el Resumen leyó cortadas o casi sin la empresa (24 
     expect(cortadasQueSeLeenEnteras(DE_ANTES)).toBe(1);
     const l = linea({ resumenEn: "2026-11-24T14:49:00.000Z", cortadas: 1 });
     expect(l.estado).toBe("resumenAtrasado");
-    expect(l.texto).toBe("La escala está al día, pero el Resumen leyó cortada 1 reunión larga: rehazlo con IA en el Resumen para que la lea entera.");
+    expect(l.texto).toBe("La escala está al día, pero el Resumen leyó cortada 1 reunión larga.");
     expect(linea({ resumenEn: "2026-11-11T14:49:00.000Z", cortadas: 3 }).texto).toBe(
-      "La escala está al día, pero el Resumen se armó antes de la última reunión y leyó cortadas 3 reuniones largas: rehazlo con IA en el Resumen para que las lea enteras.",
+      "La escala está al día, pero el Resumen se armó antes de la última reunión y leyó cortadas 3 reuniones largas.",
     );
     // Sin Resumen no hay nada que rehacer.
     expect(linea({ resumenEn: null, cortadas: 2 }).estado).toBe("alDia");

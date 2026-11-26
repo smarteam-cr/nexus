@@ -241,7 +241,8 @@ export function ChipDeProcedencia({ procedencia }: { procedencia: Procedencia })
 
 /**
  * De qué es una pregunta, en una línea: «Arquitectura · Quién decide» o «Escala · Datos · hoy creemos
- * ● Deficiente hipótesis». `corta` quita el «Arquitectura · / Escala ·» (la vista por sección ya lo dice).
+ * ● Deficiente». `corta` quita el «Arquitectura · / Escala ·» (la vista por sección ya lo dice). Sin «hipótesis» (26 nov: lo
+ * que propuso Nexus va sin rótulo; «hoy creemos» ya dice que no lo confirmó el cliente).
  */
 export function DeQueEs({ p, corta = false, conProcedencia = true }: { p: PreguntaParaMostrar; corta?: boolean; conProcedencia?: boolean }) {
   const { escala, mapa, exp, marco } = useLienzo();
@@ -259,7 +260,6 @@ export function DeQueEs({ p, corta = false, conProcedencia = true }: { p: Pregun
           {nombre} · {pos ? (pos.clase === "evidencia" ? "está en" : "hoy creemos") : "sin dato"}
         </span>
         {pos && <NivelChip nivel={pos.nivel} className="text-fg-secondary" />}
-        {pos?.clase === "hipotesis" && <span className="text-xs text-warn-ink">hipótesis</span>}
       </>
     );
   } else if (lado === "tarjeta") {

@@ -88,9 +88,10 @@ describe("2 · arriba, una sola línea", () => {
        25 nov el pedido vive en `useUbicarLaEscala`: lo comparten la línea y el aviso de arriba del Resumen. */
     const ubicar = fs.readFileSync(path.join(process.cwd(), "components", "exploraciones", "useUbicarLaEscala.ts"), "utf8").replace(/\r\n/g, "\n");
     expect(ubicar).toContain('lanzar("posicionar", conLoQueYaSabemos ? { proyectoDeContexto: contexto } : {})');
-    expect(paso).toContain("onClick={() => void ubicar()}");
-    // Desde la noche del 24 nov va debajo de la página (escala-sin-resumen.test.ts), solo en la preventa.
-    expect(paso).toContain('linea={lugar === "preventa" ? <LineaDeLaUbicacion /> : null}');
+    // Desde el 26 nov el botón es «Actualizar con Nexus», arriba (validar-la-escala.test.ts): ubica o rehace el Resumen.
+    expect(paso).toContain('onClick={() => void (que.accion === "resumen" ? armarElResumen() : ubicar.ubicar())}');
+    // La línea, sin botón, debajo de la cabecera de arriba y solo en la preventa (escala-sin-resumen.test.ts).
+    expect(paso).toContain("debajo={<LineaDeLaUbicacion u={u} />}");
     // Solo «Ubicar» cambia la frase a «ubicando»; otro trabajo del agente solo hace esperar al botón.
     expect(ubicar).toContain('ubicando: corriendo && corrida?.modo === "posicionar"');
     expect(paso).toMatch(/lineaDeLaEscala\(\{[\s\S]{0,600}\n {4}ubicando,\n/);

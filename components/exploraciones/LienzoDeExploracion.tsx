@@ -57,6 +57,7 @@ import { avisoDelLote, queHaceUsar, usadasDeHoy, type LugarDelLote } from "@/lib
 import { camposDeLaFichaQueToca } from "@/lib/exploraciones/a-la-ficha";
 import { idsDeLaEscala, type EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { chequeoConfirmado, chequeoDelMapa, posicionesDelMapa } from "@/lib/exploraciones/mapa";
+import { cuentaDeLaValidacion, marcaDelRiel, partesQueCuentan } from "@/lib/exploraciones/validar-la-escala";
 import { definicionEnElMarco, marcoDe } from "@/lib/exploraciones/marco";
 import { queSigueDelProyecto } from "@/lib/exploraciones/avance-del-proyecto";
 import { sePuedeReintentar } from "@/lib/exploraciones/reintento";
@@ -105,7 +106,7 @@ import { EVENTO_DEL_RECORRIDO, type AccionDelRecorrido } from "@/lib/recorridos/
 const DE_QUE_VA: Record<Exclude<PasoDelLienzoUI, "exploracion" | "informacion" | "procesos">, string> = {
   resumen: "Lo que se sabe del prospecto. Toca una tarjeta para completarla o revisar lo que propuso el agente.",
   preparacion: "Con quién vas a hablar, qué es la empresa y cómo abrir la conversación.",
-  escala: "Dónde parece estar cada equipo, con hipótesis y evidencia.",
+  escala: "Dónde está cada equipo en la escala.",
   casos: "Lo que se le puede proponer, según dónde está cada equipo.",
   propuesta: "La propuesta comercial, armada con lo confirmado.",
   analisis: "Cómo se ha trabajado a este prospecto, sesión por sesión, y qué falta diagnosticar antes de proponer.",
@@ -730,7 +731,13 @@ export default function LienzoDeExploracion({
   const lista = listaParaProponer(exp.estado, chequeo).every((p) => p.cumplido);
   // El punto de «Análisis»: verde con alguna sesión analizada, ámbar si hay alguna con transcripción sin analizar.
   const analisisDeVenta = useAnalisisDeLaVenta(exp.id, conAnalisis);
-  const conHipotesis = Object.values(mapa.posiciones).some((p) => p.clase === "hipotesis");
+  // El diagnóstico dice cuántas partes faltan por validar (26 nov): lo mismo que «Validar (N)» arriba de la escala.
+  const validacion = cuentaDeLaValidacion({
+    partes: partesQueCuentan(escala.areas, exp.estado.areas, mapa.posiciones),
+    posiciones: mapa.posiciones,
+    confirmado: exp.estado.contenido.chequeo,
+    pendientes: revisables.filter((it) => piezaDelDestino(it.destino) === "escala"),
+  });
   const filaDe = (p: (typeof PIEZAS)[number]): FilaDelRiel => {
     const porRevisar = deCadaPaso(p);
     let estado: EstadoDePieza;
@@ -747,10 +754,13 @@ export default function LienzoDeExploracion({
         if (!aviso && sinLeer.length > 0) aviso = { corto: `${sinLeer.length} sin leer`, largo: "Reuniones o documentos que el agente todavía no leyó" };
         break;
       }
-      case "escala":
-        estado = porRevisar > 0 ? "pendiente" : chequeo.completo ? "generada" : conHipotesis ? "pendiente" : "vacia";
-        if (!porRevisar && !chequeo.completo && conHipotesis) aviso = { corto: "hipótesis", largo: "El mapa sale en parte de hipótesis: confírmalas en las reuniones" };
-        break;
+      case "escala": {
+        // Sin «hipótesis» (26 nov): cuántas partes faltan por validar, o ✓ cuando no falta ninguna.
+        const marca = marcaDelRiel(validacion);
+        estado = marca.estado;
+        if (marca.corto) aviso = { corto: marca.corto, largo: marca.largo };
+        return { clave: p, etiqueta: NOMBRE_DEL_PASO[p], estado, ayuda: AYUDA_DEL_ESTADO[estado], aviso, sugeridas: 0 };
+      }
       case "casos":
         estado = porRevisar > 0 ? "pendiente" : Object.keys(exp.estado.contenido.casosDeUso).length > 0 ? "generada" : "vacia";
         break;

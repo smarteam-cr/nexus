@@ -15,8 +15,11 @@
  * «Exploración» vuelve a su página de inicio.
  *
  * El punto de cada pieza: azul si el agente sugirió algo ahí (con cuántas, en azul), ámbar si pide
- * atención (hipótesis, reuniones sin leer, lista para proponer), verde si ya tiene contenido, gris si
- * todavía nada. En pantallas chicas se acuesta y las sesiones se eligen en Exploración.
+ * atención (reuniones sin leer, lista para proponer, partes del diagnóstico por validar), verde si ya tiene
+ * contenido, gris si todavía nada. El Diagnóstico de rendimiento (26 nov) dice cuántas partes faltan por validar
+ * («4», con «4 partes por validar» al pasar el cursor) y ✓ en verde cuando no falta ninguna
+ * (lib/exploraciones/validar-la-escala.ts › `marcaDelRiel`). En pantallas chicas se acuesta y las sesiones se eligen en
+ * Exploración.
  */
 import type { EstadoDePieza, FilaDePieza } from "@/components/canvas/SelectorDePiezas";
 import AvisoDeFicha from "@/components/clients/AvisoDeFicha";
@@ -83,7 +86,11 @@ function Fila({
           {sugeridas.texto ?? sugeridas.n}
         </span>
       ) : (
-        aviso && <span className={cn("flex-shrink-0 text-xs", estado === "pendiente" ? "text-warn-ink" : "text-fg-muted")}>{aviso}</span>
+        aviso && (
+          <span className={cn("flex-shrink-0 text-xs tabular-nums", estado === "pendiente" ? "text-warn-ink" : estado === "generada" ? "font-semibold text-success-ink" : "text-fg-muted")}>
+            {aviso}
+          </span>
+        )
       )}
     </button>
   );

@@ -4,16 +4,18 @@
  * PasoEscala — dónde parece estar cada equipo en la escala, y por qué.
  *
  * Tercera vuelta (2026-11-08, Elías con Centauro Solutions): «lo importante es que el vendedor VEA la escala, con los
- * nodos y el puntaje, exactamente como se ve en el diagnóstico de rendimiento». En este orden (el de la noche del 24 nov,
- * Elías con TEC · AE):
- *   1. Arriba, «Como lo ve el cliente» / «Comparar áreas» y, a la derecha, «Publicar» y «Acceso».
- *   2. Lo que sugiere el agente, en una franja: cuántas con evidencia y cuántas por explorar, «Pasar las N al mapa» y la
- *      lista solo si se pide. Sin «Usadas hoy» (el aviso de cada uso ya deshace).
+ * nodos y el puntaje, exactamente como se ve en el diagnóstico de rendimiento». En este orden (el del 26 nov, Elías: «la
+ * pantalla interna no tiene que explicarse»; quien la abre sabe que Nexus la precargó y que le toca validarla):
+ *   1. Arriba de todo, qué falta validar («Faltan 4 de 12 por validar» o «✓ Validado por Marco · 26 nov»), «Validar (N)»
+ *      (lo principal: lo propuesto una por una), «Usar todas» y el único botón de la IA, «Actualizar con Nexus»
+ *      (`ArribaDelDiagnostico`). Debajo, en la preventa, la LÍNEA de cómo se ubicó la escala, sin botón
+ *      (`LineaDeLaUbicacion`). Reemplaza a la franja «El agente sugiere… por explorar… Nada se confirma solo».
+ *      Después, «Como lo ve el cliente» / «Comparar áreas» y, a la derecha, «Publicar» y «Acceso».
+ *   2. (Hasta el 26 nov: la franja de lo que sugiere el agente, con «Revisar una por una» y «Pasar las N al mapa».)
  *   3. La página (sin el título «Dónde está hoy» desde el 24 nov, ni la frase de lo explorado ni el objetivo: Elías,
- *      «demasiada información»). Debajo, la LÍNEA de cómo se ubicó la escala (`LineaDeLaUbicacion`, solo la preventa;
- *      hasta el 24 nov iba arriba): si hay algo nuevo que llevar a la escala, con «Ubicar con las reuniones» (el agente lee
- *      las transcripciones de las sesiones y ubica las tres áreas con su evidencia, y lo que no tiene evidencia directa
- *      como hipótesis por explorar). Y debajo, «Para completar el diagnóstico» (`ParaCompletarElDiagnostico`).
+ *      «demasiada información»). Un solo vocabulario para cada parte (lib/exploraciones/validar-la-escala.ts): lo que
+ *      propuso Nexus, sin rótulo; «✓ validado»; «sin dato». Y debajo, «Para completar el diagnóstico»
+ *      (`ParaCompletarElDiagnostico`).
  *      En «Comparar áreas», las tres áreas como botones que se
  *      PRESIONAN (cuarta vuelta, 2026-11-08: «se pueden elegir varias, y se ven en el mismo radar, una sobre otra, cada
  *      una de un color»). Se ven con el RADAR DEL DIAGNÓSTICO (`RadarDeUnaEmpresa`, el mismo de la página del cliente:
@@ -44,8 +46,8 @@
  * escala»), no «Ubicar con las reuniones». «Acceso» (30 oct, cuenta y preventa): el enlace con que el cliente la ve y
  * qué equipos ve (AccesoALaEscala.tsx).
  */
-import { useEffect, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
-import { Button, Selector } from "@/components/ui";
+import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { Button, Selector, useToast } from "@/components/ui";
 import { BOTON_DE_HERRAMIENTA, BOTON_DE_HERRAMIENTA_ACTIVO } from "@/components/ui/sistema";
 import { PUNTO_DE_NIVEL } from "@/components/escala/niveles";
 import RadarDeUnaEmpresa from "@/components/escala/RadarDeUnaEmpresa";
@@ -66,24 +68,39 @@ import { claveDeLaEleccion, guardarLaEleccion, leerLaEleccion, suscribirseALoGua
 import { cn } from "@/lib/cn";
 import type { AreaDelChequeo } from "@/lib/escala/chequeo";
 import type { ClaveDeCapa } from "@/lib/escala/documento/tipos";
-import { esHipotesisDeNivel, type DestinoDePropuesta, type ItemPropuesto } from "@/lib/exploraciones/contenido";
 import type { AreaDelLienzo, DimensionDelLienzo, EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { fraseDelFreno, ordenParaExplorar, partesParaExplorar } from "@/lib/exploraciones/equipos-de-la-escala";
 import { abrirNexusEnLaPreventa } from "@/lib/exploraciones/abrir-nexus";
-import { lasNotasNuevas, respuestaDe, ultimaUbicacion } from "@/lib/exploraciones/completar-el-diagnostico";
-import { nivelesDeUnaNota, nivelesSugeridosEnPalabras } from "@/lib/exploraciones/notas-del-equipo";
+import { lasNotasNuevas, leidoHasta, respuestaDe, ultimaUbicacion } from "@/lib/exploraciones/completar-el-diagnostico";
+import { cuantoLleva } from "@/lib/exploraciones/corrida-del-resumen";
 import { diaCorto } from "@/lib/exploraciones/fechas";
-import { chequeoDelMapa, cuentaDelArea, fraseDeLaCuenta, loQueLaFrena, type PosicionEnElMapa } from "@/lib/exploraciones/mapa";
-import { cortadasQueSeLeenEnteras, lineaDeLaEscala, marcasQueCambiaron } from "@/lib/exploraciones/linea-de-la-escala";
+import { chequeoDelMapa, loQueLaFrena, type PosicionEnElMapa } from "@/lib/exploraciones/mapa";
+import { cortadasQueSeLeenEnteras, lineaDeLaEscala, marcasQueCambiaron, type LineaDeLaEscala } from "@/lib/exploraciones/linea-de-la-escala";
+import {
+  cuentaDeLaValidacion,
+  estadoDeLaParte,
+  fraseDeLaValidacion,
+  lineaDeLaValidacion,
+  paraValidar,
+  partesQueCuentan,
+  queHaceActualizar,
+  rotuloDeLaParte,
+  validacionDelArea,
+  validadoDespues,
+} from "@/lib/exploraciones/validar-la-escala";
+import { useMe } from "@/hooks/useMe";
 import AccesoALaEscala from "./AccesoALaEscala";
 import PublicarLaEscala from "./PublicarLaEscala";
 import ListaQueSeAnima from "./ListaQueSeAnima";
 import { AL_LUGAR, DEL_LUGAR, useLienzo } from "./contexto";
-import FranjaDeSugerencias, { IconoDeSugerencia } from "./FranjaDeSugerencias";
+import { IconoDeSugerencia } from "./FranjaDeSugerencias";
 import { ConQueSeMide } from "./Identificacion";
 import PanelDelAgente from "./PanelDelAgente";
 import { piezaDelDestino } from "./piezas";
-import { BotonUsarTodas, FilaSugerida } from "./Propuestas";
+import { BotonUsarTodas } from "./Propuestas";
+import ValidarLaEscala from "./ValidarLaEscala";
+import { useResumenEnCurso } from "./useResumenEnCurso";
+import { useResumenEnLaPagina } from "./useResumenEnLaPagina";
 import PreparacionParaEngagement from "./PreparacionParaEngagement";
 import { QueVaPrimero } from "./QueVaPrimero";
 import { useAreasDeLaEscala } from "./useAreasDeLaEscala";
@@ -96,30 +113,7 @@ import PaginaDeLaEscala from "./PaginaDeLaEscala";
 /** «A», «A y B», «A, B y C». */
 const enLista = (xs: string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`);
 
-/** Dónde cae una sugerencia de esta pieza, en una línea: «Ventas · Datos», «Áreas», «Con qué se mide». */
-function dondeCae(d: DestinoDePropuesta, escala: EscalaDelLienzo): string {
-  const deDim = (id: string) => {
-    const area = escala.areas.find((a) => a.dimensiones.some((x) => x.id === id));
-    const dim = area?.dimensiones.find((x) => x.id === id);
-    return area && dim ? `${area.nombre} · ${dim.nombre}` : id;
-  };
-  switch (d.tipo) {
-    case "nivel":
-    case "aExplorar":
-      return deDim(d.dimensionId);
-    case "falta":
-      return deDim(d.criterioId.split(".").slice(0, 2).join("."));
-    case "area":
-      return "Áreas";
-    case "edicion":
-    case "perfil":
-      return "Con qué se mide";
-    default:
-      return "La escala";
-  }
-}
-
-/** Un área fuera de la preventa: se suma desde su pestaña. */
+/** Un área fuera de la preventa: se suma desde su pestaña. Sin la ayuda «Súmala si…» (26 nov: la pantalla no se explica). */
 function AreaFuera({ area, onSumar }: { area: AreaDelLienzo; onSumar: () => void }) {
   const { puedeEditar, guardando, lugar } = useLienzo();
   const enLaCuenta = lugar === "cuenta";
@@ -127,13 +121,6 @@ function AreaFuera({ area, onSumar }: { area: AreaDelLienzo; onSumar: () => void
     <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-line bg-surface-muted px-5 py-7 text-center">
       <p className="text-sm font-semibold text-fg">
         {enLaCuenta ? `${area.nombre} no está en juego en la escala de la cuenta` : `Todavía no hay nada de ${area.nombre} en las reuniones`}
-      </p>
-      <p className="max-w-[460px] text-[13px] text-fg-muted">
-        {enLaCuenta
-          ? "Súmala si el cliente la trabaja o paga licencias que no usa. Después, «Actualizar escala» la ubica con lo que Nexus ya sabe."
-          : lugar === "preventa"
-            ? "Si se habló de ella, «Ubicar con las reuniones» la llena con hipótesis por explorar, aunque no esté en juego. Súmala a la preventa si el prospecto la nombra o paga licencias que no usa."
-            : "Súmala si el cliente la nombra o paga licencias que no usa. Al sumarla, el agente la ubica en la escala con lo que ya sabe."}
       </p>
       {puedeEditar && (
         <Button size="sm" variant="secondary" className="mt-1" disabled={guardando} onClick={onSumar}>
@@ -148,14 +135,21 @@ function AreaFuera({ area, onSumar }: { area: AreaDelLienzo; onSumar: () => void
 
 /**
  * UNA línea (24 nov; Elías: «lo único que hay que entender es si alguna parte tiene que actualizarse»): si hay reuniones
- * de después de la última vez que se ubicó la escala (o de que se armó el Resumen), y el botón de siempre, el agente que
- * ubica la escala con las TRANSCRIPCIONES de las sesiones (modo «posicionar», el mismo de «Actualizar escala» de la
- * cuenta): lo lanza una persona, nunca corre solo ni en cada visita. Lo que dice, en lib/exploraciones/linea-de-la-escala.ts.
- * Reemplaza la fila «1 Ubicar con las reuniones · 2 Confirmar en el mapa · 3 Armar el Resumen» y lo de «Dónde está hoy».
- * Desde la noche del 24 nov (Elías con TEC · AE) va DEBAJO de la página, no arriba: arriba quedan «Publicado…» y «Acceso».
+ * de después de la última vez que se ubicó la escala (o de que se armó el Resumen). Lo que dice, en
+ * lib/exploraciones/linea-de-la-escala.ts. Desde el 26 nov no tiene botón: ubicar (el agente que lee las TRANSCRIPCIONES
+ * de las sesiones, modo «posicionar») lo lanza «Actualizar con Nexus», arriba, que lee el estado de esta línea; la línea va
+ * debajo de esa cabecera, con el proyecto de contexto. Lo lanza una persona, nunca corre solo ni en cada visita.
  */
-function LineaDeLaUbicacion() {
-  const { exp, puedeEditar } = useLienzo();
+function useLineaDeLaUbicacion(): {
+  linea: LineaDeLaEscala;
+  proyectos: ReturnType<typeof useUbicarLaEscala>["proyectos"];
+  contexto: string | null;
+  elegir: (id: string | null) => void;
+  corriendo: boolean;
+  lanzando: boolean;
+  ubicar: () => Promise<unknown> | void;
+} {
+  const { exp } = useLienzo();
   const { pestanas } = useSesiones();
   /* La preventa de un cliente (24 nov) parte de lo que ya sabemos: el botón lo dice mientras no haya sesiones de
      diagnóstico, y se elige el proyecto que se lee como contexto. La elección la comparte el aviso de arriba del Resumen
@@ -184,11 +178,18 @@ function LineaDeLaUbicacion() {
       enLaPreventa: true,
     }).sinUbicar,
   });
+  return { linea, proyectos, contexto, elegir, corriendo, lanzando, ubicar };
+}
+
+/** La línea de cómo se ubicó la escala, sin botón (el de la IA es «Actualizar con Nexus»), con el proyecto de contexto. */
+function LineaDeLaUbicacion({ u }: { u: ReturnType<typeof useLineaDeLaUbicacion> }) {
+  const { puedeEditar } = useLienzo();
+  const { linea, proyectos, contexto, elegir, corriendo, lanzando } = u;
   return (
-    <div role="status" aria-label="Cómo se ubicó la escala" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-secondary">
-      <span className={cn("min-w-0", linea.boton.fuerte && "font-medium text-fg")}>{linea.texto}</span>
+    <div role="status" aria-label="Cómo se ubicó la escala" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
+      <span className="min-w-0">{linea.texto}</span>
       {puedeEditar && proyectos.length > 0 && (
-        <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
+        <span className="inline-flex items-center gap-1.5">
           Con el contexto de
           <Selector
             etiqueta="El proyecto que se lee como contexto al ubicar la escala"
@@ -200,24 +201,6 @@ function LineaDeLaUbicacion() {
           />
         </span>
       )}
-      {puedeEditar && (
-        <Button
-          size="sm"
-          variant={linea.boton.fuerte ? "primary" : "ghost"}
-          loading={lanzando}
-          disabled={corriendo}
-          title={
-            corriendo && linea.estado !== "ubicando"
-              ? "Nexus está trabajando en esta preventa: cuando termine, puedes ubicar la escala."
-              : conLoQueYaSabemos
-                ? "El agente lee las sesiones (primero las de diagnóstico) y lo que ya sabemos de la empresa: sus reuniones con Smarteam en resumen, la memoria, el proyecto que elijas y las notas del equipo. Ubica Ventas, Marketing y Servicio: lo que dijo el cliente o una nota del equipo, con su cita, y lo demás como hipótesis por explorar. Nada se confirma solo."
-                : "El agente lee las transcripciones de las sesiones y las notas del equipo, y ubica Ventas, Marketing y Servicio: lo que dijo el cliente o una nota del equipo, con su cita, y lo demás como hipótesis por explorar. Nada se confirma solo."
-          }
-          onClick={() => void ubicar()}
-        >
-          {linea.boton.etiqueta}
-        </Button>
-      )}
     </div>
   );
 }
@@ -225,58 +208,162 @@ function LineaDeLaUbicacion() {
 /** El valor de «Sin un proyecto» en el selector del contexto (un id de proyecto nunca empieza así). */
 const SIN_PROYECTO = "-sin-proyecto";
 
-// ── 2 · Lo que sugiere el agente, arriba y una vez ──────────────────────────
+// ── 2 · Arriba del diagnóstico: qué falta validar, «Validar (N)» y «Actualizar con Nexus» ───────────────────────────
 
-const deLaEscala = (d: DestinoDePropuesta) => piezaDelDestino(d) === "escala";
+/**
+ * Lo que registra el agente de la cuenta (EscalaDeLaCuenta › `AgenteDeLaCuenta`, con su proyecto y su venta de contexto)
+ * para que «Actualizar con Nexus» lo lance desde arriba (26 nov): en la cuenta, ubicar es «actualizar» de su ruta.
+ */
+export interface UbicarDeLaCuenta {
+  ubicar: () => void;
+  lanzando: boolean;
+  corriendo: boolean;
+}
+export const RegistrarUbicarDeLaCuenta = createContext<((u: UbicarDeLaCuenta | null) => void) | null>(null);
 
-/** Las hipótesis de nivel que el agente sugiere y se dibujan en el radar (nadie las usó todavía). */
-function hipotesisPendientes(posiciones: Readonly<Record<string, PosicionEnElMapa>>): ItemPropuesto[] {
-  return Object.values(posiciones).flatMap((p) => (p.origen === "propuesto" && p.clase === "hipotesis" && p.pendiente && esHipotesisDeNivel(p.pendiente) ? [p.pendiente] : []));
+/**
+ * «Actualizar con Nexus» (26 nov, Elías: un solo botón de la IA, arriba). Reemplaza a «Ubicar con las reuniones» /
+ * «Volver a ubicar» / «Actualizar» (la línea de la ubicación), «Actualizar escala» (el agente de la cuenta), y «Armar el
+ * Resumen con IA» / «Rehacer con IA» / «Volver a ubicar» del Resumen. Qué hace lo decide `queHaceActualizar`: ubica si hay
+ * algo que la escala no leyó; con algo por validar no rehace el Resumen; sin nada por validar, arma o rehace el Resumen
+ * si quedó atrás. Nada se confirma ni se publica solo. «✨ Mejorar con IA» y el chat «Nexus» siguen para lo demás.
+ */
+function ActualizarConNexus({
+  linea,
+  ubicar,
+  porValidar,
+  validadas,
+}: {
+  linea: { estado: LineaDeLaEscala["estado"]; boton: { fuerte: boolean } };
+  ubicar: { ubicar: () => unknown; lanzando: boolean; corriendo: boolean };
+  porValidar: number;
+  validadas: number;
+}) {
+  const { exp, puedeEditar, lugar } = useLienzo();
+  const toast = useToast();
+  const resumen = useResumenEnCurso(exp.id);
+  const enLaPagina = useResumenEnLaPagina(exp.id);
+  const guardado = exp.estado.contenido.resumenDeLaEscala;
+  // Las notas que el Resumen no leyó (las mismas del aviso de arriba del Resumen): rehacerlo las lee.
+  const laQueLoArmo = resumen.terminada && resumen.terminada.id === guardado?.agentRunId ? { estado: "DONE", empezo: resumen.terminada.empezo } : null;
+  const notasDelResumen = guardado?.at
+    ? lasNotasNuevas({
+        notas: exp.estado.contenido.notas,
+        autores: exp.estado.contenido.autoresDeLasNotas,
+        corridas: exp.estado.propuesta.corridas,
+        resumenDesde: leidoHasta(guardado.at, laQueLoArmo),
+        enLaPreventa: lugar === "preventa",
+      }).delResumen.total
+    : 0;
+  const que = queHaceActualizar({
+    linea,
+    porValidar,
+    validadas,
+    resumen: {
+      hay: !!guardado?.at,
+      corriendo: resumen.corriendo,
+      detenida: !!resumen.corrida?.detenida,
+      /* La página trae la firma del servidor, pero solo cuando está a la vista: lo validado después de armar el Resumen
+         también lo deja atrás (desde «Comparar áreas», la página no se vuelve a pedir). */
+      atrasado: enLaPagina.escalaCambio || enLaPagina.formatoViejo || notasDelResumen > 0 || validadoDespues(exp.estado.contenido.chequeo, guardado?.at ?? null),
+    },
+  });
+  if (!puedeEditar) return null;
+  const armarElResumen = async () => {
+    const r = await resumen.armar();
+    if (!r.ok) {
+      // Si arrancó y terminó mal, el aviso de arriba del Resumen dice por qué; si ni arrancó, se dice acá.
+      if (!r.corrida) toast.error(r.error);
+      return;
+    }
+    const n = r.corrida.descartados.length;
+    toast.success(`Listo en ${cuantoLleva(r.corrida.empezo, Date.parse(r.corrida.termino ?? new Date().toISOString()))}.${n ? ` ${n === 1 ? "Una cosa no pasó" : `${n} cosas no pasaron`} la verificación.` : ""}`);
+    // Ya estaba corriendo otra (otra pestaña, otra persona): lo que se sumó después de que empezó no entró.
+    if (r.ajena) toast.info("Ya se estaba rehaciendo cuando lo pediste: si sumaste algo después, vuelve a pedirlo.");
+  };
+  const esperando = que.accion === "esperar" || ubicar.lanzando || resumen.lanzando;
+  return (
+    <Button
+      size="sm"
+      variant={que.fuerte ? "primary" : "secondary"}
+      loading={esperando}
+      // Otro trabajo del agente en esta preventa (leer una reunión, la guía): espera a que termine.
+      disabled={esperando || (que.accion === "ubicar" && ubicar.corriendo)}
+      title={que.queHace}
+      onClick={() => void (que.accion === "resumen" ? armarElResumen() : ubicar.ubicar())}
+    >
+      {esperando ? "Nexus está actualizando…" : "Actualizar con Nexus"}
+    </Button>
+  );
+}
+
+/** «Actualizar con Nexus» de la preventa: ubica con las reuniones (y lo que ya sabemos), como la línea de la ubicación. */
+function ActualizarEnLaPreventa({ u, porValidar, validadas }: { u: ReturnType<typeof useLineaDeLaUbicacion>; porValidar: number; validadas: number }) {
+  return <ActualizarConNexus linea={u.linea} ubicar={{ ubicar: u.ubicar, lanzando: u.lanzando, corriendo: u.corriendo }} porValidar={porValidar} validadas={validadas} />;
+}
+
+/** En la cuenta: lo lanza el agente de la ficha (lo que registró); sin él todavía, no hay botón. */
+function ActualizarEnLaCuenta({ deLaCuenta, porValidar, validadas }: { deLaCuenta: UbicarDeLaCuenta | null; porValidar: number; validadas: number }) {
+  const { exp } = useLienzo();
+  if (!deLaCuenta) return null;
+  /* Nunca se ubicó en la cuenta, aunque traiga niveles copiados de la preventa (revisión del 26 nov): lo primero es leer lo
+     que Nexus sabe de la cuenta, no armar el Resumen con lo de la preventa. */
+  const nunca = !exp.estado.propuesta.corridas.some((c) => c.modo === "posicionar");
+  const linea = deLaCuenta.corriendo
+    ? { estado: "ubicando" as const, boton: { fuerte: false } }
+    : nunca
+      ? { estado: "sinUbicar" as const, boton: { fuerte: true } }
+      : { estado: "alDia" as const, boton: { fuerte: false } };
+  return <ActualizarConNexus linea={linea} ubicar={deLaCuenta} porValidar={porValidar} validadas={validadas} />;
 }
 
 /**
- * Una franja: cuántas sugerencias con evidencia y cuántas por explorar, y «Pasar las N al mapa». Las por explorar ya se
- * ven en el radar con su aro punteado; usarlas es lo que las deja llegar a la página del cliente como «por explorar».
+ * ARRIBA DEL DIAGNÓSTICO (26 nov, Elías: «la pantalla interna no tiene que explicarse»). Reemplaza a la franja «El agente
+ * sugiere N niveles con evidencia, M por explorar… Nada se confirma solo» con «Revisar una por una» y «Pasar las N al
+ * mapa»:
+ *   · a la izquierda, qué falta: «Faltan 4 de 12 por validar», o «✓ Validado por Marco · 26 nov» cuando no falta nada
+ *     (lib/exploraciones/validar-la-escala.ts › `lineaDeLaValidacion`; quién, de lo que guardó cada parte);
+ *   · a la derecha, «Validar (N)» (lo principal: recorre lo propuesto una por una, ValidarLaEscala.tsx), «Usar todas»
+ *     (secundaria) y «Actualizar con Nexus»;
+ *   · debajo, en la preventa, la línea de cómo se ubicó la escala (sin botón: antes iba debajo de la página).
  */
-function SugerenciasDeLaEscala() {
-  const { revisables, escala, mapa } = useLienzo();
-  const [verLista, setVerLista] = useState(false);
-  const conEvidencia = revisables.filter((it) => deLaEscala(it.destino));
-  const porExplorar = hipotesisPendientes(mapa.posiciones);
-  const todas = [...conEvidencia, ...porExplorar];
-  if (!todas.length) return null;
-  const niveles = conEvidencia.filter((it) => it.destino.tipo === "nivel").length;
-  // Desde el 25 nov un nivel puede salir de una nota del equipo: la franja no dice «lo que dijo el cliente» de esos.
-  const deUnaNota = nivelesDeUnaNota(conEvidencia);
-  const otras = conEvidencia.length - niveles;
-  const partes = [
-    niveles ? nivelesSugeridosEnPalabras(niveles, deUnaNota) : null,
-    porExplorar.length ? `${porExplorar.length} por explorar` : null,
-    otras ? `${otras} ${otras === 1 ? "cambio" : "cambios"} más (áreas, qué explorar, con qué se mide)` : null,
-  ].filter((x): x is string => !!x);
+function ArribaDelDiagnostico({ deLaCuenta }: { deLaCuenta: UbicarDeLaCuenta | null }) {
+  const { lugar } = useLienzo();
+  return lugar === "preventa" ? <ArribaEnLaPreventa /> : <CabeceraDeLaValidacion nexus={(c) => <ActualizarEnLaCuenta deLaCuenta={deLaCuenta} {...c} />} />;
+}
+
+function ArribaEnLaPreventa() {
+  const u = useLineaDeLaUbicacion();
+  return <CabeceraDeLaValidacion nexus={(c) => <ActualizarEnLaPreventa u={u} {...c} />} debajo={<LineaDeLaUbicacion u={u} />} />;
+}
+
+function CabeceraDeLaValidacion({ nexus, debajo }: { nexus: (c: { porValidar: number; validadas: number }) => ReactNode; debajo?: ReactNode }) {
+  const { exp, escala, mapa, revisables, puedeEditar } = useLienzo();
+  const me = useMe();
+  const [validando, setValidando] = useState(false);
+  const partes = partesQueCuentan(escala.areas, exp.estado.areas, mapa.posiciones);
+  const deLaPieza = revisables.filter((it) => piezaDelDestino(it.destino) === "escala");
+  const items = paraValidar({ partes, posiciones: mapa.posiciones, revisablesDeLaEscala: deLaPieza });
+  const cuenta = cuentaDeLaValidacion({ partes, posiciones: mapa.posiciones, confirmado: exp.estado.contenido.chequeo, pendientes: deLaPieza });
+  const linea = lineaDeLaValidacion(cuenta, me?.email ?? null);
   return (
-    <section aria-label="Lo que sugiere el agente" className="space-y-1.5">
-      <FranjaDeSugerencias
-        acciones={
-          <>
-            {conEvidencia.length > 0 && (
-              <button type="button" onClick={() => setVerLista((v) => !v)} className={verLista ? BOTON_DE_HERRAMIENTA_ACTIVO : BOTON_DE_HERRAMIENTA}>
-                {verLista ? "Ocultar la lista" : "Revisar una por una"}
-              </button>
-            )}
-            <BotonUsarTodas items={todas} lugar="escala" />
-          </>
-        }
-      >
-        El agente sugiere {partes.length > 1 ? `${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}` : partes[0]} en el Diagnóstico de rendimiento. Las por explorar son el aro punteado del radar. Nada se confirma solo.
-      </FranjaDeSugerencias>
-      {verLista && (
-        <ul className="space-y-1.5">
-          {conEvidencia.map((it) => (
-            <FilaSugerida key={it.id} item={it} destino={dondeCae(it.destino, escala)} />
-          ))}
-        </ul>
-      )}
+    <section aria-label="Validar el diagnóstico" className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <p role="status" className={cn("text-sm font-semibold", linea?.completa ? "text-success-ink" : "text-fg")}>
+          {linea ? `${linea.completa ? "✓ " : ""}${linea.texto}` : "Todavía no hay nada que validar"}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {puedeEditar && items.length > 0 && (
+            <Button size="sm" variant="primary" onClick={() => setValidando(true)}>
+              Validar ({items.length})
+            </Button>
+          )}
+          {items.length > 1 && <BotonUsarTodas items={items} lugar="escala" etiqueta="Usar todas" secundario />}
+          {nexus({ porValidar: items.length, validadas: cuenta.validadas })}
+        </div>
+      </div>
+      {debajo}
+      <ValidarLaEscala items={items} abierto={validando} onCerrar={() => setValidando(false)} />
     </section>
   );
 }
@@ -322,13 +409,13 @@ function MarcaDeElegida({ elegida, color }: { elegida: boolean; color: string })
   );
 }
 
-/** Un área como botón que se presiona: su nivel y cuánto tiene con evidencia, o que está fuera. */
+/** Un área como botón que se presiona: su nivel y cuánto tiene validado, o que está fuera. */
 function BotonDeArea({ area, elegida, orden, onElegir }: { area: AreaDelLienzo; elegida: boolean; orden: number; onElegir: () => void }) {
   const { mapa, escala, nombreDeNivel, lugar } = useLienzo();
   const conAlgo = tieneAlgo(area, mapa.posiciones);
   const calculo = orden > 0 || conAlgo ? calculoDelArea(escala, area, mapa.posiciones) : undefined;
-  const cuenta = calculo ? cuentaDelArea(calculo, mapa.posiciones) : null;
-  const todo = !!cuenta && cuenta.hipotesis === 0 && cuenta.sinDato === 0;
+  const cuenta = calculo ? validacionDelArea(area.dimensiones, mapa.posiciones) : null;
+  const todo = !!cuenta && cuenta.porValidar === 0 && cuenta.sinDato === 0;
   const color = colorDelArea(area.id);
   return (
     <button
@@ -365,14 +452,15 @@ function BotonDeArea({ area, elegida, orden, onElegir }: { area: AreaDelLienzo; 
                 <span className={cn("h-2 w-2 rounded-full", PUNTO_DE_NIVEL[calculo.nivel])} aria-hidden="true" />
                 {nombreDeNivel(calculo.nivel)}
                 {calculo.puntaje !== null && <span className="text-xs tabular-nums text-fg-muted">{Math.round(calculo.puntaje)}/100</span>}
-                <span className={cn("text-[11px] font-semibold", todo ? "text-success-ink" : "text-warn-ink")}>{todo ? "con evidencia" : "parece"}</span>
+                {/* Un solo vocabulario (26 nov): «✓ validado» cuando no falta nada; lo propuesto, sin rótulo. */}
+                {todo && <span className="text-[11px] font-semibold text-success-ink">✓ validado</span>}
               </>
             ) : (
               <span className="text-fg-muted">Sin ubicar todavía</span>
             )}
           </span>
           {cuenta && (
-            <span className="text-xs text-fg-muted">{fraseDeLaCuenta(cuenta)}</span>
+            <span className="text-xs text-fg-muted">{fraseDeLaValidacion(cuenta)}</span>
           )}
         </>
       ) : (
@@ -453,7 +541,7 @@ function RadarDeLasAreas({ principal, otras, onElegir }: { principal: AreaDelLie
       const dl = a.dimensiones.find((x) => x.id === d.id);
       if (!dl?.aplica) continue;
       const p = mapa.posiciones[d.id];
-      tarjetas[d.id] = { id: d.id, nombre: d.nombre, area: a.nombre, color, nivel: d.nivel, puntaje: d.puntaje, clase: p?.clase ?? null, porQue: p?.porQue ?? null, pregunta: dl.pregunta };
+      tarjetas[d.id] = { id: d.id, nombre: d.nombre, area: a.nombre, color, nivel: d.nivel, puntaje: d.puntaje, estado: estadoDeLaParte(p), porQue: p?.porQue ?? null, pregunta: dl.pregunta };
     }
     areas.push({ area: a.nombre, color, dimensiones: dimensionesDelRadar(a, c, mapa.posiciones) });
   }
@@ -536,9 +624,7 @@ function AreaConAlgo({
   const { mapa, escala, nombreDeNivel, puedeEditar, guardando, lugar } = useLienzo();
   const calculo = calculoDelArea(escala, area, mapa.posiciones);
   if (!calculo) return null;
-  const cuenta = cuentaDelArea(calculo, mapa.posiciones);
-  const todoConEvidencia = cuenta.hipotesis === 0 && cuenta.sinDato === 0;
-  const verbo = todoConEvidencia ? "está en" : "parece estar en";
+  const cuenta = validacionDelArea(area.dimensiones, mapa.posiciones);
   const aplican = area.dimensiones.filter((d) => d.aplica).length;
   const abierta = abiertaId ? area.dimensiones.find((d) => d.id === abiertaId) : null;
 
@@ -552,7 +638,7 @@ function AreaConAlgo({
             {area.nombre}
             {calculo.nivel ? (
               <>
-                <span className="font-normal text-fg-secondary">{verbo}</span>
+                <span className="font-normal text-fg-secondary">está en</span>
                 <span className="inline-flex items-center gap-1.5">
                   <span className={cn("h-2 w-2 rounded-full", PUNTO_DE_NIVEL[calculo.nivel])} aria-hidden="true" />
                   {nombreDeNivel(calculo.nivel)}
@@ -564,7 +650,7 @@ function AreaConAlgo({
             )}
           </p>
           <p className="text-xs text-fg-muted">
-            {fraseDeLaCuenta(cuenta, aplican)}
+            {fraseDeLaValidacion(cuenta, aplican)}
             {!enJuego && ` · no está en juego ${DEL_LUGAR[lugar]}`}
           </p>
         </div>
@@ -643,10 +729,8 @@ function ParaCompletarElDiagnostico() {
     <section aria-label="Para completar el diagnóstico" className="flex flex-col gap-3">
       <div className="flex flex-col gap-0.5">
         <h4 className="text-sm font-semibold text-fg">Para completar el diagnóstico</h4>
-        <p className="text-xs text-fg-muted">
-          Lo que más frena a cada equipo (la escala lo ubica en su capa más baja: subir eso es lo que lo mueve) y lo que falta saber de cada parte.
-          {conNexus ? " Responde con Nexus lo que ya sepas: queda como nota en «Lo que sabes del cliente» y el Resumen la lee al rehacerlo." : " Pregúntalo en la próxima reunión."}
-        </p>
+        {/* Sin la explicación de lo que hace Nexus con una respuesta (26 nov: la pantalla no se explica). */}
+        <p className="text-xs text-fg-muted">Lo que más frena a cada equipo y lo que falta saber de cada parte.</p>
       </div>
       {/* Sin `etiqueta`: la sección de arriba ya se llama así (dos regiones con el mismo nombre, una dentro de la otra). */}
       <ListaQueSeAnima ids={orden} espacio={3}>
@@ -654,7 +738,7 @@ function ParaCompletarElDiagnostico() {
           const area = escala.areas.find((a) => a.id === id);
           if (!area) return null;
           const calculo = calculoDelArea(escala, area, mapa.posiciones);
-          const cuenta = calculo ? cuentaDelArea(calculo, mapa.posiciones) : null;
+          const cuenta = calculo ? validacionDelArea(area.dimensiones, mapa.posiciones) : null;
           const frena = calculo ? loQueLaFrena(calculo) : null;
           const dims = frena?.dimensiones.map((x) => area.dimensiones.find((d) => d.id === x)).filter((d): d is DimensionDelLienzo => !!d) ?? [];
           const enJuego = exp.estado.areas.indexOf(area.id) + 1;
@@ -679,7 +763,7 @@ function ParaCompletarElDiagnostico() {
                 </h5>
                 {/* Lo que decían los botones de las áreas (8 nov: en «Como lo ve el cliente» no hay botones). */}
                 <span className="text-xs text-fg-muted">
-                  {cuenta ? `${fraseDeLaCuenta(cuenta)} · ` : ""}
+                  {cuenta ? `${fraseDeLaValidacion(cuenta)} · ` : ""}
                   {enJuego > 0 ? `${enJuego}.º en juego` : "salió en las reuniones"}
                 </span>
               </div>
@@ -694,8 +778,9 @@ function ParaCompletarElDiagnostico() {
               )}
               {preguntas.length > 0 ? (
                 <ul className="flex flex-col gap-1.5">
-                  {(todas ? preguntas : preguntas.slice(0, PREGUNTAS_A_LA_VISTA)).map(({ d, esHipotesis }) => {
+                  {(todas ? preguntas : preguntas.slice(0, PREGUNTAS_A_LA_VISTA)).map(({ d }) => {
                     const p = mapa.posiciones[d.id];
+                    const rotulo = rotuloDeLaParte(estadoDeLaParte(p));
                     const pregunta = tarjetas[d.id]?.preguntas[0] ?? d.pregunta;
                     const respuesta = respuestaDe(notas, autoresDeLasNotas, area.nombre, d.nombre);
                     return (
@@ -707,7 +792,9 @@ function ParaCompletarElDiagnostico() {
                         encima={
                           <span className="text-xs text-fg-secondary">
                             <span className="tabular-nums text-fg-muted">{d.id}</span> <span className="font-semibold text-fg">{d.nombre}</span>
-                            {esHipotesis && p ? <span className="text-warn-ink"> · ○ {nombreDeNivel(p.nivel)}, por explorar</span> : <span className="text-fg-muted"> · sin dato todavía</span>}
+                            {/* Un solo vocabulario (26 nov): el nivel que propuso Nexus sin rótulo, «✓ validado», «sin dato». */}
+                            {p && <span className="text-fg-secondary"> · {nombreDeNivel(p.nivel)}</span>}
+                            {rotulo && <span className={estadoDeLaParte(p) === "validada" ? "font-semibold text-success-ink" : "text-fg-muted"}> · {rotulo}</span>}
                           </span>
                         }
                         nota={
@@ -722,7 +809,8 @@ function ParaCompletarElDiagnostico() {
                               onClick={() => abrirNexusEnLaPreventa({ exploracionId: exp.id, pregunta: { equipo: area.nombre, dimension: d.nombre, dimensionId: d.id, pregunta } })}
                               className="text-xs font-semibold text-brand hover:underline"
                             >
-                              {respuesta ? "Sumar algo con Nexus" : "Responder con Nexus"}
+                              {/* Una sola entrada al chat «Nexus» (26 nov): antes, ya respondida, decía «Sumar algo con Nexus». */}
+                              Responder con Nexus
                             </button>
                           ) : null
                         }
@@ -731,7 +819,7 @@ function ParaCompletarElDiagnostico() {
                   })}
                 </ul>
               ) : (
-                <p className="text-xs text-fg-muted">Todas sus partes tienen evidencia: no falta nada que preguntar.</p>
+                <p className="text-xs text-fg-muted">No falta nada que preguntar.</p>
               )}
               {preguntas.length > PREGUNTAS_A_LA_VISTA && (
                 <button type="button" onClick={() => alternar(area.id)} className="self-start text-xs font-semibold text-fg-secondary hover:text-fg hover:underline">
@@ -785,7 +873,7 @@ function ComoSeVe({ vista, onVista }: { vista: Vista; onVista: (v: Vista) => voi
  * La escala: la página (o «Comparar áreas»), debajo la línea de cómo se ubicó (`linea`, solo la preventa) y «Para
  * completar el diagnóstico». Hasta el 24 nov se titulaba «Dónde está hoy» (Elías, con TEC · AE: «quitar»).
  */
-function DondeEstaHoy({ vista, linea }: { vista: Vista; linea: ReactNode }) {
+function DondeEstaHoy({ vista }: { vista: Vista }) {
   const { exp, escala, mapa, cambiar, lugar, puedeEditar, guardando } = useLienzo();
   const enJuego = exp.estado.areas;
   const [abierta, setAbierta] = useState<string | null>(null);
@@ -879,14 +967,7 @@ function DondeEstaHoy({ vista, linea }: { vista: Vista; linea: ReactNode }) {
           <span className="text-[13px] font-semibold text-brand">Selecciona un departamento para ver dónde está en la escala.</span>
         ) : principal && fuera.length > 0 ? (
           <>
-            <span
-              className="truncate"
-              title={
-                lugar === "preventa"
-                  ? "Si se habló de ella, «Ubicar con las reuniones» la llena con hipótesis por explorar, aunque no esté en juego."
-                  : "Al sumarla, el agente la ubica en la escala con lo que ya sabe."
-              }
-            >
+            <span className="truncate">
               {enLista(fuera.map((a) => a.nombre))} todavía no {fuera.length === 1 ? "tiene" : "tienen"} nada de las reuniones: no se dibuja.
             </span>
             {puedeEditar &&
@@ -914,7 +995,6 @@ function DondeEstaHoy({ vista, linea }: { vista: Vista; linea: ReactNode }) {
       )}
         </>
       )}
-      {linea}
       <ParaCompletarElDiagnostico />
     </section>
   );
@@ -925,11 +1005,15 @@ export default function PasoEscala({ agente }: { agente?: ReactNode } = {}) {
   const { exp, lugar } = useLienzo();
   const hayAreas = exp.estado.areas.length > 0;
   const [vista, setVista] = useState<Vista>("pagina");
+  // Lo que registra el agente de la cuenta para que «Actualizar con Nexus» lo lance desde arriba (26 nov).
+  const [deLaCuenta, setDeLaCuenta] = useState<UbicarDeLaCuenta | null>(null);
   // El título y de qué va la pieza los pone el lienzo, como en las demás piezas.
   return (
+    <RegistrarUbicarDeLaCuenta.Provider value={setDeLaCuenta}>
     <div className="flex flex-col gap-5">
-      {/* Arriba (24 nov, Elías con TEC · AE): cómo se ve la escala y, a la derecha, «Publicado…» y «Acceso». La línea de
-          cómo se ubicó la escala bajó: va debajo de la página, antes de «Para completar el diagnóstico». */}
+      {/* Arriba de todo (26 nov): qué falta validar, «Validar (N)» y «Actualizar con Nexus». Debajo, cómo se ve la escala
+          y, a la derecha, «Publicado…» y «Acceso». */}
+      <ArribaDelDiagnostico deLaCuenta={deLaCuenta} />
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <ComoSeVe vista={vista} onVista={setVista} />
         {lugar !== "proyecto" && (
@@ -939,8 +1023,7 @@ export default function PasoEscala({ agente }: { agente?: ReactNode } = {}) {
           </div>
         )}
       </div>
-      <SugerenciasDeLaEscala />
-      <DondeEstaHoy vista={vista} linea={lugar === "preventa" ? <LineaDeLaUbicacion /> : null} />
+      <DondeEstaHoy vista={vista} />
       <ConQueSeMide />
       {hayAreas && (
         <div data-recorrido="preventa.escala.primero">
@@ -949,5 +1032,23 @@ export default function PasoEscala({ agente }: { agente?: ReactNode } = {}) {
       )}
       {agente ?? <PanelDelAgente modoPrincipal="leer" compacto />}
     </div>
+    </RegistrarUbicarDeLaCuenta.Provider>
   );
+}
+
+/**
+ * El agente de la cuenta registra cómo se lanza (26 nov): «Actualizar con Nexus», arriba, lo usa. El registro se hace una
+ * vez y se renueva solo cuando cambia si está lanzando o corriendo; `ubicar` llama siempre a lo último.
+ */
+export function useRegistrarUbicarDeLaCuenta(ubicar: () => void, estado: { lanzando: boolean; corriendo: boolean }): void {
+  const registrar = useContext(RegistrarUbicarDeLaCuenta);
+  const ultimo = useRef(ubicar);
+  useEffect(() => {
+    ultimo.current = ubicar;
+  });
+  const { lanzando, corriendo } = estado;
+  useEffect(() => {
+    registrar?.({ ubicar: () => ultimo.current(), lanzando, corriendo });
+  }, [registrar, lanzando, corriendo]);
+  useEffect(() => () => registrar?.(null), [registrar]);
 }
