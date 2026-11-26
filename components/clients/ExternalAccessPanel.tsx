@@ -100,7 +100,12 @@ function fechaCorta(iso: string): string {
     .replace(/\./g, "");
 }
 
-export function ExternalAccessButton({ projectId }: { projectId: string }) {
+/**
+ * `foco` (2026-11-25, Elías): el «Acceso» de un documento —el cronograma, la Entrega— abre el MISMO pop-up enfocado en
+ * esa parte: arriba su link directo (`?next=`), la contraseña y su Publicar u Ocultar; el resto de las partes, plegado
+ * en «Ver todo lo del proyecto». Sin `foco` (ficha y Resumen del proyecto), el pop-up completo de siempre.
+ */
+export function ExternalAccessButton({ projectId, foco }: { projectId: string; foco?: ExternalSurface }) {
   const [state, setState] = useState<AccessState | null>(null);
   const [open, setOpen] = useState(false);
   const [working, setWorking] = useState(false);
@@ -233,13 +238,19 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
      sin punto si todavía no se generó. El detalle lo dice el `title` y el pop-up. */
   const punto = isActive ? "bg-success-ink" : isRevoked ? "bg-warn-ink" : null;
   const estado = isActive ? "activo" : isRevoked ? "revocado" : "sin generar";
+  // Una parte que no aplica en este proyecto no se enfoca: el pop-up queda completo.
+  const enfocada = foco && !state.noAplican?.includes(foco) ? publishSurface(foco) : null;
 
   return (
     <>
       <button
         onClick={() => setOpen(true)}
         className={BOTON_DE_HERRAMIENTA}
-        title={`Acceso del cliente: ${estado}. Quién del cliente puede abrir el proyecto y qué ve`}
+        title={
+          enfocada
+            ? `Acceso del cliente: ${estado}. El link directo a ${enfocada.nombre}, la contraseña y si el cliente lo ve`
+            : `Acceso del cliente: ${estado}. Quién del cliente puede abrir el proyecto y qué ve`
+        }
       >
         {punto ? (
           <span className={`h-2 w-2 flex-shrink-0 rounded-full ${punto}`} aria-hidden="true" />
@@ -251,7 +262,7 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
 
       {open && (
         <Ventana onClose={closeModal}>
-          <Cabecera estado={isActive ? "activo" : isRevoked ? "revocado" : "sin-generar"} state={state} onClose={closeModal} />
+          <Cabecera estado={isActive ? "activo" : isRevoked ? "revocado" : "sin-generar"} state={state} foco={enfocada?.nombre ?? null} onClose={closeModal} />
           {!state.exists ? (
             <SinAcceso state={state} working={working} onGenerate={generateAll} />
           ) : isRevoked ? (
@@ -259,7 +270,7 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
           ) : (
             <>
               {porQueNo && <PorQueNoSePublica motivos={porQueNo.motivos} href={porQueNo.href} />}
-              <Activo state={state} onSavePassword={savePassword} onTogglePublish={togglePublish} />
+              <Activo state={state} foco={enfocada?.key ?? null} onSavePassword={savePassword} onTogglePublish={togglePublish} />
               <Pie
                 state={state}
                 confirming={confirming}
@@ -338,14 +349,25 @@ function Ventana({ onClose, children }: { onClose: () => void; children: ReactNo
   );
 }
 
-function Cabecera({ estado, state, onClose }: { estado: "activo" | "revocado" | "sin-generar"; state: AccessState; onClose: () => void }) {
+function Cabecera({
+  estado,
+  state,
+  foco,
+  onClose,
+}: {
+  estado: "activo" | "revocado" | "sin-generar";
+  state: AccessState;
+  /** El nombre de la parte enfocada («Cronograma»); null = el pop-up completo. */
+  foco: string | null;
+  onClose: () => void;
+}) {
   const chip =
     estado === "activo"
       ? { texto: "Activo", caja: "border-success-line bg-success-surface text-success-ink", punto: "bg-success" }
       : estado === "revocado"
         ? { texto: "Revocado", caja: "border-warn-line bg-warn-surface text-warn-ink", punto: "bg-warning" }
         : { texto: "Sin generar", caja: "border-line bg-surface text-fg-secondary", punto: "border-[1.5px] border-fg-muted" };
-  const subtitulo = [state.proyecto, state.cliente].filter(Boolean).join(" · ");
+  const subtitulo = [foco, state.proyecto, state.cliente].filter(Boolean).join(" · ");
   return (
     <div className="flex flex-shrink-0 items-start gap-3 border-b border-line px-6 pb-4 pt-5">
       <div className="min-w-0 flex-1">
@@ -426,14 +448,18 @@ function Revocado({ state, working, onGenerate }: { state: AccessState; working:
 
 function Activo({
   state,
+  foco,
   onSavePassword,
   onTogglePublish,
 }: {
   state: AccessState;
+  /** La parte enfocada (el «Acceso» de un documento); null = el pop-up completo. */
+  foco: ExternalSurface | null;
   onSavePassword: (pw: string) => Promise<string | null>;
   onTogglePublish: (kind: ExternalSurface, publish: boolean) => Promise<void>;
 }) {
   const toast = useToast();
+  const [verTodo, setVerTodo] = useState(false);
   // En local, el enlace del .env (3004) se pasa a la dirección que se está mirando (lib/external/enlace-local.ts).
   const urlBase = enlaceEnEsteNavegador(state.url ?? "", typeof window === "undefined" ? null : window.location.origin);
   const partes = PUBLISH_SURFACES.filter((s) => !state.noAplican?.includes(s.key)).map((s) => ({
@@ -441,8 +467,8 @@ function Activo({
     e: state.partes?.[s.key] ?? { publicadaEl: null, motivo: null },
   }));
   const publicadas = new Set(partes.filter((p) => p.e.publicadaEl).map((p) => p.s.key));
-  const sinPublicar = partes.length - publicadas.size;
-  const mensaje = mensajeParaElCliente({ proyecto: state.proyecto ?? "el proyecto", urlBase, publicadas });
+  const mensaje = mensajeParaElCliente({ proyecto: state.proyecto ?? "el proyecto", urlBase, publicadas, foco: foco ?? undefined });
+  const enfocada = foco ? partes.find((p) => p.s.key === foco) ?? null : null;
   // `publicable === false` explícito: una respuesta vieja sin el campo no bloquea nada (el gate real vive en el servidor).
   const bloqueoGeneral = state.publicable === false ? state.motivoNoPublicable ?? "Este proyecto no admite publicación externa." : null;
 
@@ -455,31 +481,127 @@ function Activo({
     }
   };
 
+  const filaDe = ({ s, e }: (typeof partes)[number], primera: boolean) => (
+    <FilaDeParte
+      key={s.key}
+      kind={s.key}
+      nombre={s.nombre}
+      url={linkDeLaParte(urlBase, s.key)}
+      estado={e}
+      bloqueo={bloqueoGeneral ?? e.motivo}
+      primera={primera}
+      onCopiar={(u) => void copiar(u, `Link de ${s.nombre} copiado.`)}
+      onTogglePublish={onTogglePublish}
+    />
+  );
+
+  /** Una fila de partes con el aviso de las que están sin publicar. */
+  const listaDePartes = (lista: typeof partes) => {
+    const sinPublicarAca = lista.filter((p) => !p.e.publicadaEl).length;
+    return (
+      <div className="overflow-hidden rounded-xl border border-line bg-surface">
+        {lista.map((p, i) => filaDe(p, i === 0))}
+        {sinPublicarAca > 0 && (
+          <div className="flex items-center gap-2 border-t border-line bg-surface-muted px-3.5 py-2.5 text-xs text-fg-muted">
+            <span className="h-2 w-2 flex-shrink-0 rounded-full border-[1.5px] border-fg-muted" aria-hidden="true" />
+            {sinPublicarAca === 1 ? "En la que está sin publicar" : `En las ${sinPublicarAca} sin publicar`}, quien entra con el link ve «no disponible».
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const filaDelLink = (url: string, ayuda: string, copiado: string) => (
+    <div className="grid grid-cols-[96px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-3.5 py-3">
+      <span className="text-xs text-fg-muted">Link</span>
+      <span title={url} className="truncate text-[13px] text-fg-secondary">
+        {url.replace(/^https?:\/\//, "")}
+      </span>
+      <BotonCopiar onClick={() => void copiar(url, copiado)} />
+      <span />
+      <span className="col-span-2 text-xs text-fg-muted">{ayuda}</span>
+    </div>
+  );
+
+  const contrasena = <Contrasena guardada={state.accessPassword ?? null} onSave={onSavePassword} onCopiar={(t) => void copiar(t, "Contraseña copiada.")} />;
+
+  const botonDelMensaje = (sinMensaje: string) => (
+    <div className="flex flex-wrap items-center gap-3">
+      <button type="button" disabled={!mensaje} onClick={() => mensaje && void copiar(mensaje, "Mensaje copiado: la contraseña mándala aparte.")} className={BOTON_AZUL_GRANDE}>
+        <IconoCopiar className="h-[15px] w-[15px]" />
+        Copiar mensaje para el cliente
+      </button>
+      <span className="min-w-[200px] flex-1 text-xs text-fg-muted">
+        {mensaje ? "El link, lo que ya está publicado y cómo entrar. La contraseña no va en el mensaje." : sinMensaje}
+      </span>
+    </div>
+  );
+
+  /* ── Enfocado en una parte (el «Acceso» del cronograma o de la Entrega) ──
+     Arriba, lo de ESA parte: su link directo, la contraseña y su Publicar u Ocultar. Las demás no se esconden: quedan
+     plegadas en «Ver todo lo del proyecto», con el link del proyecto, que abre lo primero publicado. */
+  if (enfocada) {
+    const nombre = enfocada.s.nombre;
+    const otras = partes.filter((p) => p.s.key !== enfocada.s.key);
+    return (
+      <div className="flex flex-col gap-6 overflow-y-auto px-6 pb-6 pt-5">
+        <section aria-label={`Para entrar a ${nombre}`} className="flex flex-col gap-2.5">
+          <span className={ROTULO_DEL_SISTEMA}>Para entrar</span>
+          <div className="rounded-xl border border-line bg-surface">
+            {filaDelLink(
+              linkDeLaParte(urlBase, enfocada.s.key),
+              enfocada.e.publicadaEl
+                ? `Lleva directo a ${nombre}. Te pide la contraseña.`
+                : `Lleva directo a ${nombre}. Mientras siga sin publicar, quien entra ve «no disponible».`,
+              `Link de ${nombre} copiado.`,
+            )}
+            {contrasena}
+            {filaDe(enfocada, false)}
+          </div>
+          {botonDelMensaje(`Publica «${nombre}» para armar el mensaje.`)}
+        </section>
+
+        {otras.length > 0 && (
+          <section aria-label="Todo lo del proyecto" className="flex flex-col gap-2.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <button
+                type="button"
+                aria-expanded={verTodo}
+                onClick={() => setVerTodo((v) => !v)}
+                className="inline-flex items-center gap-1 text-xs font-medium text-fg-secondary transition-colors hover:text-fg"
+              >
+                <svg className={cn("h-3 w-3 transition-transform", verTodo && "rotate-90")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                  <path d="M9 5l7 7-7 7" />
+                </svg>
+                Ver todo lo del proyecto
+              </button>
+              <span className="text-xs text-fg-muted">
+                {publicadas.size} de {partes.length} publicadas
+              </span>
+            </div>
+            {verTodo && (
+              <>
+                <div className="rounded-xl border border-line bg-surface">
+                  {filaDelLink(urlBase, "El link del proyecto: abre lo primero que esté publicado. Misma contraseña.", "Link del proyecto copiado.")}
+                </div>
+                {listaDePartes(otras)}
+              </>
+            )}
+          </section>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6 overflow-y-auto px-6 pb-6 pt-5">
       <section aria-label="Para entrar" className="flex flex-col gap-2.5">
         <span className={ROTULO_DEL_SISTEMA}>Para entrar</span>
         <div className="rounded-xl border border-line bg-surface">
-          <div className="grid grid-cols-[96px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-3.5 py-3">
-            <span className="text-xs text-fg-muted">Link</span>
-            <span title={urlBase} className="truncate text-[13px] text-fg-secondary">
-              {urlBase.replace(/^https?:\/\//, "")}
-            </span>
-            <BotonCopiar onClick={() => void copiar(urlBase, "Link copiado.")} />
-            <span />
-            <span className="col-span-2 text-xs text-fg-muted">Abre lo primero que esté publicado. Para llevarlo directo a otra parte, copia el link de esa fila.</span>
-          </div>
-          <Contrasena guardada={state.accessPassword ?? null} onSave={onSavePassword} onCopiar={(t) => void copiar(t, "Contraseña copiada.")} />
+          {filaDelLink(urlBase, "Abre lo primero que esté publicado. Para llevarlo directo a otra parte, copia el link de esa fila.", "Link copiado.")}
+          {contrasena}
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button type="button" disabled={!mensaje} onClick={() => mensaje && void copiar(mensaje, "Mensaje copiado: la contraseña mándala aparte.")} className={BOTON_AZUL_GRANDE}>
-            <IconoCopiar className="h-[15px] w-[15px]" />
-            Copiar mensaje para el cliente
-          </button>
-          <span className="min-w-[200px] flex-1 text-xs text-fg-muted">
-            {mensaje ? "El link, lo que ya está publicado y cómo entrar. La contraseña no va en el mensaje." : "Publica al menos una parte para armar el mensaje."}
-          </span>
-        </div>
+        {botonDelMensaje("Publica al menos una parte para armar el mensaje.")}
       </section>
 
       <section aria-label="Lo que ve el cliente" className="flex flex-col gap-2.5">
@@ -489,27 +611,7 @@ function Activo({
             {publicadas.size} de {partes.length} publicadas
           </span>
         </div>
-        <div className="overflow-hidden rounded-xl border border-line bg-surface">
-          {partes.map(({ s, e }, i) => (
-            <FilaDeParte
-              key={s.key}
-              kind={s.key}
-              nombre={s.nombre}
-              url={linkDeLaParte(urlBase, s.key)}
-              estado={e}
-              bloqueo={bloqueoGeneral ?? e.motivo}
-              primera={i === 0}
-              onCopiar={(u) => void copiar(u, `Link de ${s.nombre} copiado.`)}
-              onTogglePublish={onTogglePublish}
-            />
-          ))}
-          {sinPublicar > 0 && (
-            <div className="flex items-center gap-2 border-t border-line bg-surface-muted px-3.5 py-2.5 text-xs text-fg-muted">
-              <span className="h-2 w-2 flex-shrink-0 rounded-full border-[1.5px] border-fg-muted" aria-hidden="true" />
-              {sinPublicar === 1 ? "En la que está sin publicar" : `En las ${sinPublicar} sin publicar`}, quien entra con el link ve «no disponible».
-            </div>
-          )}
-        </div>
+        {listaDePartes(partes)}
       </section>
     </div>
   );

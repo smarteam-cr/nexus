@@ -24,24 +24,38 @@ function unirConY(partes: string[]): string {
   return `${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}`;
 }
 
-/** El mensaje listo para pegar, o null si no hay nada publicado para el cliente. */
+/**
+ * El mensaje listo para pegar, o null si no hay nada publicado para el cliente.
+ *
+ * Con `foco` (el «Acceso» de un documento, 2026-11-25): el link lleva directo a esa parte y el mensaje dice a cuál; lo
+ * demás publicado para el cliente va como «También puedes ver». Sin esa parte publicada no hay mensaje: el link
+ * mostraría «no disponible».
+ */
 export function mensajeParaElCliente(opts: {
   proyecto: string;
   urlBase: string;
   publicadas: ReadonlySet<PublishSurfaceKey>;
+  foco?: PublishSurfaceKey;
 }): string | null {
   const paraElCliente = PUBLISH_SURFACES.filter((s) => s.key !== "desarrollo" && opts.publicadas.has(s.key));
+  const cierre = ["", "Para entrar te va a pedir una contraseña: te la mando por otro medio."];
+  if (opts.foco) {
+    const enfocada = PUBLISH_SURFACES.find((s) => s.key === opts.foco);
+    if (!enfocada || !opts.publicadas.has(enfocada.key)) return null;
+    const otras = paraElCliente.filter((s) => s.key !== enfocada.key);
+    return [
+      "Hola:",
+      "",
+      `Te comparto el acceso a «${opts.proyecto}»:`,
+      linkDeLaParte(opts.urlBase, enfocada.key),
+      "",
+      `Te lleva directo a: ${enfocada.nombre}.`,
+      ...(otras.length ? [`También puedes ver: ${unirConY(otras.map((s) => s.nombre))}.`] : []),
+      ...cierre,
+    ].join("\n");
+  }
   if (!paraElCliente.length) return null;
   const link = linkDeLaParte(opts.urlBase, paraElCliente[0].key);
   const nombres = unirConY(paraElCliente.map((s) => s.nombre));
-  return [
-    "Hola:",
-    "",
-    `Te comparto el acceso a «${opts.proyecto}»:`,
-    link,
-    "",
-    `Ya puedes ver: ${nombres}.`,
-    "",
-    "Para entrar te va a pedir una contraseña: te la mando por otro medio.",
-  ].join("\n");
+  return ["Hola:", "", `Te comparto el acceso a «${opts.proyecto}»:`, link, "", `Ya puedes ver: ${nombres}.`, ...cierre].join("\n");
 }
