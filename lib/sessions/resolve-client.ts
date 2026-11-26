@@ -31,6 +31,7 @@ import {
   interlocutoresDesdeFilas,
   fichasQueDaElDominio,
   type CategorizeContext,
+  type TrazaDeLaCascada,
   type CategorizableSession,
   ORDEN_DE_CLIENTES_PARA_ATRIBUIR,
 } from "@/lib/sessions/categorize";
@@ -225,6 +226,8 @@ export interface ReunionQueCambia {
   de: string | null;
   /** La que tendría con el cambio. */
   a: string | null;
+  /** Por qué la tendría: el paso de la cascada que decidió (y cómo, si decidió entre fichas). */
+  porQue?: TrazaDeLaCascada;
 }
 
 /**
@@ -266,10 +269,15 @@ export async function reResolverReunionesDe(
      * puede usarlo).
      */
     exigirHubspot?: boolean;
+    /**
+     * Mirar TODAS las reuniones, no solo las de estas personas: lo pide un cambio de las fichas (una sigla, un dominio),
+     * que mueve también reuniones de otra gente. Sin el tope por persona.
+     */
+    todas?: boolean;
   },
 ): Promise<{ cambian: ReunionQueCambia[]; saltadas: ReunionQueCambia[] }> {
   const lista = [...new Set(correos.map((c) => c.trim().toLowerCase()).filter(Boolean))];
-  if (!lista.length) return { cambian: [], saltadas: [] };
+  if (!lista.length && !o.todas) return { cambian: [], saltadas: [] };
   if (o.aplicar && o.ajustarFichas) throw new Error("Cambiar las fichas en memoria es solo para un simulacro.");
   const ctx = await buildCategorizeCtx();
   if (o.ajustarFichas) ctx.clients = o.ajustarFichas(ctx.clients);
@@ -284,7 +292,14 @@ export async function reResolverReunionesDe(
     ctx.interlocutoresConfirmados = confirmadas;
   }
   const porId = new Map<string, { id: string; title: string; date: Date; participants: string[]; manualClientId: string | null; resolvedClientId: string | null }>();
-  for (const correo of lista) {
+  if (o.todas) {
+    for (const x of await prisma.firefliesSession.findMany({
+      select: { id: true, title: true, date: true, participants: true, manualClientId: true, resolvedClientId: true },
+    })) {
+      porId.set(x.id, x);
+    }
+  }
+  for (const correo of o.todas ? [] : lista) {
     const suyas = await prisma.firefliesSession.findMany({
       where: { participants: { has: correo } },
       orderBy: { date: "desc" },
@@ -300,8 +315,10 @@ export async function reResolverReunionesDe(
   ctx.hubspotCompaniesByDomain = o.exigirHubspot ? await mapaDeHubspotSinDegradar(sesiones, ctx.internalDomains) : await buildHubspotDomainMap(sesiones, ctx.internalDomains);
   const cambian: ReunionQueCambia[] = [];
   for (const s of sesiones) {
-    const a = resolveSessionClientId(s, ctx);
-    if (a !== s.resolvedClientId) cambian.push({ sessionId: s.id, title: s.title, date: s.date, de: s.resolvedClientId, a });
+    const porQue: TrazaDeLaCascada = {};
+    const g = categorizeSession(s, ctx, porQue);
+    const a = g.kind === "client" ? g.id : null;
+    if (a !== s.resolvedClientId) cambian.push({ sessionId: s.id, title: s.title, date: s.date, de: s.resolvedClientId, a, porQue });
   }
   if (!o.aplicar) return { cambian, saltadas: [] };
 

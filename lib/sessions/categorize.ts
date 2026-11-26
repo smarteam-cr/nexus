@@ -38,7 +38,7 @@
  *
  * ⚠ La gente CONFIRMADA (2026-11-25, «Unidades e interlocutores»). Una persona del equipo dice con qué ficha trabaja cada
  * persona del cliente (`PersonaDeLaEmpresa.confirmadaAt`; llega como `interlocutoresConfirmados`). Si alguien de afuera
- * en la reunión está confirmado, decide el paso 3·0 (`porLaGenteConfirmada`), antes del dominio:
+ * en la reunión está confirmado, decide el paso 3·0 (`decisionDeLaGenteConfirmada`), antes del dominio:
  *  · Las candidatas son las fichas de la gente confirmada y las del dominio de cada persona, cada una con su empresa
  *    (nunca la casa). Si el título nombra a una ficha que no es candidata, el paso se hace a un lado.
  *  · Primero el título, entre las candidatas. Después cada persona: la confirmada en UNA ficha vale por esa ficha, por
@@ -104,6 +104,29 @@ export interface CategorizeContext {
    * Opcional: sin él (o vacío), la cascada es la de siempre.
    */
   interlocutoresConfirmados?: ReadonlyMap<string, readonly string[]>;
+}
+
+/** Qué paso de la cascada decidió (`categorizeSession` con `traza`): para los simulacros, que dicen POR QUÉ. */
+export type PasoDeLaCascada =
+  | "a-mano"
+  | "interna-por-titulo"
+  | "interna"
+  | "gente-confirmada"
+  | "dominio"
+  | "categoria"
+  | "hubspot"
+  | "empresa-de-hubspot-sin-ficha"
+  | "titulo"
+  | "sin-dueno";
+
+/**
+ * Lo que la cascada anota mientras decide, si se le pasa (no cambia lo que devuelve): el paso y, si decidió entre
+ * fichas (las unidades de una empresa o la gente confirmada), cómo. La escribe la MISMA cascada en cada punto donde
+ * devuelve: no es otra copia de su orden.
+ */
+export interface TrazaDeLaCascada {
+  paso?: PasoDeLaCascada;
+  entre?: DecisionEntreEntidades["por"];
 }
 
 export interface CategorizableSession {
@@ -381,17 +404,18 @@ function duenoPorElTitulo(
   externalDomains: Set<string>,
   ctx: CategorizeContext,
   ambiguous: Set<string>,
+  traza?: TrazaDeLaCascada,
 ): SessionGroup | null {
   const r = findClientByTitleMatch(session.title, ctx.clients, ambiguous, ctx.internalDomains);
   if (r.cliente) {
     const c = r.cliente;
-    return repartirEntreEntidades(c.id, session, externalDomains, ctx) ?? { kind: "client", id: c.id, label: c.name, company: c.company };
+    return repartirEntreEntidades(c.id, session, externalDomains, ctx, traza) ?? { kind: "client", id: c.id, label: c.name, company: c.company };
   }
   if (r.motivo === "empate") {
     const casa = esLaCasa(ctx.internalDomains);
     const grupos = new Set(r.candidatos.filter((c) => !casa(c)).map((c) => entidadesDelDominio(c.id, ctx)));
     const [grupo] = grupos;
-    if (grupos.size === 1 && grupo) return repartirEntreEntidades(grupo[0]!.id, session, externalDomains, ctx);
+    if (grupos.size === 1 && grupo) return repartirEntreEntidades(grupo[0]!.id, session, externalDomains, ctx, traza);
   }
   return null;
 }
@@ -757,7 +781,7 @@ export function fichasQueDaElDominio(correo: string, ctx: CategorizeContext): st
 }
 
 /**
- * Paso 3·0 · LA GENTE CONFIRMADA. Null si nadie de afuera en la reunión está confirmado (la cascada sigue como siempre),
+ * Paso 3·0 · LA GENTE CONFIRMADA (`decisionDeLaGenteConfirmada`). Null si nadie de afuera en la reunión está confirmado (la cascada sigue como siempre),
  * o si el título nombra a una ficha que no es candidata (la cascada de siempre la resuelve por el título, como antes).
  * Si no, este paso decide: una ficha, o POR DECIDIR (orphan → `resolvedClientId` null, a la vista en /sessions). Las
  * candidatas: las fichas de la gente confirmada y la del dominio de cada persona (registrado, paso 3, o de su empresa de
@@ -768,10 +792,6 @@ export function fichasQueDaElDominio(correo: string, ctx: CategorizeContext): st
  * (pedido del 25 nov). Y es la regla de siempre entre unidades: la gente no desempata un título.
  * *Por qué por decidir y no la ficha más vieja:* si la gente apunta a dos fichas, elegir una sería adivinar en silencio.
  */
-function porLaGenteConfirmada(session: CategorizableSession, externalDomains: Set<string>, ctx: CategorizeContext): SessionGroup | null {
-  return decisionDeLaGenteConfirmada(session, externalDomains, ctx)?.grupo ?? null;
-}
-
 function decisionDeLaGenteConfirmada(
   session: CategorizableSession,
   externalDomains: Set<string>,
@@ -859,10 +879,12 @@ function repartirEntreEntidades(
   session: CategorizableSession,
   externalDomains: Set<string>,
   ctx: CategorizeContext,
+  traza?: TrazaDeLaCascada,
 ): SessionGroup | null {
   const entidades = entidadesDelDominio(clientId, ctx);
   if (!entidades) return null;
   const d = decidirEntreEntidades(session, entidades, ctx);
+  if (traza) traza.entre = d.por;
   const elegida = d.clientId ? entidades.find((e) => e.id === d.clientId) : undefined;
   if (elegida) return { kind: "client", id: elegida.id, label: elegida.name, company: elegida.company };
   const delGrupo = new Set(entidades.flatMap((e) => effectiveDomainsForClient(e)));
@@ -941,15 +963,20 @@ export function aprenderPersonasDeEntidades(
  */
 export function categorizeSession(
   session: CategorizableSession,
-  ctx: CategorizeContext
+  ctx: CategorizeContext,
+  traza?: TrazaDeLaCascada,
 ): SessionGroup {
   const { clients, categories, hubspotCompaniesByDomain, internalDomains } = ctx;
   const ambiguous = ctx.ambiguousNameTokens ?? EMPTY_TOKEN_SET;
+  const paso = (p: PasoDeLaCascada) => {
+    if (traza) traza.paso = p;
+  };
 
   // ── 1. Manual override ─────────────────────────────────────────────────────
   if (session.manualClientId) {
     const c = clients.find((cl) => cl.id === session.manualClientId);
     if (c) {
+      paso("a-mano");
       return { kind: "client", id: c.id, label: c.name, company: c.company };
     }
     // Si manualClientId no resuelve (cliente eliminado), seguimos con la cascada
@@ -966,9 +993,11 @@ export function categorizeSession(
   // clientes: una sesión interna cuyo título contiene el nombre del cliente
   // (ej. "Hand Off | WHEREX") debe ir al bucket de ese cliente, no a Internal.
   if (participantDomains.size > 0 && externalDomains.size === 0) {
-    const porTitulo = duenoPorElTitulo(session, externalDomains, ctx, ambiguous);
+    paso("interna-por-titulo");
+    const porTitulo = duenoPorElTitulo(session, externalDomains, ctx, ambiguous, traza);
     if (porTitulo) return porTitulo;
     // Sin match por título → grupo Internal real
+    paso("interna");
     const internalCat = categories.find((c) => c.kind === "internal");
     if (internalCat) {
       return {
@@ -986,9 +1015,13 @@ export function categorizeSession(
   // ── 3·0. La gente confirmada (2026-11-25) ──────────────────────────────────
   // Solo si alguien de afuera está confirmado por el equipo en una ficha: decide entre sus fichas y las de los
   // dominios de la reunión (título → gente confirmada → dominio y lo aprendido → por decidir). Sin nadie confirmado,
-  // devuelve null y la cascada sigue idéntica. Ver `porLaGenteConfirmada`.
-  const porLaGente = porLaGenteConfirmada(session, externalDomains, ctx);
-  if (porLaGente) return porLaGente;
+  // devuelve null y la cascada sigue idéntica. Ver `decisionDeLaGenteConfirmada`.
+  const porLaGente = decisionDeLaGenteConfirmada(session, externalDomains, ctx);
+  if (porLaGente) {
+    paso("gente-confirmada");
+    if (traza) traza.entre = porLaGente.por;
+    return porLaGente.grupo;
+  }
 
   // ── 3. Match con Client.emailDomains (por dominio externo) ────────────────
   // Usa `effectiveDomainsForClient` para que clientes con `company` que parece
@@ -999,8 +1032,9 @@ export function categorizeSession(
     if (domains.length === 0) continue;
     const hit = domains.some((d) => externalDomains.has(d));
     if (hit) {
+      paso("dominio");
       return (
-        repartirEntreEntidades(c.id, session, externalDomains, ctx) ??
+        repartirEntreEntidades(c.id, session, externalDomains, ctx, traza) ??
         { kind: "client", id: c.id, label: c.name, company: c.company }
       );
     }
@@ -1011,6 +1045,7 @@ export function categorizeSession(
     if (cat.kind === "internal") continue; // ya cubierto en paso 2
     const hit = cat.domains.some((d) => externalDomains.has(d.toLowerCase()));
     if (hit) {
+      paso("categoria");
       return {
         kind: "category",
         id: cat.id,
@@ -1036,8 +1071,9 @@ export function categorizeSession(
     const linkedClient = clientsByHs.get(company.id);
     if (linkedClient) {
       // Señal FUERTE: la company de HubSpot está ligada a un Client → ese Client.
+      paso("hubspot");
       return (
-        repartirEntreEntidades(linkedClient.id, session, externalDomains, ctx) ??
+        repartirEntreEntidades(linkedClient.id, session, externalDomains, ctx, traza) ??
         { kind: "client", id: linkedClient.id, label: linkedClient.name, company: linkedClient.company }
       );
     }
@@ -1050,6 +1086,7 @@ export function categorizeSession(
   //    en el Client (ej. Mr Wings→tecnofood, Honda→facocr). El registro del dominio real
   //    resuelve esto por dominio (paso 3) y permite endurecer a "corte" más adelante.
   if (unlinkedCompany && ctx.groupUnlinkedHubspotCompany) {
+    paso("empresa-de-hubspot-sin-ficha");
     return {
       kind: "hubspotCompany",
       id: unlinkedCompany.id,
@@ -1059,10 +1096,12 @@ export function categorizeSession(
   }
 
   // ── 6. Title matching con Client (fallback débil) ─────────────────────────
-  const porTitulo = duenoPorElTitulo(session, externalDomains, ctx, ambiguous);
+  paso("titulo");
+  const porTitulo = duenoPorElTitulo(session, externalDomains, ctx, ambiguous, traza);
   if (porTitulo) return porTitulo;
 
   // ── 7. Orphan ─────────────────────────────────────────────────────────────
+  paso("sin-dueno");
   if (externalDomains.size === 0) {
     // No hay participantes externos identificables y tampoco internos puros
     return { kind: "orphan", label: "Sin participantes" };

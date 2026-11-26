@@ -25,13 +25,24 @@ const Persona = z.object({
   nota: z.string(),
 });
 
+const ParDeFicha = z.tuple([z.string(), z.string().min(1)]);
+
 export const MapaDeInterlocutores = z
   .object({
     titulo: z.string(),
     fichas: z.record(z.string(), z.object({ id: z.string(), nombre: z.string() })),
     personas: z.array(Persona).min(1),
+    /**
+     * Cambios en las FICHAS que aprobó una persona (Elías, 25 nov: «SAS es Stratosphere»): [clave de ficha, valor]. Una
+     * sigla se suma a la ficha; un dominio pasa a la ficha (se quita de la que lo tenga). Van en el mapa y no por la línea
+     * de comandos para que el --apply escriba exactamente lo que se aprobó.
+     */
+    cambiosDeFichas: z.object({ siglas: z.array(ParDeFicha).optional(), dominios: z.array(ParDeFicha).optional() }).optional(),
   })
   .superRefine((m, c) => {
+    for (const [k] of [...(m.cambiosDeFichas?.siglas ?? []), ...(m.cambiosDeFichas?.dominios ?? [])]) {
+      if (!m.fichas[k]) c.addIssue({ code: "custom", message: `cambiosDeFichas: la ficha «${k}» no está en «fichas»` });
+    }
     for (const p of m.personas) {
       for (const k of [...(p.confirmadaEn ?? []), ...(p.sugeridaEn ?? [])]) {
         if (!m.fichas[k]) c.addIssue({ code: "custom", message: `${p.correo}: la ficha «${k}» no está en «fichas»` });

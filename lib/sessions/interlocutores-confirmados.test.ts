@@ -16,6 +16,7 @@ import {
   interlocutoresDesdeFilas,
   type CategorizableSession,
   type CategorizeContext,
+  type TrazaDeLaCascada,
 } from "./categorize";
 
 const TAE = { id: "tae", name: "TEC · TAE", company: "tec.ac.cr", emailDomains: ["itcr.ac.cr", "tec.ac.cr"], siglas: ["TAE"] };
@@ -241,6 +242,24 @@ describe("quien es de VARIAS unidades de una empresa también cuenta (revisión 
       },
     );
     expect(duenoDe(reunion("Revisión semanal", ["rep@partner.test", "pedro@itcr.ac.cr"]), conPartner)).toBe("(orphan)");
+  });
+});
+
+describe("la traza dice qué paso de la cascada decidió (para los simulacros)", () => {
+  it("anota el paso y, entre fichas, cómo; sin cambiar lo que devuelve", () => {
+    const s = reunion("Revisión semanal de leads", [CINDY]);
+    const t1: TrazaDeLaCascada = {};
+    expect(categorizeSession(s, ctx({ [CINDY]: ["ae"] }), t1)).toEqual(categorizeSession(s, ctx({ [CINDY]: ["ae"] })));
+    expect(t1).toEqual({ paso: "gente-confirmada", entre: "confirmada" });
+    const t2: TrazaDeLaCascada = {};
+    categorizeSession(reunion("TAE | Soporte", ["x@itcr.ac.cr"]), ctx(), t2);
+    expect(t2).toEqual({ paso: "dominio", entre: "nombre" });
+    const t3: TrazaDeLaCascada = {};
+    categorizeSession(reunion("Weekly", ["ana@credix.com"]), ctx(), t3);
+    expect(t3).toEqual({ paso: "dominio" });
+    const t4: TrazaDeLaCascada = {};
+    categorizeSession({ title: "Daily", participants: ["a@smarteamcr.com"], manualClientId: null }, ctx(), t4);
+    expect(t4.paso).toBe("interna");
   });
 });
 

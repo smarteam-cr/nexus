@@ -9,6 +9,11 @@
  *   … --el-mapa-manda   # el mapa reemplaza lo que ya dijo una persona en esas fichas (por defecto se conserva)
  *   npx tsx scripts/interlocutores-precargar.ts --mapa <archivo.json> --sigla strato=SAS --dominio strato=stratospherecorp.com
  *       # ¿y si además la ficha tuviera esa sigla, o ese dominio (que se quita de la ficha que lo tenga)? Solo en memoria.
+ *
+ * Los cambios de las FICHAS que aprobó una persona (una sigla, un dominio que pasa) van en el mapa (`cambiosDeFichas`) y
+ * el --apply los escribe primero; con ellos, el simulacro y el --apply miran TODAS las reuniones, no solo las del mapa.
+ * El simulacro dice el porqué de cada reunión que cambia, lo que cuelga de ellas (vínculos, minutas, hechos, tareas,
+ * pedidos, análisis de venta) y cómo quedan las invariantes que lo miran.
  *   ALLOW_PROD_WRITE=1 npx tsx scripts/interlocutores-precargar.ts --mapa <archivo.json> --por <correo del equipo> --apply
  *
  * El formato del mapa: scripts/lib/interlocutores-precarga.ts (no vive en el repo: trae correos de personas del cliente).
@@ -84,7 +89,7 @@ async function main() {
   /* Por defecto se CONSERVA lo que ya dijo una persona en las fichas del mapa (una confirmación o una sugerencia que el mapa
      no trae). Con --el-mapa-manda, el mapa reemplaza eso, y el simulacro lista qué se pierde. */
   const elMapaManda = process.argv.includes("--el-mapa-manda");
-  const escribir = resolverApply({ tablas: ["PersonaDeLaEmpresa"] });
+  const escribir = resolverApply({ tablas: ["PersonaDeLaEmpresa", "Client"] });
   const por = arg("--por");
   if (escribir && (!por || !por.includes("@"))) throw new Error("Con --apply, --por <correo de quien dio el mapa> es obligatorio.");
   if (escribir && confirmarSugeridas) throw new Error("--confirmar-sugeridas es solo para el simulacro: las sugeridas se confirman en la pantalla.");
@@ -211,46 +216,119 @@ async function main() {
       const deFuera = confirmadasHoy.filter((c) => c.correo === p.correo && !ids.includes(c.clientId)).map((c) => c.clientId);
       hipotesis.set(p.correo, [...new Set([...deFuera, ...propias])]);
     }
-    /* Lo que se pide simular de las fichas (solo en memoria, nunca con --apply): una sigla, un dominio que se pasa. */
-    const siglas = valores("--sigla");
-    const dominios = valores("--dominio");
-    if (escribir && (siglas.length || dominios.length)) throw new Error("--sigla y --dominio son solo para el simulacro: esos datos los cambia una persona en la ficha.");
-    const ajustarFichas = siglas.length || dominios.length
+    /* Los cambios de las fichas: los aprobados van en el mapa (y el --apply los escribe); los de la línea de comandos son
+       solo para probar en el simulacro. */
+    const siglasCli = valores("--sigla");
+    const dominiosCli = valores("--dominio");
+    if (escribir && (siglasCli.length || dominiosCli.length)) {
+      throw new Error("En el --apply, los cambios de las fichas van en el mapa (cambiosDeFichas), que es lo que se aprobó.");
+    }
+    const siglas = [...(mapa.cambiosDeFichas?.siglas ?? []), ...siglasCli];
+    const dominios = [...(mapa.cambiosDeFichas?.dominios ?? []), ...dominiosCli];
+    const cambianFichas = siglas.length > 0 || dominios.length > 0;
+    const ajustarFichas = cambianFichas
       ? (clients: Parameters<NonNullable<Parameters<typeof reResolverReunionesDe>[1]["ajustarFichas"]>>[0]) =>
           clients.map((c) => {
             let x = c;
-            for (const [k, sigla] of siglas) if (idDe(k) === c.id) x = { ...x, siglas: [...(x.siglas ?? []), sigla] };
+            for (const [k, sigla] of siglas) if (idDe(k) === c.id && !(x.siglas ?? []).includes(sigla)) x = { ...x, siglas: [...(x.siglas ?? []), sigla] };
             for (const [k, dominio] of dominios) {
-              if (idDe(k) === c.id) x = { ...x, emailDomains: [...x.emailDomains, dominio] };
+              if (idDe(k) === c.id) x = x.emailDomains.includes(dominio) ? x : { ...x, emailDomains: [...x.emailDomains, dominio] };
               else if (x.emailDomains.includes(dominio)) x = { ...x, emailDomains: x.emailDomains.filter((d) => d !== dominio) };
             }
             return x;
           })
       : undefined;
-    if (ajustarFichas) {
+    if (cambianFichas) {
       console.log("");
-      console.log(`En memoria: ${[...siglas.map(([k, v]) => `sigla «${v}» en ${mapa.fichas[k]!.nombre}`), ...dominios.map(([k, v]) => `${v} pasa a ${mapa.fichas[k]!.nombre}`)].join(" · ")}.`);
+      console.log(`Las fichas cambian (en memoria): ${[...siglas.map(([k, v]) => `sigla «${v}» en ${mapa.fichas[k]!.nombre}`), ...dominios.map(([k, v]) => `${v} pasa a ${mapa.fichas[k]!.nombre}`)].join(" · ")}.`);
+      console.log("Con eso cambian también reuniones de otra gente: se miran TODAS las reuniones, no solo las de este mapa.");
     }
-    const { cambian: sinCambio } = await reResolverReunionesDe(correos, { aplicar: false, exigirHubspot: true });
-    const { cambian: conCambio } = await reResolverReunionesDe(correos, { hipotesis, aplicar: false, ajustarFichas, exigirHubspot: true });
-    const yaDistintas = new Set(sinCambio.map((c) => c.sessionId));
-    const porElMapa = conCambio.filter((c) => !yaDistintas.has(c.sessionId) || sinCambio.find((x) => x.sessionId === c.sessionId)?.a !== c.a);
+    const { cambian: sinCambio } = await reResolverReunionesDe(correos, { aplicar: false, exigirHubspot: true, todas: cambianFichas });
+    const { cambian: conCambio } = await reResolverReunionesDe(correos, { hipotesis, aplicar: false, ajustarFichas, exigirHubspot: true, todas: cambianFichas });
+    const yaDistintas = new Map(sinCambio.map((c) => [c.sessionId, c.a]));
+    const porElMapa = conCambio.filter((c) => !yaDistintas.has(c.sessionId) || yaDistintas.get(c.sessionId) !== c.a);
+    const otrasDuenas = [...new Set(conCambio.flatMap((c) => [c.de, c.a]).filter((x): x is string => !!x && !nombreDe.has(x)))];
+    for (const c of otrasDuenas.length ? await prisma.client.findMany({ where: { id: { in: otrasDuenas } }, select: { id: true, name: true } }) : []) {
+      nombreDe.set(c.id, c.name);
+    }
     const nombre = (id: string | null) => (id ? (nombreDe.get(id) ?? id) : "por decidir");
+    /* Sin ficha no siempre es «por decidir»: una reunión interna queda en la categoría Interna. */
+    const adonde = (c: (typeof conCambio)[number]) =>
+      c.a ? nombre(c.a) : c.porQue?.paso === "interna" ? "Interna (reunión del equipo)" : c.porQue?.paso === "categoria" ? "una categoría" : "por decidir";
     console.log(`\n## Las reuniones que cambian de dueña: ${porElMapa.length}\n`);
     if (sinCambio.length) {
-      console.log(`(Aparte, ${sinCambio.length} de sus reuniones ya hoy están distintas de lo que diría el resolver: se re-resuelven igual con el --apply.)\n`);
+      console.log(`(Aparte, ${sinCambio.length} reunión(es) ya hoy están distintas de lo que diría el resolver: se re-resuelven igual con el --apply.)\n`);
     }
     const grupos = new Map<string, typeof porElMapa>();
     for (const c of porElMapa) {
-      const k = `${nombre(c.de)} → ${nombre(c.a)}`;
+      const k = `${nombre(c.de)} → ${adonde(c)}`;
       grupos.set(k, [...(grupos.get(k) ?? []), c]);
     }
     for (const [k, lista] of [...grupos].sort((a, b) => b[1].length - a[1].length)) {
       console.log(`### ${k}: ${lista.length}`);
-      for (const c of lista.sort((a, b) => +a.date - +b.date)) console.log(`- ${fecha(c.date)} · ${c.title}`);
+      for (const c of lista.sort((a, b) => +a.date - +b.date)) console.log(`- ${fecha(c.date)} · ${c.title.trim()} — ${porQueEnPalabras(c.porQue)}`);
       console.log("");
     }
     if (!porElMapa.length) console.log("Ninguna: el mapa no cambia la dueña de ninguna reunión.\n");
+    const dosNombres = porElMapa.filter((c) => c.a === null && c.porQue?.entre === "dos-nombres").length;
+    if (dosNombres) console.log(`De las que quedan por decidir, ${dosNombres} es(son) porque el título nombra a las dos fichas (la regla: una reunión de dos la asigna una persona en /sessions).\n`);
+
+    /* ── 4b. Lo que cuelga de esas reuniones ── */
+    const cambian = conCambio;
+    const idsCambian = cambian.map((c) => c.sessionId);
+    const destino = new Map(cambian.map((c) => [c.sessionId, c.a]));
+    const [vinculos, tareas, pedidos, hechos, analisis, lecturas, minutas] = await Promise.all([
+      prisma.sessionProject.findMany({
+        where: { sessionId: { in: idsCambian } },
+        select: { sessionId: true, source: true, reviewedAt: true, handoffOverride: true, project: { select: { name: true, clientId: true } } },
+      }),
+      prisma.tarea.findMany({ where: { sessionId: { in: idsCambian } }, select: { numero: true, sessionId: true, clientId: true, cita: true, estado: true } }),
+      prisma.pedidoFueraDeAlcance.findMany({ where: { sessionId: { in: idsCambian }, estado: { not: "DESCARTADO" } }, select: { sessionId: true, clientId: true, pedido: true } }),
+      prisma.hechoDeReunion.findMany({ where: { sessionId: { in: idsCambian }, estado: { in: ["pendiente", "delegado"] } }, select: { sessionId: true, clientId: true, estado: true } }),
+      prisma.analisisDeVenta.count({ where: { sessionId: { in: idsCambian } } }),
+      prisma.lecturaDeReunion.count({ where: { sessionId: { in: idsCambian } } }),
+      prisma.sessionMinute.findMany({ where: { sessionId: { in: idsCambian } }, select: { sessionId: true } }),
+    ]);
+    const ajeno = (sessionId: string | null, clientId: string | null) => {
+      const a = sessionId ? destino.get(sessionId) : undefined;
+      return !!a && !!clientId && a !== clientId;
+    };
+    const vinculosQueSeSueltan = vinculos.filter((v) => ajeno(v.sessionId, v.project.clientId));
+    const vinculosQueEsperan = vinculos.filter((v) => destino.get(v.sessionId) === null && v.project.clientId !== null);
+    const tareasQueCruzan = tareas.filter((t) => t.cita && ajeno(t.sessionId, t.clientId));
+    const pedidosQueCruzan = pedidos.filter((x) => ajeno(x.sessionId, x.clientId));
+    const pendientesQueSeRetiran = hechos.filter((h) => h.estado === "pendiente" && h.sessionId && destino.get(h.sessionId) !== h.clientId);
+    const delegadosQueCruzan = hechos.filter((h) => h.estado === "delegado" && ajeno(h.sessionId, h.clientId));
+    console.log("## Lo que cuelga de esas reuniones\n");
+    console.log(`- Vínculos a proyectos: ${vinculos.length}. Se sueltan ${vinculosQueSeSueltan.length} (a proyectos de otra ficha, cuando la dueña nueva es una ficha), ${vinculosQueSeSueltan.filter((v) => v.source === "manual" || v.reviewedAt || v.handoffOverride !== null).length} de ellos puestos o revisados por una persona.`);
+    for (const v of vinculosQueSeSueltan) console.log(`    · «${v.project.name.trim()}» (${nombre(v.project.clientId)})${v.source === "manual" || v.reviewedAt ? " — lo puso o revisó una persona" : ""}`);
+    if (vinculosQueEsperan.length) console.log(`  Quedan ${vinculosQueEsperan.length} vínculo(s) de reuniones que pasan a por decidir: no alimentan ningún documento hasta que una persona asigne la reunión en /sessions (el chokepoint solo lee las reuniones de la ficha).`);
+    const minutasPorDestino = new Map<string, number>();
+    for (const m of minutas) {
+      const c = cambian.find((x) => x.sessionId === m.sessionId)!;
+      minutasPorDestino.set(adonde(c), (minutasPorDestino.get(adonde(c)) ?? 0) + 1);
+    }
+    console.log(
+      `- Minutas: ${minutas.length}${minutas.length ? ` (${[...minutasPorDestino].map(([k, n]) => `${n} a ${k}`).join(", ")})` : ""}; lecturas (compromisos, pedidos): ${lecturas}. ` +
+        "Van con su reunión: las lee la ficha nueva; si queda sin ficha, ningún documento las lee hasta que alguien la asigne. Los documentos ya generados en la vieja no cambian solos.",
+    );
+    console.log(`- Hechos pendientes: ${pendientesQueSeRetiran.length} se retiran solos («La reunión cambió de dueño») y se vuelven a pedir en la ficha nueva.`);
+    console.log(`- Análisis de venta: ${analisis}. Se sueltan los de la dueña anterior (INV57).`);
+    console.log(`- Tareas con la cita de una reunión que cambia de ficha: ${tareasQueCruzan.length}${tareasQueCruzan.length ? ` (${tareasQueCruzan.map((t) => `T-${t.numero}`).join(", ")}): quedan en su ficha y ponen INV42 en rojo hasta que alguien les cambie el cliente` : ""}.`);
+    console.log(`- Pedidos fuera de alcance de esas reuniones: ${pedidosQueCruzan.length}${pedidosQueCruzan.length ? ": quedan en su ficha y ponen INV46 en rojo hasta que alguien los descarte o los pase" : ""}.`);
+    console.log(`- Hechos delegados: ${delegadosQueCruzan.length}${delegadosQueCruzan.length ? ": no se retiran solos y ponen INV45 en rojo (remedio: scripts/hechos-fuera-de-su-cliente.ts)" : ""}.`);
+
+    /* ── 4c. Las invariantes con la separación hecha (en memoria) ── */
+    const vinculosHoyCruzados = vinculos.filter((v) => {
+      const s = cambian.find((c) => c.sessionId === v.sessionId)!;
+      return s.de !== null && v.project.clientId !== s.de;
+    });
+    console.log("\n## Las invariantes con la separación hecha (en memoria)\n");
+    console.log(`- INV1 (vínculos que cruzan cliente): ${vinculosQueSeSueltan.length ? `el --apply suelta los ${vinculosQueSeSueltan.length}` : "ninguno"}; los de las que quedan por decidir no cuentan (sin dueña). Verde.`);
+    console.log(`- INV2 (lo materializado = lo que diría el resolver): el --apply re-resuelve las ${cambian.length} que cambian${cambianFichas ? " (de toda la base)" : ""}. Verde, salvo lo que cambie entre el simulacro y la escritura (se salta y se lista).`);
+    console.log(`- INV42 (tareas): ${tareasQueCruzan.length ? `ROJO, ${tareasQueCruzan.length}` : "verde"}. INV45 (hechos vivos): ${delegadosQueCruzan.length ? `ROJO, ${delegadosQueCruzan.length}` : "verde"}. INV46 (pedidos): ${pedidosQueCruzan.length ? `ROJO, ${pedidosQueCruzan.length}` : "verde"}. INV57 (análisis de venta): verde (se sueltan).`);
+    if (dominios.length) console.log("- INV37 (un dominio en una sola ficha): el dominio pasa, no se duplica. Verde.");
+    if (vinculosHoyCruzados.length) console.log(`  (Hoy ya hay ${vinculosHoyCruzados.length} vínculo(s) de estas reuniones que cruzan: el --apply los suelta.)`);
 
     /* Las reglas del escritor (equipo, categorías, la casa): se miran TODAS antes de escribir la primera. */
     const rechazos: string[] = [];
@@ -259,32 +337,50 @@ async function main() {
       if (motivo) rechazos.push(`${p.correo}: ${motivo}`);
     }
     if (rechazos.length) {
-      console.log(`⛔ El mapa trae ${rechazos.length} persona(s) que no se pueden guardar:`);
+      console.log(`\n⛔ El mapa trae ${rechazos.length} persona(s) que no se pueden guardar:`);
       for (const r of rechazos) console.log(`  ${r}`);
       console.log("");
     }
 
     if (!escribir) {
-      console.log("Simulacro: no se escribió nada. Para aplicarlo: ALLOW_PROD_WRITE=1 … --por <correo> --apply");
+      console.log("\nSimulacro: no se escribió nada. Para aplicarlo: ALLOW_PROD_WRITE=1 … --por <correo> --apply");
       return;
     }
     if (rechazos.length) throw new Error("Corrige el mapa antes del --apply.");
 
     /* ── 5. Aplicar ── */
     await assertCodigoDesplegado();
-    /* Todo lo que el --apply toca: las personas, la dueña de cada reunión que se mueve y sus vínculos a proyectos
-       COMPLETOS (se sueltan los de otra ficha, también los que puso una persona). */
-    const idsQueSeMueven = conCambio.map((c) => c.sessionId);
+    /* Todo lo que el --apply toca: las fichas que cambian, las personas, la dueña de cada reunión que se mueve y lo que
+       cuelga de ellas COMPLETO (vínculos, también los que puso una persona; hechos; análisis de venta). */
     const respaldo = guardarRespaldoJson({
       mapa: mapa.titulo,
-      reuniones: conCambio.map((c) => ({ id: c.sessionId, resolvedClientIdAntes: c.de, resolvedClientIdDespues: c.a })),
-      vinculos: await prisma.sessionProject.findMany({ where: { sessionId: { in: idsQueSeMueven } } }),
-      // Lo que el cambio de dueña desestima o suelta (reResolveSession): los hechos y los análisis de venta.
-      hechos: await prisma.hechoDeReunion.findMany({ where: { sessionId: { in: idsQueSeMueven } } }),
-      analisisDeVenta: await prisma.analisisDeVenta.findMany({ where: { sessionId: { in: idsQueSeMueven } } }),
+      fichas: await prisma.client.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, siglas: true, emailDomains: true } }),
+      fichasConElDominio: dominios.length
+        ? await prisma.client.findMany({ where: { emailDomains: { hasSome: dominios.map(([, d]) => d) } }, select: { id: true, name: true, emailDomains: true } })
+        : [],
+      reuniones: cambian.map((c) => ({ id: c.sessionId, resolvedClientIdAntes: c.de, resolvedClientIdDespues: c.a })),
+      vinculos: await prisma.sessionProject.findMany({ where: { sessionId: { in: idsCambian } } }),
+      hechos: await prisma.hechoDeReunion.findMany({ where: { sessionId: { in: idsCambian } } }),
+      analisisDeVenta: await prisma.analisisDeVenta.findMany({ where: { sessionId: { in: idsCambian } } }),
       personas: await prisma.personaDeLaEmpresa.findMany({ where: { correo: { in: correos } } }),
     });
     console.log(`Respaldo JSON: ${respaldo}`);
+    if (cambianFichas) {
+      await prisma.$transaction(async (tx) => {
+        for (const [k, sigla] of siglas) {
+          const c = await tx.client.findUniqueOrThrow({ where: { id: idDe(k) }, select: { siglas: true } });
+          if (!c.siglas.includes(sigla)) await tx.client.update({ where: { id: idDe(k) }, data: { siglas: [...c.siglas, sigla] } });
+        }
+        for (const [k, dominio] of dominios) {
+          for (const otra of await tx.client.findMany({ where: { emailDomains: { has: dominio }, id: { not: idDe(k) } }, select: { id: true, emailDomains: true } })) {
+            await tx.client.update({ where: { id: otra.id }, data: { emailDomains: otra.emailDomains.filter((d) => d !== dominio) } });
+          }
+          const c = await tx.client.findUniqueOrThrow({ where: { id: idDe(k) }, select: { emailDomains: true } });
+          if (!c.emailDomains.includes(dominio)) await tx.client.update({ where: { id: idDe(k) }, data: { emailDomains: [...c.emailDomains, dominio] } });
+        }
+      });
+      console.log("Fichas actualizadas (siglas y dominios).");
+    }
     const tocables = ids;
     for (const p of mapa.personas) {
       await guardarInterlocutor({
@@ -304,8 +400,9 @@ async function main() {
     /* Se mueve exactamente lo del simulacro de arriba (con su dueña nueva); lo que dé distinto ahora se salta y se lista. */
     const { cambian: movidas, saltadas } = await reResolverReunionesDe(correos, {
       aplicar: true,
-      aprobadas: new Map(conCambio.map((c) => [c.sessionId, { de: c.de, a: c.a }])),
+      aprobadas: new Map(cambian.map((c) => [c.sessionId, { de: c.de, a: c.a }])),
       exigirHubspot: true,
+      todas: cambianFichas,
     });
     console.log(`Reuniones re-resueltas: ${movidas.length}.`);
     if (saltadas.length) {
@@ -315,6 +412,32 @@ async function main() {
   } finally {
     await prisma.$disconnect();
   }
+}
+
+/** El porqué de la dueña nueva, en palabras (la traza de la cascada). */
+function porQueEnPalabras(t: { paso?: string; entre?: string } | undefined): string {
+  const entre: Record<string, string> = {
+    nombre: "el título la nombra",
+    confirmada: "la gente que confirmó el equipo",
+    gente: "lo aprendido de los títulos",
+    dominio: "el dominio de su gente",
+    "dos-nombres": "el título nombra a las dos fichas",
+    "gente-de-varias": "hay gente de dos fichas",
+    "sin-pista": "sin pista (la gente del grupo no decide sola)",
+  };
+  const paso: Record<string, string> = {
+    "a-mano": "asignada a mano",
+    "interna-por-titulo": "reunión interna: por el título",
+    interna: "reunión interna",
+    "gente-confirmada": "gente confirmada",
+    dominio: "por el dominio",
+    categoria: "por una categoría",
+    hubspot: "por la empresa de HubSpot",
+    titulo: "por el título",
+    "sin-dueno": "sin pista",
+  };
+  if (!t?.paso) return "sin pista";
+  return t.entre ? `${paso[t.paso] ?? t.paso}: ${entre[t.entre] ?? t.entre}` : (paso[t.paso] ?? t.paso);
 }
 
 main().catch((e) => {

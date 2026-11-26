@@ -17677,7 +17677,7 @@ Marco y Mariana (teamnet.com.mx) manejan sistemas para todo el grupo, y el domin
   y no da de baja a una persona confirmada o sumada por el equipo (origen `equipo`, `laSostieneElEquipo`). Lo aprendido de
   los títulos (`aprenderPersonasDeEntidades`) se calcula SIN la gente confirmada: confirmar a alguien no cambia lo que
   Nexus aprende de los demás.
-- **El resolver: un paso nuevo, el 3·0, solo en `categorize.ts` (invariante 2)** (`porLaGenteConfirmada`). Corre solo si
+- **El resolver: un paso nuevo, el 3·0, solo en `categorize.ts` (invariante 2)** (`decisionDeLaGenteConfirmada`). Corre solo si
   alguien de afuera en la reunión está confirmado; si nadie lo está, la cascada es idéntica a la de antes (con prueba).
   Cuando corre, decide (una ficha o POR DECIDIR):
   1. Las candidatas: las fichas de la gente confirmada y la del dominio de cada persona (registrado, paso 3, o por su
@@ -17766,9 +17766,18 @@ Marco y Mariana (teamnet.com.mx) manejan sistemas para todo el grupo, y el domin
   una sigla o un dominio más en una ficha.
   - **TEC (simulacro del 25 nov):** 7 confirmadas (5 en AE, 2 en TAE) y 5 por confirmar. **Ninguna reunión cambia de
     dueña**: la separación ya estaba bien (lo que midió la coordinadora); confirmar asegura las que vengan.
-  - **Teamnet / Stratosphere (simulacro):** con los tres del grupo y la gente de stratospherecorp.com sugerida, cambian 4
-    (3 a Stratosphere; «Health Score Team» queda por decidir). Con la sigla «SAS» en Stratosphere (solo en memoria): 40
-    (17 a Stratosphere y 23 conjuntas, «Teamnet y SAS», por decidir). La sigla y el dominio son datos de clientes en uso:
-    los decide Elías.
+  - **Teamnet / Stratosphere — Elías, 25 nov: «Sí, SAS es Stratosphere».** El mapa lleva los cambios de las fichas
+    aprobados (`cambiosDeFichas`): Stratosphere gana la sigla «SAS» y el dominio stratospherecorp.com pasa de Teamnet a
+    Stratosphere; Laura, Marco y Mariana quedan del grupo y la gente de stratospherecorp.com (5) confirmada en
+    Stratosphere. Con cambios de fichas, el simulacro y el --apply miran TODAS las reuniones y el simulacro dice el porqué
+    de cada una (la traza de la cascada: `categorizeSession(…, traza)`, que la anota en el mismo recorrido). **Simulacro:
+    cambian 44 reuniones de Teamnet:** 17 a Stratosphere (el título dice «SAS» o «Stratosphere»); 23 por decidir (22
+    conjuntas, «Teamnet y SAS» o «Teamnet - SAS», porque el título nombra a las dos: la regla de siempre, las asigna una
+    persona en /sessions; y «Health Score Team», sin título y solo con gente del grupo); 4 reuniones internas que
+    nombran a las dos («Demo interna TEAMNET & SAS») pasan a Interna. Lo que cuelga: 17 vínculos (de la IA) al proyecto
+    «Teamnet - Reimplementación CRM» se sueltan; los 27 de las que quedan sin ficha esperan (no alimentan nada sin dueña);
+    23 minutas van con su reunión (5 a Stratosphere); sin tareas, pedidos, hechos ni análisis de venta. INV1, 2, 37, 42,
+    45, 46 y 57 quedan en verde con la separación en memoria. *Lo aceptado:* hasta que una persona asigne las 22
+    conjuntas, ni Teamnet ni Stratosphere las leen; los documentos de Teamnet ya generados no cambian solos.
 - **Sin cambio:** la agenda de «Mi día» (`lib/mi-dia/agenda.ts`) reparte los eventos futuros con su regla de unidades y
   todavía no mira a la gente confirmada.
