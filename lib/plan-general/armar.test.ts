@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { ExternalTimelineData, ExternalTimelinePhase } from "@/lib/external/timeline-view-types";
-import { anclaComun, armarPlanGeneral, corrimiento, unirParaElCliente, type FaseParaElPlan, type ProyectoParaElPlan } from "./armar";
+import { anclaComun, anclaDelPlan, armarPlanGeneral, corrimiento, unirParaElCliente, type FaseParaElPlan, type ProyectoParaElPlan } from "./armar";
 import { fotoDelPlan, hayCambiosSinPublicar, leerFoto, tieneLoops } from "./foto";
 
 type TareaDeFase = FaseParaElPlan["tasks"][number];
@@ -76,7 +76,9 @@ describe("armarPlanGeneral: el plan del equipo, con las filas del motor", () => 
   it("solo las fases-loop, en orden de número, sobre el arranque más temprano", () => {
     expect(plan.fases.map((f) => f.loopNumero)).toEqual([1, 4, 5]);
     expect(plan.ancla).toBe(NOV2);
-    expect(plan.proyectos.map((p) => p.id)).toEqual(["ventas", "infoclic"]);
+    // Los proyectos son los que ENTRAN (la lista del plan, 26 nov): uno sin loops está, aunque no muestre nada.
+    expect(plan.proyectos.map((p) => p.id)).toEqual(["ventas", "infoclic", "sin-loops"]);
+    expect(plan.guardado).toBe(false);
   });
 
   it("cada fase arranca donde arranca en SU cronograma, corrida por el arranque de su proyecto", () => {
@@ -201,5 +203,115 @@ describe("la foto del cliente", () => {
   it("hay algo que compartir cuando hay loops", () => {
     expect(tieneLoops(hoy)).toBe(true);
     expect(tieneLoops({ exists: false, anchorStartDate: null, phases: [] })).toBe(false);
+  });
+});
+
+/* 2026-11-26 · El plan como objeto de la cuenta: sus fases PROPIAS (lo transversal), su arranque, su orden y lo que ve
+   el cliente de ellas (DECISIONS «El plan general es un objeto de la cuenta»). */
+const propio = (ancla: string | null, fases: FaseParaElPlan[]) => ({ anchorStartDate: ancla, detailConfirmedAt: NOV2, phases: fases });
+
+describe("armarPlanGeneral con fases propias", () => {
+  const plan = armarPlanGeneral(
+    [
+      proyecto("ventas", NOV16, [fase("v4", 4, [tarea("a", 0)]), fase("v-comun", null, [tarea("z", 0)], { order: 1 })]),
+      proyecto("infoclic", NOV2, [fase("c1", 1, [tarea("c", 0)])]),
+    ],
+    propio(NOV2, [
+      fase("transversal", 0, [tarea("t1", 0, { status: "DONE", semanas: 2 }), tarea("t4", 3, { semanas: 6 })], { durationWeeks: 9 }),
+      fase("sin-numero", null, [], { order: 1, startWeek: 2, durationWeeks: 3 }),
+    ]),
+  );
+
+  it("entran TODAS las fases del plan (con número o sin él), sin proyecto, y del proyecto solo los loops", () => {
+    expect(plan.fases.map((f) => f.id)).toEqual(["sin-numero", "transversal", "c1", "v4"]);
+    expect(plan.fases.filter((f) => f.proyectoId === null).map((f) => f.id)).toEqual(["sin-numero", "transversal"]);
+    expect(plan.fases.some((f) => f.id === "v-comun")).toBe(false);
+    expect(plan.guardado).toBe(true);
+  });
+
+  it("el arranque es el del plan, y los proyectos se corren desde ahí", () => {
+    expect(plan.ancla).toBe(NOV2);
+    expect(plan.anclaPropia).toBe(true);
+    expect(plan.fases.find((f) => f.id === "transversal")!.startWeek).toBe(0);
+    expect(plan.fases.find((f) => f.id === "sin-numero")!.startWeek).toBe(2);
+    expect(plan.fases.find((f) => f.id === "v4")!.startWeek).toBe(2);
+  });
+
+  it("⛔ un proyecto que arranca ANTES que el plan mueve el S0: nada queda en semanas negativas", () => {
+    const tarde = armarPlanGeneral([proyecto("p", NOV2, [fase("l", 1, [])])], propio(NOV16, [fase("t", 0, [])]));
+    expect(tarde.ancla).toBe(NOV2);
+    expect(tarde.fases.find((f) => f.id === "l")!.startWeek).toBe(0);
+    expect(tarde.fases.find((f) => f.id === "t")!.startWeek).toBe(2);
+    // La pantalla resta esto al guardar el arranque de una fase propia.
+    expect(tarde.corrimientoPropio).toBe(2);
+    expect(plan.corrimientoPropio).toBe(0);
+  });
+
+  it("las tareas de una fase propia son las filas del motor (semana, duración, estado)", () => {
+    const t = plan.fases.find((f) => f.id === "transversal")!.tasks;
+    expect(t.map((x) => [x.id, x.weekIndex, x.semanas, x.status])).toEqual([
+      ["t1", 0, 2, "DONE"],
+      ["t4", 3, 6, "PENDING"],
+    ]);
+  });
+
+  it("un plan sin arranque usa el más temprano de sus proyectos (lo de antes)", () => {
+    expect(armarPlanGeneral([proyecto("p", NOV16, [fase("l", 1, [])])], propio(null, [])).ancla).toBe(NOV16);
+    expect(anclaDelPlan(null, [NOV16, NOV2])).toBe(NOV2);
+    expect(anclaDelPlan(NOV2, [NOV16])).toBe(NOV2);
+    expect(anclaDelPlan(NOV16, [NOV2])).toBe(NOV2);
+  });
+
+  it("a igual número de loop, primero la del plan y después por proyecto", () => {
+    const p = armarPlanGeneral(
+      [{ ...proyecto("a", NOV2, [fase("a3", 3, [])]), name: "Alfa" }],
+      propio(NOV2, [fase("p3", 3, [])]),
+    );
+    expect(p.fases.map((f) => f.id)).toEqual(["p3", "a3"]);
+  });
+});
+
+describe("unirParaElCliente con las fases propias del plan", () => {
+  const unido = unirParaElCliente([
+    { data: cronograma(NOV2, [faseExterna("c1", 0)]), loops: new Map([["c1", 1]]), proyectoNombre: "Infoclic" },
+    {
+      delPlan: true,
+      data: cronograma(NOV2, [faseExterna("tr", 0, { durationWeeks: 9 }), faseExterna("libre", 1, { startWeek: 3 })]),
+      loops: new Map([["tr", 0]]),
+    },
+  ]);
+
+  it("el loop 0 se rotula «00 · Transversal»; una fase propia sin número, con su nombre; todas entran", () => {
+    expect(unido.phases.map((f) => [f.name, f.startWeek, f.order])).toEqual([
+      ["Fase libre", 3, 0],
+      ["00 · Fase tr", 0, 1],
+      ["01 · Fase c1", 0, 2],
+    ]);
+  });
+
+  it("⛔ lo de la fase propia pasa como lo dejó el chokepoint, y sin particularidades", () => {
+    expect(unido.phases.find((f) => f.id === "tr")!.tasks).toEqual([{ title: "Tarea de tr", weekIndex: 1, status: "PENDING", party: "SMARTEAM", type: "TASK" }]);
+    expect(unido.particularidades).toEqual([]);
+  });
+
+  it("⛔ al cliente tampoco le llegan semanas negativas: un proyecto que arranca antes mueve el S0", () => {
+    const u = unirParaElCliente([
+      { data: cronograma(NOV2, [faseExterna("c1", 0)]), loops: new Map([["c1", 1]]) },
+      { delPlan: true, data: cronograma(NOV16, [faseExterna("tr", 0)]), loops: new Map([["tr", 0]]) },
+    ]);
+    expect(u.anchorStartDate).toBe(NOV2);
+    expect(u.phases.map((f) => [f.id, f.startWeek])).toEqual([
+      ["tr", 2],
+      ["c1", 0],
+    ]);
+  });
+
+  it("sin fases propias, lo mismo que antes del 26 nov (la foto publicada de kölbi no queda «con cambios»)", () => {
+    const antes = unirParaElCliente([{ data: cronograma(NOV2, [faseExterna("l", 0)]), loops: new Map([["l", 1]]) }]);
+    const conPlanVacio = unirParaElCliente([
+      { data: cronograma(NOV2, [faseExterna("l", 0)]), loops: new Map([["l", 1]]) },
+      { delPlan: true, data: { exists: true, anchorStartDate: NOV2, phases: [], particularidades: [] }, loops: new Map() },
+    ]);
+    expect(hayCambiosSinPublicar(conPlanVacio, antes)).toBe(false);
   });
 });

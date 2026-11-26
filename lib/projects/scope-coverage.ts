@@ -46,7 +46,15 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
     modo: "exento",
     razon:
       "el plan general (2026-11-19) lee los cronogramas de una cuenta: activos y no de prueba, y solo cuentan las fases " +
-      "con loop, que existen solo en proyectos que alguien cargó. No lista proyectos ni decide cartera o cobro.",
+      "con loop, que existen solo en proyectos que alguien cargó. No lista proyectos ni decide cartera o cobro. Desde el " +
+      "26 nov, con plan guardado, los de SU lista (PROYECTO_DEL_PLAN: activos, de la cuenta, sin el escondido).",
+  },
+  // El plan general como objeto de la cuenta (2026-11-26): valida la lista de proyectos del plan contra la cuenta.
+  "lib/plan-general/plan.ts": {
+    modo: "exento",
+    razon:
+      "la lista explícita del plan general: valida que cada proyecto sea activo, de la cuenta y no de prueba " +
+      "(PROYECTO_DEL_PLAN) y siembra el plan nuevo con los que tienen loops. No decide cartera, cobro ni navegación.",
   },
   // ── Los que usan un criterio ───────────────────────────────────────────────
   "app/(shell)/clients/[id]/layout.tsx": { modo: "criterio", criterio: "navegable" },

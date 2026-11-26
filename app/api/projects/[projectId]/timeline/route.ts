@@ -403,15 +403,17 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
       },
     },
   });
-  if (!tl) return { exists: false };
+  // Por `projectId`: siempre tiene proyecto (un cronograma de plan no tiene, DECISIONS «El plan general es un objeto…»).
+  if (!tl?.project) return { exists: false };
+  const proyecto = tl.project;
   // El summary alimenta el panel "Qué hacer acá". Va en try/catch a propósito: es contexto de apoyo,
   // y si falla no puede tumbar el cronograma en sí.
   const [kickoffDate, summary, referenciasDeLaPropuesta] = await Promise.all([
     getKickoffSessionDate(projectId),
     // C-17: el summary sale del árbol que ya se leyó arriba; el único viaje extra es el ciclo de vida.
     loadProjectSummaryDesdeArbol(projectId, {
-      status: tl.project.status,
-      healthStatusOverride: tl.project.healthStatusOverride,
+      status: proyecto.status,
+      healthStatusOverride: proyecto.healthStatusOverride,
       timeline: tl,
     }).catch(() => null),
     /* L4: contra qué se compara la propuesta (solo con un borrador-v1). También es contexto de apoyo: si falla,
@@ -421,7 +423,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
       guardado: tl.pendingProposal,
       token: tl.pendingProposalRunId,
       publishedSnapshot: tl.publishedSnapshot,
-      publicadoEn: tl.project.timelinePublishedAt,
+      publicadoEn: proyecto.timelinePublishedAt,
     }).catch(() => null),
   ]);
   // Sesiones de entrega reales por fase (calculado, no persistido). null por fase
@@ -450,11 +452,11 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     summary,
     anchorStartDate: tl.anchorStartDate?.toISOString() ?? null,
     closeDateOverride: tl.closeDateOverride?.toISOString() ?? null,
-    limites: limitesDeLaFila({ ...tl, conSemanaCero: conSemanaCeroDelPipeline(tl.project.hubspotPipelineId) }),
+    limites: limitesDeLaFila({ ...tl, conSemanaCero: conSemanaCeroDelPipeline(proyecto.hubspotPipelineId) }),
     lastEditedByHuman: tl.lastEditedByHuman?.toISOString() ?? null,
     generatedByAgentRunId: tl.generatedByAgentRunId,
     detailConfirmedAt: tl.detailConfirmedAt?.toISOString() ?? null,
-    timelinePublishedAt: tl.project.timelinePublishedAt?.toISOString() ?? null,
+    timelinePublishedAt: proyecto.timelinePublishedAt?.toISOString() ?? null,
     hasPublishedOnce: tl.publishedSnapshot != null,
     publicadas: readPublishedParticularidades(tl.publishedSnapshot),
     kickoffSessionDate: kickoffDate?.toISOString() ?? null,
@@ -1294,7 +1296,7 @@ export async function DELETE(
     prisma,
     {
       projectId,
-      clientId: existing.project.clientId,
+      clientId: guard.clientId,
       timelineId: existing.id,
       actorEmail: guard.user.email ?? null,
       source: "UI_PATCH",

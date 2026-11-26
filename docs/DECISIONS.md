@@ -16114,6 +16114,88 @@ entregables de kölbi se hacen por área.
   proyectos no cambian (respuesta 1: son espejo de HubSpot).
 - **Lo transversal no se carga todavía** (alineación, entrevistas, sprint review…). La puerta queda abierta: un grupo
   transversal sería una fase con número propio en el proyecto que se decida.
+  *Enmienda (26 nov, Elías): el plan deja de ser una vista y lo transversal no va en un proyecto: es una fase propia
+  del plan. Ver «El plan general es un objeto de la cuenta».*
+
+## El plan general es un objeto de la cuenta, con su lista de proyectos y sus propias fases (2026-11-26, etapa 1: kölbi)
+
+**Contexto.** Hasta acá el plan general era una VISTA: juntaba toda fase con `loopNumero` de los proyectos activos de
+una ficha y no guardaba nada propio. Elías decidió (26 nov) estandarizarlo desde la raíz, porque lo van a necesitar las
+cuentas con varios proyectos y los grupos de unidades (el TEC con AE y TAE, `Client.comparteDominioConId`). Lo
+transversal (alinear objetivos, entrevistas, el diagnóstico de madurez, la adopción) no es de ningún proyecto y no tenía
+dónde vivir (la sección anterior lo dejó pendiente: «un grupo transversal sería una fase con número propio en el
+proyecto que se decida»). Etapas: **1** = esto, con kölbi; **2** = un plan que junta proyectos de varias unidades del
+grupo (el dueño pasa a ser la ficha principal); **3** = qué interlocutores ven el plan.
+
+- **El plan es una fila propia** (`PlanGeneral`, una por cuenta: `clientId` único, CASCADE). Su dueño es la cuenta. En
+  la etapa 2 el dueño será la ficha principal del grupo; la regla «uno por dueño» sigue.
+- **La lista de proyectos es EXPLÍCITA** (`ProyectoDelPlan`, pivote plan↔proyecto, ARCHITECTURE §2 regla 5), ya no
+  «toda fase con loop». De cada proyecto incluido entran sus fases con número (los loops, como hasta acá): las demás
+  fases de su cronograma son del proyecto y no se ven en el plan. Entra solo un proyecto de la MISMA cuenta, activo y que
+  no es de prueba (en la etapa 1; la 2 abre las fichas del grupo). Lo pide la ruta y lo vuelve a filtrar la lectura: un
+  proyecto que se cerró o se pasó a prueba deja de verse aunque siga en la lista. Se edita en «Proyectos del plan».
+- **Las fases propias son un cronograma cuyo dueño es el plan.** `ProjectTimeline` puede ser de un proyecto O de un plan
+  (`projectId` y `planId` nullable, únicos, con el CHECK `ProjectTimeline_un_solo_dueno`: exactamente uno). Así las fases
+  propias son `TimelinePhase` y sus tareas `TimelineTask` de siempre, con las mismas semanas, estados, duración en
+  semanas, fechas fijadas y responsables, y se pintan con el MISMO Gantt y el MISMO panel (decisión del 19 nov: todo
+  cronograma es fases, tareas y semanas, con un solo motor). El plan nace con su cronograma, en la misma transacción.
+  - *Por qué no el proyecto escondido «Información del cliente» (`__strategy__`):* es un atajo de almacenamiento, aparece
+    como proyecto en cada lector de proyectos, y la regla es no meterle nada nuevo.
+  - *Por qué no tablas propias para las fases del plan:* duplicarían las reglas del motor (semanas que caben, coherencia
+    fase↔tarea, fechas reales, lo que cruza al cliente) y se separarían del cronograma al primer cambio.
+  - *El riesgo, y cómo se cerró:* un cronograma de plan no tiene proyecto, y los lectores que recorren cronogramas sin
+    filtrar por proyecto podrían contarlo como uno. Con `projectId` nullable, `timeline.project` pasa a ser opcional en
+    los tipos: el compilador marcó cada lugar que lo leía y cada uno se revisó. Los lectores por proyecto (Cobranza,
+    alertas, atrasos, vigía, «Mi día», ciclo, línea base, el cronograma del cliente, la carga) llegan al cronograma desde
+    el proyecto (`project.timeline`, `where: { projectId }` o `timeline: { project: … }`), así que uno de plan no puede
+    entrar: una relación nula no cumple ningún filtro sobre el proyecto. Los que recorrían TODOS los cronogramas (los
+    resultados de «¿cuánto te tomó?», sus preguntas y el INV22) ahora piden `projectId` no nulo o nombran al plan.
+    `lib/plan-general/fuera-de-los-proyectos.test.ts` congela la lista de lectores que recorren cronogramas sin pasar por
+    un proyecto: uno nuevo la pone en rojo hasta que alguien decide qué hace con un cronograma de plan.
+- **El arranque del plan es el `anchorStartDate` de SU cronograma** (una sola fuente, ARCHITECTURE §2 regla 1). Todo se
+  cuenta desde ahí: cada proyecto se corre las semanas que hay entre su arranque y el del plan. Un plan sin arranque usa el
+  más temprano de sus proyectos (lo de antes). Se fija en el Gantt del plan, como el de un proyecto, y no puede ir DESPUÉS
+  del primero de sus proyectos con loops (400). Si después un proyecto queda antes (se suma a la lista, un kickoff lo corre
+  hacia atrás), el S0 del Gantt pasa a ser el de ese proyecto y las fases propias se corren (`corrimientoPropio`): el Gantt
+  cuenta desde S0, y un loop en una semana negativa no se vería ni le llegaría bien al cliente (revisión del 26 nov).
+- **Las tareas de una fase propia se editan con la misma vara que el cronograma:** acceso a la cuenta + `editTimeline`
+  (`guardPlanEdit`), y borrar pide `deleteTimeline` (`guardPlanDelete`): el CSE suspende, no borra. Las operaciones de una
+  tarea (crearla, cambiarle el estado con la coherencia de su fase, editar sus campos, moverla, borrarla) viven UNA vez en
+  `lib/timeline/una-tarea.ts` y las usan las rutas del proyecto y las del plan; cambia solo dónde se busca el cronograma
+  (`{ projectId }` o `{ planId }`). Las fases propias (nombre, semanas, arranque) se crean con «+ Fase del plan» (con su
+  número de loop) y se editan en su fila del Gantt; las fases de un proyecto siguen editándose en el cronograma de su
+  proyecto (`GanttPhase.estructuraFija`, nuevo en el motor: la fila no deja editar ni borrar la fase, sí sus tareas). Una
+  fase propia no se acorta si deja tareas afuera (INV22), y una tarea no pasa del plan a un proyecto ni al revés.
+- **Lo que no corre en una fase propia:** el vigía de Éxito del cliente (`TimelineEvent` es por proyecto) y «¿cuánto te
+  tomó?» (las preguntas de tiempo son de una tarea de un proyecto). Lo transversal no tiene un proyecto al que avisarle;
+  si hace falta, se decide en su etapa.
+- **Una fase propia con `loopNumero` 0 se rotula «00 · Transversal»** (`rotuloDelLoop`). Sin número, sale con su nombre.
+  En el plan, las fases van por número de loop (las sin número, primero); a igual número, primero las del plan y después
+  por proyecto.
+- **Lo que ve el cliente pasa por el MISMO chokepoint** (`readClientTimeline`, que ahora también lee el cronograma de un
+  plan: `readClientTimelineDelPlan`, el mismo select): sin notas de tarea, sin lo suspendido ni lo «por validar», sin
+  tareas si el detalle no está confirmado. El cronograma del plan nace con el detalle confirmado: sus tareas las escribe
+  una persona, no hay detalle de la IA que revisar. La foto (formato 2, la forma no cambia) suma las fases propias a los
+  loops de los proyectos.
+- **El acceso sigue siendo `AccesoAlPlanGeneral`, uno por cuenta**, y queda ligado al plan por el dueño: los dos son
+  únicos por `clientId`. El enlace que ya existe no cambia y crear el plan no toca la foto publicada: el cliente ve lo
+  nuevo recién con «Publicar». *Por qué no una llave al plan:* la fila de kölbi existe antes que su plan y la llave
+  obligaría a rehacerla; quien mueva el dueño de un plan en la etapa 2 mueve los dos.
+- **Juntar dos fichas duplicadas muda el plan** (`planGeneral` en `UNO_A_UNO`, lib/clients/fusion-de-empresas.ts) con su
+  cronograma y su lista, igual que el acceso. Sin eso, borrar la ficha absorbida se llevaba en cascada las fases propias y
+  dejaba el enlace del cliente mostrando una foto de fases que ya no existen (revisión del 26 nov). Si las dos tienen plan,
+  queda el de la que sigue, como todo lo uno a uno.
+- **Una cuenta sin plan guardado se ve como antes** (los proyectos con loops, sin fases propias), y el plan nace con lo
+  primero que se guarda (una fase propia, la lista de proyectos, el arranque o el acceso), con esos mismos proyectos y ese
+  arranque. Así el deploy no deja a kölbi sin plan entre el código y su script.
+- **kölbi** (`scripts/kolbi-plan-de-la-cuenta.ts`, simulacro primero): crea su plan con sus tres proyectos, arranque lunes
+  2 nov (el de los tres) y la fase «Transversal» (loop 0, en curso, S0 a S8) con cuatro tareas: alinear objetivos (S0,
+  hecha), entrevistas y mapa de procesos (S0, dos semanas, hecha), hallazgos y scorecard (S1, hecha) y capacitación y
+  adopción (S3 a S8, en curso). El entregable y quiénes participan van en el detalle de cada tarea. No republica: el
+  cliente sigue viendo la foto del 26 nov hasta que alguien aprieta «Publicar».
+- **Lo que no queda garantizado:** que un lector nuevo que recorra todos los cronogramas sin pasar por un proyecto se
+  acuerde del plan (lo vigilan la prueba de la lista y el tipo nullable, no una regla de la base); que el vigía o las
+  alertas avisen de un atraso en lo transversal (no lo miran, a propósito).
 
 ## Trivias (2026-11-19)
 

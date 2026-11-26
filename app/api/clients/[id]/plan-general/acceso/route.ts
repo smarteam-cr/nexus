@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToClient, guardCapability } from "@/lib/auth/api-guards";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
+import { SQL_DEL_PLAN } from "@/lib/plan-general/respuesta";
 import {
   crearAccesoAlPlan,
   ErrorDelAccesoAlPlan,
@@ -29,7 +30,7 @@ async function responder(hacer: () => Promise<EstadoDelAccesoAlPlan>) {
   } catch (e) {
     if (e instanceof ErrorDelAccesoAlPlan) return NextResponse.json({ error: e.message }, { status: e.status });
     if (esquemaDesactualizado(e))
-      return NextResponse.json({ error: "Falta aplicar scripts/sql/2026-11-19-plan-general-de-la-cuenta.sql y reiniciar." }, { status: 503 });
+      return NextResponse.json({ error: `Falta aplicar ${SQL_DEL_PLAN} y reiniciar.` }, { status: 503 });
     throw e;
   }
 }

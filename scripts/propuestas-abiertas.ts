@@ -181,8 +181,9 @@ async function main() {
   const { prisma, close } = createScriptDb();
   try {
     const ahora = new Date();
-    const filas = await prisma.projectTimeline.findMany({
-      where: { pendingProposal: { not: Prisma.DbNull } },
+    const filasDeLaBase = await prisma.projectTimeline.findMany({
+      // Un cronograma de plan general no tiene propuestas: el filtro de proyecto es para el tipo.
+      where: { pendingProposal: { not: Prisma.DbNull }, projectId: { not: null } },
       orderBy: { updatedAt: "asc" },
       select: {
         id: true,
@@ -207,6 +208,7 @@ async function main() {
         project: { select: { name: true, client: { select: { name: true } } } },
       },
     });
+    const filas = filasDeLaBase.flatMap((f) => (f.projectId ? [{ ...f, projectId: f.projectId }] : []));
     const nombre = (f: (typeof filas)[number]) =>
       `${f.project?.client?.name ?? "(sin cliente)"} › ${f.project?.name ?? "(sin proyecto)"}`;
 

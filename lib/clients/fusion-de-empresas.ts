@@ -167,9 +167,10 @@ export const SIN_CHOCAR = [
  * Una por ficha (`clientId` es `@unique` o `@id`): se muda si la que sigue no la tiene. Si las dos tienen, queda la de
  * la que sigue (las copias las vuelve a armar el sync) y la otra va entera al respaldo «antes». La clasificación de la
  * cartera NO es una copia: la confirmó una persona, así que la que sigue toma de la otra lo que no tiene confirmado
- * (`plegarClasificacion`).
+ * (`plegarClasificacion`). El plan general (2026-11-26) se muda con su cronograma y su lista: los dos cuelgan del plan,
+ * no de la ficha; sus proyectos se mudan solos (`project.clientId`), así que la lista sigue valiendo.
  */
-export const UNO_A_UNO = ["hubspotAccount", "clientCsSignals", "clientPartnerSnapshot", "csAccountBrief", "clasificacionDeCuenta", "perfilDeLaEmpresa", "accesoAlPlanGeneral"] as const;
+export const UNO_A_UNO = ["hubspotAccount", "clientCsSignals", "clientPartnerSnapshot", "csAccountBrief", "clasificacionDeCuenta", "perfilDeLaEmpresa", "accesoAlPlanGeneral", "planGeneral"] as const;
 
 /** Lo que cuelga de la cuenta de cobro (por `cuentaId`): se muda a la cuenta de la que sigue cuando las dos tienen. */
 export const DE_LA_CUENTA = [

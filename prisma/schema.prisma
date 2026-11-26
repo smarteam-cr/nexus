@@ -336,6 +336,7 @@ model Client {
   documentosDeLaEmpresa    ProjectCanvas[]           @relation("DocumentosDeLaEmpresa") // R3: los documentos sin proyecto ni propuesta (CASCADE)
   accesosADocumentos       AccesoAlDocumento[] // R3 etapa 3: los enlaces de esos documentos (CASCADE)
   accesoAlPlanGeneral      AccesoAlPlanGeneral? // el enlace del plan general de la cuenta (2026-11-19, CASCADE)
+  planGeneral              PlanGeneral? // el plan general de la cuenta: sus proyectos y sus fases propias (2026-11-26, CASCADE)
   personas                 PersonaDeLaEmpresa[]      @relation("PersonasDeLaEmpresa") // R6: una persona del cliente con su rol (CASCADE)
   perfil                   PerfilDeLaEmpresa?        @relation("PerfilDeLaEmpresa") // R13: el perfil de la empresa que usa Nexus (hoy Smarteam)
   clienteIdeal             IcpItem[]                 @relation("ClienteIdealDeLaEmpresa") // R13 (SET NULL)
@@ -762,6 +763,7 @@ model Project {
   personasDeCuestionario     CuestionarioResponsable[]
   guiaDeExploracion          GuiaDeExploracion?
   timeline                   ProjectTimeline?
+  enPlanesGenerales          ProyectoDelPlan[] // los planes generales que lo incluyen (2026-11-26, CASCADE)
   ciclos                     CicloDeProyecto[] // servicio recurrente: un tramo con fechas, de diagnóstico a aprendizaje
   recomendacionDeRecurrencia RecomendacionDeRecurrencia? // etapa 6: pasar este servicio temporal a SmartLoop
   casosDeUso                 CasoDeUso[]
@@ -994,8 +996,14 @@ model NotaDeContexto {
 
 model ProjectTimeline {
   id                           String    @id @default(cuid())
-  projectId                    String    @unique
-  project                      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // El DUEÑO del cronograma: un proyecto O un plan general (2026-11-26, DECISIONS «El plan general es un objeto de la
+  // cuenta»). Exactamente uno de los dos: lo sostiene el CHECK `ProjectTimeline_un_solo_dueno`, que Prisma no modela.
+  // nullable porque un cronograma de plan no tiene proyecto: quien recorra cronogramas SIN pasar por un proyecto
+  // tiene que decidir qué hace con uno de plan (lib/plan-general/fuera-de-los-proyectos.test.ts lleva la lista).
+  projectId                    String?      @unique
+  project                      Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  planId                       String?      @unique // nullable porque casi todo cronograma es de un proyecto
+  plan                         PlanGeneral? @relation(fields: [planId], references: [id], onDelete: Cascade)
   anchorStartDate              DateTime? // null hasta que el CSE la fije; cuando exista, define la conversión semanas → fechas
   // Tanda K — cierre FIJADO A MANO por el CSE, mismo criterio que el arranque: null = usar el
   // proyectado (projectedEnd, derivado de anchor+fases). Con valor, GANA sobre el derivado — y
@@ -2277,6 +2285,37 @@ model AccesoAlDocumento {
   updatedAt   DateTime      @updatedAt
 
   @@index([clientId])
+}
+
+// El PLAN GENERAL de una cuenta (2026-11-26, etapa 1): un objeto propio, uno por cuenta, con la lista EXPLÍCITA de sus
+// proyectos (ProyectoDelPlan: de cada uno entran sus loops) y su propio cronograma (ProjectTimeline.planId: las fases
+// transversales, con el mismo motor de todo cronograma). El arranque del plan es el `anchorStartDate` de ese cronograma.
+// El acceso del cliente (AccesoAlPlanGeneral) queda ligado por la cuenta: los dos son únicos por `clientId`.
+// SQL: scripts/sql/2026-11-26-plan-general-objeto-de-la-cuenta.sql. Ver DECISIONS «El plan general es un objeto de la cuenta».
+model PlanGeneral {
+  id         String            @id @default(cuid())
+  clientId   String            @unique
+  client     Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  creadoPor  String? // el correo de quien lo creó (auditoría)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  proyectos  ProyectoDelPlan[]
+  cronograma ProjectTimeline?
+}
+
+// Un proyecto incluido en un plan general (pivote, ARCHITECTURE §2 regla 5). En la etapa 1, solo de la misma cuenta,
+// activo y que no es de prueba (lo pide la ruta y lo vuelve a filtrar la lectura).
+model ProyectoDelPlan {
+  id          String      @id @default(cuid())
+  planId      String
+  plan        PlanGeneral @relation(fields: [planId], references: [id], onDelete: Cascade)
+  projectId   String
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  agregadoPor String? // el correo de quien lo sumó (auditoría)
+  createdAt   DateTime    @default(now())
+
+  @@unique([planId, projectId])
+  @@index([projectId])
 }
 
 // El enlace con que el cliente ve el PLAN GENERAL de la cuenta (2026-11-19): los loops de sus proyectos en un solo

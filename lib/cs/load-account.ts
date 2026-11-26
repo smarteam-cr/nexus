@@ -467,7 +467,7 @@ export async function loadCsAccount(
       porHub: { marketing: h.marketingScore, sales: h.salesScore, service: h.serviceScore },
     })),
     desvios: particularidades.map((x) => ({
-      proyecto: x.timeline.project.name,
+      proyecto: x.timeline.project?.name ?? "Plan general",
       titulo: x.title,
       quien: x.party,
       semanas: x.weeksImpact ?? 0,

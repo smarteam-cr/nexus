@@ -12,6 +12,8 @@ import type { NextRequest } from "next/server";
 
 const guards = vi.hoisted(() => ({ guardTimelineEdit: vi.fn(), guardTimelineDelete: vi.fn() }));
 vi.mock("@/lib/auth/api-guards", () => guards);
+// La ruta llama a lib/timeline/una-tarea.ts (2026-11-26), que es solo de servidor.
+vi.mock("server-only", () => ({}));
 
 import { prisma } from "@/lib/db/prisma";
 import { DELETE, PATCH } from "@/app/api/projects/[projectId]/timeline/tasks/[taskId]/campos/route";

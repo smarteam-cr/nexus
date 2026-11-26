@@ -219,8 +219,11 @@ export const CRONOGRAMAS_TRABADOS: Fuente = {
     const limite = c.ahora.getTime() - DIAS_PARA_QUE_UNA_PROPUESTA_SE_TRABE * 86_400_000;
     const porId = new Map(proyectos.map((p) => [p.id, p]));
     const trabadas = con
-      .map((t, i) => ({ p: porId.get(t.projectId)!, cuando: autorias[i]?.cuando ?? null }))
-      .filter((x) => x.p && x.cuando && Date.parse(x.cuando) < limite)
+      .flatMap((t, i) => {
+        const p = t.projectId ? porId.get(t.projectId) : undefined;
+        return p ? [{ p, cuando: autorias[i]?.cuando ?? null }] : [];
+      })
+      .filter((x) => x.cuando && Date.parse(x.cuando) < limite)
       .sort((x, y) => Date.parse(x.cuando!) - Date.parse(y.cuando!));
     if (trabadas.length === 0) return [];
     const partes = trabadas

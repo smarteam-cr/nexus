@@ -18,6 +18,7 @@ const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new Prism
 async function main() {
   const now = new Date();
   const timelines = await prisma.projectTimeline.findMany({
+    where: { projectId: { not: null } },
     select: {
       projectId: true,
       pendingProgress: true,
@@ -30,18 +31,20 @@ async function main() {
 
   let candidates = 0;
   for (const tl of timelines) {
+    const { projectId, project } = tl;
+    if (!projectId || !project) continue;
     const taskCount = tl.phases.reduce((n, p) => n + p.tasks.length, 0);
     if (taskCount === 0) continue; // solo los que tienen detalle (el guard de D.2)
     candidates++;
     const pastSessions = await prisma.sessionProject.count({
-      where: { projectId: tl.projectId, session: { date: { lte: now } } },
+      where: { projectId, session: { date: { lte: now } } },
     });
     const phasesDone = tl.phases.filter((p) => p.status === "DONE").length;
     const tasksDone = tl.phases.reduce((n, p) => n + p.tasks.filter((t) => t.status === "DONE").length, 0);
     console.log(
-      `\n• ${tl.project.name}  (projectId=${tl.projectId})\n` +
+      `\n• ${project.name}  (projectId=${projectId})\n` +
         `    fases=${tl.phases.length} (DONE=${phasesDone})  tareas=${taskCount} (DONE=${tasksDone})  sesiones pasadas=${pastSessions}\n` +
-        `    hubspotServiceId=${tl.project.hubspotServiceId ?? "—"}  etapaHS=${tl.project.hubspotPipelineStageLabel ?? "(sin materializar)"}\n` +
+        `    hubspotServiceId=${project.hubspotServiceId ?? "—"}  etapaHS=${project.hubspotPipelineStageLabel ?? "(sin materializar)"}\n` +
         `    pendingProgress=${tl.pendingProgress ? "SÍ" : "no"}`,
     );
   }

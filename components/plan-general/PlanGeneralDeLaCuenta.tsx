@@ -3,18 +3,20 @@
 /**
  * PlanGeneralDeLaCuenta — «Plan general» en la ficha del cliente (2026-11-19, Elías: arriba de «Proyectos»).
  *
- * Es el MISMO cronograma de Nexus (TimelineGantt + TaskDetailDrawer) con las fases-loop de todos los proyectos de la
- * cuenta juntas, sobre el arranque común (lib/plan-general/armar.ts). No hay un gantt ni un editor propios: Elías, 19
- * nov: «todos los cronogramas usan el mismo motor».
+ * Es el MISMO cronograma de Nexus (TimelineGantt + TaskDetailDrawer) con las fases PROPIAS del plan (lo transversal) y
+ * los loops de los proyectos de su lista, sobre el arranque del plan (lib/plan-general/armar.ts). No hay un gantt ni un
+ * editor propios: Elías, 19 nov: «todos los cronogramas usan el mismo motor».
  *
- * No guarda nada propio: cada cambio va a la tarea en el cronograma de SU proyecto, por rutas de una tarea con la misma
- * vara que el Gantt del proyecto (guardTimelineEdit; borrar, guardTimelineDelete): el estado por el PATCH de la tarea,
- * lo demás por `.../tasks/[taskId]/campos`, una tarea nueva por `.../tasks`. Lo que se cambia acá se ve en el
- * cronograma del proyecto y al revés. Las fases (nombre, semanas, arranque) se editan en el cronograma de su proyecto.
- * El cliente ve la foto que se publica con «Publicar» (lib/plan-general/acceso.ts).
+ * Cada cambio va a la tarea en SU cronograma, por las rutas de una tarea con la misma vara que el Gantt del proyecto
+ * (lib/timeline/una-tarea.ts): las de un loop, por las del cronograma de su proyecto (guardTimelineEdit; borrar,
+ * guardTimelineDelete); las de una fase propia, por `plan-general/tasks` (guardPlanEdit / guardPlanDelete). El estado por
+ * el PATCH de la tarea, lo demás por `.../campos`, una tarea nueva por `.../tasks`. Las fases de un loop (nombre, semanas,
+ * arranque) se editan en el cronograma de su proyecto (`estructuraFija`); las propias, en su fila. «+ Fase del plan»
+ * crea una propia, «Proyectos del plan» elige la lista, y el arranque se fija en el Gantt. El cliente ve la foto que se
+ * publica con «Publicar» (lib/plan-general/acceso.ts). DECISIONS «El plan general es un objeto de la cuenta» (26 nov).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Modal, useToast } from "@/components/ui";
+import { Alert, ConfirmDialog, Field, Input, Modal, useToast } from "@/components/ui";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton, SkeletonPanel } from "@/components/ui/Skeleton";
 import { BOTON_DE_HERRAMIENTA, BotonAzul, BotonBlanco, BotonEnlace } from "@/components/ui/sistema";
@@ -22,12 +24,13 @@ import TimelineGantt, { type GanttPhase, type GanttTask, type GanttTaskStatus } 
 import TaskDetailDrawer from "@/components/canvas/TaskDetailDrawer";
 import type { EstadoDelAccesoAlPlan } from "@/lib/plan-general/acceso";
 import { enlaceEnEsteNavegador } from "@/lib/external/enlace-local";
-import type { FaseDelPlan, PlanGeneral, TareaDelPlan } from "@/lib/plan-general/tipos";
+import { rotuloDelLoop, type FaseDelPlan, type PlanGeneral, type ProyectoParaElegir, type TareaDelPlan } from "@/lib/plan-general/tipos";
 
 /** Una tarea en pantalla: la del plan, o una nueva que todavía no se guardó (sin id hasta tener título). */
 type Tarea = Omit<TareaDelPlan, "id"> & { id?: string; key: string };
 type Fase = Omit<FaseDelPlan, "tasks"> & { tasks: Tarea[] };
 type Cambio = Partial<Pick<Tarea, "title" | "notes" | "weekIndex" | "semanas" | "party" | "type" | "startDateOverride" | "dueDateOverride">>;
+type CambioDeFase = Partial<Pick<Fase, "name" | "durationWeeks" | "startWeek" | "sessionCount">>;
 
 /** «mié 19 nov, 3:40 p. m.» en hora de Costa Rica. */
 function diaYHora(iso: string): string {
@@ -49,11 +52,17 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
   const [plan, setPlan] = useState<PlanGeneral | null>(null);
   const [fases, setFases] = useState<Fase[]>([]);
   const [acceso, setAcceso] = useState<EstadoDelAccesoAlPlan | null>(null);
+  const [opciones, setOpciones] = useState<ProyectoParaElegir[]>([]);
+  const [modal, setModal] = useState<"fase" | "proyectos" | null>(null);
+  const [borrandoFase, setBorrandoFase] = useState<Fase | null>(null);
   const [puede, setPuede] = useState({ editar: false, borrar: false });
   const [error, setError] = useState<string | null>(null);
   const [abierta, setAbierta] = useState<{ phaseKey: string; taskKey: string } | null>(null);
   const fasesRef = useRef<Fase[]>([]);
   fasesRef.current = fases;
+  /** Cuánto se corren las fases propias en pantalla (un proyecto que arranca antes que el plan): se resta al guardar. */
+  const corrimientoPropio = useRef(0);
+  corrimientoPropio.current = plan?.corrimientoPropio ?? 0;
   /* Los cambios de texto se guardan con una pausa (tipear un título no es un PATCH por letra), juntos por tarea. */
   const pendientes = useRef(new Map<string, { cambio: Cambio; timer: ReturnType<typeof setTimeout> }>());
   const creando = useRef(new Set<string>());
@@ -82,12 +91,13 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
 
   const cargar = useCallback(async () => {
     try {
-      const r = await pedir<{ plan: PlanGeneral; acceso: EstadoDelAccesoAlPlan; puede: { editar: boolean; borrar: boolean } }>(
+      const r = await pedir<{ plan: PlanGeneral; acceso: EstadoDelAccesoAlPlan; opciones: ProyectoParaElegir[]; puede: { editar: boolean; borrar: boolean } }>(
         `/api/clients/${clientId}/plan-general`,
       );
       setPlan(r.plan);
       setFases(aFases(r.plan));
       setAcceso(r.acceso);
+      setOpciones(r.opciones);
       setPuede(r.puede);
       setError(null);
     } catch (e) {
@@ -117,6 +127,10 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
     }
   }, [clientId]);
 
+  /** Dónde vive el cronograma de una fase: el de su proyecto (un loop) o el del plan (una fase propia). */
+  const rutaDe = (f: { proyectoId: string | null }) =>
+    f.proyectoId ? `/api/projects/${f.proyectoId}/timeline` : `/api/clients/${clientId}/plan-general`;
+
   const buscar = (taskKey: string) => {
     for (const f of fasesRef.current) {
       const t = f.tasks.find((x) => x.key === taskKey);
@@ -141,14 +155,14 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
     const { fase, tarea } = hallada;
     const enviado = { title: tarea.title.trim(), weekIndex: tarea.weekIndex, semanas: tarea.semanas, party: tarea.party, type: tarea.type };
     try {
-      const { task: creada } = await pedir<{ task: { id: string } }>(`/api/projects/${fase.proyectoId}/timeline/tasks`, {
+      const { task: creada } = await pedir<{ task: { id: string } }>(`${rutaDe(fase)}/tasks`, {
         method: "POST",
         body: JSON.stringify({ phaseId: fase.id, ...enviado }),
       });
       clavePorId.current.set(creada.id, taskKey);
       // Se borró mientras se creaba: se borra ya creada (si no, volvía al recargar).
       if (borrarAlCrear.current.delete(taskKey)) {
-        await pedir(`/api/projects/${fase.proyectoId}/timeline/tasks/${creada.id}/campos`, { method: "DELETE" });
+        await pedir(`${rutaDe(fase)}/tasks/${creada.id}/campos`, { method: "DELETE" });
         return;
       }
       cambiarLocal(taskKey, { id: creada.id });
@@ -169,7 +183,7 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
         if (d.party !== enviado.party) resto.party = d.party;
         if (d.type !== enviado.type) resto.type = d.type;
         if (Object.keys(resto).length > 0) {
-          await pedir(`/api/projects/${fase.proyectoId}/timeline/tasks/${creada.id}/campos`, { method: "PATCH", body: JSON.stringify(resto) });
+          await pedir(`${rutaDe(fase)}/tasks/${creada.id}/campos`, { method: "PATCH", body: JSON.stringify(resto) });
         }
       }
       void refrescarAcceso();
@@ -199,7 +213,7 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
       const envio = (ultimoEnvio.current.get(taskKey) ?? 0) + 1;
       ultimoEnvio.current.set(taskKey, envio);
       const r = await pedir<{ semanas: number | null; weekIndex: number }>(
-        `/api/projects/${hallada.fase.proyectoId}/timeline/tasks/${hallada.tarea.id}/campos`,
+        `${rutaDe(hallada.fase)}/tasks/${hallada.tarea.id}/campos`,
         { method: "PATCH", body: JSON.stringify(cuerpo) },
       );
       // El servidor recorta la duración a lo que cabe en la fase: la pantalla muestra lo que quedó guardado. Salvo que
@@ -252,7 +266,7 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
       }),
     );
     try {
-      await pedir(`/api/projects/${hallada.f.proyectoId}/timeline/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ status: next }) });
+      await pedir(`${rutaDe(hallada.f)}/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ status: next }) });
       void refrescarAcceso();
     } catch (e) {
       fallo(e);
@@ -293,7 +307,7 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
       return;
     }
     try {
-      await pedir(`/api/projects/${hallada.fase.proyectoId}/timeline/tasks/${hallada.tarea.id}/campos`, { method: "DELETE" });
+      await pedir(`${rutaDe(hallada.fase)}/tasks/${hallada.tarea.id}/campos`, { method: "DELETE" });
       void refrescarAcceso();
     } catch (e) {
       fallo(e);
@@ -305,14 +319,87 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
     const destino = fasesRef.current.find((f) => f.id === toPhaseKey);
     if (!hallada?.tarea.id || !destino) return;
     if (destino.proyectoId !== hallada.fase.proyectoId) {
-      toast.error("Una tarea no pasa de un proyecto a otro: créala en el loop de destino.");
+      toast.error(
+        destino.proyectoId && hallada.fase.proyectoId
+          ? "Una tarea no pasa de un proyecto a otro: créala en el loop de destino."
+          : "Una tarea no pasa entre el plan y un proyecto: créala en la fase de destino.",
+      );
       return;
     }
     try {
-      await pedir(`/api/projects/${hallada.fase.proyectoId}/timeline/tasks/${hallada.tarea.id}/campos`, {
+      await pedir(`${rutaDe(hallada.fase)}/tasks/${hallada.tarea.id}/campos`, {
         method: "PATCH",
         body: JSON.stringify({ phaseId: toPhaseKey, weekIndex: toWeekIndex, order: toOrder }),
       });
+      await cargar();
+    } catch (e) {
+      fallo(e);
+    }
+  };
+
+  /* Una fase PROPIA se edita en su fila (nombre, semanas, arranque), como en el cronograma de un proyecto: optimista y
+     guardada con una pausa (tipear un nombre no es un PATCH por letra). Las de un loop no llegan acá (estructuraFija). */
+  const pendientesDeFase = useRef(new Map<string, { cambio: CambioDeFase; timer: ReturnType<typeof setTimeout> }>());
+  const guardarFase = async (faseId: string) => {
+    const p = pendientesDeFase.current.get(faseId);
+    pendientesDeFase.current.delete(faseId);
+    if (!p) return;
+    const cambio = { ...p.cambio };
+    if (cambio.name !== undefined && !cambio.name.trim()) delete cambio.name;
+    if (Object.keys(cambio).length === 0) return;
+    // La pantalla cuenta desde el S0 del plan; la fase guarda su semana en SU cronograma.
+    if (cambio.startWeek !== undefined) cambio.startWeek -= corrimientoPropio.current;
+    try {
+      await pedir(`/api/clients/${clientId}/plan-general/fases/${faseId}`, { method: "PATCH", body: JSON.stringify(cambio) });
+      // Acortarla recorta en el servidor las tareas que se pasaban del final: la pantalla muestra lo guardado.
+      if (cambio.durationWeeks !== undefined) await cargar();
+      void refrescarAcceso();
+    } catch (e) {
+      fallo(e);
+    }
+  };
+  const actualizarFase = (faseId: string, patch: { name?: string; durationWeeks?: number; sessionCount?: number | null; startWeek?: number | null }) => {
+    const f = fasesRef.current.find((x) => x.id === faseId);
+    if (!f || f.proyectoId) return;
+    // Toda fase propia tiene su arranque explícito: «auto» (vacío) no existe en el plan, así que un vacío no se guarda.
+    const { startWeek, ...resto } = patch;
+    const cambio: CambioDeFase = { ...resto, ...(typeof startWeek === "number" ? { startWeek } : {}) };
+    if (Object.keys(cambio).length === 0) return;
+    setFases((fs) => fs.map((x) => (x.id === faseId ? { ...x, ...cambio } : x)));
+    const antes = pendientesDeFase.current.get(faseId);
+    if (antes) clearTimeout(antes.timer);
+    const soloTexto = Object.keys(cambio).every((k) => k === "name");
+    const timer = setTimeout(() => void guardarFase(faseId), soloTexto ? 700 : 400);
+    pendientesDeFase.current.set(faseId, { cambio: { ...(antes?.cambio ?? {}), ...cambio }, timer });
+  };
+  useEffect(() => {
+    const enEspera = pendientesDeFase.current;
+    return () => {
+      for (const id of [...enEspera.keys()]) {
+        clearTimeout(enEspera.get(id)!.timer);
+        void guardarFase(id);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al desmontar
+  }, []);
+
+  const borrarFase = async (f: Fase) => {
+    const p = pendientesDeFase.current.get(f.id);
+    if (p) clearTimeout(p.timer);
+    pendientesDeFase.current.delete(f.id);
+    try {
+      await pedir(`/api/clients/${clientId}/plan-general/fases/${f.id}`, { method: "DELETE" });
+      setBorrandoFase(null);
+      await cargar();
+    } catch (e) {
+      setBorrandoFase(null);
+      fallo(e);
+    }
+  };
+
+  const fijarArranque = async (ymd: string) => {
+    try {
+      await pedir(`/api/clients/${clientId}/plan-general`, { method: "PATCH", body: JSON.stringify({ arranque: ymd || null }) });
       await cargar();
     } catch (e) {
       fallo(e);
@@ -332,7 +419,11 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
         status: f.status,
         needsValidation: f.needsValidation,
         loopNumero: f.loopNumero,
-        proyecto: f.proyectoNombre,
+        // Una fase propia se rotula «Plan general»: con eso el Gantt sabe que junta varios cronogramas (y no le pone
+        // el aviso «↑ arranca antes», que habla de fases que se acomodan solas).
+        proyecto: f.proyectoNombre ?? "Plan general",
+        // Un loop se edita en el cronograma de su proyecto; una fase propia, acá.
+        estructuraFija: !!f.proyectoId,
         tasks: f.tasks.map(
           (t): GanttTask => ({
             key: t.key,
@@ -388,7 +479,14 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
   const tareaAbierta = faseAbierta?.tasks.find((t) => t.key === abierta?.taskKey) ?? null;
   const todas = ganttPhases.flatMap((f) => f.tasks.map((t) => ({ phaseKey: f.key, taskKey: t.key })));
   const lugar = abierta ? todas.findIndex((x) => x.taskKey === abierta.taskKey) : -1;
-  const sinDetalle = plan.proyectos.filter((p) => !p.detalleConfirmado);
+  // Solo los que el cliente VE (con loops): de uno sin loops no ve nada, con o sin el detalle confirmado.
+  const conLoops = new Set(plan.fases.map((f) => f.proyectoId));
+  const sinDetalle = plan.proyectos.filter((p) => !p.detalleConfirmado && conLoops.has(p.id));
+  const nombreDeLaFase = (f: GanttPhase | undefined) => {
+    if (!f) return "";
+    const nombre = f.loopNumero != null ? rotuloDelLoop(f.loopNumero, f.name) : f.name;
+    return `${nombre} · ${f.proyecto}`;
+  };
 
   return (
     <div className="space-y-6 px-8 pb-10 pt-6">
@@ -396,9 +494,11 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
         <div className="space-y-1">
           <h2 className="text-sm font-semibold text-fg">Plan general</h2>
           <p className="max-w-2xl text-xs text-fg-muted">
-            El cronograma de los loops de {plan.proyectos.length === 1 ? "su proyecto" : `sus ${plan.proyectos.length} proyectos`}, juntos. Cada
-            tarea es la de su proyecto: lo que cambias aquí cambia en su cronograma, y al revés. Las fases se editan en el cronograma de
-            cada proyecto.
+            {plan.proyectos.length === 0
+              ? "Las fases del plan. Todavía no tiene proyectos: súmalos en «Proyectos del plan»."
+              : `Las fases del plan y los loops de ${plan.proyectos.length === 1 ? "su proyecto" : `sus ${plan.proyectos.length} proyectos`}, juntos.`}
+            Una tarea de un loop es la de su proyecto: lo que cambias aquí cambia en su cronograma, y al revés. Los loops se editan en el
+            cronograma de cada proyecto; las fases del plan, aquí.
           </p>
           {plan.proyectos.length > 0 && (
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-muted">
@@ -411,7 +511,19 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
             </p>
           )}
         </div>
-        {acceso && puede.editar && <AccesoAlPlan clientId={clientId} acceso={acceso} onCambio={cambiarAcceso} />}
+        <div className="flex flex-wrap items-center gap-2">
+          {puede.editar && (
+            <>
+              <button type="button" onClick={() => setModal("proyectos")} className={BOTON_DE_HERRAMIENTA}>
+                Proyectos del plan
+              </button>
+              <button type="button" onClick={() => setModal("fase")} className={BOTON_DE_HERRAMIENTA}>
+                + Fase del plan
+              </button>
+            </>
+          )}
+          {acceso && puede.editar && <AccesoAlPlan clientId={clientId} acceso={acceso} onCambio={cambiarAcceso} />}
+        </div>
       </div>
 
       {sinDetalle.length > 0 && (
@@ -423,8 +535,8 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
 
       {ganttPhases.length === 0 ? (
         <EmptyState
-          title="Todavía no hay loops"
-          description="Un loop es una fase del cronograma de un proyecto marcada con su número. Cuando algún proyecto los tenga, aparecen aquí juntos."
+          title="Todavía no hay fases"
+          description="Aquí se juntan las fases del plan (lo transversal, con «+ Fase del plan») y los loops de los proyectos del plan: un loop es una fase del cronograma de un proyecto marcada con su número."
         />
       ) : (
         <TimelineGantt
@@ -437,6 +549,16 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
           onAddTask={agregar}
           onMoveTask={(tk, ph, w, o) => void mover(tk, ph, w, o)}
           onOpenTask={(pk, tk) => setAbierta({ phaseKey: pk, taskKey: tk })}
+          onUpdatePhase={puede.editar ? actualizarFase : undefined}
+          onRemovePhase={
+            puede.borrar
+              ? (key) => {
+                  const f = fasesRef.current.find((x) => x.id === key);
+                  if (f && !f.proyectoId) setBorrandoFase(f);
+                }
+              : undefined
+          }
+          onSetAnchor={puede.editar ? (ymd) => void fijarArranque(ymd) : undefined}
         />
       )}
 
@@ -444,7 +566,7 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
         open={!!tareaAbierta}
         task={tareaAbierta}
         phaseKey={abierta?.phaseKey ?? null}
-        phaseName={faseAbierta ? `${String(faseAbierta.loopNumero).padStart(2, "0")} · ${faseAbierta.name} · ${faseAbierta.proyecto}` : ""}
+        phaseName={nombreDeLaFase(faseAbierta)}
         phaseDurationWeeks={faseAbierta?.durationWeeks ?? 1}
         absolutePhaseStart={faseAbierta?.startWeek ?? 0}
         anchor={ancla}
@@ -464,7 +586,204 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
         hasPrev={lugar > 0}
         hasNext={lugar >= 0 && lugar < todas.length - 1}
       />
+
+      <NuevaFase
+        open={modal === "fase"}
+        clientId={clientId}
+        hayTransversal={fases.some((f) => !f.proyectoId && f.loopNumero === 0)}
+        onClose={() => setModal(null)}
+        onCreada={() => {
+          setModal(null);
+          void cargar();
+        }}
+      />
+      <ProyectosDelPlanModal
+        open={modal === "proyectos"}
+        clientId={clientId}
+        opciones={opciones}
+        onClose={() => setModal(null)}
+        onGuardado={() => {
+          setModal(null);
+          void cargar();
+        }}
+      />
+      <ConfirmDialog
+        open={!!borrandoFase}
+        title={borrandoFase ? `¿Borrar la fase «${borrandoFase.name}»?` : ""}
+        description={
+          borrandoFase && borrandoFase.tasks.length > 0
+            ? `Se borra con ${borrandoFase.tasks.length === 1 ? "su tarea" : `sus ${borrandoFase.tasks.length} tareas`}. No se puede deshacer.`
+            : "No se puede deshacer."
+        }
+        confirmLabel="Borrar la fase"
+        onCancel={() => setBorrandoFase(null)}
+        onConfirm={() => (borrandoFase ? borrarFase(borrandoFase) : undefined)}
+      />
     </div>
+  );
+}
+
+/** «+ Fase del plan»: una fase propia (lo transversal). El loop 0 se rotula «00 · Transversal». */
+function NuevaFase({
+  open,
+  clientId,
+  hayTransversal,
+  onClose,
+  onCreada,
+}: {
+  open: boolean;
+  clientId: string;
+  /** Ya hay una «00 · Transversal»: el cuadro no propone otra igual. */
+  hayTransversal: boolean;
+  onClose: () => void;
+  onCreada: () => void;
+}) {
+  const [nombre, setNombre] = useState("");
+  const [loop, setLoop] = useState("");
+  const [inicio, setInicio] = useState("0");
+  const [semanas, setSemanas] = useState("4");
+  const [error, setError] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  // Cada vez que se abre, de cero: sin el error de la vez anterior y sin proponer una segunda «Transversal».
+  useEffect(() => {
+    if (!open) return;
+    setNombre(hayTransversal ? "" : "Transversal");
+    setLoop(hayTransversal ? "" : "0");
+    setInicio("0");
+    setSemanas("4");
+    setError(null);
+  }, [open, hayTransversal]);
+
+  const crear = async () => {
+    const n = (v: string) => (v.trim() === "" ? null : Number(v));
+    setGuardando(true);
+    setError(null);
+    try {
+      await pedir(`/api/clients/${clientId}/plan-general/fases`, {
+        method: "POST",
+        body: JSON.stringify({ name: nombre.trim(), loopNumero: n(loop), startWeek: n(inicio) ?? 0, durationWeeks: n(semanas) ?? 1 }),
+      });
+      onCreada();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo crear la fase.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Fase del plan"
+      description="Una fase que no es de ningún proyecto: la alineación, el diagnóstico, la adopción. Sus tareas se editan como las de cualquier cronograma."
+    >
+      <div className="space-y-3">
+        {error && <Alert variant="danger">{error}</Alert>}
+        <Field label="Nombre">
+          <Input value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={120} />
+        </Field>
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="Loop" hint="0 = «00 · Transversal». Vacío, sin número.">
+            <Input type="number" min={0} max={99} value={loop} onChange={(e) => setLoop(e.target.value)} />
+          </Field>
+          <Field label="Arranca en" hint="S0 es la primera semana.">
+            <Input type="number" min={0} value={inicio} onChange={(e) => setInicio(e.target.value)} />
+          </Field>
+          <Field label="Semanas">
+            <Input type="number" min={1} value={semanas} onChange={(e) => setSemanas(e.target.value)} />
+          </Field>
+        </div>
+        <div className="flex justify-end gap-2">
+          <BotonBlanco onClick={onClose} disabled={guardando}>
+            Cancelar
+          </BotonBlanco>
+          <BotonAzul onClick={() => void crear()} disabled={guardando || !nombre.trim()}>
+            Crear la fase
+          </BotonAzul>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** «Proyectos del plan»: la lista explícita. De cada proyecto entran sus loops; uno sin loops entra pero no muestra nada. */
+function ProyectosDelPlanModal({
+  open,
+  clientId,
+  opciones,
+  onClose,
+  onGuardado,
+}: {
+  open: boolean;
+  clientId: string;
+  opciones: ProyectoParaElegir[];
+  onClose: () => void;
+  onGuardado: () => void;
+}) {
+  const [elegidos, setElegidos] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  useEffect(() => {
+    if (open) {
+      setElegidos(new Set(opciones.filter((o) => o.incluido).map((o) => o.id)));
+      setError(null);
+    }
+  }, [open, opciones]);
+
+  const guardar = async () => {
+    setGuardando(true);
+    setError(null);
+    try {
+      await pedir(`/api/clients/${clientId}/plan-general/proyectos`, { method: "PUT", body: JSON.stringify({ projectIds: [...elegidos] }) });
+      onGuardado();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo guardar la lista.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Proyectos del plan" description="De cada proyecto que elijas, el plan muestra sus loops.">
+      <div className="space-y-3">
+        {error && <Alert variant="danger">{error}</Alert>}
+        {opciones.length === 0 ? (
+          <p className="text-xs text-fg-muted">Esta cuenta no tiene proyectos activos.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {opciones.map((o) => (
+              <li key={o.id}>
+                <label className="flex cursor-pointer items-center gap-2 text-[13px] text-fg-secondary">
+                  <input
+                    type="checkbox"
+                    checked={elegidos.has(o.id)}
+                    onChange={(e) =>
+                      setElegidos((sel) => {
+                        const n = new Set(sel);
+                        if (e.target.checked) n.add(o.id);
+                        else n.delete(o.id);
+                        return n;
+                      })
+                    }
+                  />
+                  <span className="text-fg">{o.nombre}</span>
+                  <span className="text-xs text-fg-muted">{o.loops === 0 ? "sin loops todavía" : o.loops === 1 ? "1 loop" : `${o.loops} loops`}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex justify-end gap-2">
+          <BotonBlanco onClick={onClose} disabled={guardando}>
+            Cancelar
+          </BotonBlanco>
+          <BotonAzul onClick={() => void guardar()} disabled={guardando}>
+            Guardar la lista
+          </BotonAzul>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

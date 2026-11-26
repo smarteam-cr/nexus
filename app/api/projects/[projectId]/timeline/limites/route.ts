@@ -53,12 +53,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ pr
     where: { projectId },
     select: { id: true, ...SELECT_LIMITES, project: { select: { hubspotPipelineId: true } } },
   });
-  if (!tl) return NextResponse.json({ error: "Este proyecto todavía no tiene cronograma." }, { status: 404 });
+  if (!tl?.project) return NextResponse.json({ error: "Este proyecto todavía no tiene cronograma." }, { status: 404 });
+  const { hubspotPipelineId } = tl.project;
 
   const propuestos = leerPropuestos(tl.limitesPropuestos);
   const responder = (fila: typeof tl) =>
     NextResponse.json({
-      limites: limitesDeLaFila({ ...fila, conSemanaCero: conSemanaCeroDelPipeline(fila.project.hubspotPipelineId) }),
+      limites: limitesDeLaFila({ ...fila, conSemanaCero: conSemanaCeroDelPipeline(hubspotPipelineId) }),
     });
 
   if (body.accion === "descartar-propuesta") {

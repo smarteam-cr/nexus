@@ -44,7 +44,7 @@ export async function proyectoTrabajaPorLoops(
 export async function bloqueDeLoopsDelProyecto(projectId: string): Promise<string | null> {
   const c = await loopsDeLaCuenta(projectId);
   if (!c || (!c.esSmartLoop && c.fases.length === 0)) return null;
-  return bloqueDeLoopsParaElHandoff(c.fases.map((f) => ({ numero: f.loopNumero!, nombre: f.name, proyecto: f.timeline.project.name })));
+  return bloqueDeLoopsParaElHandoff(c.fases.map((f) => ({ numero: f.loopNumero!, nombre: f.name, proyecto: f.timeline.project?.name ?? "" })));
 }
 
 /**

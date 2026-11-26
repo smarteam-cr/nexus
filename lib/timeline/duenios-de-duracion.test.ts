@@ -70,6 +70,22 @@ const ESCRITORES: { archivo: string; protege: string }[] = [
      (`recalcularCierreDeFase`, que toca solo el estado), vive en escribir-estructura.ts, declarado
      arriba. */
   {
+    /* Entró el 2026-11-26 al juntar las operaciones de una tarea en un archivo: el PATCH de estado escribe la fase y el
+       de campos lee su duración. Ninguno la cambia. */
+    archivo: "lib/timeline/una-tarea.ts",
+    protege:
+      "NO cambia la duración de ninguna fase: el `timelinePhase.update` es solo el estado (coherencia fase↔tarea) y " +
+      "`durationWeeks` se LEE para acotar la tarea (400 si arranca fuera de la fase; `semanasQueCaben` para su duración).",
+  },
+  {
+    /* Entró el 2026-11-26 (el plan general como objeto de la cuenta): edita una fase PROPIA del plan. */
+    archivo: "lib/plan-general/plan.ts",
+    protege:
+      "Edita una fase propia del plan general (`editarFasePropia`). Acortarla con una tarea en una semana que deja de " +
+      "existir es 400 («muévelas antes de acortarla»), sin escribir nada; las que se pasaban del nuevo final se " +
+      "recortan con `semanasQueCaben` en la misma transacción.",
+  },
+  {
     archivo: "scripts/fusionar-fases-cronograma.ts",
     protege:
       "Fusiona dos fases a mano. Ya acotaba: calcula `ultimaSemana = durationWeeks - 1` y mete " +

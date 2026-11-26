@@ -13,16 +13,14 @@
  *
  * La tarea nace `source=HUMAN`, `status=PENDING`. El `order` se calcula al final
  * de su semana. La edición/estado posteriores van por PUT/PATCH (guardTimelineEdit).
+ * La operación vive en lib/timeline/una-tarea.ts (la misma del plan general, 2026-11-26); acá quedan la guarda y el
+ * aviso al vigía.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import type { TaskParty, TimelineTaskType } from "@prisma/client";
 import { emitTimelineEventsSafe } from "@/lib/cs/timeline-events";
-import { semanasQueCaben } from "@/lib/timeline/weeks";
-
-const PARTIES = ["CLIENTE", "SMARTEAM", "AMBOS", "DEV"] as const;
-const TYPES = ["SESSION", "TASK"] as const;
+import { crearTarea, leerPedidoDeTarea } from "@/lib/timeline/una-tarea";
 
 export async function POST(
   req: NextRequest,
@@ -38,64 +36,21 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
-  const body = raw as {
-    phaseId?: unknown;
-    title?: unknown;
-    weekIndex?: unknown;
-    party?: unknown;
-    type?: unknown;
-    semanas?: unknown;
-  } | null;
-
-  const phaseId = typeof body?.phaseId === "string" ? body.phaseId : "";
-  const title = typeof body?.title === "string" ? body.title.trim() : "";
-  const weekIndexRaw = body?.weekIndex;
-  if (!phaseId) return NextResponse.json({ error: "phaseId requerido" }, { status: 400 });
-  if (!title) return NextResponse.json({ error: "El título de la tarea es obligatorio" }, { status: 400 });
-  if (typeof weekIndexRaw !== "number" || !Number.isInteger(weekIndexRaw) || weekIndexRaw < 0) {
-    return NextResponse.json({ error: "weekIndex debe ser un entero ≥ 0" }, { status: 400 });
-  }
-  const party =
-    typeof body?.party === "string" && (PARTIES as readonly string[]).includes(body.party)
-      ? (body.party as TaskParty)
-      : null;
-  const type =
-    typeof body?.type === "string" && (TYPES as readonly string[]).includes(body.type)
-      ? (body.type as TimelineTaskType)
-      : null;
+  const pedido = leerPedidoDeTarea(raw);
+  if (!pedido.ok) return NextResponse.json({ error: pedido.error }, { status: pedido.status });
 
   // Ownership por traversal: la fase debe pertenecer al timeline de ESTE proyecto.
-  const phase = await prisma.timelinePhase.findFirst({
-    where: { id: phaseId, timeline: { projectId } },
-    select: {
-      id: true,
-      durationWeeks: true,
-      timeline: { select: { id: true, project: { select: { clientId: true } } } },
-    },
-  });
-  if (!phase) {
-    return NextResponse.json({ error: "Fase no encontrada en este proyecto" }, { status: 404 });
-  }
-  const weekIndex = Math.min(weekIndexRaw, Math.max(phase.durationWeeks - 1, 0));
-  /* Una tarea puede durar varias semanas (2026-11-19): se recorta a lo que cabe en la fase, igual que el weekIndex;
-     1 se guarda como null (lo de siempre). */
-  const semanas = semanasQueCaben(typeof body?.semanas === "number" ? body.semanas : null, weekIndex, phase.durationWeeks);
-
-  // order = al final de su semana.
-  const order = await prisma.timelineTask.count({ where: { phaseId, weekIndex } });
-
-  const created = await prisma.timelineTask.create({
-    data: { phaseId, title, weekIndex, order, party, type, source: "HUMAN", status: "PENDING", semanas },
-    select: { id: true, title: true, weekIndex: true, order: true, party: true, type: true, status: true, source: true, semanas: true },
-  });
+  const r = await crearTarea({ projectId }, pedido.valor);
+  if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+  const created = r.valor.task;
 
   // Evento crudo para el watchdog (best-effort).
   await emitTimelineEventsSafe(
     prisma,
     {
       projectId,
-      clientId: phase.timeline.project.clientId,
-      timelineId: phase.timeline.id,
+      clientId: guard.clientId,
+      timelineId: r.valor.timelineId,
       actorEmail: guard.user.email ?? null,
       source: "UI_PATCH",
     },

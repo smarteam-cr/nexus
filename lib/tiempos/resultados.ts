@@ -92,8 +92,12 @@ export async function datosDeTiempos(periodo: PeriodoDeTiempos, ahora = new Date
       select: { email: true, name: true, roleEnum: true },
       orderBy: { name: "asc" },
     }),
-    // Los proyectos que tienen cronograma: los únicos con tareas que marcar.
-    prisma.projectTimeline.findMany({ select: { project: { select: { id: true, name: true, client: { select: { name: true } } } } } }),
+    // Los proyectos que tienen cronograma: los únicos con tareas que marcar. Un cronograma de plan general no es de un
+    // proyecto y no lleva «¿cuánto te tomó?» (DECISIONS «El plan general es un objeto de la cuenta»).
+    prisma.projectTimeline.findMany({
+      where: { projectId: { not: null } },
+      select: { project: { select: { id: true, name: true, client: { select: { name: true } } } } },
+    }),
     cargarConfigCarga(),
     // Las tareas de Smarteam o compartidas de todos los cronogramas (sin sesiones), para contar las tareas clave.
     prisma.timelineTask.findMany({
@@ -101,6 +105,7 @@ export async function datosDeTiempos(periodo: PeriodoDeTiempos, ahora = new Date
         AND: [
           { OR: [{ type: null }, { type: "TASK" }] },
           { OR: [{ party: null }, { party: { in: ["SMARTEAM", "AMBOS"] } }] },
+          { phase: { timeline: { projectId: { not: null } } } },
         ],
       },
       select: { title: true, status: true, phase: { select: { timeline: { select: { projectId: true } } } } },
@@ -141,7 +146,11 @@ export async function datosDeTiempos(periodo: PeriodoDeTiempos, ahora = new Date
     deTareas.map((p) => ({ tipo: p.tipoFase, minutos: p.minutos ?? 0, estimado: p.estimadoMinutos })),
     supuestos,
   );
-  const familias = filasDeFamilias(tareasDeCronogramas, delArranque, deTareas, configuracion.config.horasPorFamilia, ahora);
+  const deProyectos = tareasDeCronogramas.flatMap((t) => {
+    const projectId = t.phase.timeline.projectId;
+    return projectId ? [{ ...t, phase: { timeline: { projectId } } }] : [];
+  });
+  const familias = filasDeFamilias(deProyectos, delArranque, deTareas, configuracion.config.horasPorFamilia, ahora);
   const arranque = estadoDelArranque(delArranque, porMomento.get("ARRANQUE")?.config, ahora);
 
   const documentos = DOCUMENTOS.map((d) => {
@@ -158,7 +167,7 @@ export async function datosDeTiempos(periodo: PeriodoDeTiempos, ahora = new Date
 
   const vistos = new Set<string>();
   const proyectos = timelines
-    .map((t) => t.project)
+    .flatMap((t) => (t.project ? [t.project] : []))
     .filter((p) => (vistos.has(p.id) ? false : (vistos.add(p.id), true)))
     .map((p) => ({ id: p.id, nombre: [p.client?.name, p.name].filter(Boolean).join(" · ") }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));

@@ -283,7 +283,7 @@ export async function POST(
     prisma,
     {
       projectId,
-      clientId: tl.project.clientId,
+      clientId: guard.clientId,
       timelineId: tl.id,
       actorEmail: guard.user.email ?? null,
       source: "PROGRESS_APPLY",

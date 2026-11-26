@@ -24,7 +24,8 @@ async function main() {
   console.log(APPLY ? "── MODO APPLY (escribe) ──\n" : "── DRY-RUN (no escribe; usá --apply) ──\n");
 
   const timelines = await prisma.projectTimeline.findMany({
-    where: { anchorStartDate: null },
+    // Solo los de un proyecto: un plan general fija su arranque a mano (no tiene kickoff).
+    where: { anchorStartDate: null, projectId: { not: null } },
     select: { projectId: true, project: { select: { name: true, client: { select: { name: true } } } } },
   });
 
@@ -33,8 +34,10 @@ async function main() {
   let filled = 0;
   let skipped = 0;
   for (const tl of timelines) {
-    const label = `${tl.project.client?.name ?? "?"} / ${tl.project.name}`;
-    const date = await getKickoffSessionDate(tl.projectId);
+    const { projectId, project } = tl;
+    if (!projectId || !project) continue;
+    const label = `${project.client?.name ?? "?"} / ${project.name}`;
+    const date = await getKickoffSessionDate(projectId);
     if (!date) {
       console.log(`  ·  ${label} — sin sesión de kickoff → se deja vacío`);
       skipped++;
@@ -43,7 +46,7 @@ async function main() {
     const ymd = date.toISOString().slice(0, 10);
     if (APPLY) {
       await prisma.projectTimeline.update({
-        where: { projectId: tl.projectId },
+        where: { projectId },
         data: { anchorStartDate: date },
       });
       console.log(`  ✓  ${label} — anchor = ${ymd} (aplicado)`);

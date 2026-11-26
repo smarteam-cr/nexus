@@ -42,7 +42,7 @@ export const PROPUESTA_DE_CRONOGRAMA: Fuente = {
       con.map((t) => ({ token: t.pendingProposalRunId, guardado: t.pendingProposal })),
     );
     return con.flatMap((t, i): Pendiente[] => {
-      const p = porId.get(t.projectId);
+      const p = t.projectId ? porId.get(t.projectId) : undefined;
       if (!p) return [];
       const autoria = autorias[i];
       const espera = haceCuanto(autoria?.cuando, c.ahora);

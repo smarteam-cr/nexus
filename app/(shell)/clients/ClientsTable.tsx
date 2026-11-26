@@ -287,7 +287,7 @@ export const consultarIndice = cache(async (
   const proyectoPorId = new Map(abiertos.map((p) => [p.id, p]));
   const avisos: AvisoDeCartera[] = [];
   conPropuesta.forEach((t, i) => {
-    const p = proyectoPorId.get(t.projectId);
+    const p = t.projectId ? proyectoPorId.get(t.projectId) : undefined;
     if (!p) return;
     const autoria = autorias[i];
     avisos.push({

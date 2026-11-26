@@ -50,7 +50,7 @@ async function main() {
   for (const tl of timelines.slice(0, 12)) {
     const totalW = tl.phases.reduce((a, p) => a + p.durationWeeks, 0);
     const tasks = tl.phases.reduce((a, p) => a + p._count.tasks, 0);
-    console.log(`\n• ${tl.project.name} [${tl.project.client?.name ?? "—"}]  ${tl.phases.length} fases · ${totalW} sem · ${tasks} tareas · anchor ${tl.anchorStartDate ? "sí" : "no"}`);
+    console.log(`\n• ${tl.project?.name ?? "(plan general)"} [${tl.project?.client?.name ?? "—"}]  ${tl.phases.length} fases · ${totalW} sem · ${tasks} tareas · anchor ${tl.anchorStartDate ? "sí" : "no"}`);
     for (const p of tl.phases) console.log(`    - ${p.name} (${p.durationWeeks}sem, ${p.sessionCount ?? "—"}ses${p.activityType ? `, ${p.activityType}` : ""})`);
   }
 }

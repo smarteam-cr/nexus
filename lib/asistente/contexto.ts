@@ -464,9 +464,11 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     prisma.projectTimeline.count({ where: { projectId, publishedSnapshot: { not: Prisma.DbNull } } }),
     prisma.projectTimeline.count({ where: { projectId, pendingProposal: { not: Prisma.DbNull } } }),
   ]);
-  if (!timeline) {
+  // Por `projectId`: siempre tiene proyecto (un cronograma de plan no tiene).
+  if (!timeline?.project) {
     return { texto: "Este proyecto todavía no tiene cronograma.", cierreActual: null };
   }
+  const proyecto = timeline.project;
   /* El borrador VACÍO que espera sus tareas, y si su corrida sigue viva (`leerEstadoDelVacio`). Cierre
      de la revisión de E2a: se contaba con un filtro JSON de Prisma que nunca se corrió contra la base y
      que, si fallaba, volvía EN SILENCIO al texto de «decidir la propuesta». Ahora se lee el JSON (solo
@@ -504,7 +506,7 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
   /* 2026-10-02 · LO ACORDADO CON EL CLIENTE (lib/timeline/limites.ts): la fecha límite y la duración
      vendida contra el plan de hoy, con la cuenta hecha por el código. El chat no mueve un límite (eso
      lo hace una persona, con el cliente); si lo que le piden deja el plan fuera, lo dice. */
-  const limites = limitesDeLaFila({ ...timeline, conSemanaCero: conSemanaCeroDelPipeline(timeline.project.hubspotPipelineId) });
+  const limites = limitesDeLaFila({ ...timeline, conSemanaCero: conSemanaCeroDelPipeline(proyecto.hubspotPipelineId) });
   const avisoLimites = avisoDeLimites(
     revisarLimites({ ancla: timeline.anchorStartDate?.toISOString() ?? null, fases: timeline.phases, limites }),
     limites,
@@ -632,7 +634,7 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     .join("\n");
 
   const texto = [
-    `PROYECTO: ${timeline.project.name} — cliente ${timeline.project.client.name}`,
+    `PROYECTO: ${proyecto.name} — cliente ${proyecto.client.name}`,
     "",
     "EL CRONOGRAMA HOY. Cada fase trae su ID entre corchetes y, debajo, sus tareas agrupadas por",
     "semana. Cada tarea trae su identificador entre corchetes: es lo que va en `taskId`",
@@ -680,8 +682,8 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     propuesta?.resumen && lineaConPropuesta !== null
       ? armarContextoConPropuesta(
           {
-            proyecto: timeline.project.name,
-            cliente: timeline.project.client.name,
+            proyecto: proyecto.name,
+            cliente: proyecto.client.name,
             propuesta: { ...propuesta, resumen: propuesta.resumen },
             cierreFijado,
             paraRehacerTodo,

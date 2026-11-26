@@ -111,11 +111,13 @@ async function leerComoElScript(timelineId: string) {
       },
     },
   });
+  if (!f.projectId) throw new Error("el cronograma de la prueba es de un proyecto");
+  const projectId = f.projectId;
   const run = f.pendingProposalRunId ? await prisma.agentRun.findUnique({ where: { id: f.pendingProposalRunId } }) : null;
   const creada = run?.createdAt ?? null;
-  const eventos = creada ? await eventosPosteriores(prisma, f.projectId, creada) : [];
+  const eventos = creada ? await eventosPosteriores(prisma, projectId, creada) : [];
   const vivoHoy: VivoConOrden = { ancla: f.anchorStartDate?.toISOString() ?? null, fases: f.phases };
-  return { f, eventos, vivoHoy, r: convertirLaVieja({ json: f.pendingProposal, vivoHoy, creada, eventos }) };
+  return { f: { ...f, projectId }, eventos, vivoHoy, r: convertirLaVieja({ json: f.pendingProposal, vivoHoy, creada, eventos }) };
 }
 
 const entradaDe = (l: Awaited<ReturnType<typeof leerComoElScript>>): EntradaDeLaConversion => ({
