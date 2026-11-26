@@ -12,6 +12,7 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { ROLES_DE_PERSONA } from "@/lib/clients/personas-de-la-empresa";
+import { normalizarDominio, normalizarSigla } from "@/lib/clients/siglas-y-dominios";
 
 const Persona = z.object({
   correo: z.string().transform((s) => s.trim().toLowerCase()).refine((s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s), "correo inválido"),
@@ -25,7 +26,23 @@ const Persona = z.object({
   nota: z.string(),
 });
 
-const ParDeFicha = z.tuple([z.string(), z.string().min(1)]);
+/* Una sigla y un dominio quedan como los guarda la ficha (lib/clients/siglas-y-dominios.ts, la misma que el PATCH). */
+export { normalizarDominio, normalizarSigla };
+
+const ParDeSigla = z.tuple([
+  z.string(),
+  z
+    .string()
+    .transform((s) => normalizarSigla(s) ?? "")
+    .refine((s) => s !== "", "una sigla tiene 2 letras o más"),
+]);
+const ParDeDominio = z.tuple([
+  z.string(),
+  z
+    .string()
+    .transform((s) => normalizarDominio(s) ?? "")
+    .refine((s) => s !== "", "un dominio va como «empresa.com»"),
+]);
 
 export const MapaDeInterlocutores = z
   .object({
@@ -37,7 +54,7 @@ export const MapaDeInterlocutores = z
      * sigla se suma a la ficha; un dominio pasa a la ficha (se quita de la que lo tenga). Van en el mapa y no por la línea
      * de comandos para que el --apply escriba exactamente lo que se aprobó.
      */
-    cambiosDeFichas: z.object({ siglas: z.array(ParDeFicha).optional(), dominios: z.array(ParDeFicha).optional() }).optional(),
+    cambiosDeFichas: z.object({ siglas: z.array(ParDeSigla).optional(), dominios: z.array(ParDeDominio).optional() }).optional(),
   })
   .superRefine((m, c) => {
     for (const [k] of [...(m.cambiosDeFichas?.siglas ?? []), ...(m.cambiosDeFichas?.dominios ?? [])]) {

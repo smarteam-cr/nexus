@@ -17739,8 +17739,9 @@ Marco y Mariana (teamnet.com.mx) manejan sistemas para todo el grupo, y el domin
     nombre, orígenes; las filas nuevas se borran) y se pide revisar el aviso (mover y después devolver perdía vínculos,
     hechos y análisis de venta). El aviso, la recuenta y el guardado le piden a HubSpot sin degradar
     (`exigirHubspot`): con HubSpot caído, el aviso mostraba reuniones que «se movían» solo porque faltaba ese dato. *Lo aceptado:* si
-    algo cambia en los milisegundos entre esa cuenta y la escritura, esa reunión no se mueve (INV2 la marca), y un error a
-    mitad de camino deja la confirmación guardada sin sus reuniones hasta la próxima re-resolución. Al guardar, se re-resuelven
+    algo cambia en los milisegundos entre esa cuenta y la escritura, esa reunión no se mueve (INV2 la marca), y un error de
+    la base a mitad de camino deja la confirmación guardada sin sus reuniones hasta la próxima re-resolución. HubSpot ya
+    no puede cortarlo ahí: la mudanza usa lo que respondió en la cuenta (revisión del 26 nov). Al guardar, se re-resuelven
     las reuniones de esa persona (`reResolverReunionesDe`, resolve-client.ts, con `reResolveSession`: los hechos, el
     análisis de venta y la lectura acompañan el cambio de dueña) y, como «Mover», se sueltan sus vínculos a proyectos de
     otra ficha cuando la dueña nueva es una ficha (invariante 1; si queda por decidir, esperan a quien la asigne). La
@@ -17757,13 +17758,28 @@ Marco y Mariana (teamnet.com.mx) manejan sistemas para todo el grupo, y el domin
   «por la gente que confirmó el equipo».
 - **La precarga desde un mapa** (`scripts/interlocutores-precargar.ts --mapa <json>`, simulacro por defecto): el mapa NO va
   en el repo (trae correos de personas de los clientes). Solo va confirmado lo que dijo una persona con su correo; un
-  correo deducido o una persona sin rol en el mapa va **sugerida** (por confirmar). El `--apply` pide `--por`, respalda
-  `PersonaDeLaEmpresa` (guard) y, en JSON, la dueña de antes y después de cada reunión que se mueve, sus vínculos a
-  proyectos, sus hechos y sus análisis de venta; mueve exactamente lo del simulacro de esa corrida (lo que dé distinto se
-  salta y se lista); valida todo el mapa antes de escribir; y no corre si producción no tiene el código desplegado. Por
-  defecto **conserva** lo que ya dijo una persona en las fichas del mapa y el mapa no trae (confirmaciones, sugerencias,
-  el rol que puso una persona y el nombre), y lo lista; `--el-mapa-manda` lo reemplaza. `--sigla` y `--dominio` prueban en memoria qué pasaría con
-  una sigla o un dominio más en una ficha.
+  correo deducido o una persona sin rol en el mapa va **sugerida** (por confirmar). El simulacro termina con una **huella**
+  de lo que se mueve (`huellaDeMovidas`, la misma de la pestaña), y el `--apply` pide `--por` y `--huella`: si lo que se
+  mueve ahora no es lo que se vio, no escribe nada. Respalda `PersonaDeLaEmpresa` y `Client` (guard) y, en JSON, las fichas
+  que cambian, las personas, la dueña de antes y después de cada reunión que se mueve, sus vínculos a proyectos, sus
+  hechos y sus análisis de venta; valida todo el mapa antes de escribir; y no corre si el commit de producción no trae el
+  mismo `categorize.ts` y `resolve-client.ts` (`git diff` contra el sha de /api/health). **Revisión del 26 nov, para no
+  dejar nada a medias:** HubSpot se consulta una vez, para el simulacro, y la mudanza usa esa respuesta (antes se
+  volvía a preguntar con las fichas ya escritas); si escribir las fichas o las personas falla, se devuelven como estaban
+  y no se mueve nada; cada reunión se mueve con sus vínculos a otra ficha en la misma transacción
+  (`reResolveSession › soltarVinculosAjenos`), y una aprobada que la app ya había movido suelta igual los suyos; el
+  `--apply` espera lo que cuelga de cada mudanza (hechos, análisis de venta, lectura, reclasificación), que antes se
+  cortaba al cerrar la conexión. Con cambios de fichas, el simulacro arma el contexto con las fichas ya cambiadas
+  (`buildCategorizeCtx(ajustarFichas)`): lo aprendido de los títulos con la sigla nueva entra en la cuenta, como en la
+  base con el cambio escrito. Las reuniones de OTRA gente que ya hoy dan distinto de lo guardado (la deriva) se listan
+  con su título y no se mueven (`--con-la-deriva` las suma, y sirve para completar una mudanza que se cortó). El
+  simulacro dice, de cada vínculo que se suelta o que espera, si lo eligió una persona y para qué documento
+  (`isLockedLink`), y lo que el cambio le SUMA a cada invariante, medido (INV37 con su propia regla sobre las fichas
+  cambiadas), sin decir «verde»: si una ya está en rojo por otra cosa lo dice `check:invariants`. Por defecto **conserva**
+  lo que ya dijo una persona en las fichas del mapa y el mapa no trae (confirmaciones, sugerencias, el rol que puso una
+  persona y el nombre), y lo lista; `--el-mapa-manda` lo reemplaza. `--sigla` y `--dominio` prueban en memoria qué pasaría
+  con una sigla o un dominio más en una ficha; las del mapa y las de la línea de comandos quedan como las guarda la ficha
+  (`lib/clients/siglas-y-dominios.ts`, la misma limpieza del PATCH).
   - **TEC (simulacro del 25 nov):** 7 confirmadas (5 en AE, 2 en TAE) y 5 por confirmar. **Ninguna reunión cambia de
     dueña**: la separación ya estaba bien (lo que midió la coordinadora); confirmar asegura las que vengan.
   - **Teamnet / Stratosphere — Elías, 25 nov: «Sí, SAS es Stratosphere».** El mapa lleva los cambios de las fichas
@@ -17776,8 +17792,12 @@ Marco y Mariana (teamnet.com.mx) manejan sistemas para todo el grupo, y el domin
     persona en /sessions; y «Health Score Team», sin título y solo con gente del grupo); 4 reuniones internas que
     nombran a las dos («Demo interna TEAMNET & SAS») pasan a Interna. Lo que cuelga: 17 vínculos (de la IA) al proyecto
     «Teamnet - Reimplementación CRM» se sueltan; los 27 de las que quedan sin ficha esperan (no alimentan nada sin dueña);
-    23 minutas van con su reunión (5 a Stratosphere); sin tareas, pedidos, hechos ni análisis de venta. INV1, 2, 37, 42,
-    45, 46 y 57 quedan en verde con la separación en memoria. *Lo aceptado:* hasta que una persona asigne las 22
-    conjuntas, ni Teamnet ni Stratosphere las leen; los documentos de Teamnet ya generados no cambian solos.
+    23 minutas van con su reunión (5 a Stratosphere); sin tareas, pedidos, hechos ni análisis de venta. **7 de los 27 que
+    esperan los eligió una persona:** «Kick off - Teamnet y Sas», elegida para el handoff, pasa a Interna; cinco
+    capacitaciones y «Health Score Team», elegidas para el diagnóstico, la planificación y la ejecución, quedan por
+    decidir. Salen de esos documentos salvo que alguien las asigne a mano a Teamnet antes del `--apply`. Medido en memoria,
+    el cambio no le suma nada a INV1, 2, 37, 42, 45, 46 ni 57 (INV1, 37, 42 y 45 ya están en rojo por otros clientes).
+    *Lo aceptado:* hasta que una persona asigne las 22 conjuntas, ni Teamnet ni Stratosphere las leen; los documentos de
+    Teamnet ya generados no cambian solos (50 corridas de agentes usaron estas reuniones).
 - **Sin cambio:** la agenda de «Mi día» (`lib/mi-dia/agenda.ts`) reparte los eventos futuros con su regla de unidades y
   todavía no mira a la gente confirmada.

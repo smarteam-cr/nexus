@@ -263,6 +263,45 @@ describe("la traza dice qué paso de la cascada decidió (para los simulacros)",
   });
 });
 
+describe("la traza no cambia la decisión en ningún paso de la cascada (revisión del 26 nov)", () => {
+  const BRAVO = { id: "bravo", name: "Bravo Logistica", company: null, emailDomains: [] };
+  const completo = ctx(
+    { [CINDY]: ["ae"] },
+    {
+      clients: [TAE, TEAMNET, CUATRO_AM, CREDIX, STRATO, AE, BRAVO],
+      categories: [
+        { id: "int", name: "Interna", slug: "interna", domains: ["smarteamcr.com"], kind: "internal", color: null },
+        { id: "pt", name: "Partner", slug: "partner", domains: ["partner.test"], kind: "partner", color: null },
+      ],
+      hubspotCompaniesByDomain: new Map([
+        ["bravo-log.com", { id: "hs-bravo", name: "Bravo", domain: "bravo-log.com" } as never],
+        ["suelta.com", { id: "hs-suelta", name: "Suelta SA", domain: "suelta.com" } as never],
+      ]),
+      clientsByHubspotCompanyId: new Map([["hs-bravo", { id: "bravo", name: "Bravo Logistica", company: null }]]),
+      groupUnlinkedHubspotCompany: true,
+    },
+  );
+  const casos: [string, CategorizableSession, string][] = [
+    ["a-mano", reunion("Weekly", ["ana@credix.com"], "teamnet"), "teamnet"],
+    ["interna-por-titulo", { title: "Credix | Preparación", participants: ["a@smarteamcr.com"], manualClientId: null }, "credix"],
+    ["interna", { title: "Daily", participants: ["a@smarteamcr.com"], manualClientId: null }, "(category)"],
+    ["gente-confirmada", reunion("Revisión semanal de leads", [CINDY]), "ae"],
+    ["dominio", reunion("Weekly", ["ana@credix.com"]), "credix"],
+    ["categoria", reunion("Partner sync", ["rep@partner.test"]), "(category)"],
+    ["hubspot", reunion("Weekly", ["jefe@bravo-log.com"]), "bravo"],
+    ["empresa-de-hubspot-sin-ficha", reunion("Weekly", ["ana@suelta.com"]), "(hubspotCompany)"],
+    ["titulo", reunion("Credix | Weekly", ["libre@gmail.com"]), "credix"],
+    ["sin-dueno", reunion("Weekly", ["libre@gmail.com"]), "(orphan)"],
+  ];
+  it.each(casos)("%s", (paso, s, dueno) => {
+    const traza: TrazaDeLaCascada = {};
+    const conTraza = categorizeSession(s, completo, traza);
+    expect(conTraza).toEqual(categorizeSession(s, completo));
+    expect(traza.paso).toBe(paso);
+    expect(conTraza.kind === "client" ? conTraza.id : `(${conTraza.kind})`).toBe(dueno);
+  });
+});
+
 describe("lo confirmado no se aprende ni enseña", () => {
   it("aprender la gente de las unidades da lo mismo con y sin confirmados", () => {
     const sesiones = [reunion("AE | Reportes", [CINDY, "x@itcr.ac.cr"]), reunion("TAE | CRM", ["jefe@itcr.ac.cr"]), reunion("Revisión", [CINDY])];

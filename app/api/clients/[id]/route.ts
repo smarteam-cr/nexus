@@ -9,6 +9,7 @@ import { soltarReunionesDeLaEmpresa } from "@/lib/clients/soltar-reuniones";
 import { z } from "zod";
 import { can } from "@/lib/auth/permissions/engine";
 import { ErrorDeDato, proponerDato } from "@/lib/clients/datos-de-la-empresa-server";
+import { limpiarDominio, normalizarSigla } from "@/lib/clients/siglas-y-dominios";
 import { escribirEnHubspot } from "@/lib/clients/escritura-en-hubspot-server";
 
 /* A-20 (auditoría 2026-09-03): el PATCH escribía lo que llegaba en el body (`data.name.trim()`
@@ -76,14 +77,12 @@ export async function PATCH(
       ...(data.company !== undefined && { company: data.company?.trim() || null }),
       ...(data.notes !== undefined && { notes: data.notes?.trim() || null }),
       ...(data.emailDomains !== undefined && {
-        emailDomains: (data.emailDomains as string[])
-          .map((d: string) => d.trim().toLowerCase().replace(/^@/, ""))
-          .filter(Boolean),
+        emailDomains: (data.emailDomains as string[]).map(limpiarDominio).filter(Boolean),
       }),
       /* Siglas con que el equipo nombra al cliente en los títulos («CAV»). Se guardan en
          mayúsculas y sin espacios; de 2 letras para arriba (una letra matchearía cualquier cosa). */
       ...(data.siglas !== undefined && {
-        siglas: [...new Set(data.siglas.map((x) => x.trim().toUpperCase().replace(/\s+/g, "")).filter((x) => x.length >= 2))],
+        siglas: [...new Set(data.siglas.map(normalizarSigla).filter((x): x is string => !!x))],
       }),
       // Tamaño del logo. `null` explícito = "volver al default", y por eso se distingue
       // de `undefined` (= "no lo mandé"): son cosas distintas. El clamp es del servidor

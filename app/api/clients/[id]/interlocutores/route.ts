@@ -138,8 +138,9 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
        guardó algo en ese instante), se vuelve atrás solo su fila, sin reglas (es deshacer), y se pide revisar el aviso:
        mover y después devolver perdía los vínculos a proyectos, los hechos y el análisis de venta (revisión del 25 nov). */
     let ahora: ReunionQueCambia[];
+    let hubspot: Awaited<ReturnType<typeof reResolverReunionesDe>>["hubspot"];
     try {
-      ahora = (await reResolverReunionesDe([pedido.correo], { aplicar: false, exigirHubspot: true })).cambian;
+      ({ cambian: ahora, hubspot } = await reResolverReunionesDe([pedido.correo], { aplicar: false, exigirHubspot: true }));
     } catch (e) {
       await restaurarPersona(foto, pedido.correo, plan.tocables);
       throw e;
@@ -148,10 +149,12 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
       await restaurarPersona(foto, pedido.correo, plan.tocables);
       return NextResponse.json(REVISA, { status: 409 });
     }
+    /* Con lo que HubSpot respondió en la cuenta de arriba: sin volver a preguntarle, no puede fallar DESPUÉS de escribir la
+       persona y dejar el guardado a medias (revisión del 26 nov). */
     const hechas = await reResolverReunionesDe([pedido.correo], {
       aplicar: true,
       aprobadas: new Map(ahora.map((m) => [m.sessionId, { de: m.de, a: m.a }])),
-      exigirHubspot: true,
+      hubspot,
     });
     if (hechas.saltadas.length) {
       // Solo si algo cambió en los milisegundos entre la cuenta y la escritura: no se mueve, y la verificación lo marca (INV2).

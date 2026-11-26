@@ -16,6 +16,18 @@ vi.mock("@/lib/seguimiento/hechos-server", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/seguimiento/hechos-server")>()),
   alCambiarDeDueno: async () => undefined,
 }));
+/* Cuántas veces se le pregunta a HubSpot (la base de pruebas no tiene cuenta: la respuesta real es «sin cuenta»). */
+const hubspot = vi.hoisted(() => ({ llamadas: 0 }));
+vi.mock("@/lib/hubspot/companies", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/hubspot/companies")>();
+  return {
+    ...real,
+    searchCompaniesByDomains: (...a: Parameters<typeof real.searchCompaniesByDomains>) => {
+      hubspot.llamadas++;
+      return real.searchCompaniesByDomains(...a);
+    },
+  };
+});
 vi.mock("@/lib/analizador-venta/ajenos", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/analizador-venta/ajenos")>()),
   soltarAnalisisDeVentaAjenos: async () => 0,
@@ -155,5 +167,84 @@ describe("una persona del equipo confirma con qué ficha trabaja alguien", () =>
     });
     // Volver a sumarla, no.
     await expect(guardarInterlocutor({ tocables: [tae.id], cambio: { correo: "rep@partner.test", confirmadaEn: [tae.id] }, porEmail: "eli@smarteamcr.com" })).rejects.toThrow(/categoría/);
+  });
+});
+
+describe("un cambio de las fichas (una sigla, un dominio) en el simulacro de la precarga (revisión del 26 nov)", () => {
+  /* Dos unidades sin palabra en común: la sigla sola cuenta como pista del título. */
+  async function unaEmpresa() {
+    await prisma.sessionCategory.create({ data: { name: "Interna", slug: "interna", domains: ["smarteamcr.com"], kind: "internal" } });
+    const corvalia = await prisma.client.create({ data: { name: "Corvalia", emailDomains: ["corvalia.test"], createdAt: new Date("2026-01-01") } });
+    const ternesto = await prisma.client.create({ data: { name: "Ternesto", comparteDominioConId: corvalia.id, createdAt: new Date("2026-02-01") } });
+    const conXyz = <T extends { id: string; siglas?: string[] | null; emailDomains: string[] }>(clients: readonly T[]): T[] =>
+      clients.map((c) => (c.id === ternesto.id ? ({ ...c, siglas: [...(c.siglas ?? []), "XYZ"] } as T) : c));
+    await prisma.firefliesSession.createMany({
+      data: [
+        // Interna, sin nadie de afuera: solo la sigla nueva del título la lleva a Ternesto.
+        { id: "s-int", title: "Demo interna XYZ", date: new Date("2026-11-18T15:00:00Z"), participants: ["heiver@smarteamcr.com"] },
+        // La que enseña: con la sigla, Nexus aprende que Ana es de Ternesto.
+        { id: "s-k", title: "XYZ kickoff", date: new Date("2026-11-19T15:00:00Z"), participants: ["ana@corvalia.test", "heiver@smarteamcr.com"] },
+        // Sin pista en el título: decide lo aprendido de Ana.
+        { id: "s-seg", title: "Seguimiento semanal", date: new Date("2026-11-20T15:00:00Z"), participants: ["ana@corvalia.test"] },
+      ],
+    });
+    await resolveAllSessions({ reclassify: false });
+    return { ternesto, conXyz };
+  }
+  const resumen = (r: { cambian: { sessionId: string; a: string | null }[] }) => r.cambian.map((c) => [c.sessionId, c.a]).sort();
+
+  it("con «todas» se mira también la reunión interna que no tiene a nadie del mapa; sin «todas», no", async () => {
+    const { ternesto, conXyz } = await unaEmpresa();
+    const todas = await reResolverReunionesDe([], { aplicar: false, ajustarFichas: conXyz, todas: true });
+    expect(resumen(todas)).toContainEqual(["s-int", ternesto.id]);
+    expect((await reResolverReunionesDe([], { aplicar: false, ajustarFichas: conXyz })).cambian).toEqual([]);
+  });
+
+  it("el simulacro en memoria da lo mismo que la base con la sigla escrita (lo aprendido de los títulos incluido)", async () => {
+    const { ternesto, conXyz } = await unaEmpresa();
+    const simulado = await reResolverReunionesDe([], { aplicar: false, ajustarFichas: conXyz, todas: true });
+    await prisma.client.update({ where: { id: ternesto.id }, data: { siglas: ["XYZ"] } });
+    const escrito = await reResolverReunionesDe([], { aplicar: false, todas: true });
+    expect(resumen(simulado)).toEqual(resumen(escrito));
+    // Y el caso que lo prueba de verdad está adentro: la que decide lo aprendido con la sigla nueva.
+    expect(resumen(escrito)).toContainEqual(["s-seg", ternesto.id]);
+  });
+});
+
+describe("la mudanza con lo aprobado (revisión del 26 nov)", () => {
+  it("una aprobada que ya está en su ficha nueva (la movió la app) suelta igual sus vínculos a la ficha vieja", async () => {
+    const { tae, ae } = await elTec();
+    const deTae = await prisma.project.create({ data: { clientId: tae.id, name: "TAE | CRM (test)" } });
+    await prisma.firefliesSession.create({
+      data: { id: "s-1", title: "Revisión semanal de leads", date: new Date("2026-11-20T15:00:00Z"), participants: ["cindy@itcr.test", "pedro@itcr.test"] },
+    });
+    await guardarInterlocutor({ tocables: [tae.id, ae.id], cambio: { correo: "cindy@itcr.test", confirmadaEn: [ae.id] }, porEmail: "eli@smarteamcr.com" });
+    // La app ya la movió a AE, pero el vínculo de la IA a TAE quedó.
+    await prisma.firefliesSession.update({ where: { id: "s-1" }, data: { resolvedClientId: ae.id } });
+    await prisma.sessionProject.create({ data: { sessionId: "s-1", projectId: deTae.id, isPrimary: true, source: "agent" } });
+
+    const r = await reResolverReunionesDe(["cindy@itcr.test"], { aplicar: true, aprobadas: new Map([["s-1", { de: null, a: ae.id }]]) });
+    expect(r.cambian).toEqual([]);
+    expect(await prisma.sessionProject.count({ where: { sessionId: "s-1" } })).toBe(0);
+  });
+
+  it("con el mapa de HubSpot del simulacro no se le vuelve a preguntar a HubSpot", async () => {
+    const { tae, ae } = await elTec();
+    await prisma.firefliesSession.create({
+      data: { id: "s-1", title: "Revisión semanal de leads", date: new Date("2026-11-20T15:00:00Z"), participants: ["cindy@itcr.test", "pedro@itcr.test"] },
+    });
+    await resolveAllSessions({ reclassify: false });
+    const simulado = await reResolverReunionesDe(["cindy@itcr.test"], { hipotesis: new Map([["cindy@itcr.test", [ae.id]]]), aplicar: false, exigirHubspot: true });
+    await guardarInterlocutor({ tocables: [tae.id, ae.id], cambio: { correo: "cindy@itcr.test", confirmadaEn: [ae.id] }, porEmail: "eli@smarteamcr.com" });
+    expect(hubspot.llamadas).toBeGreaterThan(0); // el simulacro sí preguntó
+    const antes = hubspot.llamadas;
+    const r = await reResolverReunionesDe(["cindy@itcr.test"], {
+      aplicar: true,
+      aprobadas: new Map(simulado.cambian.map((c) => [c.sessionId, { de: c.de, a: c.a }])),
+      hubspot: simulado.hubspot,
+      esperarLoQueCuelga: true,
+    });
+    expect(r.cambian.map((c) => c.sessionId)).toEqual(["s-1"]);
+    expect(hubspot.llamadas).toBe(antes);
   });
 });
