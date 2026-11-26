@@ -57,7 +57,8 @@ function buildVerifyUrl(req: NextRequest, accessToken: string): string {
   // Usar APP_URL (URL pública). Detrás de Docker, req.nextUrl.origin resuelve al
   // bind interno (0.0.0.0:3004) y el link quedaría inalcanzable para el cliente.
   // Fallback al origin en dev. Mismo patrón que auth/signout|callback|google.
-  const base = process.env.APP_URL || new URL(req.url).origin;
+  // Sin la barra final: con `APP_URL` terminado en «/» el link salía con «//external» (2026-11-25).
+  const base = (process.env.APP_URL || new URL(req.url).origin).replace(/\/+$/, "");
   return `${base}/external/verify/${accessToken}`;
 }
 

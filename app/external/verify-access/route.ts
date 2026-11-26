@@ -38,6 +38,7 @@ import {
   sumarALaListaDeAccesos,
 } from "@/lib/external/lista-de-accesos";
 import { nombreVisibleDelProyecto } from "@/lib/external/nombre-visible";
+import { primeraSuperficiePublicada } from "@/lib/external/rutas";
 import { bloqueoVigente, claveDeIp, clearAttempts, registrarFallo } from "@/lib/external/verify-rate-limit";
 
 // ── Handler ──────────────────────────────────────────────────────────────────
@@ -97,6 +98,15 @@ export async function POST(req: NextRequest) {
           proyectoInterno: true,
           hermanoCsProjectId: true,
           altaEstado: true,
+          // Los flags que mira cada página (las vistas de lib/external): sin `?next=`, el formulario lleva a la
+          // primera superficie publicada (lib/external/rutas.ts › primeraSuperficiePublicada).
+          kickoffPublishedAt: true,
+          timelinePublishedAt: true,
+          desarrolloPublishedAt: true,
+          entregaPublishedAt: true,
+          diagnosticoPublishedAt: true,
+          planificacionPublishedAt: true,
+          ciclosPublishedAt: true,
           // Para la tarjeta «Entrando a <proyecto> · <cliente>»: quien acaba de poner la
           // contraseña ve de QUÉ proyecto era antes de llegar.
           client: { select: { name: true } },
@@ -161,6 +171,8 @@ export async function POST(req: NextRequest) {
     // El formulario arma la dirección de destino con este id (lib/external/rutas.ts). El token
     // no vuelve a aparecer en ninguna URL, y la dirección dice de qué proyecto es.
     acceso: access.id,
+    // A dónde ir si el enlace no trae `?next=`. Es una pista, no un permiso: la página vuelve a mirar su flag.
+    destino: primeraSuperficiePublicada(access.project),
     proyecto: nombreVisibleDelProyecto(access.project.name, access.project.client.name),
     cliente: access.project.client.name,
   });

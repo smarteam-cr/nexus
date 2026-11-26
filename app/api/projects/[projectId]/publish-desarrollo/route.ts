@@ -41,7 +41,7 @@ export async function GET(
   const access = project.externalAccess;
   let devUrl: string | null = null;
   if (access && !access.revokedAt) {
-    const base = process.env.APP_URL || new URL(req.url).origin;
+    const base = (process.env.APP_URL || new URL(req.url).origin).replace(/\/+$/, "");
     devUrl = `${base}/external/verify/${access.accessToken}?next=desarrollo`;
   }
 

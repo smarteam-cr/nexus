@@ -17,7 +17,7 @@
  */
 import { useState, FormEvent } from "react";
 import { IconCheck } from "@/components/ui/AcceptReject";
-import { esIdDeAcceso, rutaDeSuperficie, superficieDeNext } from "@/lib/external/rutas";
+import { destinoDespuesDeEntrar, esIdDeAcceso, rutaDeSuperficie } from "@/lib/external/rutas";
 
 type State =
   | { kind: "idle" }
@@ -29,7 +29,8 @@ type State =
 
 /**
  * Destino post-verify: la dirección de ESTE proyecto en la superficie que pide el enlace
- * (`?next=`, lista cerrada — lib/external/rutas.ts). El id lo manda el servidor y se valida acá:
+ * (`?next=`, lista cerrada — lib/external/rutas.ts); sin `?next=`, la primera publicada, que calcula el
+ * servidor (`destino`). El id y el destino los manda el servidor y se validan acá:
  * nada del parámetro ni de la respuesta se interpola en una URL sin pasar por `rutaDeSuperficie`.
  *
  * Antes el destino era `/external/<superficie>` sin proyecto: quedaba en la barra con cara de
@@ -68,7 +69,8 @@ export function VerifyForm({ token, next }: { token: string; next?: string }) {
         });
         // La credencial httpOnly ya la sumó el endpoint. Navegación full (no router.push) para
         // que el server component de destino la lea.
-        window.location.assign(rutaDeSuperficie(data.acceso, superficieDeNext(next)));
+        // Sin `?next=`, la primera parte publicada que manda el servidor; las dos pasan por la lista cerrada.
+        window.location.assign(rutaDeSuperficie(data.acceso, destinoDespuesDeEntrar(next, data.destino)));
         return;
       }
       if (res.status === 429) {

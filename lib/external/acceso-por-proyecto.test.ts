@@ -25,7 +25,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { PUBLISH_SURFACES } from "@/lib/projects/publish-surfaces";
 import { armarCredencial } from "./credencial";
-import { esIdDeAcceso, rutaDeSuperficie, superficieDeNext } from "./rutas";
+import { destinoDespuesDeEntrar, esIdDeAcceso, primeraSuperficiePublicada, rutaDeSuperficie, superficieDeNext } from "./rutas";
 import {
   MAX_ACCESOS_RECORDADOS,
   VIGENCIA_DE_UN_ACCESO_MS,
@@ -109,6 +109,33 @@ describe("1 · la dirección nombra el proyecto y nunca lleva el token", () => {
     expect(superficieDeNext(undefined)).toBe("kickoff");
     expect(superficieDeNext("https://otro.sitio")).toBe("kickoff");
     expect(superficieDeNext("../api")).toBe("kickoff");
+  });
+
+  /* RC Inmobiliaria (2026-11-25): solo el cronograma publicado y el enlace sin `?next=` llevaba al kickoff sin
+     publicar («no disponible»). Sin `?next=`, el destino es la primera parte publicada. */
+  it("sin ?next=, lleva a la primera parte publicada; sin nada publicado, al kickoff", () => {
+    const f = new Date("2026-11-25T00:00:00Z");
+    expect(primeraSuperficiePublicada({ kickoffPublishedAt: f, timelinePublishedAt: f })).toBe("kickoff");
+    expect(primeraSuperficiePublicada({ kickoffPublishedAt: null, timelinePublishedAt: f })).toBe("cronograma");
+    expect(primeraSuperficiePublicada({ entregaPublishedAt: f, planificacionPublishedAt: f })).toBe("entrega");
+    expect(primeraSuperficiePublicada({})).toBe("kickoff");
+    expect(primeraSuperficiePublicada({ kickoffPublishedAt: null, timelinePublishedAt: null })).toBe("kickoff");
+    // El requerimiento técnico lo abre el desarrollador con su enlace: no le gana a una parte del cliente.
+    expect(primeraSuperficiePublicada({ desarrolloPublishedAt: f, entregaPublishedAt: f })).toBe("entrega");
+    expect(primeraSuperficiePublicada({ desarrolloPublishedAt: f })).toBe("desarrollo");
+  });
+
+  it("el formulario respeta un ?next= válido y no usa nada del servidor sin validarlo", () => {
+    expect(destinoDespuesDeEntrar("cronograma", "kickoff")).toBe("cronograma");
+    expect(destinoDespuesDeEntrar("kickoff", "cronograma")).toBe("kickoff");
+    expect(destinoDespuesDeEntrar(undefined, "cronograma")).toBe("cronograma");
+    expect(destinoDespuesDeEntrar(null, "planificacion")).toBe("planificacion");
+    expect(destinoDespuesDeEntrar(undefined, "https://otro.sitio")).toBe("kickoff");
+    expect(destinoDespuesDeEntrar(undefined, "../api")).toBe("kickoff");
+    expect(destinoDespuesDeEntrar(undefined, 42)).toBe("kickoff");
+    expect(destinoDespuesDeEntrar(undefined, undefined)).toBe("kickoff");
+    expect(destinoDespuesDeEntrar("../api", "cronograma"), "un next desconocido no gana").toBe("cronograma");
+    expect(rutaDeSuperficie(CUID_A, destinoDespuesDeEntrar(undefined, "cronograma"))).toBe(`/external/cronograma/${CUID_A}`);
   });
 });
 
@@ -424,7 +451,7 @@ describe("5 · las direcciones sin proyecto no pintan contenido, y solo Nexus ca
   it("el formulario lleva a la dirección del proyecto, nunca a una sin proyecto", () => {
     const src = sinComentarios(leer("app/external/verify/[token]/VerifyForm.tsx"));
     expect(src).toContain('fetch("/external/verify-access"');
-    expect(src).toContain("rutaDeSuperficie(data.acceso, superficieDeNext(next))");
+    expect(src).toContain("rutaDeSuperficie(data.acceso, destinoDespuesDeEntrar(next, data.destino))");
     expect(src.includes("SURFACE_PATHS"), "volvió la lista de destinos sin proyecto").toBe(false);
     expect(/location\.assign\(\s*["'`]\/external\//.test(src)).toBe(false);
   });
