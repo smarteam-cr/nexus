@@ -73,7 +73,7 @@ export default async function ProbarLaEscala({ searchParams }: { searchParams: P
             {empresas.length === 0 ? (
               <EmptyState
                 title={q ? "Ninguna empresa con ese nombre" : "No hay empresas para probar"}
-                description="Salen las empresas que puedes ver y que tienen una preventa o una exploración, que es de donde salen los niveles. Una empresa sin ellas se ubica primero en su ficha, en La escala › «Actualizar escala»."
+                description="Salen las empresas que puedes ver y que tienen una preventa o una exploración, que es de donde salen los niveles. Una empresa sin ellas se ubica primero en su ficha, en Diagnóstico de rendimiento › «Actualizar escala»."
               />
             ) : (
               <ul className="divide-y divide-line rounded-xl border border-line bg-surface">

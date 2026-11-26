@@ -195,7 +195,7 @@ function bloques(): BloqueGuardado[] {
     vinneta("Se abre a la derecha y la página sigue a la vista. «Más ancho» lo agranda y Escape lo cierra."),
     vinneta("Escribes o dictas. Enter envía y Shift+Enter baja de renglón; en el celular se envía con el botón."),
     vinneta("En la preventa, la ficha, los documentos, el cronograma y Tareas, la conversación queda guardada: si cierras y vuelves, sigue ahí. «Nueva conversación», arriba, empieza otra y la anterior no se borra."),
-    vinneta("Los «Mejorar con IA» de un solo pedido (La escala de la ficha del cliente, los casos de uso, los artefactos y el perfil de un puesto) no guardan la conversación: «Nueva conversación», o irte de esa pantalla, borra lo pedido y lo que no aplicaste."),
+    vinneta("Los «Mejorar con IA» de un solo pedido (el Diagnóstico de rendimiento de la ficha del cliente, los casos de uso, los artefactos y el perfil de un puesto) no guardan la conversación: «Nueva conversación», o irte de esa pantalla, borra lo pedido y lo que no aplicaste."),
 
     titulo(2, "La regla de siempre: Nexus propone, tú aplicas"),
     vinneta("Lo que te propone queda en una lista con casillas. Desmarcas lo que no quieres y aprietas «Aplicar»."),
@@ -218,7 +218,7 @@ function bloques(): BloqueGuardado[] {
     vinneta(`Si falta algo, te hace hasta ${TOPES.rondasDePreguntas} rondas de preguntas cortas.`),
     vinneta("Te muestra «Esto cambia lo que se sabe del cliente»: la nota con tus palabras tal cual y lo que entendió. Con «Guardar» la guardas; con «No guardar» no queda nada."),
     vinneta("Te propone cambios a las tarjetas (Negocio, Embudo, objeciones…). Cada uno se aplica aparte: «Aplicar», «No» o «Aplicar todo»."),
-    vinneta("Si lo que contaste cambia La escala, te avisa y la rehace con una cuenta regresiva de 10 segundos. La puedes cancelar."),
+    vinneta("Si lo que contaste cambia el Diagnóstico de rendimiento, te avisa y lo rehace con una cuenta regresiva de 10 segundos. La puedes cancelar."),
     titulo(4, "Preguntarle lo que se habló"),
     vinneta("Responde con las notas del equipo, las tarjetas, lo que aceptó el cliente y las reuniones de la empresa, y te muestra la frase de donde lo saca."),
     vinneta("Si no está en ninguna parte, te dice «No lo sé». Si no tienes acceso a la empresa, responde solo con lo de la preventa y te lo dice."),
@@ -250,7 +250,7 @@ function bloques(): BloqueGuardado[] {
       "Haz más cortas las preguntas",
     ),
 
-    titulo(3, "En La escala"),
+    titulo(3, "En el Diagnóstico de rendimiento"),
     vinneta("«✨ Mejorar con IA» de la página o de una sección: le pides un cambio y te muestra cada parte con el antes y el después."),
     vinneta("En la preventa es la misma conversación de siempre: con la sección marcada también le preguntas lo que sabe de la cuenta. La marca solo dice a qué parte va un cambio."),
     vinneta("Desde «Nexus» de arriba también le pides un cambio a la página («Cambia el titular…»): va al Resumen."),
@@ -331,11 +331,11 @@ function bloques(): BloqueGuardado[] {
       tarjeta(
         "Lo que cuentas en la preventa",
         "Queda como nota en «Lo que sabes del cliente», con tus palabras, tu nombre y el día. Debajo, lo que Nexus entendió.",
-        "La leen el Resumen de La escala, la memoria de la cuenta (la que usan el chat de la ficha y los agentes de Nexus) y los casos de uso.",
+        "La leen el Resumen del Diagnóstico de rendimiento, la memoria de la cuenta (la que usan el chat de la ficha y los agentes de Nexus) y los casos de uso.",
       ),
       tarjeta(
         "Lo que puede llegar al cliente",
-        "El Resumen de La escala lee tus notas enteras, y lo que pides en La escala va a la página que ve el cliente: ahí puede salir una cifra o algo interno. Revisa la página antes de publicar.",
+        "El Resumen del Diagnóstico de rendimiento lee tus notas enteras, y lo que pides en el Diagnóstico de rendimiento va a la página que ve el cliente: ahí puede salir una cifra o algo interno. Revisa la página antes de publicar.",
         "La memoria de la cuenta es más estricta: a los documentos del cliente pasa solo lo que no es interno (sin montos, negociación ni quién decide) y nunca el texto de tu nota.",
       ),
       tarjeta(
@@ -352,13 +352,13 @@ function bloques(): BloqueGuardado[] {
     vinneta(
       `En la ficha del cliente: ${TOPES_DEL_CHAT.mensajesPorDia} mensajes al día y ${TOPES_DEL_CHAT.usdPorDia} dólares de gasto al día por persona, sumando todas sus cuentas. Debajo del título ves cuánto lleva la conversación y cuántos mensajes te quedan. Hasta ${TOPES_DEL_CHAT.cambiosPorLista} cambios por lista.`,
     ),
-    vinneta(`En Tareas: ${MENSAJES_DE_TAREAS_POR_DIA} mensajes al día. En La escala: ${PEDIDOS_POR_DIA} pedidos al día.`),
-    vinneta("En la preventa y en La escala hay además un tope de gasto del mes para todo el equipo: avisa al 80 % y, si se acaba, se sigue el mes siguiente. Y si se agota el presupuesto de IA de todo Nexus, el chat te lo dice."),
+    vinneta(`En Tareas: ${MENSAJES_DE_TAREAS_POR_DIA} mensajes al día. En el Diagnóstico de rendimiento: ${PEDIDOS_POR_DIA} pedidos al día.`),
+    vinneta("En la preventa y en el Diagnóstico de rendimiento hay además un tope de gasto del mes para todo el equipo: avisa al 80 % y, si se acaba, se sigue el mes siguiente. Y si se agota el presupuesto de IA de todo Nexus, el chat te lo dice."),
     vinneta(
-      `En la preventa, un mensaje puede tener hasta ${conPuntos(TOPES.largoDelMensaje)} caracteres, y un pedido a La escala, hasta ${conPuntos(MAX_PEDIDO)}. Lo que se guarda como nota llega hasta ${conPuntos(TOPES.largoDeLaNota)}: si escribiste más, la nota guarda lo último (y siempre tu respuesta a una pregunta de La escala), con «…» donde cortó, y la ves antes de «Guardar». En la ficha del cliente, los documentos, el cronograma y Tareas, un mensaje va hasta ${conPuntos(TOPES_DEL_CHAT.largoDelMensaje)}. Los «Mejorar con IA» de un solo pedido aceptan menos: ${conPuntos(LARGO_DE_UN_PEDIDO_DE_ARTEFACTO)} en los artefactos y el perfil de un puesto, y ${conPuntos(MAX_LARGO_DE_LA_INSTRUCCION)} en un caso de uso.`,
+      `En la preventa, un mensaje puede tener hasta ${conPuntos(TOPES.largoDelMensaje)} caracteres, y un pedido al Diagnóstico de rendimiento, hasta ${conPuntos(MAX_PEDIDO)}. Lo que se guarda como nota llega hasta ${conPuntos(TOPES.largoDeLaNota)}: si escribiste más, la nota guarda lo último (y siempre tu respuesta a una pregunta del Diagnóstico de rendimiento), con «…» donde cortó, y la ves antes de «Guardar». En la ficha del cliente, los documentos, el cronograma y Tareas, un mensaje va hasta ${conPuntos(TOPES_DEL_CHAT.largoDelMensaje)}. Los «Mejorar con IA» de un solo pedido aceptan menos: ${conPuntos(LARGO_DE_UN_PEDIDO_DE_ARTEFACTO)} en los artefactos y el perfil de un puesto, y ${conPuntos(MAX_LARGO_DE_LA_INSTRUCCION)} en un caso de uso.`,
     ),
     titulo(4, "Permisos"),
-    vinneta("En la preventa, La escala y los casos de uso: poder editar la preventa. Si no puedes editarla, el botón «Nexus» de la preventa abre el chat de la cuenta, el mismo de la ficha."),
+    vinneta("En la preventa, el Diagnóstico de rendimiento y los casos de uso: poder editar la preventa. Si no puedes editarla, el botón «Nexus» de la preventa abre el chat de la cuenta, el mismo de la ficha."),
     vinneta("En la ficha, los documentos del proyecto, la propuesta comercial, el cronograma y Tareas: el permiso «Conversar con el asistente». Lo tienen de base CS, Ventas, Desarrollo y Marketing; lo ajusta la dirección en Equipo. La propuesta comercial pide además el acceso de Ventas."),
     vinneta("Para pedirle cosas de la cuenta desde la preventa: ese mismo permiso y acceso a la empresa. Sin ellos, lo que pides se lee como algo que cuentas o preguntas."),
     vinneta("En los documentos de Roles y el perfil de un puesto: poder administrar Roles."),

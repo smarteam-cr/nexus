@@ -19,9 +19,9 @@ import { useLienzo } from "./contexto";
 import { seguimientoDelResumen } from "./useResumenEnCurso";
 
 export const AVISO_DE_LA_ESCALA_REHECHA =
-  "Listo: la página de La escala tiene cambios que el cliente todavía no ve. Revísalos en «La escala» y publica cuando quieras.";
+  "Listo: la página del Diagnóstico de rendimiento tiene cambios que el cliente todavía no ve. Revísalos en «Diagnóstico de rendimiento» y publica cuando quieras.";
 
-export const CORRIENDO_LA_ESCALA = "Nexus está rehaciendo la página de La escala con tu nota (unos 3 minutos). Lo escrito a mano se queda y nada se publica.";
+export const CORRIENDO_LA_ESCALA = "Nexus está rehaciendo la página del Diagnóstico de rendimiento con tu nota (unos 3 minutos). Lo escrito a mano se queda y nada se publica.";
 
 export function useRehacerLaEscala(): () => Promise<string> {
   const { exp, recargar } = useLienzo();

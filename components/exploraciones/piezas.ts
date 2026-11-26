@@ -12,7 +12,7 @@ export const NOMBRE_DEL_PASO: Record<PasoDelLienzoUI, string> = {
   exploracion: "Exploración",
   informacion: "Información del cliente",
   procesos: "Procesos",
-  escala: "La escala",
+  escala: "Diagnóstico de rendimiento",
   casos: "Casos de uso",
   propuesta: "Propuesta",
   analisis: "Análisis",

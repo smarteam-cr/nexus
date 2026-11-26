@@ -11,7 +11,7 @@ import { definicionEnElMarco, type Marco } from "./marco";
 
 export interface GrupoDeDestino {
   clave: string;
-  /** Cómo se llama el lugar, con mayúscula: «Retos», «La escala». */
+  /** Cómo se llama el lugar, con mayúscula: «Retos», «Diagnóstico de rendimiento». */
   nombre: string;
 }
 
@@ -26,7 +26,9 @@ export function grupoDelDestino(d: DestinoDePropuesta, marco: Marco): GrupoDeDes
     case "area":
     case "edicion":
     case "perfil":
-      return { clave: "escala", nombre: "La escala" };
+      // En la preventa es el Diagnóstico de rendimiento (26 nov); en un proyecto de CS, la escala (su documento
+      // «Diagnóstico» es otro).
+      return { clave: "escala", nombre: marco.clave === "cs" ? "La escala" : "Diagnóstico de rendimiento" };
     case "casoDeUso":
       return { clave: "casos", nombre: "Casos de uso" };
   }
@@ -48,8 +50,9 @@ export function ordenarPorGrupo<T>(xs: readonly T[], grupo: (x: T) => GrupoDeDes
     .map((y) => y.x);
 }
 
-/** «Retos» → «retos», «La escala» → «la escala»; una sigla queda como está («CRM de hoy»). */
+/** «Retos» → «retos», «La escala» → «la escala», «Diagnóstico de rendimiento» → «el Diagnóstico de rendimiento»; una sigla queda como está («CRM de hoy»). */
 function enMinuscula(nombre: string): string {
+  if (nombre === "Diagnóstico de rendimiento") return `el ${nombre}`;
   if (nombre.length > 1 && nombre[1] === nombre[1].toUpperCase() && nombre[1] !== nombre[1].toLowerCase()) return nombre;
   return nombre.charAt(0).toLowerCase() + nombre.slice(1);
 }

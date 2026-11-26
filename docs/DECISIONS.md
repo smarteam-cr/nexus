@@ -17928,3 +17928,24 @@ Marco y Mariana (teamnet.com.mx) manejan sistemas para todo el grupo, y el domin
     Teamnet ya generados no cambian solos (50 corridas de agentes usaron estas reuniones).
 - **Sin cambio:** la agenda de «Mi día» (`lib/mi-dia/agenda.ts`) reparte los eventos futuros con su regla de unidades y
   todavía no mira a la gente confirmada.
+
+## El Diagnóstico de rendimiento es el artefacto; la escala es la regla de los niveles (2026-11-26)
+
+Elías, 26 nov: en la preventa, el paso y el artefacto «La escala» pasan a llamarse **«Diagnóstico de rendimiento»**. La
+escala sigue siendo la regla de los niveles (Inicial, En desarrollo, Funcional…): «el diagnóstico ubica a cada equipo en
+la escala».
+
+- **Cambia solo el texto que se ve** donde nombra el paso, la página o el artefacto: la etiqueta del riel
+  (`NOMBRE_DEL_PASO.escala`), «en «Diagnóstico de rendimiento»» en los avisos, «la página del Diagnóstico de rendimiento»
+  y el «Acceso del cliente al Diagnóstico de rendimiento», el chat «Nexus» (chip, avisos y lo que Nexus propuso), la
+  ficha de la cuenta (La cuenta › Diagnóstico de rendimiento), el recorrido de la preventa, las etiquetas de las corridas
+  y la página «El chat Nexus» de Documentación. Los prompts que nombran la página dicen «la página del Diagnóstico de
+  rendimiento (antes «La escala»)», para que el modelo entienda los dos nombres.
+- **Se queda «la escala»** donde nombra la regla: «ubicar la escala», «Probar la escala», «la edición de la escala»,
+  «La escala no está publicada en Nexus», «La escala, en simple», «La escala en el tiempo» (los niveles de cada día),
+  «La escala hasta ahora» y el panel «La escala» de la derecha (los niveles de cada área), las dimensiones de la escala,
+  el módulo Escala (el documento y sus tests) y la preventa de un proyecto de Customer Success.
+- **No cambia:** claves, rutas, archivos ni datos (`escala` sigue en el código), la página que ya ve el cliente, y los
+  pasos «Resumen» y «Análisis». Nunca se acorta a «Diagnóstico»: choca con el documento «Diagnóstico» de los proyectos de
+  Customer Success.
+- **Para producción:** volver a correr `scripts/seed-pagina-chat-nexus.ts` (simulacro y `--apply`) después del deploy.

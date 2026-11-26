@@ -368,7 +368,7 @@ interface FilaDeLaHistoria {
 
 /** De dónde sale una posición: la preventa, la cuenta entera («Información del cliente») o la Exploración de un proyecto. */
 const deDondeEn = (datos: Ok) => (p: { proyecto: { id: string; nombre: string } | null }) =>
-  !p.proyecto ? "La escala de la preventa" : p.proyecto.id === datos.contenedorId ? "La escala de la cuenta" : `La Exploración de «${p.proyecto.nombre}»`;
+  !p.proyecto ? "El Diagnóstico de rendimiento de la preventa" : p.proyecto.id === datos.contenedorId ? "El Diagnóstico de rendimiento de la cuenta" : `La Exploración de «${p.proyecto.nombre}»`;
 
 function filasDeLaHistoria(datos: Ok, cuentaId: string | null, abrir: (exploracionId: string) => React.ReactNode): FilaDeLaHistoria[] {
   const deDonde = deDondeEn(datos);
@@ -572,11 +572,11 @@ export default function EscalaDeLaCuenta({
     try {
       const r = await fetch(`/api/clients/${clientId}/escala`, { cache: "no-store" });
       const j = await r.json().catch(() => null);
-      if (!r.ok) throw new Error(j?.error ?? "No se pudo cargar la escala de la empresa.");
+      if (!r.ok) throw new Error(j?.error ?? "No se pudo cargar el Diagnóstico de rendimiento de la empresa.");
       setDatos(j as Datos);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo cargar la escala de la empresa.");
+      setError(e instanceof Error ? e.message : "No se pudo cargar el Diagnóstico de rendimiento de la empresa.");
     }
   }, [clientId]);
 
@@ -598,16 +598,16 @@ export default function EscalaDeLaCuenta({
     try {
       const r = await fetch(`/api/clients/${clientId}/escala`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "abrir" }) });
       const j = (await r.json().catch(() => null)) as { error?: string; traidas?: number; desde?: string | null; afuera?: number; noSeTrajo?: boolean } | null;
-      if (!r.ok) throw new Error(j?.error ?? "No se pudo abrir la escala de la cuenta.");
-      if (j?.noSeTrajo) toast.error("No se pudo traer lo ya medido: alguien cambió la escala al mismo tiempo. Recarga para intentarlo de nuevo.");
+      if (!r.ok) throw new Error(j?.error ?? "No se pudo abrir el Diagnóstico de rendimiento de la cuenta.");
+      if (j?.noSeTrajo) toast.error("No se pudo traer lo ya medido: alguien cambió el Diagnóstico de rendimiento al mismo tiempo. Recarga para intentarlo de nuevo.");
       else if (j?.traidas)
         toast.success(
-          `La escala de la cuenta parte de lo medido en ${j.desde ?? "la preventa"}: ${j.traidas === 1 ? "una dimensión" : `${j.traidas} dimensiones`}.` +
+          `El Diagnóstico de rendimiento de la cuenta parte de lo medido en ${j.desde ?? "la preventa"}: ${j.traidas === 1 ? "una dimensión" : `${j.traidas} dimensiones`}.` +
             (j.afuera ? ` ${j.afuera === 1 ? "Una cosa no existe" : `${j.afuera} cosas no existen`} en esta escala y no se trajo.` : ""),
         );
       await cargar();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo abrir la escala de la cuenta.");
+      toast.error(e instanceof Error ? e.message : "No se pudo abrir el Diagnóstico de rendimiento de la cuenta.");
     } finally {
       setAbriendo(false);
     }
@@ -684,7 +684,7 @@ export default function EscalaDeLaCuenta({
   const encabezado = (acciones?: React.ReactNode) => (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h2 className="text-[22px] font-bold leading-tight text-fg">La escala</h2>
+        <h2 className="text-[22px] font-bold leading-tight text-fg">Diagnóstico de rendimiento</h2>
         <p className="mt-1 text-[13px] text-fg-muted">
           La misma escala de la preventa: dónde está la empresa en cada área, de dónde sale cada nivel y cómo se movió desde que nos compró. Para el equipo:
           el cliente solo ve lo que tiene evidencia, y solo si le compartes el «Acceso».
@@ -809,18 +809,18 @@ export default function EscalaDeLaCuenta({
       ) : (
         <>
           <EmptyState
-            title="La escala de la cuenta todavía no está abierta"
+            title="El Diagnóstico de rendimiento de la cuenta todavía no está abierto"
             description={
               puede.exploracion
-                ? "Al abrirla parte de lo ya medido en la preventa o en la Exploración de un proyecto, si lo hay. Después, «Actualizar escala» lee todo lo que Nexus sabe y propone dónde está; tú usas lo que esté bien."
+                ? "Al abrirlo parte de lo ya medido en la preventa o en la Exploración de un proyecto, si lo hay. Después, «Actualizar escala» lee todo lo que Nexus sabe y propone dónde está; tú usas lo que esté bien."
                 : historia.length
-                  ? "La abre quien puede trabajar la exploración del cliente. Abajo está lo medido en la preventa y en cada proyecto."
-                  : "La abre quien puede trabajar la exploración del cliente."
+                  ? "Lo abre quien puede trabajar la exploración del cliente. Abajo está lo medido en la preventa y en cada proyecto."
+                  : "Lo abre quien puede trabajar la exploración del cliente."
             }
             action={
               puede.exploracion ? (
                 <BotonAzul disabled={abriendo} onClick={() => void abrir()}>
-                  Abrir la escala
+                  Abrir el Diagnóstico de rendimiento
                 </BotonAzul>
               ) : undefined
             }

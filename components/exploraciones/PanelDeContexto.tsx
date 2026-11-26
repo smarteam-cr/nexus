@@ -317,7 +317,7 @@ function LaEscala() {
       {enProyecto && <AreasEnJuego />}
       {areas.length === 0 ? (
         <p data-recorrido="preventa.panel.escala" className="text-xs text-fg-muted">
-          {enProyecto ? "Elige arriba las áreas en juego." : "Elige las áreas en juego en «La escala»."}
+          {enProyecto ? "Elige arriba las áreas en juego." : "Elige las áreas en juego en «Diagnóstico de rendimiento»."}
         </p>
       ) : (
         <ul data-recorrido="preventa.panel.escala" className="space-y-1.5 rounded-xl border border-line bg-surface px-3 py-2.5">

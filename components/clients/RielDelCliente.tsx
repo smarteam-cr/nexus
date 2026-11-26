@@ -168,7 +168,7 @@ export default function RielDelCliente({
         <FilaDeCuenta etiqueta="Personas y tickets" activa={cuentaActiva === "personas"} onClick={() => onElegirCuenta("personas")} />
         <FilaDeCuenta etiqueta="Tareas" activa={cuentaActiva === "tareas"} onClick={() => onElegirCuenta("tareas")} />
         <FilaDeCuenta etiqueta="Notas" activa={cuentaActiva === "notas"} onClick={() => onElegirCuenta("notas")} />
-        <FilaDeCuenta etiqueta="La escala" activa={cuentaActiva === "escala"} onClick={() => onElegirCuenta("escala")} />
+        <FilaDeCuenta etiqueta="Diagnóstico de rendimiento" activa={cuentaActiva === "escala"} onClick={() => onElegirCuenta("escala")} />
         <FilaDeCuenta etiqueta="Casos de uso" activa={cuentaActiva === "casos"} onClick={() => onElegirCuenta("casos")} />
         <FilaDeCuenta etiqueta="Fuera de alcance" activa={cuentaActiva === "solicitudes"} onClick={() => onElegirCuenta("solicitudes")} />
       </div>

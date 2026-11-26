@@ -193,7 +193,7 @@ export async function generarDescripcionesDeLaEscala(o: {
       clientId: fila.clientId,
       projectId: fila.projectId,
       status: "RUNNING",
-      stepLabel: "La escala: la descripción de cada equipo",
+      stepLabel: "Diagnóstico de rendimiento: la descripción de cada equipo",
       currentPhase: "Escribiendo la descripción…",
       triggeredByEmail: o.email,
       filters: { exploracion: o.exploracionId, modo: "descripcion-de-la-escala", areas: aEscribir.map((x) => x.resultado.areaId) } as Prisma.InputJsonValue,

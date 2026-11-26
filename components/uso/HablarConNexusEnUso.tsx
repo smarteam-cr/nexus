@@ -30,7 +30,7 @@ export default function HablarConNexusEnUso({ datos }: { datos: UsoDeHablarConNe
           valor={`${numero(c.cambiosAplicados)} de ${numero(c.cambiosPropuestos)}`}
           pie={decididos ? `${numero(c.cambiosDescartados)} descartados; ${pct(c.cambiosAplicados / decididos)} de los decididos se aplicó` : "ninguno decidido todavía"}
         />
-        <Cifra titulo="Gasto" valor={usd(datos.gastoUsd)} pie={`en ${dias} días (la conversación y el aviso de La escala)`} />
+        <Cifra titulo="Gasto" valor={usd(datos.gastoUsd)} pie={`en ${dias} días (la conversación y el aviso del Diagnóstico de rendimiento)`} />
         {mes ? (
           <Cifra
             titulo="Este mes"

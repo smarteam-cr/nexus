@@ -492,7 +492,7 @@ async function prepararElResumen(o: { exploracionId: string; email: string | nul
         clientId: fila.clientId,
         projectId: fila.projectId,
         status: "RUNNING",
-        stepLabel: "La escala: el Resumen para el cliente",
+        stepLabel: "Diagnóstico de rendimiento: el Resumen para el cliente",
         currentPhase: FASES_DEL_RESUMEN.leyendo(deVerdad.length, le.ctx.reuniones.length - deVerdad.length),
         triggeredByEmail: o.email,
         sourceSessionIds: reunionesDeVerdad(le.ctx.reuniones).map((r) => r.id),

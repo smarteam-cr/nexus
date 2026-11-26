@@ -125,7 +125,7 @@ export default function PedirleANexus({
           Sobre «{foco}» · {lugarNombre}
         </ChipDeNexus>
       ) : (
-        <ChipDeNexus>Sobre la página «{lugarNombre}» de La escala</ChipDeNexus>
+        <ChipDeNexus>Sobre la página «{lugarNombre}» del Diagnóstico de rendimiento</ChipDeNexus>
       )}
       <CajaDeNexus
         cajaRef={cajaRef}
@@ -147,8 +147,8 @@ export default function PedirleANexus({
       abierto={abierto}
       onClose={onClose}
       cajaRef={cajaRef}
-      ariaLabel={`Nexus · La escala › ${lugarNombre}`}
-      subtitulo={`La escala › ${lugarNombre}`}
+      ariaLabel={`Nexus · Diagnóstico de rendimiento › ${lugarNombre}`}
+      subtitulo={`Diagnóstico de rendimiento › ${lugarNombre}`}
       garantia="Nexus propone, tú aplicas; nada se publica."
       nuevaConversacion={{
         alHacer: empezarDeNuevo,
@@ -163,7 +163,7 @@ export default function PedirleANexus({
     >
       {vacio && (
         <ChatVacio
-          intro="Pídele un cambio a la página de La escala. Por ejemplo:"
+          intro="Pídele un cambio a la página del Diagnóstico de rendimiento. Por ejemplo:"
           ejemplos={EJEMPLOS}
           cierre={<p>Te muestra cada parte con el antes y el después. Nexus propone; tú aplicas. Nada se publica.</p>}
         />

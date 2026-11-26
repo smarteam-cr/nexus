@@ -188,7 +188,7 @@ export function HistorialDelAgente() {
               {leido.tests.map((t) => (
                 <li key={t.resultado.areaId}>
                   {nombreDeArea(t.resultado.areaId)}: lo contestó {t.contacto}
-                  {t.resultado.fecha ? ` el ${diaCorto(t.resultado.fecha)}` : ""}. Sus niveles entran como hipótesis en «La escala»: son de la escala anterior y se confirman en la primera reunión.
+                  {t.resultado.fecha ? ` el ${diaCorto(t.resultado.fecha)}` : ""}. Sus niveles entran como hipótesis en «Diagnóstico de rendimiento»: son de la escala anterior y se confirman en la primera reunión.
                 </li>
               ))}
             </ul>

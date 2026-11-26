@@ -30,7 +30,7 @@ import RespuestaDelCliente from "./RespuestaDelCliente";
 function loQueTiene(a: AreaDeLaEscala): string {
   const usadas = [a.conEvidencia ? `${a.conEvidencia} con evidencia` : null, a.porExplorar ? `${a.porExplorar} por explorar` : null].filter(Boolean).join(" · ");
   if (usadas) return `${usadas} de ${a.partes}`;
-  if (a.sugeridas) return `${a.sugeridas} ${a.sugeridas === 1 ? "sugerida" : "sugeridas"} sin usar: sale «En medición»; úsalas en La escala para que tenga nivel`;
+  if (a.sugeridas) return `${a.sugeridas} ${a.sugeridas === 1 ? "sugerida" : "sugeridas"} sin usar: sale «En medición»; úsalas en el Diagnóstico de rendimiento para que tenga nivel`;
   return a.seHablo ? "se habló de ella, pero no tiene nada ubicado: sale «En medición»" : "todavía no se habló de ella: sale «En medición»";
 }
 
@@ -161,7 +161,7 @@ export default function AccesoALaEscala() {
 
   return (
     <>
-      <button type="button" disabled={!acceso && !error} onClick={() => setAbierto(true)} className={BOTON_DE_HERRAMIENTA} title={`Acceso del cliente a la escala: ${NOMBRE_DEL_ESTADO[estado]}`}>
+      <button type="button" disabled={!acceso && !error} onClick={() => setAbierto(true)} className={BOTON_DE_HERRAMIENTA} title={`Acceso del cliente al Diagnóstico de rendimiento: ${NOMBRE_DEL_ESTADO[estado]}`}>
         {punto ? (
           <span className={`h-2 w-2 flex-shrink-0 rounded-full ${punto}`} aria-hidden="true" />
         ) : (
@@ -172,10 +172,10 @@ export default function AccesoALaEscala() {
         )}
         Acceso
       </button>
-      <Modal open={abierto} onClose={() => { setAbierto(false); setRevocando(false); }} title="Acceso del cliente a la escala" description="Una página como la del resultado del test, con lo que la empresa ya tiene ubicado. Quien tenga el enlace la ve.">
+      <Modal open={abierto} onClose={() => { setAbierto(false); setRevocando(false); }} title="Acceso del cliente al Diagnóstico de rendimiento" description="Una página como la del resultado del test, con lo que la empresa ya tiene ubicado. Quien tenga el enlace la ve.">
         <div className="space-y-3">
           {error && <Alert variant="danger">{error}</Alert>}
-          {noAbre && <Alert variant="warning">Este enlace ya no abre: esta escala se archivó. Revócalo y comparte la que siga viva.</Alert>}
+          {noAbre && <Alert variant="warning">Este enlace ya no abre: este Diagnóstico de rendimiento se archivó. Revócalo y comparte el que siga vivo.</Alert>}
           {!noAbre && <EquiposQueVe />}
           {acceso && !noAbre && <p className="text-[13px] text-fg-secondary">{acceso.medidas ? cuanto : "Los equipos elegidos todavía no tienen nada ubicado: la página los muestra «En medición»."}</p>}
           {acceso?.enlace && (

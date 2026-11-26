@@ -123,7 +123,7 @@ function loQueContesto(s: SalidaDeLaVuelta, estados: ReadonlyMap<string, ListaEn
 /** El texto que dejó en la conversación el mensaje de una propuesta a La escala (el que viajó). */
 function textoDeLaVuelta(s: SalidaDeLaVuelta, e: EscalaEnLaConversacion): string {
   const t = (s as { textoDeLaEscala?: unknown }).textoDeLaEscala;
-  return typeof t === "string" && t ? t : e.propuesta.nota ?? "Nexus propuso cambios a La escala.";
+  return typeof t === "string" && t ? t : e.propuesta.nota ?? "Nexus propuso cambios al Diagnóstico de rendimiento.";
 }
 
 /** Las frases de los hechos que propuso un «listo» (lo que Nexus entendió), leídas sin confiar en ellas. */

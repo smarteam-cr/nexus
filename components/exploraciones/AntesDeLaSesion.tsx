@@ -1008,7 +1008,7 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
   const conOrdenPropio = !!pestana.sesion?.ajustesDeLaGuia?.orden?.length;
   const ajustar = useAjustarLaGuia(pestana);
   const faltan = marco.tarjetas.filter((c) => lineasDe(c, e.contenido.casillas[c]).length === 0).length;
-  const donde = enProyecto ? "en el panel de la derecha" : "en «La escala»";
+  const donde = enProyecto ? "en el panel de la derecha" : "en «Diagnóstico de rendimiento»";
   /* Siempre cierra con la pregunta de cierre y el siguiente paso, y pide lo que falta que no salió: para proponer en la
      preventa, de la estrategia en un proyecto (avance-del-proyecto.ts). */
   const temasDeLaGuia = new Set(preguntas.map((p) => p.apunta?.para ?? p.para));

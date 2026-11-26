@@ -815,7 +815,7 @@ function bloqueDeLaConversacion(m: readonly MensajeDeLaConversacion[]): string {
             : x.es === "pedido"
               ? "PERSONA (pidió algo de la cuenta)"
               : x.es === "cambio"
-                ? "PERSONA (pidió un cambio a la página de La escala)"
+                ? "PERSONA (pidió un cambio a la página del Diagnóstico de rendimiento)"
                 : "PERSONA"
       : x.es === "respuesta"
         ? "NEXUS (respondió)"
@@ -824,7 +824,7 @@ function bloqueDeLaConversacion(m: readonly MensajeDeLaConversacion[]): string {
           : x.es === "lista"
             ? "NEXUS (sobre la cuenta)"
             : x.es === "escala"
-              ? "NEXUS (propuso cambios a La escala)"
+              ? "NEXUS (propuso cambios al Diagnóstico de rendimiento)"
               : "NEXUS";
   return conTopeDeLaConversacion(m)
     .map((x) => `${quien(x)}: ${x.texto}`)
@@ -855,7 +855,7 @@ export function pedidoDelTurno(
     lectura === "duda"
       ? `LO ÚLTIMO QUE ESCRIBIÓ PUEDE SER ALGO QUE CUENTA, UNA PREGUNTA O UN PEDIDO: decídelo mirando la conversación. Si te pregunta algo sobre la cuenta (o sigue con lo que le respondiste), devuelve {"tipo":"consulta"}; si te pide hacer algo en la cuenta (una tarea, el siguiente paso, la guía; o sigue con la lista que Nexus le propuso), devuelve {"tipo":"pedido"};${
           ctx.conLaEscala
-            ? ' si te pide cambiar algo de la página de La escala que ve el cliente (el título, el texto de arriba, el problema principal, los puntos clave, el recorrido, un equipo, una cifra; o sigue con los cambios que Nexus le propuso a esa página), devuelve {"tipo":"cambio"};'
+            ? ' si te pide cambiar algo de la página del Diagnóstico de rendimiento (antes «La escala») que ve el cliente (el título, el texto de arriba, el problema principal, los puntos clave, el recorrido, un equipo, una cifra; o sigue con los cambios que Nexus le propuso a esa página), devuelve {"tipo":"cambio"};'
             : ""
         } si te cuenta algo, sigue como siempre.`
       : `LO ÚLTIMO QUE ESCRIBIÓ NO ES UNA PREGUNTA NI UN PEDIDO: te está contando algo. No devuelvas «consulta», «pedido» ni «cambio».${

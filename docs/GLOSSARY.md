@@ -7,6 +7,11 @@
   resultado del test), con «Hoy» y la **meta** (a dónde lo llevamos: Funcional, o el siguiente desde Funcional; la elige
   quien presenta). **Reto principal**: el titular de cada departamento en el Resumen, con **lo que lo causa** debajo y
   **cuánto cuesta** (la cifra en dinero, o «por validar»).
+- **Diagnóstico de rendimiento** (26 nov, Elías; antes «La escala»): el paso de la preventa y el artefacto que ve el cliente: el Resumen y la
+  página de cada área, con dónde está cada equipo. También la pantalla de La cuenta › Diagnóstico de rendimiento. **La escala** sigue siendo
+  la regla de los niveles (Inicial, En desarrollo, Funcional…): «el diagnóstico ubica a cada equipo en la escala». Nunca
+  se acorta a «Diagnóstico»: ese es el documento de los proyectos de Customer Success. El código conserva `escala` en
+  claves, rutas y archivos.
 - **Resumen de la escala** (`lib/exploraciones/resumen-de-la-escala.ts`, desde el 2026-11-09; resumen ejecutivo desde el
   10 nov; segunda vuelta el 11 nov): la primera pestaña de la escala que ve el cliente: arriba las tres cifras de lo que hicimos
   y después su negocio, cómo funciona su operación, qué encontramos por equipo de la escala (con sus subequipos adentro) y
@@ -21,7 +26,7 @@
   confirma con un clic; y una **reunión mal leída** (cortada, o casi sin la voz de la empresa) se avisa con «Volver a leer».
   Sus versiones se ven en el **Historial de versiones** (21 nov), como las de cualquier documento.
 - **Historial de versiones** (21 nov, `lib/versiones`, `components/versiones/HistorialDeVersiones.tsx`): el popup de
-  todo documento (Resumen de La escala, handoff, kickoff, diagnóstico, planificación, entrega, copias, propuesta
+  todo documento (Resumen del Diagnóstico de rendimiento, handoff, kickoff, diagnóstico, planificación, entrega, copias, propuesta
   comercial y cronograma) con sus **versiones**: cómo nació cada una («Rehecho con IA», «Editado», «Publicado», «Vuelta
   a una anterior», «Presentado», «Congelado»), quién y cuándo. **Actual** es el documento como está; **Lo que ve el
   cliente**, la última publicada mientras siga compartido. «Usar esta versión» la vuelve la actual como borrador y nunca
@@ -253,10 +258,10 @@
 - **De dónde viene** (una tarea, `lib/tareas/origen.ts`): reunión con el cliente, sprint interno, HubSpot, el chat, un
   siguiente paso, una plantilla o a mano. Lo decide la sala de la reunión, no el cliente de la tarea.
 - **Versión de la escala** (`VersionDeLaEscala`): la foto de dónde está una empresa en la escala en un día, con de
-  dónde sale cada nivel. Se ve en La cuenta › La escala, «La escala en el tiempo». Interna. Desde el 2026-10-18 dice de
+  dónde sale cada nivel. Se ve en La cuenta › Diagnóstico de rendimiento, «La escala en el tiempo». Interna. Desde el 2026-10-18 dice de
   qué venta y de qué propuesta sale, y su **momento**: «al vender» (el día en que se ganó la venta), «al arrancar» (el
   arranque del proyecto) u «hoy».
-- **Actualizar escala** (La cuenta › La escala, modo `posicionar` del agente): el agente lee todo lo que Nexus sabe de la
+- **Actualizar escala** (La cuenta › Diagnóstico de rendimiento, modo `posicionar` del agente): el agente lee todo lo que Nexus sabe de la
   empresa (lo vendido, las reuniones en resumen, las tareas, el cronograma, la memoria, HubSpot) y propone el nivel de
   cada dimensión con la frase del cliente. Lo dispara una persona; lo propuesto se usa ahí mismo. No marca nada como
   leído.
@@ -376,7 +381,7 @@
 - **Preventa** (Ventas → Preventa, `/sales/exploraciones`, modelo `ExploracionDeVenta`): el lienzo de
   una empresa en venta, desde que llega (por el test o desde HubSpot) hasta la primera propuesta y el
   traspaso al CSE. Sus piezas: Preparación (Identificación y Conexión) · Exploración (las reuniones) ·
-  Información del cliente · Procesos · La escala · Casos de uso · Propuesta. La trabaja todo Customer
+  Información del cliente · Procesos · Diagnóstico de rendimiento · Casos de uso · Propuesta. La trabaja todo Customer
   Success (permiso `preventa`, desde el 2026-10-06); armar la propuesta sigue siendo de Ventas. Se
   llamaba «Exploración de venta» hasta el 2026-10-03; la dirección y el modelo conservan ese nombre. No
   confundir con el canvas «Exploración» de un proyecto (el del CSE).
@@ -534,7 +539,7 @@
   cronograma. Se elige en el panel de la tarea; la tarea vence al final de la última.
 - **Pieza oculta** (`Project.piezasOcultas`): una pieza del riel que el equipo ocultó en ese proyecto; queda en «Ver N
   piezas más», no se borra ni se apaga.
-- **La escala de la empresa** (La cuenta › La escala): dónde está la empresa en cada área de la escala, con la fecha y de
+- **Diagnóstico de rendimiento de la empresa** (La cuenta › Diagnóstico de rendimiento; antes «La escala de la empresa»): dónde está la empresa en cada área de la escala, con la fecha y de
   dónde sale (las exploraciones con niveles confirmados). Sirve venga o no de una preventa.
 - **Servicio recurrente** (`lib/servicios/catalogo.ts`, desde el 2026-10-18): lo que Smarteam hace todos los meses para
   un cliente, declarado una vez en el catálogo: qué incluye, su **cadencia**, sus **rutinas** (reuniones fijas y tareas

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DestinoDePropuesta } from "./contenido";
 import { dondeQuedoLoUsado, grupoDelDestino, ordenarPorGrupo } from "./lo-que-aprendimos";
-import { MARCO_DE_VENTA } from "./marco";
+import { MARCO_DE_CS, MARCO_DE_VENTA } from "./marco";
 
 describe("grupoDelDestino", () => {
   it("cada casilla es su grupo, con el nombre de su tarjeta", () => {
@@ -44,6 +44,13 @@ describe("dondeQuedoLoUsado", () => {
   it("pasados tres grupos, el resto se cuenta junto", () => {
     const nombres = ["La escala", "La escala", "La escala", "Retos", "Retos", "Metas", "Tiempos", "Presupuesto", "Presupuesto"];
     expect(dondeQuedoLoUsado(nombres)).toBe("3 en la escala, 2 en retos, 2 en presupuesto y 2 en otros 2 lugares");
+  });
+
+  it("en la preventa es el Diagnóstico de rendimiento (26 nov); en un proyecto de CS sigue la escala", () => {
+    const nivel = { tipo: "nivel", dimensionId: "1.1" } as unknown as DestinoDePropuesta;
+    expect(grupoDelDestino(nivel, MARCO_DE_VENTA).nombre).toBe("Diagnóstico de rendimiento");
+    expect(grupoDelDestino(nivel, MARCO_DE_CS).nombre).toBe("La escala");
+    expect(dondeQuedoLoUsado(["Diagnóstico de rendimiento", "Diagnóstico de rendimiento", "Retos"])).toBe("2 en el Diagnóstico de rendimiento y 1 en retos");
   });
 
   it("con cuatro grupos los nombra a los cuatro (no dice «otros 1 lugares»)", () => {
