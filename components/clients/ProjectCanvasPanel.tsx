@@ -1184,8 +1184,14 @@ export default function ProjectCanvasPanel({
               en este acceso; sin el botón en su barra, desde el 30 oct no había cómo hacerlo desde el documento. */}
           {/* El cronograma de siempre, igual (25 nov, Elías con RC Inmobiliaria: «la parte de cronograma debe tener el CTA de
               acceso»): el cliente lo ve en /external/cronograma con este mismo acceso, no con un enlace propio. */}
+          {/* Desde el documento, el pop-up se enfoca en ESA parte (25 nov, Elías): su link directo, la contraseña y su
+              Publicar u Ocultar; lo demás, plegado. En el Resumen, completo. El requerimiento técnico no lo lleva: ya tiene
+              su enlace propio en la barra del documento, como el kickoff, el diagnóstico y la planificación. */}
           {(enResumen || ((activeSlug === "delivery" || activeSlug === PIEZA_CRONOGRAMA) && !copiaActiva)) && !esPrueba && (
-            <ExternalAccessButton projectId={projectId} />
+            <ExternalAccessButton
+              projectId={projectId}
+              foco={enResumen ? undefined : activeSlug === "delivery" ? "entrega" : "cronograma"}
+            />
           )}
         </div>
       </div>

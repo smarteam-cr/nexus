@@ -22,6 +22,22 @@ describe("el mensaje para el cliente con su acceso", () => {
     expect(mensajeParaElCliente({ proyecto: "CRM", urlBase, publicadas: new Set(["desarrollo", "kickoff"]) })).not.toContain("Requerimiento");
   });
 
+  it("con foco, el link lleva directo a esa parte y lo demás va como «También puedes ver»", () => {
+    const m = mensajeParaElCliente({ proyecto: "CRM", urlBase, publicadas: new Set(["kickoff", "cronograma", "desarrollo"]), foco: "cronograma" })!;
+    expect(m).toContain(`«CRM»:\n${urlBase}?next=cronograma\n`);
+    expect(m).toContain("Te lleva directo a: Cronograma.");
+    expect(m).toContain("También puedes ver: Kickoff.");
+    expect(m).not.toContain("Requerimiento");
+    expect(m).toContain("te la mando por otro medio");
+    const solo = mensajeParaElCliente({ proyecto: "CRM", urlBase, publicadas: new Set(["entrega"]), foco: "entrega" })!;
+    expect(solo).toContain(`${urlBase}?next=entrega`);
+    expect(solo).not.toContain("También");
+  });
+
+  it("con foco y esa parte sin publicar no hay mensaje, aunque haya otras publicadas", () => {
+    expect(mensajeParaElCliente({ proyecto: "CRM", urlBase, publicadas: new Set(["kickoff"]), foco: "cronograma" })).toBeNull();
+  });
+
   it("el link de cada parte usa su `?next=` (el kickoff, el de siempre)", () => {
     expect(linkDeLaParte(urlBase, "kickoff")).toBe(urlBase);
     expect(linkDeLaParte(urlBase, "cronograma")).toBe(`${urlBase}?next=cronograma`);
