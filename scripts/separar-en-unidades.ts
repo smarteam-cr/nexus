@@ -61,7 +61,7 @@ import {
   ORDEN_DE_CLIENTES_PARA_ATRIBUIR,
   type CategorizeContext,
 } from "@/lib/sessions/categorize";
-import { buildHubspotDomainMap, resolveSessionClientId } from "@/lib/sessions/resolve-client";
+import { buildHubspotDomainMap, cargarInterlocutoresConfirmados, resolveSessionClientId } from "@/lib/sessions/resolve-client";
 import { asignarDuenioManual } from "@/lib/sessions/duenio-manual";
 import { isLockedLink } from "@/lib/sessions/session-project-locks";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
@@ -224,6 +224,7 @@ async function main() {
   ).map((s) => ({ ...s, manualClientId: manoReuniones.get(s.id) ?? s.manualClientId, manualAntes: s.manualClientId }));
   ctx.personasDeEntidades = aprenderPersonasDeEntidades(todas, ctx);
   ctx.hubspotCompaniesByDomain = await buildHubspotDomainMap(todas, ctx.internalDomains);
+  ctx.interlocutoresConfirmados = await cargarInterlocutoresConfirmados();
   const nuevoDe = new Map(todas.map((s) => [s.id, resolveSessionClientId(s, ctx)]));
   const proyectosCrudos = await prisma.project.findMany({
     where: { clientId: { in: idsAntes } },
@@ -265,7 +266,18 @@ async function main() {
   for (const id of ctx.personasDeEntidades.values()) if (idsDespues.has(id)) gente.set(id, (gente.get(id) ?? 0) + 1);
   log(`\n## 2. Las reuniones: ${enJuego.length}, a qué unidad y por qué\n`);
   log(`Gente aprendida del título de las reuniones: ${[...gente].map(([id, n]) => `${nombre(id)} ${n}`).join(" · ") || "(nadie)"}.\n`);
-  const columnas: PorQue[] = ["nombre", "gente", "dominio", "a-mano"];
+  /* La gente que confirmó el equipo («Unidades e interlocutores», 25 nov) pesa más que su dominio: una confirmación hecha
+     en la ficha de antes de partirla sigue apuntando a esa ficha. Se lista para revisarla en Interlocutores. */
+  const confirmadasAntes = await prisma.personaDeLaEmpresa
+    .findMany({ where: { clientId: { in: idsAntes }, confirmadaAt: { not: null } }, select: { correo: true, clientId: true } })
+    .catch(() => [] as { correo: string; clientId: string }[]);
+  if (confirmadasAntes.length) {
+    log(`⚠ ${confirmadasAntes.length} persona(s) confirmada(s) en las fichas que se separan: siguen confirmadas donde estaban y`);
+    log(`  pesan más que su dominio. Revisa cada una en Información del cliente › Interlocutores después del --apply:`);
+    for (const c of confirmadasAntes) log(`  - ${c.correo} · confirmada en ${nombre(c.clientId)}`);
+    log("");
+  }
+  const columnas: PorQue[] = ["nombre", "confirmada", "gente", "dominio", "a-mano"];
   log(`| Unidad | ${columnas.map((c) => POR_QUE[c]).join(" | ")} | Total |`);
   log(`|---|${columnas.map(() => "---|").join("")}---|`);
   for (const f of fichas) {
@@ -275,7 +287,7 @@ async function main() {
   const porDecidir = enJuego.filter((d) => d.nuevo === null);
   const motivos = new Map<string, number>();
   for (const d of porDecidir) motivos.set(POR_DE_REUNION[d.por], (motivos.get(POR_DE_REUNION[d.por]) ?? 0) + 1);
-  log(`| **Por decidir** | ${[...motivos].map(([m, n]) => `${m}: ${n}`).join(" · ") || "—"} | | | | **${porDecidir.length}** |`);
+  log(`| **Por decidir** | ${[...motivos].map(([m, n]) => `${m}: ${n}`).join(" · ") || "—"} | | | | | **${porDecidir.length}** |`);
 
   const cambian = enJuego.filter((d) => d.nuevo !== d.s.resolvedClientId);
   const seMueven = cambian.filter((d) => d.nuevo !== null);

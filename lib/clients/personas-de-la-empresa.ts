@@ -15,15 +15,17 @@
  *     que también aparece en reuniones de OTROS clientes (HubSpot, una agencia, un integrador) se queda fuera. Los del
  *     dominio de la empresa entran aunque hayan ido a una reunión de otro cliente (un webinar, una empresa del mismo
  *     grupo): si no, una sola reunión ajena sacaba a toda la empresa (revisión del 25 oct).
- * El rol (decide, influye, usa) lo dice una persona del equipo: la copia nunca lo toca.
+ * El rol (decide, champion, participa, no involucrado) lo dice una persona del equipo: la copia nunca lo toca. Tampoco
+ * toca la confirmación («Unidades e interlocutores», 2026-11-25): con qué ficha trabaja cada persona lo dice una persona
+ * del equipo, y es lo único de esta tabla que lee el resolver de reuniones.
  */
 import { DOMINIOS_GENERICOS } from "@/lib/exploraciones/agendadas";
 
-export const ROLES_DE_PERSONA = ["decide", "influye", "usa"] as const;
-export type RolDePersona = (typeof ROLES_DE_PERSONA)[number];
-export const ETIQUETA_DEL_ROL: Record<RolDePersona, string> = { decide: "Decide", influye: "Influye", usa: "Usa" };
+export { ROLES_DE_PERSONA, ETIQUETA_DEL_ROL, QUE_ES_EL_ROL, esRolDePersona, type RolDePersona } from "./roles-de-persona";
 
-export type OrigenDePersona = "hubspot" | "reunion" | "cuestionario";
+
+/** `equipo`: la sumó una persona del equipo a mano (o la precarga de su mapa). La copia la conserva. */
+export type OrigenDePersona = "hubspot" | "reunion" | "cuestionario" | "equipo";
 
 export interface ContactoParaUnir {
   id: string;
@@ -151,10 +153,22 @@ export function cambiosDePersona(
   if (ahora.nombre && ahora.nombre !== antes.nombre) c.nombre = ahora.nombre;
   if (ahora.cargo && ahora.cargo !== antes.cargo) c.cargo = ahora.cargo;
   if (ahora.contactoDeHubspotId !== antes.contactoDeHubspotId) c.contactoDeHubspotId = ahora.contactoDeHubspotId;
-  if ([...ahora.origenes].sort().join(",") !== [...antes.origenes].sort().join(",")) c.origenes = ahora.origenes;
+  // «equipo» no sale de ninguna fuente: lo puso una persona, y la copia no lo borra.
+  const origenes: OrigenDePersona[] =
+    antes.origenes.includes("equipo") && !ahora.origenes.includes("equipo") ? [...ahora.origenes, "equipo"] : ahora.origenes;
+  if ([...origenes].sort().join(",") !== [...antes.origenes].sort().join(",")) c.origenes = origenes;
   if (ahora.reuniones !== antes.reuniones) c.reuniones = ahora.reuniones;
   if ((ahora.ultimaReunionAt?.getTime() ?? null) !== (antes.ultimaReunionAt?.getTime() ?? null)) c.ultimaReunionAt = ahora.ultimaReunionAt;
   if (ahora.lado !== antes.lado) c.lado = ahora.lado;
   if (!antes.vigente) c.vigente = true;
   return Object.keys(c).length ? c : null;
+}
+
+/**
+ * ¿La copia la deja vigente aunque ninguna fuente la traiga? Sí si una persona del equipo la confirmó en esta ficha o la
+ * sumó a mano: lo que dice una persona no lo deshace la copia de cada hora («lo confirmado nunca se aprende solo», y
+ * tampoco se olvida solo).
+ */
+export function laSostieneElEquipo(p: { confirmadaAt: Date | null; origenes: readonly string[] }): boolean {
+  return p.confirmadaAt !== null || p.origenes.includes("equipo");
 }

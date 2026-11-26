@@ -217,6 +217,23 @@ describe("lo que choca con un único (SIN_CHOCAR)", () => {
     expect(ambas[0].motivo).toMatch(/Reportes de ventas/);
   });
 
+  it("⭐ una persona confirmada en la absorbida no pierde la confirmación ni el rol al fusionar (25 nov)", () => {
+    const at = new Date("2026-11-25T12:00:00Z");
+    const sigue = { id: "s1", correo: "cindy@itcr.test", confirmadaAt: null, confirmadaPorEmail: null, rol: null, rolFuente: null, rolAt: null, origenes: ["reunion"] };
+    const absorbida = { id: "a1", correo: "cindy@itcr.test", confirmadaAt: at, confirmadaPorEmail: "eli@x", rol: "champion", rolFuente: "persona", rolAt: at, origenes: ["equipo"] };
+    const [c] = resolverChoques("personaDeLaEmpresa", [absorbida], [sigue], ["correo"]);
+    expect(c).toMatchObject({
+      accion: "plegar",
+      cambios: { confirmadaAt: at, confirmadaPorEmail: "eli@x", vigente: true, rol: "champion", rolFuente: "persona", rolAt: at, origenes: ["reunion", "equipo"] },
+    });
+    // Si la que sigue ya está confirmada y con rol, queda la suya (y se avisa si el rol es otro).
+    const [d] = resolverChoques("personaDeLaEmpresa", [absorbida], [{ ...sigue, confirmadaAt: at, rol: "decide", origenes: ["equipo"] }], ["correo"]);
+    expect(d).toMatchObject({ accion: "borrar-absorbida" });
+    expect(d.motivo).toMatch(/rol/);
+    // Sin nada de una persona en la absorbida, lo de siempre.
+    expect(resolverChoques("personaDeLaEmpresa", [{ ...sigue, id: "a2" }], [sigue], ["correo"])[0]).toMatchObject({ accion: "borrar-absorbida" });
+  });
+
   it("⭐ una licencia que choca: la de la que sigue toma lo que le falta y junta las notas; un dato distinto queda el suyo y se avisa", () => {
     const sigue = { id: "s1", hub: "sales_hub", plan: "Pro", fechaCompra: null, fechaRenovacion: new Date("2027-01-01"), montoMensual: null, moneda: null, nota: "La compró Ana" };
     const absorbida = { id: "a1", hub: "sales_hub", plan: "Starter", fechaCompra: new Date("2025-03-01"), fechaRenovacion: null, montoMensual: 450, moneda: "USD", nota: "Asientos: 5" };

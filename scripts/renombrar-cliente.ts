@@ -30,7 +30,7 @@ import "./lib/permitir-server-only";
 import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { categorizeSession, buildInternalDomainsSet, computeAmbiguousNameTokens } from "@/lib/sessions/categorize";
-import { resolveAllSessions } from "@/lib/sessions/resolve-client";
+import { cargarInterlocutoresConfirmados, resolveAllSessions } from "@/lib/sessions/resolve-client";
 
 function bandera(nombre: string): string | null {
   const i = process.argv.indexOf(`--${nombre}`);
@@ -75,6 +75,9 @@ async function main() {
     prisma.firefliesSession.findMany({ select: { id: true, title: true, participants: true, manualClientId: true, resolvedClientId: true } }),
   ]);
   const porId = new Map(clientes.map((c) => [c.id, c.name]));
+  /* La gente que confirmó el equipo (paso 3·0): sin ella, el simulacro mostraría otro reparto que el que aplica el
+     --apply (`resolveAllSessions` sí la carga). */
+  const interlocutoresConfirmados = await cargarInterlocutoresConfirmados();
   const internos = buildInternalDomainsSet(categorias);
 
   const contar = (nombreDelCliente: string) => {
@@ -88,6 +91,7 @@ async function main() {
         lista.filter((c) => c.hubspotCompanyId).map((c) => [c.hubspotCompanyId!, { id: c.id, name: c.name, company: c.company }]),
       ),
       ambiguousNameTokens: computeAmbiguousNameTokens(lista),
+      interlocutoresConfirmados,
     };
     const out = new Map<string, number>();
     for (const s of sesiones) {

@@ -11607,9 +11607,12 @@ ideal y las buyer personas de Smarteam eran tablas sueltas de Marketing. SQL: `s
    fuera el equipo de Smarteam y, de los de fuera del dominio de la empresa, el dominio o el correo que aparece también en
    reuniones de otros clientes (invariante 1). Los del dominio de la empresa entran aunque hayan ido a una reunión de otro
    cliente: si no, una sola reunión ajena sacaba a toda la empresa (revisión del 25 oct).
-   El rol (decide, influye, usa) lo dice una persona del equipo y la copia nunca lo toca. Medido el 25 oct: 1.772 personas en
-   197 empresas, 1.407 con contacto de HubSpot y 365 solo por reuniones. **Pendiente:** la pantalla para ver y decidir el
-   rol, y que los cuestionarios y la preventa apunten a la persona.
+   El rol lo dice una persona del equipo y la copia nunca lo toca. *Enmendado el 25 nov* («Unidades e interlocutores»,
+   abajo): el rol es **decide · champion · participa · no involucrado** (era decide, influye, usa, sin ningún rol puesto en
+   producción: 0 de 1.772), y la persona puede quedar **confirmada** en una ficha, que es lo que usa el resolver de
+   reuniones. Medido el 25 oct: 1.772 personas en 197 empresas, 1.407 con contacto de HubSpot y 365 solo por reuniones.
+   La pantalla para ver y decidir el rol existe desde el 25 nov (Información del cliente › Interlocutores). **Pendiente:**
+   que los cuestionarios y la preventa apunten a la persona.
 8. **Lo que le falta comprar (R12, `lib/clients/lo-que-le-falta-comprar.ts`):** con la posición en la escala, los casos del
    catálogo que la moverían según el camino de crecimiento, repartidos por área (la más baja primero), sin los que ya tiene
    (en el plan, en un ciclo o cumplidos) ni los descartados; sin posición, el caso que aterriza el área de cada hub que el
@@ -14621,7 +14624,8 @@ separación de proyectos debería bastar»). Plan y números: `docs/empresas-con
 - **La regla vive en el resolver único (`categorize.ts`), en los pasos 3 (dominio) y 5 (HubSpot), y en ningún otro
   lado:** cuando la ficha que dio el dominio es de un grupo, la reunión se reparte entre la dueña y sus entidades.
   1. El **nombre** de la reunión (las `siglas` de cada ficha: «AE», «TAE»; o su nombre). Si nombra a dos, por decidir.
-  2. La **gente**: si todas las personas de afuera que se conocen son de la misma entidad, es de esa. La gente se
+  2. La **gente**: si todas las personas de afuera que se conocen son de la misma entidad, es de esa. *Desde el 25 nov,
+     la gente que CONFIRMA el equipo va primero* (ver «Unidades e interlocutores»). La gente se
      aprende SOLO del nombre de las reuniones. Las que decidió la gente no enseñan: un error no se alimenta a sí mismo.
      Las asignadas a mano tampoco: `reResolveSession` escribe solo esa reunión, y si enseñaran cambiarían el dueño de otras
      sin que nadie las vuelva a resolver (medido: asignar una por decidir movía 5). Quien estuvo en las dos cuenta para
@@ -17635,3 +17639,136 @@ es un pedido de cambio a la página») y, en «Un solo chat «Nexus»», el avis
   base local: «agrega un ítem más» trajo el punto entero y sacado de la página; «reuniones que trabajamos juntos, pon 12» no
   propuso nada y explicó que se cambia a mano; «acóplalo más al reto de la integración con Fundatec» cambió solo el problema
   principal.
+
+## Unidades e interlocutores: la gente que confirma el equipo decide de quién es la reunión (2026-11-25)
+
+Elías, 25 nov, después de probar el TEC con Heiver (creyeron que AE y TAE estaban mezclados; la coordinadora midió que no:
+el ejemplo salió de una reunión del propio AE mal leída por la IA): «en la parte de información del cliente deberían estar
+como las unidades de negocio y los interlocutores principales, para que Nexus pueda asociar muchísimo más fácil qué va hacia
+qué lugar. Incluso determinar si un interlocutor participa en varios o no.» Heiver cree que el caso se va a repetir con
+empresas más grandes. El caso inverso, sin resolver hasta hoy: Teamnet y Stratosphere tienen dominios distintos, pero Laura,
+Marco y Mariana (teamnet.com.mx) manejan sistemas para todo el grupo, y el dominio manda sus reuniones a Teamnet.
+
+**Medido antes de construir (producción, solo lectura, 25 nov):**
+- Teamnet / Stratosphere, últimos 6 meses: 56 reuniones del grupo, las 56 en Teamnet; Stratosphere tiene 0 en toda la base.
+  Por el título: 13 nombran solo a Stratosphere («Stratosphere Marketing», «… | SAS & Smarteam»), 19 solo a Teamnet, 23 a
+  las dos («Sprint semanal | Teamnet y Sas & Smarteam») y 1 a ninguna. Las 13 están en Teamnet por el paso del DOMINIO: 9
+  con gente de stratospherecorp.com, que está registrado como dominio de Teamnet, y 4 solo con los tres. «SAS» parece ser
+  Stratosphere (las llevan Elizabeth, Farah, Misael, Shaula y Suhey de stratospherecorp.com) y está en 40 títulos, los 40
+  de Teamnet.
+- Personas de afuera en reuniones de dos o más fichas: 84 en 6 meses (38 con dos o más reuniones en al menos dos), 143 en
+  toda la base (62). De las de 6 meses: 31 del dominio de una de las fichas (23 de Faco + Honda Costa Rica), 35 de agencias
+  y consultores sin ficha, 12 de HubSpot, 4 de unidades de la misma empresa, 2 genéricos. *Ojo:* Laura, Marco y Mariana no
+  salen en esa cuenta: el dominio manda todo a Teamnet. El caso «del grupo» se esconde donde el dominio decide.
+
+**Lo decidido:**
+- **El dato vive en `PersonaDeLaEmpresa` (R6), no en una tabla nueva.** Una fila por correo y ficha, ya copiada de HubSpot,
+  las reuniones y los cuestionarios. Se suma **`confirmadaAt` + `confirmadaPorEmail`**: una persona del equipo dijo que esta
+  persona trabaja con ESTA ficha. *Por qué ahí:* la persona ya estaba unida por correo y empresa; una tabla aparte habría
+  sido la sexta copia de la misma gente. SQL `scripts/sql/2026-11-25-interlocutores-confirmados.sql` (aditivo).
+- **El rol cambia de vocabulario: decide · champion · participa · no involucrado** (enmienda R6 en su lugar; no había
+  ningún rol puesto). La base tenía un CHECK con los tres de antes (`PersonaDeLaEmpresa_rol_valido`): el mismo SQL lo
+  rehace con los cuatro nuevos y deja pasar los dos viejos, que nadie escribe, para que el código de antes del deploy no
+  choque. Lo encontró la prueba de integración (`lib/clients/interlocutores.int.test.ts`).
+- **«Del grupo» = confirmada en dos o más fichas.** No es una marca aparte: se deriva. Vale entre las unidades de una
+  empresa (AE y TAE) y entre dos empresas (Teamnet y Stratosphere).
+- **Lo confirmado nunca se aprende solo: lo escribe una persona** (`guardarInterlocutor`,
+  lib/clients/personas-de-la-empresa-server.ts, el único escritor). La copia de cada hora no toca la confirmación ni el rol
+  y no da de baja a una persona confirmada o sumada por el equipo (origen `equipo`, `laSostieneElEquipo`). Lo aprendido de
+  los títulos (`aprenderPersonasDeEntidades`) se calcula SIN la gente confirmada: confirmar a alguien no cambia lo que
+  Nexus aprende de los demás.
+- **El resolver: un paso nuevo, el 3·0, solo en `categorize.ts` (invariante 2)** (`porLaGenteConfirmada`). Corre solo si
+  alguien de afuera en la reunión está confirmado; si nadie lo está, la cascada es idéntica a la de antes (con prueba).
+  Cuando corre, decide (una ficha o POR DECIDIR):
+  1. Las candidatas: las fichas de la gente confirmada y la del dominio de cada persona (registrado, paso 3, o por su
+     empresa de HubSpot, paso 5), cada una con su empresa entera (la principal y sus unidades). **Nunca la casa** (la
+     ficha de Smarteam): «X & Smarteam» es el formato de los títulos del equipo.
+     **Si el título nombra a una ficha que no es candidata, el paso se hace a un lado** y decide la cascada de siempre
+     (revisión del 25 nov: un consultor confirmado en «Alfa» que va a «Bravo | Kickoff» con gente de un dominio sin ficha
+     se llevaba la reunión de Bravo a Alfa; con la cascada de siempre, el título la da a Bravo, como antes).
+  2. **El título primero**, entre las candidatas (la misma regla de siempre entre unidades). En este paso el título se
+     corta también en «:» y «/» («Teamnet: Propuesta Web»): el corte de la cascada no lo hace y cambiarlo movería el resto.
+  3. **Después, persona por persona:** la confirmada en UNA ficha vale por esa, por encima de su dominio y de lo aprendido;
+     la «del grupo» no elige, pero veta una ficha que no es de las suyas; las demás, por su dominio o por lo aprendido.
+     Todas de la misma ficha: esa. Quien solo se
+     sabe que es de VARIAS unidades de una empresa (el dominio de una principal con unidades que viven en él, sin nada
+     aprendido) no elige ficha pero sí empresa: si la elegida no es ninguna de las suyas, por decidir (revisión del 25 nov:
+     «Revisión semanal» con gente del TEC y una persona confirmada en Credix se iba a Credix). La gente de un dominio de
+     categoría no decide ni aquí ni entre las unidades. *Lo aceptado:* en una empresa con una unidad que vive en el dominio
+     de la principal Y otra con dominio propio (hoy no hay ninguna así), una reunión con gente de las dos sin pista queda
+     por decidir aunque nadie esté confirmado.
+  4. Si apuntan a dos fichas, o nadie decide: **por decidir** (`resolvedClientId` null, a la vista en /sessions). *Por qué
+     no la ficha más vieja:* sería adivinar en silencio, la misma regla de «Dos fichas que comparten dominio».
+  - **Lo asignado a mano sigue ganando** (paso 1).
+  - Dentro de una empresa con unidades, la gente confirmada también va primero en `decidirEntreEntidades` (paso 2 de la
+    regla de las unidades). Y una unidad vive solo en el dominio de SU principal (`unidadesPorDominio`, por empresa): con
+    candidatas de dos empresas, la gente de Teamnet se volvía de AE.
+  - *Lo aceptado:* una agencia o un consultor confirmado en su ficha, en una reunión de su cliente sin el nombre en el
+    título, deja la reunión por decidir (antes ganaba la ficha más vieja de las dos). Con el título, decide el título.
+- **La pantalla: Información del cliente › «Interlocutores»** (`InterlocutoresDelCliente`, GET/PUT
+  `/api/clients/[id]/interlocutores`). Arriba, las unidades de la empresa; después las **confirmadas** y las **por
+  confirmar** (primero las que sugirió el equipo; ocho a la vista y «Ver N más»). Cada persona: nombre, correo, cargo,
+  rol, unidad (si hay unidades: una, «Del grupo: todas las unidades» o «Sin confirmar») y «+ Trabaja también con…» (una
+  ficha de otra empresa, que la hace del grupo). «+ Agregar persona» para alguien que la copia no trajo: SUMA (no le quita
+  a la persona lo que tenía confirmado en otra empresa, ni su rol si no se elige uno). **Las reglas viven en el escritor**
+  (`motivoParaNoGuardar`, también para la precarga) y frenan solo lo que se SUMA: nadie del equipo de Smarteam (INV51),
+  ningún correo de una categoría (HubSpot, partners: sus reuniones tratan varias cuentas) y nada en la ficha de Smarteam
+  (`esLaCasaEn`, la misma regla que el resolver). Quitar siempre se puede. Y el paso 3·0 no deja decidir a una persona
+  confirmada cuyo dominio después pasó a ser una categoría. Quitar la confirmación de alguien que sumó solo el equipo lo
+  saca de la lista.
+  - **Acceso (revisiones del 25 nov): por ficha, como en todo Nexus.** Lo ve y lo edita quien abre la ficha. Las unidades
+    de la empresa que no abre no se ven ni se tocan; sumar o quitar una ficha de otra empresa pide acceso a esa ficha
+    (`planDelCambio`, puro, con pruebas); el nombre de una ficha ajena sale como «Otra ficha». Y un cambio se rechaza
+    entero, también el simulacro y sin nombrarla, si toca una ficha que quien pide no abre (`fichasQuePideAbrir`): cada
+    ficha que pierde o gana una reunión de hoy (la regla de «Mover» una reunión, `empresa-de-la-reunion-server.ts`) y,
+    si cambia la confirmación, las fichas donde la persona estaba y donde queda, y las que da hoy su dominio
+    (`fichasQueDaElDominio`, con la regla de las unidades: el dominio propio de una unidad da solo esa unidad), más la
+    unidad que Nexus aprendió de los títulos para esa persona (César, aprendido en AE, confirmado en TAE). *Por qué
+    las futuras:* el simulacro solo ve las reuniones que ya existen; confirmar en Alfa a alguien de bravo.com sin
+    reuniones le quitaba a Bravo las de la semana siguiente, y quitar a alguien «del grupo» de una ficha lo deja decidir
+    solo por la otra. Si HubSpot no responde en ese control, no se guarda (503): falla cerrado; un correo genérico (gmail)
+    no le pregunta a HubSpot, y sin cuenta de HubSpot conectada (la base local) ese dominio no da ficha, como para el
+    resolver. Nunca se le pide la casa a nadie. *Lo aceptado:* cualquiera que abre la ficha puede confirmar gente (no hay una acción de permiso aparte),
+    como en el resto de «Información del cliente»; con una persona de dos empresas, hace falta abrir las dos.
+  - **Antes de guardar un cambio que mueve reuniones, la pantalla dice cuántas y de qué ficha a cuál** (el PUT con
+    `simular`), y pide «Guardar y mover». Solo fichas y números, nunca títulos de reuniones. **Se guarda solo lo que se
+    vio:** el aviso lleva una huella (`huellaDeMovidas`: cada reunión, de qué ficha sale y a cuál va) y, si al guardar la
+    cuenta da otra (otra persona guardó, llegó una reunión), no se guarda y la pantalla vuelve a pedir el aviso (409).
+    Con la persona ya escrita y ANTES de mover nada, se cuenta otra vez: si no coincide (o HubSpot no responde), la
+    persona vuelve EXACTAMENTE a como estaba (`fotoDeLaPersona` / `restaurarPersona`: quién la confirmó y cuándo, rol,
+    nombre, orígenes; las filas nuevas se borran) y se pide revisar el aviso (mover y después devolver perdía vínculos,
+    hechos y análisis de venta). El aviso, la recuenta y el guardado le piden a HubSpot sin degradar
+    (`exigirHubspot`): con HubSpot caído, el aviso mostraba reuniones que «se movían» solo porque faltaba ese dato. *Lo aceptado:* si
+    algo cambia en los milisegundos entre esa cuenta y la escritura, esa reunión no se mueve (INV2 la marca), y un error a
+    mitad de camino deja la confirmación guardada sin sus reuniones hasta la próxima re-resolución. Al guardar, se re-resuelven
+    las reuniones de esa persona (`reResolverReunionesDe`, resolve-client.ts, con `reResolveSession`: los hechos, el
+    análisis de venta y la lectura acompañan el cambio de dueña) y, como «Mover», se sueltan sus vínculos a proyectos de
+    otra ficha cuando la dueña nueva es una ficha (invariante 1; si queda por decidir, esperan a quien la asigne). La
+    reclasificación con IA corre una vez por ficha que ganó reuniones, con el tope de `resolveAllSessions` (una por
+    reunión eran N corridas de la misma ficha a la vez). Una persona con 1.000 reuniones o más no se mueve: el corte
+    dejaría reuniones afuera del simulacro. *Por qué todo esto:* «no cambies nada de ningún cliente sin avisarme»: un
+    cambio en una persona mueve reuniones que otros están usando.
+- **Al fusionar dos fichas, la confirmación y el rol no se pierden** (`resolverChoques`, lib/clients/fusion-de-empresas.ts):
+  la persona de la que sigue toma de la absorbida lo que no tiene. Los dijo una persona y la copia no los vuelve a armar.
+- **Los simulacros de agregar un dominio y de renombrar una ficha cargan la gente confirmada**
+  (scripts/agregar-dominio-a-cliente.ts, scripts/renombrar-cliente.ts): si no, mostraban otro reparto que el `--apply`.
+  **Separar una empresa en unidades** (scripts/separar-en-unidades.ts) lista las personas confirmadas en las fichas que se
+  parten (siguen confirmadas donde estaban y pesan más que su dominio: se revisan en Interlocutores) y cuenta la columna
+  «por la gente que confirmó el equipo».
+- **La precarga desde un mapa** (`scripts/interlocutores-precargar.ts --mapa <json>`, simulacro por defecto): el mapa NO va
+  en el repo (trae correos de personas de los clientes). Solo va confirmado lo que dijo una persona con su correo; un
+  correo deducido o una persona sin rol en el mapa va **sugerida** (por confirmar). El `--apply` pide `--por`, respalda
+  `PersonaDeLaEmpresa` (guard) y, en JSON, la dueña de antes y después de cada reunión que se mueve, sus vínculos a
+  proyectos, sus hechos y sus análisis de venta; mueve exactamente lo del simulacro de esa corrida (lo que dé distinto se
+  salta y se lista); valida todo el mapa antes de escribir; y no corre si producción no tiene el código desplegado. Por
+  defecto **conserva** lo que ya dijo una persona en las fichas del mapa y el mapa no trae (confirmaciones, sugerencias,
+  el rol que puso una persona y el nombre), y lo lista; `--el-mapa-manda` lo reemplaza. `--sigla` y `--dominio` prueban en memoria qué pasaría con
+  una sigla o un dominio más en una ficha.
+  - **TEC (simulacro del 25 nov):** 7 confirmadas (5 en AE, 2 en TAE) y 5 por confirmar. **Ninguna reunión cambia de
+    dueña**: la separación ya estaba bien (lo que midió la coordinadora); confirmar asegura las que vengan.
+  - **Teamnet / Stratosphere (simulacro):** con los tres del grupo y la gente de stratospherecorp.com sugerida, cambian 4
+    (3 a Stratosphere; «Health Score Team» queda por decidir). Con la sigla «SAS» en Stratosphere (solo en memoria): 40
+    (17 a Stratosphere y 23 conjuntas, «Teamnet y SAS», por decidir). La sigla y el dominio son datos de clientes en uso:
+    los decide Elías.
+- **Sin cambio:** la agenda de «Mi día» (`lib/mi-dia/agenda.ts`) reparte los eventos futuros con su regla de unidades y
+  todavía no mira a la gente confirmada.

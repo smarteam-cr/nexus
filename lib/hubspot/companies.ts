@@ -38,9 +38,13 @@ export interface HubspotCompanyLite {
  *
  * @param domains Lista de dominios externos a buscar (ej: ["acme.com", "xyz.io"]).
  *                Se normalizan a lowercase y deduplicate antes de la llamada.
+ * @param opts.lanzar Si HubSpot falla, lanza en vez de devolver lo que alcanzó a traer. Para un CONTROL DE ACCESO
+ *                (lib/sessions/resolve-client.ts › `fichasDelDominioDe`, 2026-11-25), que no puede dar un dominio por
+ *                vacío porque HubSpot no respondió. Sin él, lo de siempre: se registra y se sigue.
  */
 export async function searchCompaniesByDomains(
-  domains: string[]
+  domains: string[],
+  opts: { lanzar?: boolean } = {},
 ): Promise<Map<string, HubspotCompanyLite>> {
   const result = new Map<string, HubspotCompanyLite>();
 
@@ -104,6 +108,7 @@ export async function searchCompaniesByDomains(
         pagesFetched += 1;
         if (pagesFetched >= MAX_PAGES) break;
       } catch (err) {
+        if (opts.lanzar) throw err;
         console.error(
           "[hubspot/companies] Error buscando companies por dominio:",
           err instanceof Error ? err.message : err

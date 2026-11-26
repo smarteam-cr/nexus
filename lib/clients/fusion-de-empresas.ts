@@ -158,7 +158,8 @@ export const SIN_CHOCAR = [
   { modelo: "contactoDeHubspot", clave: ["hubspotId"], etiqueta: "contactos de HubSpot" },
   { modelo: "ticketDeHubspot", clave: ["hubspotId"], etiqueta: "tickets de HubSpot" },
   /* Una persona del cliente (R6, 2026-10-25): la misma persona en las dos fichas queda la de la que sigue; la copia la
-     vuelve a armar desde las fuentes. */
+     vuelve a armar desde las fuentes. Lo que dijo una persona del equipo (la confirmación y el rol, 25 nov) la copia NO
+     lo vuelve a armar: la que sigue lo toma de la otra si no lo tiene (`resolverChoques`). */
   { modelo: "personaDeLaEmpresa", clave: ["correo"], etiqueta: "personas de la empresa" },
 ] as const;
 
@@ -285,6 +286,9 @@ const mismoValor = (a: unknown, b: unknown) =>
  *   · Solicitudes fuera de alcance: queda la decidida; si las dos lo están, se frena (la elige una persona).
  *   · Licencias: la de la que sigue toma de la otra lo que le falta (y junta las notas); un dato distinto en las dos
  *     queda el de la que sigue y se avisa.
+ *   · Personas de la empresa: la de la que sigue toma de la otra la confirmación y el rol si no los tiene (los dijo una
+ *     persona del equipo y la copia no los vuelve a armar; sin esto, Cindy confirmada en la absorbida quedaba sin confirmar
+ *     y sus reuniones se repartían distinto sin que nadie lo viera).
  *   · Lo demás (notas de etapa, asignaciones): queda la de la que sigue, como siempre.
  */
 export function resolverChoques<T extends Readonly<Record<string, unknown>>>(
@@ -323,6 +327,33 @@ export function resolverChoques<T extends Readonly<Record<string, unknown>>>(
           accion: "plegar" as const,
           cambios,
           ...(difieren.length ? { motivo: `licencia ${String(absorbida.hub)}: queda lo de la que sigue en ${difieren.join(", ")}` } : {}),
+        },
+      ];
+    }
+    if (modelo === "personaDeLaEmpresa") {
+      const cambios: Record<string, unknown> = {};
+      if (vacio(sigue.confirmadaAt) && !vacio(absorbida.confirmadaAt)) {
+        cambios.confirmadaAt = absorbida.confirmadaAt;
+        cambios.confirmadaPorEmail = absorbida.confirmadaPorEmail ?? null;
+        cambios.vigente = true;
+      }
+      if (vacio(sigue.rol) && !vacio(absorbida.rol)) {
+        cambios.rol = absorbida.rol;
+        cambios.rolFuente = absorbida.rolFuente ?? null;
+        cambios.rolAt = absorbida.rolAt ?? null;
+      }
+      const origenesS = Array.isArray(sigue.origenes) ? (sigue.origenes as string[]) : [];
+      if (Array.isArray(absorbida.origenes) && (absorbida.origenes as string[]).includes("equipo") && !origenesS.includes("equipo")) {
+        cambios.origenes = [...origenesS, "equipo"];
+      }
+      const rolDistinto = !vacio(sigue.rol) && !vacio(absorbida.rol) && sigue.rol !== absorbida.rol;
+      return [
+        {
+          absorbida,
+          sigue,
+          accion: Object.keys(cambios).length ? ("plegar" as const) : ("borrar-absorbida" as const),
+          ...(Object.keys(cambios).length ? { cambios } : {}),
+          ...(rolDistinto ? { motivo: `${String(absorbida.correo)}: queda el rol de la que sigue (${String(sigue.rol)}), no ${String(absorbida.rol)}` } : {}),
         },
       ];
     }

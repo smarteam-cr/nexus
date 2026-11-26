@@ -123,7 +123,7 @@ describe("una persona del cliente (R6)", () => {
     const otraVez = await copiarPersonasDeLaEmpresa(c.id, { apply: true });
     expect(otraVez.creadas).toBe(0);
     expect((await prisma.personaDeLaEmpresa.findUniqueOrThrow({ where: { id: ana.id } })).rol).toBe("decide");
-    await expect(decidirRol({ clientId: "otra", personaId: ana.id, rol: "usa" })).rejects.toThrow();
+    await expect(decidirRol({ clientId: "otra", personaId: ana.id, rol: "participa" })).rejects.toThrow();
 
     expect((await INV51.correr(prisma, new Date())).ok).toBe(true);
   });
