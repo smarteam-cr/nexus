@@ -115,7 +115,7 @@ export default function PasoAnalisis() {
         <div className="space-y-2 rounded-lg bg-surface-muted p-3.5">
           <p className="text-xs font-semibold text-fg-secondary">Qué falta diagnosticar antes de proponer</p>
           {!enJuego.length ? (
-            <p className="text-[13px] text-fg-muted">La preventa todavía no tiene áreas en juego: elígelas en La escala para saber qué falta.</p>
+            <p className="text-[13px] text-fg-muted">La preventa todavía no tiene áreas en juego: elígelas en el Diagnóstico de rendimiento para saber qué falta.</p>
           ) : !conjunto.falta.sinTocar.length && !conjunto.falta.soloTocadas.length ? (
             <p className="text-[13px] text-fg">Las dimensiones de las áreas en juego ya se exploraron o están confirmadas con evidencia.</p>
           ) : (

@@ -268,7 +268,7 @@ function SugerenciasDeLaEscala() {
           </>
         }
       >
-        El agente sugiere {partes.length > 1 ? `${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}` : partes[0]} en La escala. Las por explorar son el aro punteado del radar. Nada se confirma solo.
+        El agente sugiere {partes.length > 1 ? `${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}` : partes[0]} en el Diagnóstico de rendimiento. Las por explorar son el aro punteado del radar. Nada se confirma solo.
       </FranjaDeSugerencias>
       {verLista && (
         <ul className="space-y-1.5">
@@ -859,7 +859,7 @@ function DondeEstaHoy({ vista, linea }: { vista: Vista; linea: ReactNode }) {
   );
 
   return (
-    <section aria-label="La escala" className="flex flex-col gap-3">
+    <section aria-label="Diagnóstico de rendimiento" className="flex flex-col gap-3">
       {/* Sin «Objetivo de la primera venta» ni la frase de lo explorado (24 nov, Elías: «demasiada información»), y sin el
           título «Dónde está hoy» (24 nov, noche): si hay algo que actualizar lo dice la línea de debajo de la página; dónde
           está cada equipo, la página y «Para completar el diagnóstico». */}

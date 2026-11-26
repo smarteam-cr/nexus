@@ -12,7 +12,7 @@ import { MAX_LO_QUE_SE_VIO } from "@/lib/impacto/respuesta-del-cliente";
 import type { ResumenDeLaPagina } from "@/lib/external/pagina-del-resumen";
 
 /** Cómo nombra el aviso a este entregable. */
-export const NOMBRE_DE_LA_PAGINA_DE_LA_ESCALA = "la página de La escala";
+export const NOMBRE_DE_LA_PAGINA_DE_LA_ESCALA = "la página del Diagnóstico de rendimiento";
 
 const limpio = (s: string) => s.replace(/\s+/g, " ").trim();
 

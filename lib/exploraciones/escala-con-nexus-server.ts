@@ -79,7 +79,7 @@ export async function antesDePedirleALaEscala(email: string, pedido?: string): P
   // Desde el 25 nov la caja de la conversación y un pedido a La escala tienen el mismo tope (15.000): este freno no se
   // dispara desde la conversación; queda por si un día vuelven a ser distintos (segunda revisión: no cortar en silencio).
   if (pedido !== undefined && pedido.trim().length > MAX_PEDIDO)
-    return { ok: false, status: 400, error: `Un cambio a La escala va hasta ${MAX_PEDIDO.toLocaleString("es-CR")} caracteres: acórtalo y vuelve a mandarlo.` };
+    return { ok: false, status: 400, error: `Un cambio al Diagnóstico de rendimiento va hasta ${MAX_PEDIDO.toLocaleString("es-CR")} caracteres: acórtalo y vuelve a mandarlo.` };
   const tope = await topeDeNexusHoy();
   if (tope.estado === "agotado") return { ok: false, status: 429, error: mensajeDelTope(tope) };
   const deHoy = await prisma.agentRun.count({ where: { agentSlug: AGENTE_DE_PEDIRLE, triggeredByEmail: email, createdAt: { gte: inicioDelDiaCr(new Date()) } } });
@@ -142,7 +142,7 @@ function piezasDelLugar(pagina: PaginaParaElCse, estado: EstadoDeExploracion, lu
 }
 
 /** Las reglas fijas de «Pedirle a Nexus» en La escala (van como system prompt del núcleo de «Mejorar con IA»). */
-export const REGLAS_DE_PEDIRLE = `Eres Nexus, el asistente de Smarteam. Mejoras la página de La escala que ve el CLIENTE (su diagnóstico de rendimiento) según UN pedido de una persona del equipo de Smarteam. Le hablas al cliente de TÚ.
+export const REGLAS_DE_PEDIRLE = `Eres Nexus, el asistente de Smarteam. Mejoras la página del Diagnóstico de rendimiento (antes «La escala») que ve el CLIENTE según UN pedido de una persona del equipo de Smarteam. Le hablas al cliente de TÚ.
 
 Cada sección del documento es UNA PIEZA de la página, con su clave, dónde está, lo que dice y lo que acepta. Para cambiar una pieza devuelve su clave con {"texto": "<el texto nuevo, completo>"}.
 - Para QUITAR una pieza que «se puede quitar», devuelve {"texto": "", "quitar": "si"}. Sin "quitar", un texto vacío no cambia nada.
@@ -203,7 +203,7 @@ export async function proponerEnLaEscala(
       agentSlug: AGENTE_DE_PEDIRLE,
       clientId: d.clientId,
       status: "RUNNING",
-      stepLabel: `Pedirle a Nexus · La escala › ${lectura.lugar}`,
+      stepLabel: `Pedirle a Nexus · Diagnóstico de rendimiento › ${lectura.lugar}`,
       triggeredByEmail: quien.email,
       filters: { documento: "escala", exploracionId: d.exploracionId, lugar: d.lugar, foco, pedido } as Prisma.InputJsonValue,
     },
@@ -220,7 +220,7 @@ export async function proponerEnLaEscala(
   try {
     const r = await conContextoDeIA(ia, () =>
       runDocumentAssist({
-        docLabel: `página de La escala de ${lectura.empresa} (${lectura.lugar}${foco ? ` › ${foco}` : ""})`,
+        docLabel: `página del Diagnóstico de rendimiento de ${lectura.empresa} (${lectura.lugar}${foco ? ` › ${foco}` : ""})`,
         systemPrompt: REGLAS_DE_PEDIRLE,
         // La página (o la sección pedida) va UNA vez: cada pieza es una sección del núcleo, con lo que acepta en su guía.
         sections: piezas.map((p) => ({ key: p.clave, label: `${p.seccion} › ${p.nombre}`, brief: guiaDeLaPieza(p), schema: ESQUEMA_DE_LA_PIEZA, currentData: { texto: p.valor ?? "", quitar: "" } })),

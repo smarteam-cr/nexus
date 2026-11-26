@@ -215,14 +215,14 @@ export const PREVENTA: Recorrido = {
     // La escala
     {
       ancla: "preventa.escala.edicion",
-      titulo: "La escala: con qué se mide",
+      titulo: "Diagnóstico de rendimiento: con qué se mide",
       texto: "La industria y cómo vende la empresa se eligen solas; si no calzan, las cambias. Abajo, el país y el tamaño.",
       lado: "bottom-start",
       accion: pieza("escala"),
     },
     {
       ancla: "preventa.escala.areas",
-      titulo: "La escala, como la ve el cliente",
+      titulo: "El Diagnóstico de rendimiento, como lo ve el cliente",
       texto: "La misma página que abre su enlace. Abre en «Resumen», que arma la IA con las reuniones y se edita en su lugar; después, una pestaña por área: la punteada no la ve el cliente.",
       lado: "bottom-start",
       accion: pieza("escala"),

@@ -1544,7 +1544,7 @@ function CasosDeUso({ catalogo, novedades }: { catalogo: Caso[]; novedades: Nove
             cambiaste a mano no se pisa.
           </Alert>
         )}
-        {areas.length === 0 && <p className="text-sm text-fg-muted">Elige primero las áreas en juego (en «La escala»): los casos de uso se sugieren por área.</p>}
+        {areas.length === 0 && <p className="text-sm text-fg-muted">Elige primero las áreas en juego (en «Diagnóstico de rendimiento»): los casos de uso se sugieren por área.</p>}
 
         {filas.length > 0 && (
           <section className="space-y-2">

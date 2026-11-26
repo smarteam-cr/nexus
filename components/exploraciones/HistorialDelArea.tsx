@@ -99,7 +99,7 @@ export default function HistorialDelArea({
     <HistorialDeVersiones
       open={open}
       onClose={onClose}
-      documento={`Página de ${areaNombre} · La escala de ${empresa}`}
+      documento={`Página de ${areaNombre} · Diagnóstico de rendimiento de ${empresa}`}
       cargar={cargar}
       usar={puedeEditar ? usar : undefined}
       alCambiar={alCambiar}

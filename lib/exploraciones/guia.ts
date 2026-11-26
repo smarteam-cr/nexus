@@ -1109,7 +1109,7 @@ export interface Procedencia {
 }
 
 export function textoDeLaProcedencia(p: Procedencia): string {
-  if (p.tipo === "escala") return "Lo llevaste desde La escala";
+  if (p.tipo === "escala") return "Lo llevaste desde el Diagnóstico de rendimiento";
   return p.tipo === "abierto" ? `Quedó abierto en la sesión ${p.numero}` : `Pasó de la sesión ${p.numero}`;
 }
 

@@ -196,10 +196,10 @@ export default function PruebaDeUnaEmpresa({ clientId, exploracionInicial }: { c
       ) : !d.fuente ? (
         <EmptyState
           title="Esta empresa todavía no tiene niveles en la escala"
-          description="Ubícala primero: en su ficha, La escala › «Actualizar escala» (el agente lee lo que Nexus sabe y propone niveles), o en su preventa."
+          description="Ubícala primero: en su ficha, Diagnóstico de rendimiento › «Actualizar escala» (el agente lee lo que Nexus sabe y propone niveles), o en su preventa."
           action={
             <Link href={`/clients/${clientId}?tab=__escala__`} className="text-sm font-medium text-brand hover:underline">
-              Abrir La escala de la ficha
+              Abrir el Diagnóstico de rendimiento de la ficha
             </Link>
           }
         />

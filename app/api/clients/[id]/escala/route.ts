@@ -64,7 +64,7 @@ export async function GET(_req: NextRequest, { params }: { params: Params }) {
     return NextResponse.json({ ...deLaEmpresa, puede, sePuedeProbar: !empresaExcluida(empresa?.name), cuenta: deLaCuenta.cuenta, faltaAbrir: deLaCuenta.faltaAbrir });
   } catch (e) {
     console.error("[clients/escala]", e);
-    return NextResponse.json({ error: "No se pudo cargar la escala de la empresa." }, { status: 500 });
+    return NextResponse.json({ error: "No se pudo cargar el Diagnóstico de rendimiento de la empresa." }, { status: 500 });
   }
 }
 

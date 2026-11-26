@@ -479,7 +479,7 @@ export default function PaginaDeLaEscala() {
 
   if (!pagina)
     return error ? (
-      <Alert variant="danger" title="No se pudo armar la página de la escala">
+      <Alert variant="danger" title="No se pudo armar la página del Diagnóstico de rendimiento">
         {error}{" "}
         <button type="button" className="font-semibold underline" onClick={otraVez}>
           Volver a intentar
@@ -490,8 +490,8 @@ export default function PaginaDeLaEscala() {
     );
   if (!pagina.resultados.length)
     return (
-      <Alert variant="info" title="Esta escala todavía no tiene áreas">
-        Cuando la escala tenga sus áreas, aquí se ve la página tal como la verá el cliente.
+      <Alert variant="info" title="Este Diagnóstico de rendimiento todavía no tiene áreas">
+        Cuando el Diagnóstico de rendimiento tenga sus áreas, aquí se ve la página tal como la verá el cliente.
       </Alert>
     );
   // La página abre en el Resumen (9 nov), como la del cliente.

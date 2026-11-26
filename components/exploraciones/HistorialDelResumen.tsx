@@ -110,7 +110,7 @@ export default function HistorialDelResumen({
     <HistorialDeVersiones
       open={open}
       onClose={onClose}
-      documento={`Resumen de La escala · ${empresa}`}
+      documento={`Resumen del Diagnóstico de rendimiento · ${empresa}`}
       cargar={cargar}
       usar={puedeEditar ? usar : undefined}
       frenado={frenado}

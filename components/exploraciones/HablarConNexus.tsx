@@ -24,7 +24,7 @@
  *   1. con «Guardar», la nota va a «Lo que sabes del cliente», con las palabras de la persona, su nombre y la hora
  *      (la operación `nota` de siempre: el servidor pone quién y cuándo);
  *   2. el servidor deja sus hechos (destino: esta preventa; se ven debajo de la nota) y pregunta al agente de impacto si
- *      cambia la página de La escala: si cambia, la cuenta regresiva de 10 s (components/impacto/AvisoDeImpacto.tsx), y
+ *      cambia la página del Diagnóstico de rendimiento: si cambia, la cuenta regresiva de 10 s (components/impacto/AvisoDeImpacto.tsx), y
  *      el aviso dice si contradice lo que aceptó el cliente;
  *   3. cada cambio a una tarjeta de la arquitectura de la venta, con «Aplicar» y «No», y «Aplicar todo» para los que
  *      quedan (avisa antes cuántos reemplazan algo). Nada se aplica sin un clic.
@@ -413,17 +413,17 @@ function LoQueQuedo({
 
   let escala: ReactNode = null;
   if (!errorAlGuardar && clave) {
-    if (!guardado) escala = <p className="text-2xs text-fg-muted">Nexus revisa si esto cambia la página de La escala…</p>;
+    if (!guardado) escala = <p className="text-2xs text-fg-muted">Nexus revisa si esto cambia la página del Diagnóstico de rendimiento…</p>;
     else if (guardado.fallo)
-      escala = <Alert variant="warning">No pude revisar si esto cambia la página de La escala (ni si contradice lo que aceptó el cliente). Revísala tú en «La escala».</Alert>;
+      escala = <Alert variant="warning">No pude revisar si esto cambia la página del Diagnóstico de rendimiento (ni si contradice lo que aceptó el cliente). Revísala tú en «Diagnóstico de rendimiento».</Alert>;
     else if (!guardado.impacto.cambia)
       escala = (
         <p className="text-xs text-fg-muted">
           {guardado.impacto.omitido === "sin-entregable"
-            ? "La escala todavía no tiene su Resumen armado: no hay página que rehacer."
+            ? "El Diagnóstico de rendimiento todavía no tiene su Resumen armado: no hay página que rehacer."
             : guardado.impacto.omitido === OMITIDO_POR_EL_TOPE
-              ? "Nexus llegó al tope del mes para conversar y no revisó si esto cambia la página de La escala. Revísala tú en «La escala»."
-              : "No cambia la página de La escala."}
+              ? "Nexus llegó al tope del mes para conversar y no revisó si esto cambia la página del Diagnóstico de rendimiento. Revísala tú en «Diagnóstico de rendimiento»."
+              : "No cambia la página del Diagnóstico de rendimiento."}
         </p>
       );
     else if (aviso === "abierto")
@@ -431,14 +431,14 @@ function LoQueQuedo({
     else if (aviso === "de-antes")
       escala = (
         <p className="text-xs text-fg-muted">
-          Cuando guardaste esta nota, Nexus avisó que cambia la página de La escala: {guardado.impacto.aviso} Mira cómo quedó en «La escala».
+          Cuando guardaste esta nota, Nexus avisó que cambia la página del Diagnóstico de rendimiento: {guardado.impacto.aviso} Mira cómo quedó en «Diagnóstico de rendimiento».
         </p>
       );
     else if (aviso === "cancelado-al-cerrar")
       escala = (
         <p className="text-xs text-fg-muted">
-          Dejaste la conversación con el aviso de La escala a la vista: si la cuenta no había llegado a 0, se canceló y no arrancó otra; si ya la
-          estaba rehaciendo, eso siguió en el servidor. Mira cómo quedó en «La escala».
+          Dejaste la conversación con el aviso del Diagnóstico de rendimiento a la vista: si la cuenta no había llegado a 0, se canceló y no arrancó otra; si ya la
+          estaba rehaciendo, eso siguió en el servidor. Mira cómo quedó en «Diagnóstico de rendimiento».
         </p>
       );
   }
@@ -500,7 +500,7 @@ const VACIO_DE_LA_GUIA = {
  * pregunta de la cuenta, en la misma conversación.
  */
 const vacioDeLaEscala = (e: LugarDeLaEscalaEnElCajon) => ({
-  intro: `Pídele un cambio a ${e.foco ? `«${e.foco}»` : `la página «${e.nombre}»`} de La escala, o pregúntale lo que sabe de la cuenta. Por ejemplo:`,
+  intro: `Pídele un cambio a ${e.foco ? `«${e.foco}»` : `la página «${e.nombre}»`} del Diagnóstico de rendimiento, o pregúntale lo que sabe de la cuenta. Por ejemplo:`,
   ejemplos: ["Enfócalo más en el reto principal de Ventas.", "¿Qué se dijo de esto en las reuniones?"],
   cierre: `Cada cambio te lo muestra con el antes y el después: tú lo aplicas, y nada se publica solo. El chip solo dice a qué parte va un cambio; ${
     e.foco ? `con su ✕ pides sobre toda la página «${e.nombre}».` : "con su ✕ lo quitas, y lo que pidas cambiar va al Resumen."
@@ -745,7 +745,7 @@ export default function HablarConNexus() {
     setAviso((a) => avisoAlDejarLaConversacion(a, cuentaALaVista.current));
   };
 
-  /** Lo aplicado a La escala se guarda por su propia ruta: el lienzo y la página de La escala se ponen al día. */
+  /** Lo aplicado a La escala se guarda por su propia ruta: el lienzo y la página del Diagnóstico de rendimiento se ponen al día. */
   const alCambiarLaEscala = () => {
     void recargar();
     avisarQueNexusCambioLaEscala();
@@ -791,7 +791,7 @@ export default function HablarConNexus() {
             llenaAlEmpezar && !conChipDePedido ? <Alert variant="warning">«Lo que sabes del cliente» ya tiene {MAX_LO_QUE_SABES} notas: quita una en la Preparación antes de contar otra.</Alert> : null
           }
           apagado={
-            aplicandoLaEscala ? "Nexus está aplicando los cambios a La escala…" : llenaAlEmpezar && !conChipDePedido ? "«Lo que sabes del cliente» está lleno: quita una nota en la Preparación." : null
+            aplicandoLaEscala ? "Nexus está aplicando los cambios al Diagnóstico de rendimiento…" : llenaAlEmpezar && !conChipDePedido ? "«Lo que sabes del cliente» está lleno: quita una nota en la Preparación." : null
           }
           urlDelTurno={`/api/sales/exploraciones/${exp.id}/nexus`}
           // Una sola conversación (24 nov): con el permiso del chat de la cuenta, tareas, siguiente paso y la guía se piden
@@ -806,7 +806,7 @@ export default function HablarConNexus() {
           {...(escala
             ? {
                 chip: {
-                  texto: escala.foco ? `Sobre «${escala.foco}» · ${escala.nombre}` : `Sobre la página «${escala.nombre}» de La escala`,
+                  texto: escala.foco ? `Sobre «${escala.foco}» · ${escala.nombre}` : `Sobre la página «${escala.nombre}» del Diagnóstico de rendimiento`,
                   alQuitar: () => setEscala(escala.foco ? { ...escala, foco: null } : null),
                   quitarLabel: escala.foco ? `Pedir sobre toda la página «${escala.nombre}»` : "Quitar el chip: lo que pidas cambiar va al Resumen",
                 },

@@ -307,7 +307,7 @@ describe("«El chat Nexus: qué le puedes pedir» (2026-11-24)", () => {
   });
 
   it("dice cada lugar donde se abre el chat y la regla de «Aplicar»", () => {
-    for (const lugar of ["En la preventa", "En la guía de la próxima sesión", "En La escala", "En la ficha del cliente", "En los documentos", "En el cronograma", "En Tareas", "En los casos de uso", "En los artefactos y en el perfil de un puesto"]) {
+    for (const lugar of ["En la preventa", "En la guía de la próxima sesión", "En el Diagnóstico de rendimiento", "En la ficha del cliente", "En los documentos", "En el cronograma", "En Tareas", "En los casos de uso", "En los artefactos y en el perfil de un puesto"]) {
       expect(texto, lugar).toContain(lugar);
     }
     expect(texto).toContain("Nada cambia hasta que aprietas «Aplicar»");
@@ -347,7 +347,7 @@ describe("«El chat Nexus: qué le puedes pedir» (2026-11-24)", () => {
     expect(texto).toContain(`hasta ${TOPES.turnosPorConversacion} mensajes por conversación`);
     expect(texto).toContain(`hasta ${PREGUNTAS_POR_DIA} preguntas al día`);
     expect(texto).toContain(`${TOPES_DEL_CHAT.mensajesPorDia} mensajes al día y ${TOPES_DEL_CHAT.usdPorDia} dólares`);
-    expect(texto).toContain(`En La escala: ${PEDIDOS_POR_DIA} pedidos al día`);
+    expect(texto).toContain(`En el Diagnóstico de rendimiento: ${PEDIDOS_POR_DIA} pedidos al día`);
     // Los dos escritos a mano viven en módulos del servidor: se leen del texto del código, que es lo que manda.
     const fuente = (archivo: string) => fs.readFileSync(path.join(process.cwd(), archivo), "utf8");
     expect(fuente("lib/tareas/chat/turno.ts")).toMatch(new RegExp(`MAX_TURNOS_DE_TAREAS_POR_DIA = ${MENSAJES_DE_TAREAS_POR_DIA};`));

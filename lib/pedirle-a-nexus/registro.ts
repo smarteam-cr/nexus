@@ -36,7 +36,7 @@ export interface ContratoDeDocumento {
 export const DOCUMENTOS_CON_NEXUS: readonly ContratoDeDocumento[] = [
   {
     tipo: "escala",
-    nombre: "La página de La escala (el Resumen y la página de cada área)",
+    nombre: "La página del Diagnóstico de rendimiento (el Resumen y la página de cada área)",
     quienEs:
       "Una exploración de la cuenta (preventa, o la de la cuenta): el servidor lee su clientId y lo compara con la cuenta que pide; el área tiene que estar en la página.",
     piezas: "piezasDelResumen y piezasDelArea (lib/exploraciones/escala-con-nexus.ts), desde la misma página que ve el cliente (paginaParaElCse).",

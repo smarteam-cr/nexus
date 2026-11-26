@@ -148,7 +148,7 @@ describe("llevar una pregunta a la exploración (el mismo camino que ya lee la g
     if (r.ok) expect(OperacionSchema.safeParse(r.ops[0]).success).toBe(true);
   });
 
-  it("⛔ la guía la muestra «Lo llevaste desde La escala», aunque no haya habido ninguna reunión, con su dimensión", () => {
+  it("⛔ la guía la muestra «Lo llevaste desde el Diagnóstico de rendimiento», aunque no haya habido ninguna reunión, con su dimensión", () => {
     const q = "¿Quién revisa los datos?";
     const conLaPregunta = { ...sesion, explorar: [q], explorarPara: { [q]: "1.3" }, explorarDe: { [q]: "s-tres" } };
     const pestana = { clave: "s-tres", numero: 1, sesion: conLaPregunta, hecha: false } as unknown as PestanaDeSesion;
@@ -156,7 +156,7 @@ describe("llevar una pregunta a la exploración (el mismo camino que ya lee la g
     expect(proc.abiertos.get(q)).toBe(0);
     const preguntas = preguntasParaMostrar(null, [], [], ESCALA_DE_PRUEBA, proc);
     const llevada = preguntas.find((p) => p.pregunta === q);
-    expect(llevada?.procedencia && textoDeLaProcedencia(llevada.procedencia)).toBe("Lo llevaste desde La escala");
+    expect(llevada?.procedencia && textoDeLaProcedencia(llevada.procedencia)).toBe("Lo llevaste desde el Diagnóstico de rendimiento");
     expect(llevada?.apunta?.para).toBe("1.3");
   });
 

@@ -192,7 +192,7 @@ export async function abrirLaEscalaDeLaCuenta(clientId: string, email: string): 
     }
   }
   const cuenta = await paraElLienzo(r.id, projectId);
-  if (!cuenta) return { ok: false, status: 404, error: "No se pudo abrir la escala de la cuenta." };
+  if (!cuenta) return { ok: false, status: 404, error: "No se pudo abrir el Diagnóstico de rendimiento de la cuenta." };
   return { ok: true, cuenta, traidas, desde, afuera, noSeTrajo };
 }
 

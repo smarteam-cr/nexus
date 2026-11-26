@@ -171,7 +171,7 @@ export default function LoQueSabes() {
         )}
       </div>
       {nueva && editando && <Editor inicial="" onGuardar={(t) => guardar(editando, t)} onCancelar={() => setEditando(null)} />}
-      {revisando && <p className="text-2xs text-fg-muted">Nexus revisa si esto cambia la página de La escala…</p>}
+      {revisando && <p className="text-2xs text-fg-muted">Nexus revisa si esto cambia la página del Diagnóstico de rendimiento…</p>}
       {impacto && (
         <AvisoDeImpacto
           key={impacto.clave + impacto.aviso}

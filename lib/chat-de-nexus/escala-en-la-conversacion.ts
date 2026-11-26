@@ -61,10 +61,10 @@ export function textoDeLaEscala(e: Pick<EscalaEnLaConversacion, "nombre" | "foco
   const lineas = [
     (e.propuesta.nota ?? "").trim(),
     cambios.length
-      ? `[Propuse ${cambios.length === 1 ? "un cambio" : `${cambios.length} cambios`} en ${donde} de La escala: ${cambios
+      ? `[Propuse ${cambios.length === 1 ? "un cambio" : `${cambios.length} cambios`} en ${donde} del Diagnóstico de rendimiento: ${cambios
           .map((c) => (c.despues === null ? `quitar ${c.nombre}` : `${c.nombre} → «${c.despues.replace(/\s+/g, " ").slice(0, 160)}»`))
           .join(" · ")}]`
-      : `[No propuse cambios en ${donde} de La escala]`,
+      : `[No propuse cambios en ${donde} del Diagnóstico de rendimiento]`,
   ].filter(Boolean);
   const t = lineas.join("\n");
   return t.length > TOPE_DEL_TEXTO ? `${primerasSinPartir(t, TOPE_DEL_TEXTO - 1).trimEnd()}…` : t;
@@ -149,7 +149,7 @@ export function leerLaEscalaGuardada(salida: unknown): EscalaEnLaConversacion | 
   return {
     id: e.id,
     lugar: pagina,
-    nombre: typeof e.nombre === "string" && e.nombre ? e.nombre : "La escala",
+    nombre: typeof e.nombre === "string" && e.nombre ? e.nombre : "Diagnóstico de rendimiento",
     foco: typeof e.foco === "string" && e.foco ? e.foco : null,
     propuesta,
     estados: estadosDeLaEscala(propuesta, s?.estados),

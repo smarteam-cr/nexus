@@ -87,7 +87,7 @@ export async function contextoParaNexus(fila: FilaDeExploracion, estado: EstadoD
   const contexto = [
     notas.length ? `Lo que el equipo ya contó del cliente («Lo que sabes del cliente»):\n${notas.join("\n")}` : "",
     aceptado,
-    pagina ? `La página de La escala, como la ve el cliente${escala.publicado ? " (publicada)" : " (sin publicar)"}:\n${pagina}` : "",
+    pagina ? `La página del Diagnóstico de rendimiento (antes «La escala»), como la ve el cliente${escala.publicado ? " (publicada)" : " (sin publicar)"}:\n${pagina}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
