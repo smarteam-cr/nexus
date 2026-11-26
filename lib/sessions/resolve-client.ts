@@ -28,18 +28,33 @@ import {
   entidadesDelDominio,
   aprenderPersonasDeEntidades,
   pistasDeTitulo,
+  interlocutoresDesdeFilas,
+  fichasQueDaElDominio,
   type CategorizeContext,
+  type TrazaDeLaCascada,
   type CategorizableSession,
   ORDEN_DE_CLIENTES_PARA_ATRIBUIR,
 } from "@/lib/sessions/categorize";
 export { ORDEN_DE_CLIENTES_PARA_ATRIBUIR };
 import { searchCompaniesByDomains, type HubspotCompanyLite } from "@/lib/hubspot/companies";
+import { esDominioGenerico } from "@/lib/clients/personas-de-la-empresa";
 import { DIAS_DE_FRESCURA } from "@/lib/lecturas/reglas";
 
 
-/** Carga el contexto de categorización (clientes + categorías) una sola vez. */
-export async function buildCategorizeCtx(): Promise<CategorizeContext> {
-  const [clients, categories] = await Promise.all([
+/**
+ * Un cambio en memoria de las fichas (una sigla que se suma, un dominio que pasa), para un simulacro. Devuelve las MISMAS
+ * filas, con esos campos cambiados: lo demás de cada ficha no lo toca.
+ */
+export type AjustarFichas = <T extends { id: string; siglas?: string[] | null; emailDomains: string[] }>(clients: readonly T[]) => T[];
+
+/**
+ * Carga el contexto de categorización (clientes + categorías) una sola vez. `ajustarFichas` (solo para un simulacro)
+ * cambia en memoria las fichas ANTES de armar lo que se deriva de ellas (las empresas de HubSpot ligadas, las palabras
+ * ambiguas, la gente aprendida de los títulos): así el simulacro da lo mismo que la base con el cambio escrito (revisión
+ * del 26 nov: con la sigla «SAS» sumada después, lo aprendido de los títulos «SAS …» quedaba afuera).
+ */
+export async function buildCategorizeCtx(ajustarFichas?: AjustarFichas): Promise<CategorizeContext> {
+  const [leidas, categories] = await Promise.all([
     prisma.client.findMany({
       orderBy: ORDEN_DE_CLIENTES_PARA_ATRIBUIR,
       select: {
@@ -56,6 +71,7 @@ export async function buildCategorizeCtx(): Promise<CategorizeContext> {
       select: { id: true, name: true, slug: true, domains: true, kind: true, color: true },
     }),
   ]);
+  const clients = ajustarFichas ? ajustarFichas(leidas) : leidas;
   // Señal fuerte del paso 5: company de HubSpot ligada → Client de Nexus.
   const clientsByHubspotCompanyId = new Map<string, { id: string; name: string; company: string | null }>();
   for (const c of clients) {
@@ -73,8 +89,31 @@ export async function buildCategorizeCtx(): Promise<CategorizeContext> {
     ambiguousNameTokens: computeAmbiguousNameTokens(clients),
   };
   ctx.personasDeEntidades = await cargarPersonasDeEntidades(ctx);
+  ctx.interlocutoresConfirmados = await cargarInterlocutoresConfirmados();
   return ctx;
 }
+
+/**
+ * La gente que una persona del equipo confirmó, correo → las fichas con las que trabaja (categorize.ts › paso 3·0,
+ * «Unidades e interlocutores», 2026-11-25). Las fichas van en el orden de atribuir para que el resultado no dependa de
+ * cómo devuelva las filas la base. Con la base atrasada (sin el SQL 2026-11-25-interlocutores-confirmados) devuelve
+ * vacío: la cascada sigue como antes en vez de tirar la sincronización de Meet. La comparten /sessions y la
+ * materialización: las dos tienen que ver lo mismo (INV2).
+ */
+export async function cargarInterlocutoresConfirmados(db: Pick<typeof prisma, "personaDeLaEmpresa"> = prisma): Promise<Map<string, string[]>> {
+  try {
+    const filas = await db.personaDeLaEmpresa.findMany({
+      where: { confirmadaAt: { not: null } },
+      select: { correo: true, clientId: true, client: { select: { createdAt: true } } },
+    });
+    return interlocutoresDesdeFilas(filas.map((f) => ({ correo: f.correo, clientId: f.clientId, desde: f.client.createdAt })));
+  } catch (e) {
+    const { esquemaDesactualizado } = await import("@/lib/db/esquema");
+    if (esquemaDesactualizado(e)) return new Map();
+    throw e;
+  }
+}
+
 
 /**
  * La gente de cada entidad que comparte dominio (categorize.ts › `aprenderPersonasDeEntidades`). Se cargan las reuniones
@@ -141,6 +180,18 @@ export async function reResolveSession(
      * que nadie pidió.
      */
     reclassify?: boolean;
+    /**
+     * Si queda en una ficha, borrar en la MISMA transacción sus vínculos a proyectos de otra ficha (invariante 1, como
+     * «Mover»). Lo pide la mudanza de `reResolverReunionesDe` (revisión del 26 nov): en dos pasos, un corte entre los dos
+     * dejaba la reunión en la ficha nueva con vínculos cruzados que ninguna corrida siguiente vuelve a mirar.
+     */
+    soltarVinculosAjenos?: boolean;
+    /**
+     * Esperar lo que el cambio de dueña dispara (la lectura, los hechos, el análisis de venta) en vez de soltarlo en
+     * segundo plano. Lo pide un script, que cierra la conexión al terminar y cortaba esas tareas a medias sin que nadie lo
+     * viera (revisión del 26 nov). Cada una sigue sin lanzar.
+     */
+    esperar?: boolean;
   },
 ): Promise<void> {
   const session = await prisma.firefliesSession.findUnique({
@@ -154,16 +205,26 @@ export async function reResolveSession(
     c.hubspotCompaniesByDomain = await buildHubspotDomainMap([session], c.internalDomains);
   }
   const resolved = resolveSessionClientId(session, c);
-  await prisma.firefliesSession.update({
-    where: { id: sessionId },
-    data: { resolvedClientId: resolved },
-  });
+  if (opts?.soltarVinculosAjenos && resolved) {
+    await prisma.$transaction([
+      prisma.firefliesSession.update({ where: { id: sessionId }, data: { resolvedClientId: resolved } }),
+      prisma.sessionProject.deleteMany({ where: { sessionId, project: { clientId: { not: resolved } } } }),
+    ]);
+  } else {
+    await prisma.firefliesSession.update({
+      where: { id: sessionId },
+      data: { resolvedClientId: resolved },
+    });
+  }
   // Si cambió de dueño, re-clasificar el cliente nuevo para vincular esta sesión a sus
   // proyectos (cierra el hueco resolver≠clasificar). Fire-and-forget.
+  const enCurso: Promise<unknown>[] = [];
   if (resolved && resolved !== session.resolvedClientId && opts?.reclassify !== false) {
-    void import("./reclassify")
-      .then((m) => m.reclassifyClientSessions(resolved))
-      .catch(() => {});
+    enCurso.push(
+      import("./reclassify")
+        .then((m) => m.reclassifyClientSessions(resolved))
+        .catch(() => {}),
+    );
   }
   // La lectura de seguimiento (memoria de la cuenta, etapa 2): una reunión que recibe dueño a mano también tiene que
   // tener su lectura. La cola decide si corresponde (de un cliente o un prospecto, no de puertas adentro, fresca, con
@@ -173,20 +234,232 @@ export async function reResolveSession(
   // hasta que alguien lo corrija a mano; INV42 (tareas) e INV46 (pedidos) lo muestran (DECISIONS «La lectura de cada
   // reunión es durable…»).
   if (resolved && resolved !== session.resolvedClientId) {
-    void import("@/lib/lecturas/reglas")
-      .then(async (r) => (r.seguimientoPrendido(process.env) ? (await import("@/lib/lecturas/cola")).encolarSeguimiento(sessionId) : null))
-      .catch(() => {});
+    enCurso.push(
+      import("@/lib/lecturas/reglas")
+        .then(async (r) => (r.seguimientoPrendido(process.env) ? (await import("@/lib/lecturas/cola")).encolarSeguimiento(sessionId) : null))
+        .catch(() => {}),
+    );
   }
   // Los HECHOS de la reunión (memoria de la cuenta, etapa 6): los pendientes que eran del dueño anterior quedan
   // desestimados («La reunión cambió de dueño»), y el job de la lectura vuelve a pedir los hechos en el cliente nuevo
   // (solo los hechos: la minuta no se relee y lo decidido no se toca). Sin la tabla no hace nada; nunca lanza.
   if (resolved !== session.resolvedClientId) {
     const duenoNuevo = resolved ?? session.manualClientId ?? null;
-    void import("@/lib/seguimiento/hechos-server")
-      .then((m) => m.alCambiarDeDueno([{ sessionId, duenoNuevo }]))
-      .catch(() => {});
+    enCurso.push(
+      import("@/lib/seguimiento/hechos-server")
+        .then((m) => m.alCambiarDeDueno([{ sessionId, duenoNuevo }]))
+        .catch(() => {}),
+    );
     // El análisis de venta de la dueña anterior ya no vale (S3, invariante 1; INV57). Nunca lanza.
-    void import("@/lib/analizador-venta/ajenos").then((m) => m.soltarAnalisisDeVentaAjenos([sessionId])).catch(() => {});
+    enCurso.push(import("@/lib/analizador-venta/ajenos").then((m) => m.soltarAnalisisDeVentaAjenos([sessionId])).catch(() => {}));
+  }
+  if (opts?.esperar) await Promise.all(enCurso);
+}
+
+/** Una reunión que cambia de dueña por un cambio en la gente confirmada. `de`/`a` null = por decidir. */
+export interface ReunionQueCambia {
+  sessionId: string;
+  title: string;
+  date: Date;
+  /** La dueña que tiene hoy (materializada). */
+  de: string | null;
+  /** La que tendría con el cambio. */
+  a: string | null;
+  /** Por qué la tendría: el paso de la cascada que decidió (y cómo, si decidió entre fichas). */
+  porQue?: TrazaDeLaCascada;
+}
+
+/**
+ * Tope de reuniones POR PERSONA que se miran al confirmar a alguien. Si una persona lo alcanza, no se corta en silencio:
+ * se lanza (las que quedaran afuera las movería después, sin simulacro, la próxima corrida general). La que más tiene hoy
+ * anda por las 170.
+ */
+const MAX_REUNIONES_POR_CONFIRMACION = 1000;
+
+/**
+ * «Unidades e interlocutores» (2026-11-25): las reuniones de estas personas que cambian de dueña si su confirmación queda
+ * como dice `hipotesis` (correo → fichas; sin él, como está hoy en la base). Sin `aplicar` no escribe nada: es el
+ * simulacro que se muestra antes de guardar. Con `aplicar`, las re-resuelve (`reResolveSession`, con lo que cuelga de un
+ * cambio de dueña: los hechos, el análisis de venta, la lectura) y, como «Mover» una reunión
+ * (empresa-de-la-reunion-server.ts), suelta sus vínculos a proyectos de otra ficha cuando la dueña nueva es una ficha
+ * (invariante 1; si queda por decidir, los vínculos esperan a la persona que la asigne). La reclasificación con IA corre
+ * UNA vez por ficha que ganó reuniones, con el mismo tope que `resolveAllSessions` (revisión del 25 nov: una por reunión
+ * eran N corridas de la misma ficha a la vez). Lo asignado a mano no se mueve (paso 1).
+ * ⚠ La decisión es la de la cascada (categorize.ts); acá solo se materializa.
+ */
+export async function reResolverReunionesDe(
+  correos: readonly string[],
+  o: {
+    hipotesis?: ReadonlyMap<string, readonly string[]>;
+    aplicar: boolean;
+    /**
+     * Con `aplicar`: las reuniones que una persona VIO en el simulacro, de qué ficha a cuál (sessionId → { de, a }; null =
+     * sin dueña / por decidir). Solo se mueven esas, y solo si la cuenta de ahora da lo mismo; las demás se devuelven en
+     * `saltadas` (revisión del 25 nov: entre el aviso y el guardado pudo cambiar algo, o HubSpot no responder, y se movían
+     * reuniones que nadie vio, quizá de una ficha que quien guardaba no abre). Sin él, se mueve todo lo que cambie.
+     */
+    aprobadas?: ReadonlyMap<string, { de: string | null; a: string | null }>;
+    /**
+     * Solo para un simulacro: cambia en memoria las fichas del contexto (una sigla, un dominio) antes de resolver, y antes
+     * de armar lo que se deriva de ellas (`buildCategorizeCtx`).
+     */
+    ajustarFichas?: AjustarFichas;
+    /**
+     * Las empresas de HubSpot por dominio que ya trajo un simulacro (lo devuelve en `hubspot`). Con él no se le pregunta a
+     * HubSpot otra vez: el --apply de la precarga lo pasa para no depender de HubSpot DESPUÉS de escribir las fichas y las
+     * personas (revisión del 26 nov: si no respondía ahí, quedaba escrito a medias).
+     */
+    hubspot?: ReadonlyMap<string, HubspotCompanyLite>;
+    /** Con `aplicar`: esperar lo que cuelga de cada mudanza y la reclasificación (`reResolveSession` › `esperar`). */
+    esperarLoQueCuelga?: boolean;
+    /**
+     * Si HubSpot no responde, lanzar (`HubspotNoRespondio`) en vez de contar sin el paso 5. Lo pide la pestaña de
+     * interlocutores (revisión del 25 nov): con HubSpot caído, el aviso mostraba reuniones que «se movían» solo porque
+     * faltaba ese dato, y el guardado las aplicaba. Sin cuenta de HubSpot conectada, se sigue sin él (el resolver tampoco
+     * puede usarlo).
+     */
+    exigirHubspot?: boolean;
+    /**
+     * Mirar TODAS las reuniones, no solo las de estas personas: lo pide un cambio de las fichas (una sigla, un dominio),
+     * que mueve también reuniones de otra gente. Sin el tope por persona.
+     */
+    todas?: boolean;
+  },
+): Promise<{ cambian: ReunionQueCambia[]; saltadas: ReunionQueCambia[]; hubspot: ReadonlyMap<string, HubspotCompanyLite> }> {
+  const lista = [...new Set(correos.map((c) => c.trim().toLowerCase()).filter(Boolean))];
+  if (!lista.length && !o.todas) return { cambian: [], saltadas: [], hubspot: new Map() };
+  if (o.aplicar && o.ajustarFichas) throw new Error("Cambiar las fichas en memoria es solo para un simulacro.");
+  const ctx = await buildCategorizeCtx(o.ajustarFichas);
+  if (o.hipotesis) {
+    const confirmadas = new Map(ctx.interlocutoresConfirmados ?? []);
+    const orden = new Map(ctx.clients.map((c, i) => [c.id, i]));
+    for (const [correo, fichas] of o.hipotesis) {
+      const ids = [...new Set(fichas)].filter((id) => orden.has(id)).sort((a, b) => orden.get(a)! - orden.get(b)!);
+      if (ids.length) confirmadas.set(correo.trim().toLowerCase(), ids);
+      else confirmadas.delete(correo.trim().toLowerCase());
+    }
+    ctx.interlocutoresConfirmados = confirmadas;
+  }
+  const porId = new Map<string, { id: string; title: string; date: Date; participants: string[]; manualClientId: string | null; resolvedClientId: string | null }>();
+  if (o.todas) {
+    for (const x of await prisma.firefliesSession.findMany({
+      select: { id: true, title: true, date: true, participants: true, manualClientId: true, resolvedClientId: true },
+    })) {
+      porId.set(x.id, x);
+    }
+  }
+  for (const correo of o.todas ? [] : lista) {
+    const suyas = await prisma.firefliesSession.findMany({
+      where: { participants: { has: correo } },
+      orderBy: { date: "desc" },
+      take: MAX_REUNIONES_POR_CONFIRMACION,
+      select: { id: true, title: true, date: true, participants: true, manualClientId: true, resolvedClientId: true },
+    });
+    if (suyas.length >= MAX_REUNIONES_POR_CONFIRMACION) {
+      throw new Error(`${correo} tiene ${MAX_REUNIONES_POR_CONFIRMACION} reuniones o más: no se mueve nada para no dejar ninguna afuera sin simulacro.`);
+    }
+    for (const x of suyas) porId.set(x.id, x);
+  }
+  const sesiones = [...porId.values()];
+  ctx.hubspotCompaniesByDomain = o.hubspot
+    ? new Map(o.hubspot)
+    : o.exigirHubspot
+      ? await mapaDeHubspotSinDegradar(sesiones, ctx.internalDomains)
+      : await buildHubspotDomainMap(sesiones, ctx.internalDomains);
+  const hubspot: ReadonlyMap<string, HubspotCompanyLite> = ctx.hubspotCompaniesByDomain;
+  const cambian: ReunionQueCambia[] = [];
+  for (const s of sesiones) {
+    const porQue: TrazaDeLaCascada = {};
+    const g = categorizeSession(s, ctx, porQue);
+    const a = g.kind === "client" ? g.id : null;
+    if (a !== s.resolvedClientId) cambian.push({ sessionId: s.id, title: s.title, date: s.date, de: s.resolvedClientId, a, porQue });
+  }
+  if (!o.aplicar) return { cambian, saltadas: [], hubspot };
+
+  const aprobadas = o.aprobadas;
+  const saltadas = aprobadas
+    ? cambian.filter((c) => {
+        const vista = aprobadas.get(c.sessionId);
+        return !vista || vista.de !== c.de || vista.a !== c.a;
+      })
+    : [];
+  const fuera = new Set(saltadas.map((c) => c.sessionId));
+  const aMover = cambian.filter((c) => !fuera.has(c.sessionId));
+  for (const c of aMover) {
+    // Invariante 1: ningún vínculo a un proyecto de otra ficha sobrevive al cambio de dueña (lo mismo que «Mover»), y se
+    // suelta en la misma transacción que la mudanza.
+    await reResolveSession(c.sessionId, ctx, { reclassify: false, soltarVinculosAjenos: true, esperar: o.esperarLoQueCuelga });
+  }
+  /* Una aprobada que ya está en su ficha nueva (la movió la app entre el simulacro y la escritura, o una corrida anterior
+     que se cortó) no sale en `cambian`, pero sus vínculos a proyectos de la ficha vieja siguen ahí: se sueltan igual
+     (revisión del 26 nov). Solo si la cuenta de ahora da esa misma ficha. */
+  if (aprobadas) {
+    const enCambian = new Set(cambian.map((c) => c.sessionId));
+    for (const [sessionId, vista] of aprobadas) {
+      const s = porId.get(sessionId);
+      if (!vista.a || enCambian.has(sessionId) || !s || s.resolvedClientId !== vista.a) continue;
+      await prisma.sessionProject.deleteMany({ where: { sessionId, project: { clientId: { not: vista.a } } } });
+    }
+  }
+  const ganaron = [...new Set(aMover.map((c) => c.a).filter((x): x is string => !!x))];
+  if (ganaron.length > MAX_AUTO_RECLASSIFY_CLIENTS) {
+    console.warn(`[resolve-client] ${ganaron.length} fichas ganaron reuniones: se omite el auto-reclasificado (scripts/reclassify-client-sessions.ts).`);
+  } else {
+    const reclasificar = ganaron.map((clientId) =>
+      import("./reclassify")
+        .then((m) => m.reclassifyClientSessions(clientId))
+        .catch(() => {}),
+    );
+    if (o.esperarLoQueCuelga) await Promise.all(reclasificar);
+  }
+  return { cambian: aMover, saltadas, hubspot };
+}
+
+/**
+ * Las fichas que el dominio de este correo da hoy (categorize.ts › `fichasQueDaElDominio`, con el contexto de la
+ * materialización y la empresa de HubSpot de ese dominio). Es a quién le quita reuniones FUTURAS confirmar a esta persona en
+ * otra ficha: la pestaña de interlocutores pide acceso a ellas (revisión del 25 nov).
+ */
+export async function fichasDelDominioDe(correo: string): Promise<string[]> {
+  const ctx = await buildCategorizeCtx();
+  /* La unidad que Nexus aprendió de los títulos para esta persona también pierde sus reuniones futuras si se la confirma en
+     otra ficha (revisión del 25 nov: César, aprendido en AE por «AE | …», confirmado en TAE). */
+  const aprendida = ctx.personasDeEntidades?.get(correo.trim().toLowerCase());
+  const con = (fichas: string[]) => [...new Set([...fichas, ...(aprendida ? [aprendida] : [])])];
+  const registradas = fichasQueDaElDominio(correo, ctx);
+  if (registradas.length) return con(registradas);
+  /* Sin dominio registrado, la ficha puede venir por la empresa de HubSpot ligada (paso 5). Es un control de acceso: si
+     HubSpot no responde, se lanza (FALLA CERRADO) en vez de dar el dominio por vacío, como hace la materialización. Un
+     correo genérico (gmail, yahoo) nunca da una empresa: no se pregunta. Sin cuenta de HubSpot conectada (la base local),
+     el resolver tampoco puede usar el paso 5, así que ese dominio no da ninguna ficha. */
+  const dominios = collectExternalDomains([{ participants: [correo] }], ctx.internalDomains).filter((d) => !esDominioGenerico(d));
+  if (dominios.length === 0) return con([]);
+  try {
+    ctx.hubspotCompaniesByDomain = await searchCompaniesByDomains(dominios, { lanzar: true });
+  } catch (e) {
+    const motivo = e instanceof Error ? e.message : String(e);
+    if (/no hay cuenta hubspot del sistema/i.test(motivo)) return con([]);
+    throw new HubspotNoRespondio(motivo);
+  }
+  return con(fichasQueDaElDominio(correo, ctx));
+}
+
+/** HubSpot no respondió en un control que no puede seguir sin él (`fichasDelDominioDe`). */
+export class HubspotNoRespondio extends Error {}
+
+/**
+ * Como `buildHubspotDomainMap`, pero sin degradar: si HubSpot falla, lanza `HubspotNoRespondio`. Sin cuenta de HubSpot
+ * conectada devuelve vacío (el resolver tampoco tiene el paso 5). Los correos genéricos no se preguntan.
+ */
+async function mapaDeHubspotSinDegradar(sessions: { participants: string[] }[], internalDomains: Set<string>): Promise<Map<string, HubspotCompanyLite>> {
+  const dominios = collectExternalDomains(sessions, internalDomains).filter((d) => !esDominioGenerico(d));
+  if (dominios.length === 0) return new Map();
+  try {
+    return await searchCompaniesByDomains(dominios, { lanzar: true });
+  } catch (e) {
+    const motivo = e instanceof Error ? e.message : String(e);
+    if (/no hay cuenta hubspot del sistema/i.test(motivo)) return new Map();
+    throw new HubspotNoRespondio(motivo);
   }
 }
 

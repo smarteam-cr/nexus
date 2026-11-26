@@ -12,6 +12,7 @@
  * La cascada de matching es DETERMINISTA y prioriza así:
  *   1. Manual override (manualClientId) — el consultor asignó manualmente
  *   2. Sesión 100% interna → primera categoría con kind="internal"
+ *   3·0. Gente CONFIRMADA por el equipo (solo si hay alguien confirmado en la reunión; ver abajo)
  *   3. Email-domain match con Client.emailDomains
  *   4. Email-domain match con SessionCategory.domains (excluyendo internal — ya cubiertas)
  *   5. Dominio externo → empresa HubSpot → Client ligado (Client.hubspotCompanyId).
@@ -34,6 +35,17 @@
  *  · En una empresa con MARCA (una palabra que está en el nombre de todas sus unidades: «Cemaco»), la sigla de una
  *    unidad solo vale en un título junto a la marca: «Cemaco CR |» sí, «Ride CR |» no. Sin marca (el TEC), sola.
  * DECISIONS «Una empresa con varias unidades».
+ *
+ * ⚠ La gente CONFIRMADA (2026-11-25, «Unidades e interlocutores»). Una persona del equipo dice con qué ficha trabaja cada
+ * persona del cliente (`PersonaDeLaEmpresa.confirmadaAt`; llega como `interlocutoresConfirmados`). Si alguien de afuera
+ * en la reunión está confirmado, decide el paso 3·0 (`decisionDeLaGenteConfirmada`), antes del dominio:
+ *  · Las candidatas son las fichas de la gente confirmada y las del dominio de cada persona, cada una con su empresa
+ *    (nunca la casa). Si el título nombra a una ficha que no es candidata, el paso se hace a un lado.
+ *  · Primero el título, entre las candidatas. Después cada persona: la confirmada en UNA ficha vale por esa ficha, por
+ *    encima de su dominio y de lo aprendido de los títulos; la confirmada en dos o más («del grupo») no decide; las demás,
+ *    por su dominio o por lo aprendido. Todas de la misma ficha: esa. Si no, POR DECIDIR.
+ *  · Sin nadie confirmado en la reunión, el paso no existe y la cascada es la de siempre. A mano sigue ganando (paso 1).
+ * DECISIONS «Unidades e interlocutores».
  */
 
 import type { Client, SessionCategory } from "@prisma/client";
@@ -85,6 +97,36 @@ export interface CategorizeContext {
    * Opcional: sin él, una reunión cuyo nombre no dice la entidad queda por decidir.
    */
   personasDeEntidades?: Map<string, string>;
+  /**
+   * La gente que una persona del equipo CONFIRMÓ: correo (en minúsculas) → las fichas con las que trabaja
+   * (`PersonaDeLaEmpresa.confirmadaAt`, lo carga resolve-client.ts › `cargarInterlocutoresConfirmados`). Una ficha: la
+   * persona decide por ella. Dos o más: es «del grupo» y no decide. Nunca sale de lo aprendido: lo escribe una persona.
+   * Opcional: sin él (o vacío), la cascada es la de siempre.
+   */
+  interlocutoresConfirmados?: ReadonlyMap<string, readonly string[]>;
+}
+
+/** Qué paso de la cascada decidió (`categorizeSession` con `traza`): para los simulacros, que dicen POR QUÉ. */
+export type PasoDeLaCascada =
+  | "a-mano"
+  | "interna-por-titulo"
+  | "interna"
+  | "gente-confirmada"
+  | "dominio"
+  | "categoria"
+  | "hubspot"
+  | "empresa-de-hubspot-sin-ficha"
+  | "titulo"
+  | "sin-dueno";
+
+/**
+ * Lo que la cascada anota mientras decide, si se le pasa (no cambia lo que devuelve): el paso y, si decidió entre
+ * fichas (las unidades de una empresa o la gente confirmada), cómo. La escribe la MISMA cascada en cada punto donde
+ * devuelve: no es otra copia de su orden.
+ */
+export interface TrazaDeLaCascada {
+  paso?: PasoDeLaCascada;
+  entre?: DecisionEntreEntidades["por"];
 }
 
 export interface CategorizableSession {
@@ -342,8 +384,15 @@ function findClientByTitleMatch(
 /* La CASA se deriva de los dominios internos (la SessionCategory kind="internal"), no de un
    nombre hardcodeado: «Cliente & Smarteam» es el formato estándar de los títulos del equipo, y
    Smarteam es un Client más en la base — nombraba su identidad entera y empataba con todos. */
-const esLaCasa = (internalDomains: Set<string>) => (c: { name: string; company: string | null }) =>
+const esLaCasa = (internalDomains: ReadonlySet<string>) => (c: { name: string; company: string | null }) =>
   effectiveDomainsForClient(c as Pick<Client, "name" | "company" | "emailDomains">).some((d) => internalDomains.has(d));
+
+/**
+ * ¿Esta ficha es la casa (Smarteam)? La MISMA regla que usa la cascada: un dominio de la ficha es interno. La usan la
+ * pestaña de interlocutores y su escritor para no confirmar gente en la casa (2026-11-25): una sola definición.
+ */
+export const esLaCasaEn = (internalDomains: ReadonlySet<string>) => (c: Pick<Client, "name" | "company" | "emailDomains">) =>
+  esLaCasa(internalDomains)(c);
 
 /**
  * El dueño por el título (pasos 2 y 6). Si cae en una unidad de una empresa, o empatan solo unidades de la misma
@@ -355,17 +404,18 @@ function duenoPorElTitulo(
   externalDomains: Set<string>,
   ctx: CategorizeContext,
   ambiguous: Set<string>,
+  traza?: TrazaDeLaCascada,
 ): SessionGroup | null {
   const r = findClientByTitleMatch(session.title, ctx.clients, ambiguous, ctx.internalDomains);
   if (r.cliente) {
     const c = r.cliente;
-    return repartirEntreEntidades(c.id, session, externalDomains, ctx) ?? { kind: "client", id: c.id, label: c.name, company: c.company };
+    return repartirEntreEntidades(c.id, session, externalDomains, ctx, traza) ?? { kind: "client", id: c.id, label: c.name, company: c.company };
   }
   if (r.motivo === "empate") {
     const casa = esLaCasa(ctx.internalDomains);
     const grupos = new Set(r.candidatos.filter((c) => !casa(c)).map((c) => entidadesDelDominio(c.id, ctx)));
     const [grupo] = grupos;
-    if (grupos.size === 1 && grupo) return repartirEntreEntidades(grupo[0]!.id, session, externalDomains, ctx);
+    if (grupos.size === 1 && grupo) return repartirEntreEntidades(grupo[0]!.id, session, externalDomains, ctx, traza);
   }
   return null;
 }
@@ -538,22 +588,24 @@ export function unidadQueNombraElTitulo<C extends ConEmpresa>(
 }
 
 /**
- * Qué unidad puede ser la de cada dominio del grupo: el de la principal, la principal y las unidades que viven en él
- * (`viveEnElDominioDeLaPrincipal`); el propio de una unidad, solo esa.
+ * Qué unidad puede ser la de cada dominio de las fichas: el de una principal, ella y las unidades SUYAS que viven en él
+ * (`viveEnElDominioDeLaPrincipal`); el propio de una unidad, solo esa. Las fichas pueden ser de varias empresas (el paso
+ * de la gente confirmada): cada unidad vive solo en el dominio de SU principal. Con una sola empresa da lo de siempre.
  */
-function unidadesPorDominio(grupo: readonly ClienteDelCtx[]): Map<string, Set<string>> {
+function unidadesPorDominio(fichas: readonly ClienteDelCtx[]): Map<string, Set<string>> {
   const out = new Map<string, Set<string>>();
-  const enLaPrincipal = grupo.filter((c) => viveEnElDominioDeLaPrincipal(c)).map((c) => c.id);
-  for (const c of grupo) {
+  for (const c of fichas) {
     const propios = effectiveDomainsForClient(c);
-    const duenas = c.comparteDominioConId ? [c.id] : [c.id, ...enLaPrincipal];
+    const duenas = c.comparteDominioConId
+      ? [c.id]
+      : [c.id, ...fichas.filter((u) => u.comparteDominioConId === c.id && viveEnElDominioDeLaPrincipal(u)).map((u) => u.id)];
     for (const d of propios) out.set(d, new Set([...(out.get(d) ?? []), ...duenas]));
   }
   return out;
 }
 
 export type DecisionEntreEntidades =
-  | { clientId: string; por: "nombre" | "gente" | "dominio" }
+  | { clientId: string; por: "nombre" | "confirmada" | "gente" | "dominio" }
   | { clientId: null; por: "dos-nombres" | "gente-de-varias" | "sin-pista" };
 
 /** Los correos de la reunión que no son de la casa ni de un calendario, en minúsculas. */
@@ -573,8 +625,11 @@ function correosDeAfuera(participants: string[], internalDomains: Set<string>): 
  *     la marca, o su nombre, con el mismo matcher del paso 6 acotado al grupo), es de esa. Si nombra a dos, por
  *     decidir: la gente no desempata un título que dice las dos cosas. La palabra que comparten las unidades
  *     («cemaco») no nombra a ninguna.
- *  2. La GENTE y el DOMINIO: cada persona de afuera cuenta para la unidad de su dominio, si el dominio es de una sola
- *     (el propio de Ecuador; el de Costa Rica, si ninguna unidad vive en él), o para la que dice `personasDeEntidades`.
+ *  2. La GENTE y el DOMINIO, persona por persona:
+ *     · la CONFIRMADA por el equipo (`interlocutoresConfirmados`) en UNA de estas fichas cuenta para esa, por encima de
+ *       su dominio y de lo aprendido; la confirmada en dos o más («del grupo») no cuenta para ninguna;
+ *     · las demás, para la unidad de su dominio, si el dominio es de una sola (el propio de Ecuador; el de Costa Rica, si
+ *       ninguna unidad vive en él), o para la que dice `personasDeEntidades`.
  *     Si todas las que se conocen son de la misma unidad, es de esa.
  *  3. Si no, por decidir.
  * La gente de Smarteam no cuenta: lleva las dos (en el TEC, Heiver).
@@ -582,19 +637,52 @@ function correosDeAfuera(participants: string[], internalDomains: Set<string>): 
 export function decidirEntreEntidades(
   session: CategorizableSession,
   entidades: readonly ClienteDelCtx[],
-  ctx: Pick<CategorizeContext, "internalDomains" | "ambiguousNameTokens" | "personasDeEntidades">,
+  ctx: Pick<CategorizeContext, "internalDomains" | "ambiguousNameTokens" | "personasDeEntidades" | "interlocutoresConfirmados"> &
+    Partial<Pick<CategorizeContext, "categories">>,
+): DecisionEntreEntidades {
+  return decidirEntre(session, entidades, ctx, unidadesPorDominio(entidades));
+}
+
+/** `decidirEntreEntidades` con el mapa dominio → fichas armado afuera (el paso de la gente confirmada le suma HubSpot). */
+function decidirEntre(
+  session: CategorizableSession,
+  entidades: readonly ClienteDelCtx[],
+  ctx: Pick<CategorizeContext, "internalDomains" | "ambiguousNameTokens" | "personasDeEntidades" | "interlocutoresConfirmados"> &
+    Partial<Pick<CategorizeContext, "categories">>,
+  porDominio: ReadonlyMap<string, ReadonlySet<string>>,
 ): DecisionEntreEntidades {
   const t = unidadQueNombraElTitulo(session.title, entidades, ctx.ambiguousNameTokens ?? EMPTY_TOKEN_SET);
   if (t.clientId) return { clientId: t.clientId, por: "nombre" };
   if (t.candidatos > 1) return { clientId: null, por: "dos-nombres" };
 
   const personas = ctx.personasDeEntidades;
-  const porDominio = unidadesPorDominio(entidades);
+  const confirmadas = ctx.interlocutoresConfirmados;
+  /* La gente de un dominio de categoría (HubSpot, partners) no decide aunque esté confirmada (revisión del 25 nov). */
+  const deCategoria = dominiosDeCategoria(ctx.categories);
   const ids = new Set(entidades.map((e) => e.id));
   const de = new Set<string>();
+  /* Quien solo se sabe que es de VARIAS fichas (su dominio es el de una principal con unidades que viven en él) no elige
+     ficha, pero sí empresa: si la que eligen los demás no es ninguna de las suyas, la reunión no es de esa (revisión del
+     25 nov: «Revisión semanal» con gente del TEC y una persona confirmada en Credix se iba a Credix). */
+  const deVarias: ReadonlySet<string>[] = [];
   let porLaGente = false;
+  let porConfirmadas = false;
   for (const correo of correosDeAfuera(session.participants, ctx.internalDomains)) {
-    const delDominio = porDominio.get(correo.split("@")[1]!);
+    const dominio = correo.split("@")[1]!;
+    const suyas = deCategoria.has(dominio) ? undefined : confirmadas?.get(correo)?.filter((id) => ids.has(id));
+    if (suyas?.length) {
+      /* Lo dijo una persona del equipo: vale más que su dominio y que lo aprendido. En dos o más, es del grupo y no decide. */
+      if (suyas.length === 1) {
+        de.add(suyas[0]!);
+        porConfirmadas = true;
+      } else {
+        /* Del grupo: no elige, pero veta una ficha que no es de las suyas (revisión del 25 nov: Cindy «del grupo» en AE y TAE
+           con alguien de Credix mandaba la reunión del TEC a Credix). */
+        deVarias.push(new Set(suyas));
+      }
+      continue;
+    }
+    const delDominio = porDominio.get(dominio);
     if (delDominio?.size === 1) {
       de.add([...delDominio][0]!);
       continue;
@@ -603,11 +691,182 @@ export function decidirEntreEntidades(
     if (id && ids.has(id)) {
       de.add(id);
       porLaGente = true;
+      continue;
     }
+    if (delDominio && delDominio.size > 1) deVarias.push(delDominio);
   }
-  if (de.size === 1) return { clientId: [...de][0]!, por: porLaGente ? "gente" : "dominio" };
+  if (de.size === 1) {
+    const elegida = [...de][0]!;
+    if (deVarias.some((varias) => !varias.has(elegida))) return { clientId: null, por: "gente-de-varias" };
+    return { clientId: elegida, por: porConfirmadas ? "confirmada" : porLaGente ? "gente" : "dominio" };
+  }
   if (de.size > 1) return { clientId: null, por: "gente-de-varias" };
   return { clientId: null, por: "sin-pista" };
+}
+
+/** Los dominios de las categorías que no son internas (HubSpot, partners: el paso 4). */
+const dominiosDeCategoriaPorLista = new WeakMap<readonly CategorizeContext["categories"][number][], Set<string>>();
+function dominiosDeCategoria(categories: CategorizeContext["categories"] | undefined): ReadonlySet<string> {
+  if (!categories) return EMPTY_TOKEN_SET;
+  const hecho = dominiosDeCategoriaPorLista.get(categories);
+  if (hecho) return hecho;
+  const out = new Set(categories.filter((c) => c.kind !== "internal").flatMap((c) => c.domains.map((d) => d.toLowerCase())));
+  dominiosDeCategoriaPorLista.set(categories, out);
+  return out;
+}
+
+/** Por cada lista de clientes: dominio → la primera ficha (en el orden de atribuir) que lo tiene, como el paso 3. */
+const fichaPorDominioDeLaLista = new WeakMap<readonly ClienteDelCtx[], Map<string, ClienteDelCtx>>();
+function fichaDelDominioRegistrado(dominio: string, clients: readonly ClienteDelCtx[]): ClienteDelCtx | undefined {
+  let mapa = fichaPorDominioDeLaLista.get(clients);
+  if (!mapa) {
+    mapa = new Map();
+    for (const c of clients) for (const d of effectiveDomainsForClient(c)) if (!mapa.has(d)) mapa.set(d, c);
+    fichaPorDominioDeLaLista.set(clients, mapa);
+  }
+  return mapa.get(dominio);
+}
+
+/**
+ * PURO: las filas confirmadas de `PersonaDeLaEmpresa` → `interlocutoresConfirmados` (correo en minúsculas → fichas, cada
+ * una una vez, en el orden de atribuir: por antigüedad de la ficha). Así el resultado no depende de cómo devuelva las
+ * filas la base.
+ */
+export function interlocutoresDesdeFilas(filas: readonly { correo: string; clientId: string; desde: Date }[]): Map<string, string[]> {
+  const orden = [...filas].sort((a, b) => a.desde.getTime() - b.desde.getTime() || a.clientId.localeCompare(b.clientId));
+  const out = new Map<string, string[]>();
+  for (const f of orden) {
+    const correo = f.correo.trim().toLowerCase();
+    const fichas = out.get(correo) ?? [];
+    if (!fichas.includes(f.clientId)) fichas.push(f.clientId);
+    out.set(correo, fichas);
+  }
+  return out;
+}
+
+/**
+ * La ficha que el dominio de una persona da HOY, como lo leerían los pasos 3 y 5: la primera que lo tiene registrado o, si
+ * ninguna, la ligada a su empresa de HubSpot. Nunca la casa. PURO.
+ */
+function fichaQueDaElDominio(dominio: string, ctx: CategorizeContext): { ficha: ClienteDelCtx; porHubspot: boolean } | null {
+  const casa = esLaCasa(ctx.internalDomains);
+  const registrada = fichaDelDominioRegistrado(dominio, ctx.clients);
+  if (registrada) return casa(registrada) ? null : { ficha: registrada, porHubspot: false };
+  const empresa = ctx.hubspotCompaniesByDomain.get(dominio);
+  const ligadaId = empresa ? ctx.clientsByHubspotCompanyId?.get(empresa.id)?.id : undefined;
+  const ligada = ligadaId ? ctx.clients.find((c) => c.id === ligadaId) : undefined;
+  return ligada && !casa(ligada) ? { ficha: ligada, porHubspot: true } : null;
+}
+
+/**
+ * Las fichas que el dominio de este correo da hoy, con la regla del resolver (`unidadesPorDominio`): el dominio de una
+ * principal da la principal y las unidades que viven en él; el propio de una unidad, solo esa unidad. Es a quién le
+ * puede quitar reuniones FUTURAS cambiar la confirmación de esta persona: la pestaña de interlocutores pide acceso a ellas
+ * (revisión del 25 nov; con la empresa entera, la CSE de Ecuador no podía confirmar a su propia gente porque se le pedía
+ * Costa Rica). Vacío si el dominio no da ninguna ficha. PURO.
+ */
+export function fichasQueDaElDominio(correo: string, ctx: CategorizeContext): string[] {
+  const dominio = correo.trim().toLowerCase().split("@")[1];
+  if (!dominio || ctx.internalDomains.has(dominio) || esDominioDeCalendario(dominio)) return [];
+  const r = fichaQueDaElDominio(dominio, ctx);
+  if (!r) return [];
+  const grupo = gruposDeEntidades(ctx.clients).get(r.ficha.id);
+  if (!grupo) return [r.ficha.id];
+  const porDominio = unidadesPorDominio(grupo).get(dominio);
+  if (porDominio) return [...porDominio];
+  /* Ligada por HubSpot (el dominio no está registrado): la ficha y, si es una principal, las unidades que viven en ella. */
+  return r.ficha.comparteDominioConId
+    ? [r.ficha.id]
+    : [r.ficha.id, ...grupo.filter((u) => u.comparteDominioConId === r.ficha.id && viveEnElDominioDeLaPrincipal(u)).map((u) => u.id)];
+}
+
+/**
+ * Paso 3·0 · LA GENTE CONFIRMADA (`decisionDeLaGenteConfirmada`). Null si nadie de afuera en la reunión está confirmado (la cascada sigue como siempre),
+ * o si el título nombra a una ficha que no es candidata (la cascada de siempre la resuelve por el título, como antes).
+ * Si no, este paso decide: una ficha, o POR DECIDIR (orphan → `resolvedClientId` null, a la vista en /sessions). Las
+ * candidatas: las fichas de la gente confirmada y la del dominio de cada persona (registrado, paso 3, o de su empresa de
+ * HubSpot ligada, paso 5), cada una con su empresa entera (la principal y sus unidades), nunca la casa. Entre ellas,
+ * `decidirEntre`: el título primero, después persona por persona (la confirmada en una ficha manda sobre su dominio; la
+ * «del grupo» no decide).
+ * *Por qué el título primero:* una persona del grupo no decide sola por su dominio; «con el título decide el título»
+ * (pedido del 25 nov). Y es la regla de siempre entre unidades: la gente no desempata un título.
+ * *Por qué por decidir y no la ficha más vieja:* si la gente apunta a dos fichas, elegir una sería adivinar en silencio.
+ */
+function decisionDeLaGenteConfirmada(
+  session: CategorizableSession,
+  externalDomains: Set<string>,
+  ctx: CategorizeContext,
+): { grupo: SessionGroup; por: DecisionEntreEntidades["por"] } | null {
+  const confirmadasTodas = ctx.interlocutoresConfirmados;
+  if (!confirmadasTodas?.size) return null;
+  const afuera = correosDeAfuera(session.participants, ctx.internalDomains);
+  if (!afuera.some((c) => confirmadasTodas.has(c))) return null;
+  /* Alguien de un dominio de una categoría (HubSpot, partners: paso 4) no decide aunque esté confirmado: sus reuniones
+     tratan varias cuentas. La pestaña ya no deja confirmarlo; esto cubre a quien se confirmó antes de que su dominio
+     fuera una categoría (revisión del 25 nov). */
+  const deCategoria = dominiosDeCategoria(ctx.categories);
+  const confirmadas: ReadonlyMap<string, readonly string[]> = deCategoria.size
+    ? new Map([...confirmadasTodas].filter(([correo]) => !deCategoria.has(correo.split("@")[1] ?? "")))
+    : confirmadasTodas;
+  if (!afuera.some((c) => confirmadas.has(c))) return null;
+
+  const porId = new Map(ctx.clients.map((c) => [c.id, c]));
+  const grupos = gruposDeEntidades(ctx.clients);
+  /* La casa (la ficha de Smarteam) nunca es candidata: «X & Smarteam» es el formato de los títulos del equipo. */
+  const casa = esLaCasa(ctx.internalDomains);
+  const ids = new Set<string>();
+  const sumarEmpresa = (id: string) => {
+    for (const c of grupos.get(id) ?? [porId.get(id)!]) ids.add(c.id);
+  };
+  let alguna = false;
+  for (const correo of afuera) {
+    for (const id of confirmadas.get(correo) ?? []) {
+      const c = porId.get(id);
+      if (!c || casa(c)) continue; // una ficha que ya no existe, o la casa
+      alguna = true;
+      sumarEmpresa(id);
+    }
+  }
+  if (!alguna) return null;
+
+  /* El dominio de cada persona, como lo leerían los pasos 3 y 5: lo registrado, o la empresa de HubSpot ligada. */
+  const porHubspot = new Map<string, string>();
+  for (const d of externalDomains) {
+    const r = fichaQueDaElDominio(d, ctx);
+    if (!r) continue;
+    sumarEmpresa(r.ficha.id);
+    if (r.porHubspot) porHubspot.set(d, r.ficha.id);
+  }
+
+  /* «Teamnet: Propuesta Web»: el corte del match por título no corta en «:» ni «/» (cambiarlo movería el resto de la
+     cascada, ver `palabrasParaLaMarca`). Este paso es nuevo y no tiene nada que mover: aquí sí se cortan. */
+  const conElTituloCortado = { ...session, title: session.title.replace(/[:/]/g, " ") };
+
+  /* Si el título nombra a una ficha que NO está entre las candidatas (ni ninguna de su empresa), este paso se hace a un
+     lado y sigue la cascada de siempre. *Por qué* (revisión del 25 nov): un consultor confirmado en «Alfa» que va a
+     «Bravo | Kickoff» con gente de un dominio sin ficha se llevaba la reunión de Bravo a Alfa, porque Bravo no era
+     candidata: la invariante 1 al revés. Con la cascada de siempre, el título (paso 6) la da a Bravo, como antes. */
+  const ambiguous = ctx.ambiguousNameTokens ?? EMPTY_TOKEN_SET;
+  const t = findClientByTitleMatch(conElTituloCortado.title, ctx.clients, ambiguous, ctx.internalDomains);
+  const nombradas = t.cliente ? [t.cliente] : t.motivo === "empate" ? t.candidatos : [];
+  if (nombradas.some((c) => !casa(c) && !ids.has(c.id))) return null;
+
+  const candidatas = ctx.clients.filter((c) => ids.has(c.id));
+  const porDominio = unidadesPorDominio(candidatas);
+  for (const [d, id] of porHubspot) {
+    if (porDominio.has(d)) continue;
+    const c = porId.get(id)!;
+    const viven = c.comparteDominioConId ? [] : candidatas.filter((u) => u.comparteDominioConId === c.id && viveEnElDominioDeLaPrincipal(u));
+    porDominio.set(d, new Set([c.id, ...viven.map((u) => u.id)]));
+  }
+
+  const d = decidirEntre(conElTituloCortado, candidatas, { ...ctx, interlocutoresConfirmados: confirmadas }, porDominio);
+  const elegida = d.clientId ? porId.get(d.clientId) : undefined;
+  if (elegida) return { grupo: { kind: "client", id: elegida.id, label: elegida.name, company: elegida.company }, por: d.por };
+  return {
+    grupo: { kind: "orphan", label: `Por decidir: ${candidatas.map((e) => e.name).join(" o ")}`, domain: [...externalDomains][0] },
+    por: d.por,
+  };
 }
 
 /**
@@ -620,10 +879,12 @@ function repartirEntreEntidades(
   session: CategorizableSession,
   externalDomains: Set<string>,
   ctx: CategorizeContext,
+  traza?: TrazaDeLaCascada,
 ): SessionGroup | null {
   const entidades = entidadesDelDominio(clientId, ctx);
   if (!entidades) return null;
   const d = decidirEntreEntidades(session, entidades, ctx);
+  if (traza) traza.entre = d.por;
   const elegida = d.clientId ? entidades.find((e) => e.id === d.clientId) : undefined;
   if (elegida) return { kind: "client", id: elegida.id, label: elegida.name, company: elegida.company };
   const delGrupo = new Set(entidades.flatMap((e) => effectiveDomainsForClient(e)));
@@ -669,7 +930,9 @@ export function aprenderPersonasDeEntidades(
 ): Map<string, string> {
   const grupos = gruposDeEntidades(ctx.clients);
   if (grupos.size === 0) return new Map();
-  const sinGente: CategorizeContext = { ...ctx, personasDeEntidades: undefined };
+  /* Sin la gente aprendida NI la confirmada: lo aprendido sale solo del título, y confirmar a alguien no cambia lo que
+     Nexus aprende de los demás (la gente confirmada ya decide por su cuenta, en el paso 3·0). */
+  const sinGente: CategorizeContext = { ...ctx, personasDeEntidades: undefined, interlocutoresConfirmados: undefined };
   const pistas = pistasDeTitulo(ctx.clients.filter((c) => grupos.has(c.id)), ctx.ambiguousNameTokens);
   const visto = new Map<string, Map<string, number>>();
   for (const s of sessions) {
@@ -700,15 +963,20 @@ export function aprenderPersonasDeEntidades(
  */
 export function categorizeSession(
   session: CategorizableSession,
-  ctx: CategorizeContext
+  ctx: CategorizeContext,
+  traza?: TrazaDeLaCascada,
 ): SessionGroup {
   const { clients, categories, hubspotCompaniesByDomain, internalDomains } = ctx;
   const ambiguous = ctx.ambiguousNameTokens ?? EMPTY_TOKEN_SET;
+  const paso = (p: PasoDeLaCascada) => {
+    if (traza) traza.paso = p;
+  };
 
   // ── 1. Manual override ─────────────────────────────────────────────────────
   if (session.manualClientId) {
     const c = clients.find((cl) => cl.id === session.manualClientId);
     if (c) {
+      paso("a-mano");
       return { kind: "client", id: c.id, label: c.name, company: c.company };
     }
     // Si manualClientId no resuelve (cliente eliminado), seguimos con la cascada
@@ -725,9 +993,11 @@ export function categorizeSession(
   // clientes: una sesión interna cuyo título contiene el nombre del cliente
   // (ej. "Hand Off | WHEREX") debe ir al bucket de ese cliente, no a Internal.
   if (participantDomains.size > 0 && externalDomains.size === 0) {
-    const porTitulo = duenoPorElTitulo(session, externalDomains, ctx, ambiguous);
+    paso("interna-por-titulo");
+    const porTitulo = duenoPorElTitulo(session, externalDomains, ctx, ambiguous, traza);
     if (porTitulo) return porTitulo;
     // Sin match por título → grupo Internal real
+    paso("interna");
     const internalCat = categories.find((c) => c.kind === "internal");
     if (internalCat) {
       return {
@@ -742,6 +1012,17 @@ export function categorizeSession(
     return { kind: "orphan", label: "Interna (sin categoría)" };
   }
 
+  // ── 3·0. La gente confirmada (2026-11-25) ──────────────────────────────────
+  // Solo si alguien de afuera está confirmado por el equipo en una ficha: decide entre sus fichas y las de los
+  // dominios de la reunión (título → gente confirmada → dominio y lo aprendido → por decidir). Sin nadie confirmado,
+  // devuelve null y la cascada sigue idéntica. Ver `decisionDeLaGenteConfirmada`.
+  const porLaGente = decisionDeLaGenteConfirmada(session, externalDomains, ctx);
+  if (porLaGente) {
+    paso("gente-confirmada");
+    if (traza) traza.entre = porLaGente.por;
+    return porLaGente.grupo;
+  }
+
   // ── 3. Match con Client.emailDomains (por dominio externo) ────────────────
   // Usa `effectiveDomainsForClient` para que clientes con `company` que parece
   // dominio (ej. "wherex.com") sean reconocidos sin necesidad de poblar
@@ -751,8 +1032,9 @@ export function categorizeSession(
     if (domains.length === 0) continue;
     const hit = domains.some((d) => externalDomains.has(d));
     if (hit) {
+      paso("dominio");
       return (
-        repartirEntreEntidades(c.id, session, externalDomains, ctx) ??
+        repartirEntreEntidades(c.id, session, externalDomains, ctx, traza) ??
         { kind: "client", id: c.id, label: c.name, company: c.company }
       );
     }
@@ -763,6 +1045,7 @@ export function categorizeSession(
     if (cat.kind === "internal") continue; // ya cubierto en paso 2
     const hit = cat.domains.some((d) => externalDomains.has(d.toLowerCase()));
     if (hit) {
+      paso("categoria");
       return {
         kind: "category",
         id: cat.id,
@@ -788,8 +1071,9 @@ export function categorizeSession(
     const linkedClient = clientsByHs.get(company.id);
     if (linkedClient) {
       // Señal FUERTE: la company de HubSpot está ligada a un Client → ese Client.
+      paso("hubspot");
       return (
-        repartirEntreEntidades(linkedClient.id, session, externalDomains, ctx) ??
+        repartirEntreEntidades(linkedClient.id, session, externalDomains, ctx, traza) ??
         { kind: "client", id: linkedClient.id, label: linkedClient.name, company: linkedClient.company }
       );
     }
@@ -802,6 +1086,7 @@ export function categorizeSession(
   //    en el Client (ej. Mr Wings→tecnofood, Honda→facocr). El registro del dominio real
   //    resuelve esto por dominio (paso 3) y permite endurecer a "corte" más adelante.
   if (unlinkedCompany && ctx.groupUnlinkedHubspotCompany) {
+    paso("empresa-de-hubspot-sin-ficha");
     return {
       kind: "hubspotCompany",
       id: unlinkedCompany.id,
@@ -811,10 +1096,12 @@ export function categorizeSession(
   }
 
   // ── 6. Title matching con Client (fallback débil) ─────────────────────────
-  const porTitulo = duenoPorElTitulo(session, externalDomains, ctx, ambiguous);
+  paso("titulo");
+  const porTitulo = duenoPorElTitulo(session, externalDomains, ctx, ambiguous, traza);
   if (porTitulo) return porTitulo;
 
   // ── 7. Orphan ─────────────────────────────────────────────────────────────
+  paso("sin-dueno");
   if (externalDomains.size === 0) {
     // No hay participantes externos identificables y tampoco internos puros
     return { kind: "orphan", label: "Sin participantes" };

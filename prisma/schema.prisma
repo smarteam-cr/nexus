@@ -8820,7 +8820,8 @@ model ContactoDeHubspot {
   @@index([email])
 }
 
-/// R6 (2026-10-25) · Una persona del cliente, una sola por correo y empresa, con su cargo y su rol (decide, influye, usa).
+/// R6 (2026-10-25) · Una persona del cliente, una sola por correo y empresa, con su cargo y su rol (decide, champion,
+/// participa, no involucrado) y, desde el 25 nov, si una persona del equipo confirmó que trabaja con esta ficha.
 /// Une las copias que había sueltas: los contactos de HubSpot, los participantes de las reuniones y las personas de los
 /// cuestionarios. La escribe SOLO lib/clients/personas-de-la-empresa-server.ts (la copia desde las fuentes y lo que decide
 /// una persona del equipo); `origenes` dice de dónde se la conoce. Los textos de la ficha y del handoff no se tocan.
@@ -8836,7 +8837,9 @@ model PersonaDeLaEmpresa {
   /// Su contacto en la copia de HubSpot. nullable porque no todos son contactos.
   contactoDeHubspotId String?
   contactoDeHubspot   ContactoDeHubspot? @relation("PersonaDelContacto", fields: [contactoDeHubspotId], references: [id], onDelete: SetNull)
-  /// decide · influye · usa. null = nadie lo dijo todavía.
+  /// decide · champion · participa · no-involucrado (lib/clients/personas-de-la-empresa.ts › ROLES_DE_PERSONA; hasta el
+  /// 25 nov era decide · influye · usa, sin ningún rol puesto; el CHECK `PersonaDeLaEmpresa_rol_valido` todavía deja
+  /// pasar esos dos, que nadie escribe). null = nadie lo dijo todavía.
   rol                 String?
   /// Quién dijo el rol: persona (alguien del equipo). nullable con el rol.
   rolFuente           String?
@@ -8848,8 +8851,15 @@ model PersonaDeLaEmpresa {
   /// En cuántas reuniones del cliente estuvo, y la última (lo cuenta la copia, por el chokepoint de sesiones).
   reuniones           Int                @default(0)
   ultimaReunionAt     DateTime?
-  /// false = ya no aparece en ninguna fuente. La fila no se borra.
+  /// false = ya no aparece en ninguna fuente. La fila no se borra. Una persona confirmada sigue vigente aunque ninguna
+  /// fuente la traiga.
   vigente             Boolean            @default(true)
+  /// «Unidades e interlocutores» (2026-11-25): cuándo una persona del equipo dijo que esta persona trabaja con ESTA ficha.
+  /// nullable porque la copia trae personas sin que nadie las confirme (= por confirmar). El resolver de reuniones
+  /// (lib/sessions/categorize.ts) usa solo a las confirmadas; confirmada en dos o más fichas = «del grupo».
+  confirmadaAt        DateTime?
+  /// Quién la confirmó, del equipo. nullable con `confirmadaAt`.
+  confirmadaPorEmail  String?
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 

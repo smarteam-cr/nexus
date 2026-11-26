@@ -238,6 +238,7 @@ export function clientesDespues<C extends { id: string }>(
 export type PorQue =
   | "a-mano"
   | "nombre"
+  | "confirmada"
   | "gente"
   | "dominio"
   | "reuniones"
@@ -253,6 +254,7 @@ export type PorQue =
 export const POR_QUE: Record<PorQue, string> = {
   "a-mano": "a mano",
   nombre: "por el título",
+  confirmada: "por la gente que confirmó el equipo",
   gente: "por la gente",
   dominio: "por el dominio",
   reuniones: "por la gente de sus reuniones",
@@ -267,7 +269,7 @@ export const POR_QUE: Record<PorQue, string> = {
 };
 
 /** Lo que decidió una persona o el título: lo único que el `--apply` mueve sin pedir confirmación. */
-const SEGURO = new Set<PorQue>(["a-mano", "nombre", "de-la-cuenta", "preventa", "propuesta", "proyecto"]);
+const SEGURO = new Set<PorQue>(["a-mano", "nombre", "confirmada", "de-la-cuenta", "preventa", "propuesta", "proyecto"]);
 
 export interface Destino {
   id: string;

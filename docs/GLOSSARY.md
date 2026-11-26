@@ -72,6 +72,14 @@
 - **`resolvedClientId`**: materialización de a qué Client pertenece la sesión — **fuente única
   de ownership**. La calcula `categorizeSession` y la persiste `lib/sessions/resolve-client.ts`.
 - **`manualClientId`**: override manual del consultor (gana sobre la resolución automática).
+- **Interlocutor** («Información del cliente › Interlocutores», desde el 2026-11-25): una persona del cliente con la que
+  trabajamos, con su rol (**decide · champion · participa · no involucrado**). Es una fila de `PersonaDeLaEmpresa` por
+  correo y ficha. **Confirmada** (`confirmadaAt`): una persona del equipo dijo que trabaja con esa ficha; solo así la usa
+  el resolver de reuniones (paso 3·0 de `categorizeSession`), por encima del dominio y de lo aprendido de los títulos.
+  **Por confirmar**: la trajo la copia (HubSpot, reuniones, cuestionarios) o la **sugirió** alguien del equipo (origen
+  `equipo`); no mueve ninguna reunión. **Del grupo**: confirmada en dos o más fichas (las unidades de una empresa, o dos
+  empresas como Teamnet y Stratosphere); no decide sola de quién es una reunión: decide el título, o queda por decidir.
+  Ver DECISIONS §Unidades e interlocutores.
 - **Chokepoint** (`lib/sessions/project-sources.ts`): único punto por donde la generación saca
   sesiones de un proyecto/cliente, filtrando por ownership. `belongsToClient`,
   `getProjectHandoffSessions`, `getClientSessions`.
