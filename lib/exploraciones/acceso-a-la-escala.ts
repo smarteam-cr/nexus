@@ -102,13 +102,13 @@ export async function estadoDelAcceso(exploracionId: string): Promise<EstadoDelA
 export async function publicarLaEscala(exploracionId: string, porEmail: string | null, o: { siSigue?: Date | null } = {}): Promise<boolean> {
   const pagina = await escalaParaElCliente(exploracionId);
   if (!pagina) throw new ErrorDelAcceso(409, "Esta escala ya no se puede mostrar (se archivó o cambió de empresa).");
-  // Sin equipos se publica solo para retirar lo que el cliente ya veía (queda «Tu escala todavía no está lista»).
+  // Sin equipos se publica solo para retirar lo que el cliente ya veía (queda «Tu Diagnóstico de rendimiento todavía no está listo»).
   if (!pagina.resultados.length) {
     const antes = await prisma.accesoALaEscala.findUnique({ where: { exploracionId }, select: { publicadaEn: true } });
     if (!antes?.publicadaEn) throw new ErrorDelAcceso(409, "Todavía no hay nada que mostrarle al cliente: elige al menos un equipo en «Acceso».");
   }
   /* Una página sin titular no se publica (21 nov): el cliente vería el Resumen roto. Al crear el primer acceso (`siSigue`
-     null) no se publica y listo: el enlace abre en «Tu escala todavía no está lista» hasta que alguien publique. */
+     null) no se publica y listo: el enlace abre en «Tu Diagnóstico de rendimiento todavía no está listo» hasta que alguien publique. */
   const falta = pagina.resultados.length ? faltaParaPublicar(pagina.resumen) : null;
   if (falta) {
     if (o.siSigue === null) return false;

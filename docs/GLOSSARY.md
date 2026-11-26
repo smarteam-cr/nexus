@@ -8,7 +8,8 @@
   quien presenta). **Reto principal**: el titular de cada departamento en el Resumen, con **lo que lo causa** debajo y
   **cuánto cuesta** (la cifra en dinero, o «por validar»).
 - **Diagnóstico de rendimiento** (26 nov, Elías; antes «La escala»): el paso de la preventa y el artefacto que ve el cliente: el Resumen y la
-  página de cada área, con dónde está cada equipo. También la pantalla de La cuenta › Diagnóstico de rendimiento. **La escala** sigue siendo
+  página de cada área, con dónde está cada equipo; así se rotula también la página que ve el cliente. Y la pantalla de
+  La cuenta › Diagnóstico de rendimiento. **La escala** sigue siendo
   la regla de los niveles (Inicial, En desarrollo, Funcional…): «el diagnóstico ubica a cada equipo en la escala». Nunca
   se acorta a «Diagnóstico»: ese es el documento de los proyectos de Customer Success. El código conserva `escala` en
   claves, rutas y archivos.

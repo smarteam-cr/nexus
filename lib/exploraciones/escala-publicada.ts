@@ -8,7 +8,7 @@
  * cambiados adentro.
  *
  * `FORMATO_DE_LA_FOTO`: súbelo cuando cambie la FORMA de `EscalaParaElCliente` (un campo nuevo que la vista necesita, uno
- * que cambia de tipo). Una foto de otro formato no se sirve: la página dice «Tu escala todavía no está lista» hasta que
+ * que cambia de tipo). Una foto de otro formato no se sirve: la página dice «Tu Diagnóstico de rendimiento todavía no está listo» hasta que
  * alguien publique de nuevo. Pintar una foto vieja con la vista nueva podía romper la página del cliente sin aviso.
  */
 import type { EscalaParaElCliente } from "./escala-para-el-cliente-server";

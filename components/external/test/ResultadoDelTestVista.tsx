@@ -538,7 +538,7 @@ function AreaDeLaEscala({
         <section className="ed-hero ed-envoltura">
           <div className="ed-hero-texto">
             <p className="ed-ceja">
-              {empresa || "Escala de rendimiento"} <span>/ {r.areaNombre}</span>
+              {empresa || "Diagnóstico de rendimiento"} <span>/ {r.areaNombre}</span>
               {mejorar(SECCION.resultado)}
             </p>
             <Titular className="rd-nivel" data-nivel={r.nivel ?? undefined}>
@@ -577,7 +577,7 @@ function AreaDeLaEscala({
         {r.nivel && (
         <section className="ed-parte ed-envoltura ed-escalera" aria-labelledby="ed-t-escalera">
           <p className="ed-ceja">
-            La escala de rendimiento
+            Diagnóstico de rendimiento
             {mejorar(SECCION.escalera)}
           </p>
           <h2 className="ed-titulo" id="ed-t-escalera">
@@ -858,7 +858,7 @@ function AreaDeLaEscala({
         <footer className="ed-pie ed-envoltura">
           <span className="ed-pie-marca">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={LOGO_DE_COLOR} alt="Smarteam" width={82} height={18} />· Escala de rendimiento
+            <img src={LOGO_DE_COLOR} alt="Smarteam" width={82} height={18} />· Diagnóstico de rendimiento
           </span>
           <span>
             {(() => {
@@ -884,9 +884,9 @@ export function EscalaSinMedir() {
           </span>
         </header>
         <section className="rd-tarjeta">
-          <p className="rd-eyebrow">Escala de rendimiento</p>
-          <h2>Tu escala todavía no está lista</h2>
-          <p className="rd-nota">Todavía no hay nada medido para mostrarte. Escríbele a tu contacto de Smarteam para revisarla juntos.</p>
+          <p className="rd-eyebrow">Diagnóstico de rendimiento</p>
+          <h2>Tu Diagnóstico de rendimiento todavía no está listo</h2>
+          <p className="rd-nota">Todavía no hay nada medido para mostrarte. Escríbele a tu contacto de Smarteam para revisarlo juntos.</p>
         </section>
       </main>
     </div>
