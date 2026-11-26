@@ -9,12 +9,12 @@
      Cómo se regenera: la skill regenerar-roadmap. -->
 ```ejecutivo
 {
- "corte": "2026-11-25",
- "produccion": "ed369ab6",
+ "corte": "2026-11-26",
+ "produccion": "89425ecc",
  "arriba": [
-  "En producción desde el 25 nov: el chat «Nexus» de La escala en una sola conversación, sin avisos y con ítems enteros; «Ubicar» lee las notas del equipo; el (i) al final del texto y «Mejorar con IA» al pasar el cursor.",
-  "En curso: nada corriendo.",
-  "Te espera: probar La escala de TEC · AE con el chat, armar su Resumen, revisar Centauro con Marco y las preguntas 118 (la moneda) y 99 (el conector)."
+  "En producción desde el 26 nov: lo que escribes al chat «Nexus» y a «Mejorar con IA» de La escala sube a 15.000 caracteres, y «Guardarlo como nota» ya no guarda preguntas; del 25 nov, el chat de La escala en una sola conversación y «Ubicar» con las notas.",
+  "En curso: interlocutores por unidad en «Información del cliente» (el TEC precargado y Stratosphere separado de Teamnet), con simulacro antes de mover reuniones.",
+  "Te espera: rehacer el Resumen de TEC · AE con la nota sobre Meta, revisar Centauro con Marco y las preguntas 118 (la moneda) y 99 (el conector)."
  ],
  "iniciativas": [
   {
@@ -713,8 +713,8 @@
      regenera: la skill regenerar-roadmap. Lo hecho nuevo entra SOLO acá, con su «tema»; el Resumen lo toma de aquí. -->
 ```linea
 {
- "hoy": "2026-11-25",
- "produccion": "ed369ab6",
+ "hoy": "2026-11-26",
+ "produccion": "89425ecc",
  "temasHechoHasta": "2026-10-29",
  "iniciativas": [
   {
@@ -2139,6 +2139,19 @@
     "829a18ee"
    ],
    "tema": 10
+  },
+  {
+   "fecha": "2026-11-26",
+   "iniciativa": "escala",
+   "titulo": "Lo que escribes llega a 15.000 caracteres y las preguntas ya no quedan como nota",
+   "que": "El chat «Nexus» y «Mejorar con IA» de La escala aceptan hasta 15.000 caracteres (Marco se topaba con 1.200). «Guardarlo como nota» solo guarda lo que la persona cuenta: nunca una pregunta ni el texto de Nexus. Se quitó la pregunta que había quedado como nota en TEC · AE.",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "si",
+   "tema": 5,
+   "commits": [
+    "4e0794dd",
+    "d5757982"
+   ]
   }
  ],
  "sigue": [
@@ -2157,13 +2170,29 @@
   {
    "iniciativa": "escala",
    "titulo": "TEC · AE: usar lo propuesto y armar su Resumen",
-   "que": "Arma el Resumen, completa lo que falta con «Responder con Nexus» y «Volver a ubicar», y vuelve a «Publicar»: hoy el cliente ve la versión sin Resumen.",
+   "que": "Antes de «Rehacer con IA», deja una nota: lo de Meta y los leads que no llegan al CRM es del TAE (en el AE, Josseline hablaba de reportes de campañas). La versión de hoy queda en el Historial.",
    "paraQuien": "Customer Success",
    "estado": "te-toca",
    "tema": 5,
    "preguntas": [
     116
    ]
+  },
+  {
+   "iniciativa": "escala",
+   "titulo": "Interlocutores por unidad en «Información del cliente»",
+   "que": "Quién es de cada unidad (decide, champion, participa, no involucrado) y quién trabaja para varias cuentas, para que las reuniones se repartan por personas. Precarga el TEC y separa Stratosphere de Teamnet (13 reuniones), con simulacro antes de mover nada.",
+   "paraQuien": "Customer Success",
+   "estado": "otra-sesion",
+   "tema": 5
+  },
+  {
+   "iniciativa": "escala",
+   "titulo": "La nota-pregunta de Cemaco · Ecuador",
+   "que": "Quedó una pregunta guardada como nota en la preventa de Cemaco · Ecuador. Se borra cuando digas: no se toca mientras Marco trabaja el diagnóstico de Cemaco.",
+   "paraQuien": "Elías",
+   "estado": "te-toca",
+   "tema": 5
   },
   {
    "iniciativa": "escala",
@@ -2606,7 +2635,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "Todo está en producción (ed369ab6, 25 nov): el chat «Nexus» de La escala en una sola conversación, «Ubicar» con las notas del equipo y La escala interna más limpia. Lo próximo: el Resumen de TEC · AE, Centauro con Marco y las preguntas 118 y 99.",
+ "dondeVamos": "Todo está en producción (89425ecc, 26 nov): 15.000 caracteres en el chat y La escala, y notas que solo guardan lo contado. En curso: interlocutores por unidad (TEC y Stratosphere). Lo próximo: el Resumen de TEC · AE, Centauro con Marco y las preguntas 118 y 99.",
  "temas": [
   {
    "n": 4,
@@ -3378,7 +3407,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `ed369ab6` (todo `main`) desde el 25 nov: el chat «Nexus» de La escala en una sola conversación, «Ubicar» con las notas del equipo, La escala interna más limpia, La escala sin Resumen con «Responder con Nexus», la página del chat «Nexus» en Documentación, un Resumen de La escala que no pierde las cifras de la empresa, las franjas del kickoff, un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y reuniones enteras, La escala de un cliente con lo que ya sabemos, la pantalla limpia de La escala, el registro de los cambios de base, Hablar con Nexus (etapas 0 y 1), el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
+| Producción | Corre `89425ecc` (todo `main`) desde el 26 nov: 15.000 caracteres en el chat y La escala, «Guardarlo como nota» solo con lo contado, el chat «Nexus» de La escala en una sola conversación, «Ubicar» con las notas del equipo, La escala interna más limpia, La escala sin Resumen con «Responder con Nexus», la página del chat «Nexus» en Documentación, un Resumen de La escala que no pierde las cifras de la empresa, las franjas del kickoff, un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y reuniones enteras, La escala de un cliente con lo que ya sabemos, la pantalla limpia de La escala, el registro de los cambios de base, Hablar con Nexus (etapas 0 y 1), el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
 | Por desplegar | Nada. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | Por datos de antes, ninguno nuevo (28 oct): 16 reuniones colgadas de proyectos de otro cliente (INV1) y 9 tareas que citan una reunión de otro cliente (INV42), las que ordena el plan de dominio compartido; el pipeline de Secure Title (INV11: 2 proyectos y 6 en una etapa desconocida); «TEC- AE» fusionada en HubSpot (INV13 e INV54: ya solo ella, kölbi quedó bien); una reunión de Meet leída antes de ocurrir (INV16a), y el corte de cartera de hace 96 días (INV32). |
 | Pruebas | 30 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 83 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
