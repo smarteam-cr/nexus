@@ -4,6 +4,7 @@
  * una cita que la persona dijo, y los topes. Respuestas fijas: nada llama a la IA.
  */
 import { describe, expect, it } from "vitest";
+import { prefijoDeLaRespuesta } from "@/lib/exploraciones/forma-de-la-respuesta";
 import {
   idDelCambio,
   laDijoLaPersona,
@@ -16,6 +17,10 @@ import {
   empiezaContando,
   pareceUnaPregunta,
   paraContarComoNota,
+  esAlgoQueSeCuenta,
+  sinElEncabezadoDeLaRespuesta,
+  loQueConto,
+  loQueContoEnPedazos,
   paraPreguntar,
   pedidoDelTurno,
   porQueNoSigue,
@@ -293,6 +298,158 @@ describe("si es una pregunta: el código decide lo seguro y el modelo lo dudoso 
     expect(paraContarComoNota(m, 9)).toBeNull();
     // Solo la última respuesta: una del medio, movida al final, se leería como respuesta a lo que Nexus preguntó después.
     expect(paraContarComoNota([...m, persona("Es del área de TI"), nexus("¿De qué equipo?")], 3)).toBeNull();
+  });
+
+  it("⛔ «Guardarlo como nota» nunca guarda una pregunta, un pedido ni un «gracias» (Elías, 25 nov: TEC · AE)", () => {
+    const debajoDe = (texto: string): MensajeDeLaConversacion[] => [
+      { de: "persona", texto, es: "consulta" },
+      { de: "nexus", texto: "Los retos principales del AE son la integración con Fundatec y los leads de Meta.", es: "respuesta" },
+    ];
+    // Lo que pasó: alguien preguntó, Nexus respondió y «Guardarlo como nota» dejó la PREGUNTA como algo que sabe el equipo.
+    // Lo SEGURO se corta acá; lo que no lleva signo («Oye, cuales son los retos del AE») lo corta lo que entiende Nexus al
+    // contarlo: sin un hecho ni un cambio, no hay nada que guardar (nexus-en-la-preventa.int.test.ts).
+    for (const pregunta of [
+      "cuales son los retos principales del AE?",
+      "Oye, cuales son los retos principales del AE?",
+      "¿Sabías que cobran a mano con un Excel?",
+      "Dime qué dijo Ana del ERP",
+      "Por favor dime los retos",
+      "Crea una tarea para llamar a Ana el viernes",
+      "gracias",
+      // Una pregunta con su frase de arranque, o un «¿» sin cerrar.
+      "Tengo una duda. ¿Cuáles son los retos del AE?",
+      "Hola Nexus, buenas tardes. ¿Cuáles son los retos del AE?",
+      "Muy bien entonces. ¿Qué sigue?",
+      "¿cuáles son los retos del AE",
+      // «Responder con Nexus»: lo que va después del encabezado; un pedido o un «gracias» no es la respuesta.
+      "Sobre Ventas · Datos (cómo registran hoy los contactos): dime los retos",
+      "Sobre Ventas · Datos (qué CRM usan (HubSpot o Salesforce)): gracias",
+      // …o solo una pregunta que pregunta.
+      "Sobre Ventas · Datos (cómo registran hoy los contactos): ¿qué dijo Ana de esto?",
+      // Tercera revisión del 25 nov: el tema adelante, un saludo con un «¿» sin cerrar, el arranque con dos puntos, lo que va
+      // después del «?», un «Sobre …:» que no es el encabezado de La escala, pedidos sin signo.
+      "Sobre la cobranza: ¿cuánto pierden al mes?",
+      "Sobre la cobranza, ¿qué dijeron?",
+      "En la reunión del martes, ¿qué dijo Ana?",
+      "Con respecto al ERP, ¿qué sabemos?",
+      "Quiero preguntarte algo. ¿Cuáles son los retos?",
+      "Hola, ¿cuáles son los retos del AE",
+      "Oye Nexus, ¿cuáles son los retos del AE",
+      "Tengo una pregunta: ¿cuáles son los retos del AE?",
+      "Hola Nexus, tengo una consulta: ¿quién decide?",
+      "Buenas tardes Nexus. ¿Cuáles son los retos?",
+      "Una última pregunta. ¿Qué sigue?",
+      "Muchas gracias por la info. ¿Qué más sabes?",
+      "cuales son los retos principales del AE? gracias",
+      "cuales son los retos principales del AE?.",
+      "cuales son los retos principales del AE? 👍",
+      "«cuales son los retos principales del AE?»",
+      "cuales son los retos principales del AE？",
+      "Dame los retos del AE",
+      "Quisiera conocer los retos del AE",
+      "Haz un resumen de la cuenta",
+      "Buen día, ¿quién decide?",
+    ]) {
+      expect(esAlgoQueSeCuenta(pregunta), pregunta).toBe(false);
+      expect(paraContarComoNota(debajoDe(pregunta), 1), pregunta).toBeNull();
+    }
+    // Lo que cuenta algo sigue con su botón, aunque Nexus lo haya tomado por una pregunta.
+    for (const cuenta of [
+      "La cobranza la hacen a mano con un Excel",
+      "Tienen 3 sedes y 40 vendedores",
+      "Es importante, ¿no?",
+      "Qué bárbaro, tienen 40 cuentas por gestor",
+      "Pasa que tienen una tarea con el banco",
+      // Afirmaciones que empiezan como una pregunta (la primera revisión del 25 nov: no se pueden perder).
+      "Quien decide es el gerente general",
+      "Donde más les duele es la cobranza",
+      "Cuando hablamos con Ana dijo que el ERP cambia en enero",
+      "Nos dijeron que arrancan en enero. ¿Qué sigue?",
+      // Lo contado con una pregunta pegada (segunda revisión del 25 nov): con coma, en otro renglón o delante.
+      "Tienen 40 vendedores, ¿eso cambia el plan?",
+      "El gerente decide la compra, ¿lo agrego a la guía?",
+      "Tienen 3 sedes en Guatemala\n¿Cómo lo vemos?",
+      "¿Sabes qué? Tienen 40 vendedores por sede",
+      // La respuesta a una pregunta de La escala, aunque dude (el signo no la corta).
+      "Sobre Ventas · Datos (cómo registran hoy los contactos): en un Excel compartido",
+      "Sobre Ventas · Datos (cómo registran hoy los contactos): ¿En un Excel, creo?",
+      "Sobre Ventas · Datos (qué CRM usan (HubSpot o Salesforce)): HubSpot desde marzo",
+      "Sobre Ventas · Datos (cuántos vendedores tienen): ¿Unos 40?",
+      // Tercera revisión: lo contado en dos palabras con una pregunta pegada, y el tema seguido de lo que cuenta.
+      "Usan Salesforce, ¿lo anoto?",
+      "Usan HubSpot. ¿Te sirve?",
+      "Sobre la cobranza, pierden 40 mil al mes",
+      "Sobre todo les cuesta la cobranza",
+      "En la reunión del martes dijeron que no tienen CRM, ¿lo anoto?",
+      // Cuarta revisión: el tema seguido de lo contado en pocas palabras, «Explica que…», «Me ayudas a anotar que…», y la
+      // respuesta a La escala en una palabra después de una pregunta.
+      "En esa reunión firmaron el contrato. ¿Lo guardo?",
+      "En la llamada aceptaron el precio, ¿lo anoto?",
+      "Sobre la integración ya tienen API, ¿lo anoto?",
+      "En la reunión dijeron que sí, ¿no?",
+      "Usan SAP, ¿lo anoto?",
+      "Explica que no tienen presupuesto",
+      "Me ayudas a anotar que tienen 40 vendedores",
+      "Sobre Ventas · Datos (qué CRM usan): ¿Cuál era? Salesforce",
+      ELIAS,
+    ]) {
+      expect(esAlgoQueSeCuenta(cuenta), cuenta).toBe(true);
+      expect(paraContarComoNota(debajoDe(cuenta), 1), cuenta).toEqual({ base: [], texto: cuenta });
+    }
+  });
+
+  it("⛔ el encabezado de «Responder con Nexus» se reconoce igual que lo arma la preventa, también con paréntesis en la pregunta", () => {
+    for (const pregunta of ["¿Cómo registran hoy los contactos?", "¿Qué CRM usan (HubSpot o Salesforce)?", ""]) {
+      const p = prefijoDeLaRespuesta({ equipo: "Ventas", dimension: "Datos", pregunta });
+      expect(sinElEncabezadoDeLaRespuesta(`${p}En un Excel: lo llena cada asesor.`), pregunta).toBe("En un Excel: lo llena cada asesor.");
+    }
+    expect(sinElEncabezadoDeLaRespuesta("Sobre todo les cuesta la cobranza")).toBeNull();
+    // Sin el « · » de «Sobre <equipo> · <parte>» no es el encabezado: es alguien que escribe así.
+    expect(sinElEncabezadoDeLaRespuesta("Sobre la cobranza: ¿cuánto pierden al mes?")).toBeNull();
+    expect(sinElEncabezadoDeLaRespuesta("Sobre el ERP (el de antes): ¿qué dijo Ana?")).toBeNull();
+    expect(sinElEncabezadoDeLaRespuesta("Pierden 40 mil al mes")).toBeNull();
+  });
+
+  it("⛔ la cita de un hecho de «Guardarlo como nota» se busca también en pedazos: «¿Unos 40?» y «Usan SAP, ¿lo anoto?» cuentan", () => {
+    const enLaEscala = [persona("Sobre Ventas · Datos (cuántos vendedores tienen): ¿Unos 40?")];
+    expect(laDijoLaPersona("Unos 40", loQueContoEnPedazos(enLaEscala))).toBe(true);
+    expect(laDijoLaPersona("Unos 40", loQueConto(enLaEscala))).toBe(false);
+    expect(laDijoLaPersona("Usan SAP", loQueContoEnPedazos([persona("Usan SAP, ¿lo anoto?")]))).toBe(true);
+    // Lo que no escribió sigue sin contar, y un pedazo corto vale solo entero.
+    expect(laDijoLaPersona("No tienen un CRM", loQueContoEnPedazos([persona("Oye, cuales son los retos principales del AE")]))).toBe(false);
+    expect(laDijoLaPersona("SAP", loQueContoEnPedazos([persona("Usan SAP, ¿lo anoto?")]))).toBe(false);
+  });
+
+  it("⛔ con el chip de La escala, lo que arranca contando («Ojo: usan SAP», lo que sugiere «nada que guardar») no es seguro un cambio", () => {
+    expect(comoSeLee([persona("Ojo: usan SAP")], { escala: "chip" })).toBe("duda");
+    expect(comoSeLee([persona("Nos dijeron que usan SAP")], { escala: "chip" })).toBe("duda");
+    expect(comoSeLee([persona("Ojo: usan SAP")])).toBe("contar");
+  });
+
+  it("⛔ la regla de no sacar un hecho de una pregunta va solo con «Guardarlo como nota», no al contar como siempre", () => {
+    const ctx: ContextoParaNexus = { donde: "la preventa", empresa: "X", contexto: "", destinos: [] };
+    const m = [persona("Pierden 40 mil al mes"), nexus("¿De qué mes?"), persona("¿Enero, creo?")];
+    expect(String(pedidoDelTurno(ctx, m, "contar").messages[0].content)).not.toContain("no inventes un hecho de una pregunta");
+    expect(String(pedidoDelTurno(ctx, m, "contar", { desdeElBoton: true }).messages[0].content)).toContain("no inventes un hecho de una pregunta");
+    // Y desde el botón no pregunta: si preguntara, la respuesta se juntaría en la nota con la pregunta de antes.
+    expect(String(pedidoDelTurno(ctx, m, "contar").messages[0].content)).not.toContain("YA NO PREGUNTES");
+    expect(String(pedidoDelTurno(ctx, m, "contar", { desdeElBoton: true }).messages[0].content)).toContain("YA NO PREGUNTES");
+  });
+
+  it("⛔ la nota son las palabras de la persona: nunca el texto de Nexus", () => {
+    const m: MensajeDeLaConversacion[] = [
+      persona("Pierden 40 mil al mes"),
+      nexus("¿Es en cartera vencida?"),
+      persona("Sí, en cartera vencida"),
+      { de: "persona", texto: "¿Qué dijo Ana?", es: "consulta" },
+      { de: "nexus", texto: "Ana dijo que el ERP cambia en enero.", es: "respuesta" },
+    ];
+    const nota = notaDeLaConversacion(m);
+    expect(nota).toContain("Pierden 40 mil al mes");
+    expect(nota).toContain("Sí, en cartera vencida");
+    expect(nota).not.toContain("¿Es en cartera vencida?");
+    expect(nota).not.toContain("Ana dijo");
+    expect(nota).not.toContain("¿Qué dijo Ana?");
   });
 
   it("«¿Era una pregunta? Respóndela»: lo último de la persona, si no contestaba algo a Nexus", () => {

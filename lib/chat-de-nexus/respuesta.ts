@@ -13,7 +13,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { citaEstaEnLasFuentes, normalizarParaCita } from "@/lib/timeline/limites";
 import { verificarCita } from "@/lib/analizador-venta/analisis";
-import { MODELO_DEL_CHAT, primerObjeto, type MensajeDeLaConversacion } from "./conversacion";
+import { conTopeDeLaConversacion, MODELO_DEL_CHAT, primerObjeto, TOPES, type MensajeDeLaConversacion } from "./conversacion";
 
 /** Cuántos caracteres de fuentes lee una respuesta (unos 75.000 tokens). Lo demás queda afuera, avisado. */
 export const PRESUPUESTO_DE_LAS_FUENTES = 280_000;
@@ -189,9 +189,8 @@ export function pedidoDeLaRespuesta(o: {
   ]
     .filter(Boolean)
     .join("\n\n");
-  const antes = o.conversacion
-    .slice(0, -1)
-    .slice(-6)
+  // Lo de antes, dentro del tope de lo que viaja (con la pregunta, que va entera): 25 nov, mensajes de hasta 15.000.
+  const antes = conTopeDeLaConversacion(o.conversacion.slice(0, -1).slice(-6), TOPES.largoDeLaConversacion - o.pregunta.length)
     .map((m) => `${m.de === "persona" ? "PERSONA" : "NEXUS"}: ${m.texto}`)
     .join("\n");
   return {

@@ -231,7 +231,7 @@ function bloques(): BloqueGuardado[] {
     vinneta("Acá no anota notas en HubSpot: lo que cuentas va a «Lo que sabes del cliente»."),
     titulo(4, "Si te entendió al revés"),
     vinneta("Debajo de lo que iba a guardar: «¿Era una pregunta? Respóndela»."),
-    vinneta("Debajo de una respuesta: «¿Era algo que querías contar? Guardarlo como nota»."),
+    vinneta("Debajo de una respuesta: «¿Era algo que querías contar? Guardarlo como nota». Solo si lo que escribiste cuenta algo: una pregunta nunca queda como nota."),
     ...ejemplos(
       "Marco habló con el gerente por WhatsApp: pierden unos 40.000 dólares al mes en cartera vencida.",
       "¿Qué dijeron de la cobranza?",
@@ -355,7 +355,7 @@ function bloques(): BloqueGuardado[] {
     vinneta(`En Tareas: ${MENSAJES_DE_TAREAS_POR_DIA} mensajes al día. En La escala: ${PEDIDOS_POR_DIA} pedidos al día.`),
     vinneta("En la preventa y en La escala hay además un tope de gasto del mes para todo el equipo: avisa al 80 % y, si se acaba, se sigue el mes siguiente. Y si se agota el presupuesto de IA de todo Nexus, el chat te lo dice."),
     vinneta(
-      `Un mensaje puede tener hasta ${conPuntos(TOPES.largoDelMensaje)} caracteres. Los «Mejorar con IA» de un solo pedido aceptan menos: ${conPuntos(LARGO_DE_UN_PEDIDO_DE_ARTEFACTO)} en los artefactos y el perfil de un puesto, ${conPuntos(MAX_PEDIDO)} en La escala y ${conPuntos(MAX_LARGO_DE_LA_INSTRUCCION)} en un caso de uso.`,
+      `En la preventa, un mensaje puede tener hasta ${conPuntos(TOPES.largoDelMensaje)} caracteres, y un pedido a La escala, hasta ${conPuntos(MAX_PEDIDO)}. Lo que se guarda como nota llega hasta ${conPuntos(TOPES.largoDeLaNota)}: si escribiste más, la nota guarda lo último (y siempre tu respuesta a una pregunta de La escala), con «…» donde cortó, y la ves antes de «Guardar». En la ficha del cliente, los documentos, el cronograma y Tareas, un mensaje va hasta ${conPuntos(TOPES_DEL_CHAT.largoDelMensaje)}. Los «Mejorar con IA» de un solo pedido aceptan menos: ${conPuntos(LARGO_DE_UN_PEDIDO_DE_ARTEFACTO)} en los artefactos y el perfil de un puesto, y ${conPuntos(MAX_LARGO_DE_LA_INSTRUCCION)} en un caso de uso.`,
     ),
     titulo(4, "Permisos"),
     vinneta("En la preventa, La escala y los casos de uso: poder editar la preventa. Si no puedes editarla, el botón «Nexus» de la preventa abre el chat de la cuenta, el mismo de la ficha."),

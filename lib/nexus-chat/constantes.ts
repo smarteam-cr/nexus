@@ -50,6 +50,11 @@ export const ESFUERZO_DEL_CHAT = "low" as const;
 
 /** Los topes (decisión 7 del plan: «tope por persona y por vueltas, y el costo de cada hilo»). */
 export const TOPES_DEL_CHAT = {
+  /**
+   * El largo de un mensaje en la ficha del cliente, los documentos, el cronograma y Tareas (el chat de la preventa y La
+   * escala van hasta 15.000 desde el 25 nov: lib/chat-de-nexus/conversacion.ts › TOPES).
+   */
+  largoDelMensaje: 4_000,
   /** Mensajes de una persona por día, en TODAS sus cuentas. */
   mensajesPorDia: 40,
   /** Dólares de una persona por día en el chat de Nexus, en todas sus cuentas. Pasado el tope, espera a mañana. */

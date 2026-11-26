@@ -12,7 +12,7 @@
  * y lo que la persona hace con cada cambio vuelve al recargar.
  */
 import type { PropuestaDeNexus } from "@/lib/pedirle-a-nexus/contrato";
-import { TOPES, type MensajeDeLaConversacion } from "./conversacion";
+import { primerasSinPartir, TOPES, type MensajeDeLaConversacion } from "./conversacion";
 
 /**
  * La página de La escala: el Resumen o un área. La misma forma que `LugarEnLaEscala` (lib/exploraciones/escala-con-nexus.ts);
@@ -67,7 +67,7 @@ export function textoDeLaEscala(e: Pick<EscalaEnLaConversacion, "nombre" | "foco
       : `[No propuse cambios en ${donde} de La escala]`,
   ].filter(Boolean);
   const t = lineas.join("\n");
-  return t.length > TOPE_DEL_TEXTO ? `${t.slice(0, TOPE_DEL_TEXTO - 1).trimEnd()}…` : t;
+  return t.length > TOPE_DEL_TEXTO ? `${primerasSinPartir(t, TOPE_DEL_TEXTO - 1).trimEnd()}…` : t;
 }
 
 /** Cuántos mensajes de antes lee quien propone el cambio: los últimos de la conversación, no toda. */

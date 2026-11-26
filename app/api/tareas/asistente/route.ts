@@ -18,6 +18,7 @@ import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { inicioDelDiaCr } from "@/lib/ai/presupuesto";
 import { abrirHilo, empezarDeCero, hiloVivo, turnosDeHoy } from "@/lib/asistente/hilo";
 import { PIEZA_TAREAS } from "@/lib/asistente/piezas";
+import { TOPES_DEL_CHAT } from "@/lib/nexus-chat/constantes";
 import { MODELO_DEL_ASISTENTE } from "@/lib/asistente/turno";
 import { leerCuerpo, prepararTareas, sinElSql } from "@/lib/tareas/http";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
@@ -30,7 +31,7 @@ const piezaSchema = z.literal(PIEZA_TAREAS).optional();
 const bodySchema = z.union([
   z.object({
     pieza: piezaSchema,
-    mensaje: z.string().trim().min(1).max(4_000),
+    mensaje: z.string().trim().min(1).max(TOPES_DEL_CHAT.largoDelMensaje),
     chip: z.object({ tipo: z.enum(TIPOS_DE_CHIP), id: z.string().trim().min(1).max(120) }).optional(),
   }),
   z.object({ pieza: piezaSchema, empezarDeCero: z.literal(true) }),

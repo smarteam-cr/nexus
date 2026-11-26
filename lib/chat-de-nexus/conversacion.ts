@@ -41,8 +41,24 @@ export const TOPES = {
   rondasDePreguntas: 2,
   /** Cuántas preguntas en una misma vuelta. */
   preguntasPorRonda: 2,
-  /** El largo de lo que escribe o dicta la persona en un mensaje. */
-  largoDelMensaje: 4_000,
+  /**
+   * El largo de lo que escribe o dicta la persona en un mensaje (Elías, 25 nov: de 4.000 a 15.000; Marco se topó con el
+   * tope de un pedido a La escala). Lo que viaja de la conversación al modelo tiene su propio tope (`largoDeLaConversacion`).
+   */
+  largoDelMensaje: 15_000,
+  /**
+   * El largo de la nota que se guarda al contar (`notaDeLaConversacion`): el de una nota de la preventa (la validación de
+   * `op: "nota"`, lib/exploraciones/esquemas.ts; una prueba la prueba con este número). Si lo contado pasa de ahí, la nota guarda
+   * mensajes enteros (siempre la respuesta de «Responder con Nexus», después los más nuevos: `piezasDeLaNota`), y la persona lo ve antes de
+   * «Guardar». Lo que se propone con lo contado se revisa contra lo que queda en la nota (`loQueQuedaEnLaNota`).
+   */
+  largoDeLaNota: 4_000,
+  /**
+   * Cuántas letras de la conversación viajan al modelo, como mucho (25 nov, con mensajes de 15.000: 28 mensajes podían ser
+   * 420.000 letras y dejar sin lugar a la página y a las reuniones). El último va siempre entero; se recortan primero los
+   * más viejos (`conTopeDeLaConversacion`).
+   */
+  largoDeLaConversacion: 60_000,
   /** Cuántos mensajes viajan (la persona y Nexus): dos por vuelta, con las 12 vueltas (eran 14 con 6). */
   mensajes: 28,
   /** Cuántos cambios propone como mucho. */
@@ -169,7 +185,7 @@ export function mensajesValidos(m: readonly MensajeDeLaConversacion[]): MensajeD
   const limpios = m
     .map((x) => ({
       de: x.de,
-      texto: x.texto.trim().slice(0, TOPES.largoDelMensaje),
+      texto: primerasSinPartir(x.texto.trim(), TOPES.largoDelMensaje),
       ...(x.es ? { es: x.es } : {}),
       ...(x.de === "nexus" && (x.es === "lista" || x.es === "escala") && typeof x.vuelta === "string" && x.vuelta ? { vuelta: x.vuelta.slice(0, 60) } : {}),
     }))
@@ -270,7 +286,7 @@ const ARRANQUE_DE_CONTAR =
 /** Las coletillas que no vuelven pregunta lo que se cuenta: «Es importante, ¿no?», «Pierden 40 mil al mes, ¿sabes?». */
 const COLETILLA = /,?\s*¿\s*(no|o no|verdad|cierto|sí|ok|eh|viste|ves|sabes|me explico|me entiendes|entiendes|no crees|no te parece)\s*\?\s*$/;
 /** Lo que se dice antes de preguntar y no cuenta: «Oye, Nexus, …», «Y …», «Bueno, …». */
-const SALUDO = /^((y|oye|nexus|hola|bueno|ok|okay|a ver|una pregunta|pregunta)[,:\s]+)+/;
+const SALUDO = /^((y|oye|nexus|hola|bueno|ok|okay|a ver|una pregunta|pregunta|por favor)[,:\s]+)+/;
 
 /** Sin tildes ni diéresis (la ñ queda como n): para comparar lo que se escribe con o sin ellas. */
 const sinTildes = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -460,6 +476,9 @@ export function comoSeLee(
     // Lo que nombra la cuenta («Ponlo en la guía», «Agrégalo como tarea») no es seguro un cambio: lo decide el modelo.
     if (nombraLaCuenta(ultimo.texto)) return "duda";
     if (empiezaConUnCambio(ultimo.texto)) return "cambio";
+    // Lo que arranca contando («Ojo: usan SAP», «Nos dijeron…», lo que sugiere «nada que guardar») no es seguro un cambio:
+    // lo decide el modelo, que puede contarlo (cuarta revisión del 25 nov).
+    if (empiezaContando(ultimo.texto)) return "duda";
     return pareceUnaPregunta(ultimo.texto) ? "pregunta" : "cambio";
   }
   // Sigue con lo que Nexus le propuso a la página (revisión del 25 nov: «Simplifícalo» se leía como una pregunta y gastaba
@@ -494,9 +513,148 @@ export function paraPreguntar<M extends MensajeDeLaConversacion>(m: readonly M[]
 }
 
 /**
+ * Lo que va después del encabezado de «Responder con Nexus» en La escala («Sobre Ventas · Datos (cómo registran hoy los
+ * contactos): …»): lo que escribió la persona. null si no lleva ese encabezado. La forma es la de
+ * lib/exploraciones/forma-de-la-respuesta.ts (acá sin importarla: el chat no lee la preventa); una prueba compara las dos.
+ * La pregunta puede traer paréntesis («(HubSpot o Salesforce)»): el encabezado termina en el ÚLTIMO «): » de su largo.
+ */
+export function sinElEncabezadoDeLaRespuesta(texto: string): string | null {
+  const t = texto.trimStart();
+  if (!/^sobre /i.test(t)) return null;
+  const cabeza = t.slice(0, 520);
+  const conPregunta = cabeza.lastIndexOf("): ");
+  const sinPregunta = cabeza.slice(0, 180).indexOf(": ");
+  const fin = conPregunta > 0 ? conPregunta + 3 : sinPregunta > 0 && !cabeza.slice(0, sinPregunta).includes("(") ? sinPregunta + 2 : -1;
+  // «Sobre <equipo> · <parte>»: sin el « · » antes de la pregunta, es alguien que escribe «Sobre la cobranza: ¿…?».
+  return fin > 0 && /^sobre [^()]+ · /i.test(t.slice(0, fin)) ? t.slice(fin) : null;
+}
+
+/**
+ * Las frases con que se arranca a preguntar y no cuentan nada («Tengo una duda.», «Hola Nexus, buenas tardes.», «Una
+ * última pregunta:»). Sin tildes.
+ */
+const FRASE_DE_ARRANQUE =
+  /^((y|oye|mira|nexus|hola|bueno|ok|okay|a ver|una pregunta|pregunta|por favor|muy bien|entonces|perfecto|gracias|listo|disculpa|perdon)[\s,]*)*(tengo (una|otra) (duda|pregunta|consulta)( rapida)?|(una|otra) (ultima )?(duda|pregunta|consulta)( rapida| mas)?|pregunta rapida|buen[oa]?s? (dia|dias|tardes|noches)|hola( equipo)?|muy bien( entonces)?|ok( entonces)?|bueno( entonces)?|otra cosa|una cosa|por cierto|ahora bien|(muchas )?gracias( por (la|el|tu|esa|esta|lo) [a-z]+)?|(te )?quiero preguntar(te)?( algo)?|quisiera preguntar(te)?( algo)?|te pregunto( algo)?|dejame preguntarte( algo)?)?( nexus)?$/;
+
+/**
+ * Lo que presenta el tema de una pregunta y no cuenta nada por sí solo («Sobre la cobranza, ¿qué dijeron?», «En la reunión
+ * del martes, ¿qué dijo Ana?»). Solo el arranque y como mucho dos palabras más: «En esa reunión firmaron el contrato» o
+ * «Sobre la integración ya tienen API» sí cuentan (cuarta revisión del 25 nov). «Sobre todo…» no es un tema. Sin tildes.
+ */
+const PRESENTA_EL_TEMA =
+  /^(sobre(?! todo\b)|acerca de|respecto (a|al|de|del)|con respecto (a|al)|en cuanto (a|al)|en relacion (a|al|con)|hablando de|volviendo (a|al)|en (la|esa|esta) (reunion|llamada|sesion)|en el (kickoff|diagnostico))(?=\s|$)/;
+
+/**
+ * Pedidos sin signo que `pareceUnaPregunta` no ve a propósito (allá «Lista de precios…» podría contar algo; acá solo
+ * deciden si se ofrece guardar): «Dame los retos», «Quisiera conocer…», «Haz un resumen». Sin tildes. Seguido de «que»
+ * cuenta algo («Explica que no tienen presupuesto»): `pideSinSigno`.
+ */
+const PIDE_SIN_SIGNO =
+  /^(dame(los|las|lo|la)?|me interesa(ria)? saber|quisiera (saber|conocer|entender)|quiero (conocer|entender)|necesito (conocer|entender)|investiga|haz(me)? un (resumen|listado|analisis|repaso)|hazme|lista (los|las|todos|todas|lo)|explica(me)?)(?=[\s,.:;!?]|$)/;
+
+/** Sin tildes, en minúsculas, sin el saludo de adelante («Oye, …», «Por favor …»). */
+const planoSinSaludo = (x: string) => sinTildes(x.trim().toLowerCase()).replace(/\s+/g, " ").replace(SALUDO, "");
+
+function pideSinSigno(x: string): boolean {
+  const plano = planoSinSaludo(x);
+  const orden = PIDE_SIN_SIGNO.exec(plano);
+  return !!orden && !/^\s*que(?=\s|$)/.test(plano.slice(orden[0].length));
+}
+
+/** ¿El pedazo solo presenta el tema («Sobre la cobranza», «En la reunión del martes»)? El arranque y hasta dos palabras. */
+function soloPresentaElTema(x: string): boolean {
+  const plano = planoSinSaludo(x);
+  const arranque = PRESENTA_EL_TEMA.exec(plano);
+  return !!arranque && plano.slice(arranque[0].length).trim().split(" ").filter(Boolean).length <= 2;
+}
+
+/**
+ * Los pedazos de un texto sin sus preguntas: sin cada «¿…?» (también sin cerrar, hasta el final) ni lo que termina en «?»
+ * desde el último corte; los cortes son la puntuación, los dos puntos y los renglones. El «？» de ancho completo cuenta.
+ */
+function sinLasPreguntas(t: string): string[] {
+  const conSignos = t.replace(/？/g, "?");
+  const sinAbiertas = conSignos.replace(/¿[^?]*\?/g, "\n").replace(/¿[^?]*$/, "\n");
+  const sinCerradas = sinAbiertas.replace(/[^\n.,;:!¡¿?]*\?/g, "\n");
+  return sinCerradas
+    .split(/[\n.,;:!¡¿?]+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+/**
+ * De los pedazos sin las preguntas, los que pueden contar algo: dos palabras o más («Usan Salesforce, ¿lo anoto?»; una
+ * basta en la respuesta a La escala: «¿Cuál era? Salesforce»), que no sean un saludo, una frase de arranque, el tema de la
+ * pregunta, un pedido ni un «gracias».
+ */
+function loQueCuentaSinLasPreguntas(t: string, minimo = 2): string[] {
+  return sinLasPreguntas(t).filter((x) => {
+    const plano = sinTildes(x.toLowerCase()).replace(/\s+/g, " ");
+    const palabras = plano.split(" ").filter((p) => /[a-z0-9]/.test(p)).length;
+    if (palabras < minimo || FRASE_DE_ARRANQUE.test(plano) || pideSinSigno(x) || soloPresentaElTema(x)) return false;
+    return !pareceUnaPregunta(x) && !esCortesia(x) && !esPedidoDeLaCuenta(x);
+  });
+}
+
+/**
+ * Lo que la persona contó, también en pedazos, para revisar la cita de un hecho de «Guardarlo como nota»: sin el
+ * encabezado de La escala y sin sus signos («¿Unos 40?» → «Unos 40»), y cada pedazo entre preguntas o puntos («Usan SAP,
+ * ¿lo anoto?» → «Usan SAP»). Una cita corta vale solo ENTERA (`laDijoLaPersona`): así «Unos 40» cuenta (cuarta revisión).
+ */
+export function loQueContoEnPedazos(m: readonly MensajeDeLaConversacion[]): string[] {
+  // Lo que queda en la nota: si se cortó, lo de antes del corte no respalda lo que se guarda.
+  const textos = loQueQuedaEnLaNota(m);
+  const pedazos = textos.flatMap((t) => {
+    const r = sinElEncabezadoDeLaRespuesta(t) ?? t;
+    return [r, r.replace(/[¿?？]/g, " ").replace(/\s+/g, " ").trim(), ...r.split(/[¿?？\n]+|[.;:!,](?=\s)/).map((x) => x.trim())];
+  });
+  return [...new Set([...textos, ...pedazos].filter(Boolean))];
+}
+
+/** Una pregunta que pregunta («¿Qué opciones hay?», «¿Cuántos son?»): con un qué, cuál, cómo, quién, dónde, cuándo o cuánto. */
+const PREGUNTA_CON_INTERROGATIVO =
+  /^[\s"«“'(]*¿?\s*(qué|cuál|cuáles|cómo|quién|quiénes|dónde|cuándo|cuánto|cuánta|cuántos|cuántas|por qué|cual|cuales|quien|quienes|donde|cuanto|cuanta|cuantos|cuantas)(?=[\s,.:;!?]|$)/i;
+
+/**
+ * ¿Lo que escribió la persona PUEDE ser algo que cuenta, a primera vista? Elías, 25 nov (TEC · AE): alguien preguntó
+ * «cuales son los retos principales del AE?», Nexus respondió y «Guardarlo como nota» dejó la PREGUNTA en «Lo que sabes del
+ * cliente», como si el equipo lo supiera (desde ese día «Ubicar» lee esas notas y una nota puede fijar un nivel). Lo SEGURO
+ * se mira acá: una pregunta sola (con su signo, «dime…», «quiero saber…»), un pedido de la cuenta o un «gracias» nunca son
+ * una nota; una pregunta con algo contado antes («Nos dijeron que arrancan en enero. ¿Qué sigue?») sí puede serlo. Lo que
+ * no es seguro («Oye, cuales son los retos del AE», sin signo) lo decide lo que Nexus entienda al contarlo: si no encuentra
+ * nada del cliente, no hay nada que guardar (`NADA_QUE_GUARDAR`, ./conversacion-server.ts). Una revisión del 25 nov
+ * encontró que mirar cómo empieza la frase falla para los dos lados («Quien decide es el gerente» cuenta algo).
+ */
+export function esAlgoQueSeCuenta(texto: string): boolean {
+  const respuesta = sinElEncabezadoDeLaRespuesta(texto);
+  const t = (respuesta ?? texto).trim();
+  if (!t || esCortesia(t) || esPedidoDeLaCuenta(t)) return false;
+  if (respuesta !== null) {
+    // La respuesta a una pregunta de La escala es su respuesta aunque dude («¿En un Excel, creo?»): el signo no la corta.
+    // La corta que pida algo («dime los retos») o que solo pregunte («¿Qué opciones hay?»).
+    if (pareceUnaPregunta(t.replace(/[¿?？]/g, " ")) || pideSinSigno(t)) return false;
+    return loQueCuentaSinLasPreguntas(t, 1).length > 0 || !PREGUNTA_CON_INTERROGATIVO.test(t);
+  }
+  // Sin un signo, sin un pedido y sin una pregunta sin signo: cuenta algo («La cobranza la hacen a mano»).
+  if (!/[¿?？]/.test(t) && !pareceUnaPregunta(t) && !pideSinSigno(t)) return true;
+  // Si no, lo que queda sin las preguntas («Tienen 40 vendedores, ¿eso cambia el plan?», «¿Sabes qué? Tienen 40
+  // vendedores»). Lo que pasa esta guarda y no cuenta nada lo frena lo que entienda Nexus al contarlo.
+  return loQueCuentaSinLasPreguntas(t).length > 0;
+}
+
+/** Lo que dice el servidor si le llega una pregunta para guardar como nota (la pantalla ya no ofrece el botón). */
+export const UNA_PREGUNTA_NO_ES_UNA_NOTA =
+  "Eso es una pregunta (o un pedido): no se guarda como nota. Si sabes algo del cliente, cuéntaselo a Nexus con tus palabras y lo guardas tú.";
+
+/** Lo que dice si, al contarlo, Nexus no encontró nada del cliente (ni un hecho ni un cambio): no hay nada que guardar. */
+export const NADA_QUE_GUARDAR = "No encontré nada del cliente para guardar en eso. Si es algo que sabes del cliente, escríbelo empezando con «Ojo:» y lo guardo como nota.";
+
+/**
  * «¿Era algo que querías contar? Guardarlo como nota», debajo de la ÚLTIMA respuesta (`i`): lo que se manda en su lugar. Sale el
  * par (lo que la persona escribió, marcado como consulta, y la respuesta de Nexus) y lo que escribió vuelve al final como
- * algo que cuenta. null si `i` no es una respuesta a una consulta de la persona.
+ * algo que cuenta. null si `i` no es una respuesta a una consulta de la persona, o si lo que escribió no es algo que se
+ * cuenta (`esAlgoQueSeCuenta`, 25 nov): una pregunta de verdad no tiene este botón. Lo que se manda es SIEMPRE lo que
+ * escribió la persona, nunca el texto de Nexus.
  */
 export function paraContarComoNota<M extends MensajeDeLaConversacion>(m: readonly M[], i: number): { base: M[]; texto: string } | null {
   // Solo la última: una del medio, movida al final, se leería como la respuesta a lo que Nexus preguntó después.
@@ -505,6 +663,7 @@ export function paraContarComoNota<M extends MensajeDeLaConversacion>(m: readonl
   const consulta = m[i - 1];
   // También debajo de lo que contestó la mano de la cuenta (24 nov): «Pasa que…» leído como pedido se cuenta con un clic.
   if (!respuesta || !consulta || respuesta.de !== "nexus" || (respuesta.es !== "respuesta" && respuesta.es !== "lista") || consulta.de !== "persona" || !consulta.texto.trim()) return null;
+  if (!esAlgoQueSeCuenta(consulta.texto)) return null;
   return { base: m.filter((_, k) => k !== i && k !== i - 1), texto: consulta.texto.trim() };
 }
 
@@ -517,8 +676,90 @@ export function puedePreguntar(m: readonly MensajeDeLaConversacion[]): boolean {
  * La nota que se guarda: lo que dijo la persona, con sus palabras, renglón por renglón (lo que escribió primero y lo que
  * respondió). Nunca un resumen del modelo: la nota lleva «lo dijo <persona>» y tiene que ser cierto.
  */
-export function notaDeLaConversacion(m: readonly MensajeDeLaConversacion[], tope = TOPES.largoDelMensaje): string {
-  return loQueConto(m).join("\n").slice(0, tope);
+export function notaDeLaConversacion(m: readonly MensajeDeLaConversacion[], tope = TOPES.largoDeLaNota): string {
+  return piezasDeLaNota(loQueConto(m), tope)
+    .map((p) => (p.cortada ? `…${p.texto}` : p.texto))
+    .join("\n");
+}
+
+/**
+ * Lo que contó la persona TAL COMO QUEDA EN LA NOTA, para revisar las citas de lo que se propone con eso (25 nov): si la
+ * nota se cortó, lo de antes del corte no la respalda. Mensaje por mensaje (una respuesta corta, «Unos 40», vale entera:
+ * `laDijoLaPersona`), y del que quedó en el borde, su pedazo.
+ */
+export function loQueQuedaEnLaNota(m: readonly MensajeDeLaConversacion[]): string[] {
+  return piezasDeLaNota(loQueConto(m), TOPES.largoDeLaNota).map((p) => p.texto);
+}
+
+/**
+ * Los mensajes que entran en una nota de `tope` letras (con un renglón entre cada uno). Si no entra todo: la respuesta de
+ * «Responder con Nexus» («Sobre Ventas · Datos (…): …») va siempre entera, porque su renglón marca la pregunta como
+ * respondida y le dice a «Ubicar» de qué área es (segunda revisión de los topes); después, enteros los más nuevos, y del
+ * que queda en el borde, su final (`cortada`: la nota le pone «…» adelante). Los de antes no van.
+ */
+function piezasDeLaNota(conto: readonly string[], tope: number): Array<{ texto: string; cortada?: true }> {
+  if (conto.join("\n").length <= tope) return conto.map((texto) => ({ texto }));
+  const entran = new Map<number, { texto: string; cortada?: true }>();
+  let queda = tope;
+  const tomar = (i: number, texto: string, cortada?: true) => {
+    entran.set(i, cortada ? { texto, cortada } : { texto });
+    queda -= texto.length + (cortada ? 1 : 0) + (entran.size > 1 ? 1 : 0);
+  };
+  conto.forEach((t, i) => {
+    if (sinElEncabezadoDeLaRespuesta(t) !== null && t.length + (entran.size ? 1 : 0) <= queda) tomar(i, t);
+  });
+  for (let i = conto.length - 1; i >= 0 && queda > 0; i--) {
+    if (entran.has(i)) continue;
+    const t = conto[i];
+    if (t.length + (entran.size ? 1 : 0) <= queda) {
+      tomar(i, t);
+      continue;
+    }
+    // El del borde: su final, con «…» y, si hay otros, el renglón que lo separa.
+    const cabe = queda - 1 - (entran.size ? 1 : 0);
+    if (cabe >= 20) tomar(i, ultimasSinPartir(t, cabe).trimStart(), true);
+    break;
+  }
+  return [...entran.entries()].sort((a, b) => a[0] - b[0]).map(([, p]) => p);
+}
+
+/** Los primeros `n` caracteres sin partir un emoji (un par de UTF-16 a medias no se guarda en la base). */
+export function primerasSinPartir(t: string, n: number): string {
+  if (t.length <= n) return t;
+  const c = t.charCodeAt(n - 1);
+  return t.slice(0, c >= 0xd800 && c <= 0xdbff ? n - 1 : n);
+}
+
+/** Los últimos `n` caracteres sin partir un emoji. */
+export function ultimasSinPartir(t: string, n: number): string {
+  if (t.length <= n) return t;
+  const desde = t.length - n;
+  const c = t.charCodeAt(desde);
+  return t.slice(c >= 0xdc00 && c <= 0xdfff ? desde + 1 : desde);
+}
+
+/**
+ * Lo que viaja de una conversación a un modelo, dentro de `tope` letras (25 nov). El último mensaje va siempre entero; si no
+ * cabe todo, se recortan primero los más viejos: el que queda en el borde termina en «…» (si le quedan 200 letras o más) y
+ * los de antes no van. Sirve para mensajes y para los turnos de la mano de la cuenta.
+ */
+export function conTopeDeLaConversacion<T extends { texto: string }>(m: readonly T[], tope: number = TOPES.largoDeLaConversacion): T[] {
+  const total = m.reduce((s, x) => s + x.texto.length, 0);
+  if (total <= tope || m.length < 2) return [...m];
+  const ultimo = m[m.length - 1];
+  let queda = tope - ultimo.texto.length;
+  const antes: T[] = [];
+  for (let i = m.length - 2; i >= 0 && queda > 0; i--) {
+    const x = m[i];
+    if (x.texto.length <= queda) {
+      antes.unshift(x);
+      queda -= x.texto.length;
+      continue;
+    }
+    if (queda >= 200) antes.unshift({ ...x, texto: `${primerasSinPartir(x.texto, queda - 1).trimEnd()}…` });
+    break;
+  }
+  return [...antes, ultimo];
 }
 
 // ── El pedido ───────────────────────────────────────────────────────────────────
@@ -585,7 +826,9 @@ function bloqueDeLaConversacion(m: readonly MensajeDeLaConversacion[]): string {
             : x.es === "escala"
               ? "NEXUS (propuso cambios a La escala)"
               : "NEXUS";
-  return m.map((x) => `${quien(x)}: ${x.texto}`).join("\n\n");
+  return conTopeDeLaConversacion(m)
+    .map((x) => `${quien(x)}: ${x.texto}`)
+    .join("\n\n");
 }
 
 /**
@@ -593,8 +836,16 @@ function bloqueDeLaConversacion(m: readonly MensajeDeLaConversacion[]): string {
  * nombre de quien escribe, a propósito: con él, el modelo armaba preguntas sobre esa persona («¿qué dijo Elías…?»).
  * Quién y cuándo los pone el servidor en la nota.
  */
-export function pedidoDelTurno(ctx: ContextoParaNexus, m: readonly MensajeDeLaConversacion[], lectura: Exclude<ComoSeLee, "pregunta" | "cortesia" | "pedido" | "cambio">): Anthropic.Messages.MessageCreateParamsNonStreaming {
-  const pregunta = puedePreguntar(m);
+export function pedidoDelTurno(
+  ctx: ContextoParaNexus,
+  m: readonly MensajeDeLaConversacion[],
+  lectura: Exclude<ComoSeLee, "pregunta" | "cortesia" | "pedido" | "cambio">,
+  /** La persona apretó «Guardarlo como nota» (25 nov): si en lo escrito no hay nada del cliente, que no saque un hecho. */
+  o: { desdeElBoton?: boolean } = {},
+): Anthropic.Messages.MessageCreateParamsNonStreaming {
+  // Desde «Guardarlo como nota» no pregunta (tercera revisión del 25 nov): si preguntara, lo que la persona conteste se
+  // juntaría con lo de antes en la nota, y una pregunta suya terminaría guardada. Termina en «listo» o en «nada que guardar».
+  const pregunta = !o.desdeElBoton && puedePreguntar(m);
   const texto = [
     `Estás en ${ctx.donde}. La empresa: ${ctx.empresa}. Te escribe alguien del equipo de Smarteam.`,
     ctx.contexto.trim() ? `=== LO QUE YA SE SABE (interno) ===\n${ctx.contexto.trim()}` : "",
@@ -607,7 +858,11 @@ export function pedidoDelTurno(ctx: ContextoParaNexus, m: readonly MensajeDeLaCo
             ? ' si te pide cambiar algo de la página de La escala que ve el cliente (el título, el texto de arriba, el problema principal, los puntos clave, el recorrido, un equipo, una cifra; o sigue con los cambios que Nexus le propuso a esa página), devuelve {"tipo":"cambio"};'
             : ""
         } si te cuenta algo, sigue como siempre.`
-      : "LO ÚLTIMO QUE ESCRIBIÓ NO ES UNA PREGUNTA NI UN PEDIDO: te está contando algo. No devuelvas «consulta», «pedido» ni «cambio».",
+      : `LO ÚLTIMO QUE ESCRIBIÓ NO ES UNA PREGUNTA NI UN PEDIDO: te está contando algo. No devuelvas «consulta», «pedido» ni «cambio».${
+          o.desdeElBoton
+            ? " Si en lo que escribió no hay nada del cliente (pregunta algo, pide algo o saluda), responde «listo» sin cambios y sin hechos: no inventes un hecho de una pregunta."
+            : ""
+        }`,
   ]
     .filter(Boolean)
     .join("\n\n");

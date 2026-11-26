@@ -187,7 +187,7 @@ async function main() {
 async function comprobarElDeploy() {
   const url = process.env.DATABASE_URL ?? "";
   if (/@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(url)) return;
-  const base = process.env.NEXUS_URL ?? "https://nexus.smarteamcr.com";
+  const base = process.env.NEXUS_URL || "https://nexus.smarteamcr.com";
   const sha = await fetch(`${base}/api/health`)
     .then((r) => r.json() as Promise<{ sha?: string }>)
     .then((j) => j.sha ?? "")

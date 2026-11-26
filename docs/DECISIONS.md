@@ -14842,7 +14842,8 @@ limpia del 24 nov.
     chat, la nota se ve entera antes de «Guardar», sobrevive a recargar (va en la conversación guardada) y marca la
     pregunta como respondida (`respuestaDe`, en cualquier renglón: la nota junta todo lo que se contó sin guardar). *Sin
     signos de pregunta:* el chat lee como consulta lo que tiene forma de pregunta. Si la persona pregunta en vez de contar,
-    el chat responde como siempre. La caja deja lugar para el prefijo (el mensaje entero no pasa los 4.000 caracteres).
+    el chat responde como siempre. La caja deja lugar para el prefijo (el mensaje entero no pasa los 4.000 caracteres: el
+    tope de una nota, desde el 25 nov, cuando el de un mensaje subió a 15.000).
     *Lo aceptado:* con una conversación a medias, la respuesta se suma a esa misma nota (va marcada con su pregunta).
 - ~~**Pendiente, sin construir: «Ubicar» no lee estas notas.**~~ *Hecho el 25 nov* (Elías: una nota puede fijar el nivel):
   ver «“Ubicar” lee las notas del equipo». Lo de entonces: `loQueLeeUbicar` › `fuentesParaPosicionar` no arma ninguna
@@ -16550,7 +16551,8 @@ guarda sin un clic (ni la nota ni los cambios a las tarjetas). Convive con «Agr
   equipo»; quién y cuándo los pone el servidor en la nota). Cada error tiene su salida: debajo de la ÚLTIMA respuesta,
   «¿Era algo que querías contar? Guardarlo como nota» (saca el par pregunta-respuesta y vuelve a mandar lo escrito con
   `contar`; solo la última: una del medio, movida al final, se leería como la respuesta a lo que Nexus preguntó
-  después), y debajo de lo que iba a guardarse, «¿Era una pregunta? Respóndela». Cada botón es una vuelta más y cuenta
+  después; *enmendado el 25 nov:* solo si lo escrito cuenta algo, nunca una pregunta, ver «“Guardarlo como nota” guarda
+  solo lo que la persona cuenta»), y debajo de lo que iba a guardarse, «¿Era una pregunta? Respóndela». Cada botón es una vuelta más y cuenta
   en los topes. Una consulta la responde una SEGUNDA llamada.
 - **Formato y Enter** (Elías, 21 nov: «es importante que se vea bien formateado»; se veían los `**` crudos): la respuesta
   se pinta como Markdown simple (components/chat-de-nexus/TextoConFormato.tsx: párrafos, listas y negritas; sin
@@ -16613,6 +16615,33 @@ guarda sin un clic (ni la nota ni los cambios a las tarjetas). Convive con «Agr
   60 por persona en el día de Costa Rica (el corte de `inicioDelDiaCr`, el del presupuesto de IA); pasado el tope, 429 con
   qué hacer. Se cuentan y después se crea la corrida, sin bloqueo: dos pedidos juntos pueden pasarse por uno, y el id de
   la conversación lo pone el navegador; el tope del día acota el gasto.
+  *Enmienda del 25 nov (Elías; Marco se topó con el tope de un pedido a La escala):* lo que escribe la persona sube a
+  15.000 caracteres: un mensaje (`TOPES.largoDelMensaje`, eran 4.000) y un pedido a La escala (`MAX_PEDIDO`, eran 1.200).
+  Como cada mensaje vuelve a viajar en las vueltas siguientes (hasta 28), lo que va de la conversación al modelo tiene su
+  propio tope, 60.000 letras (`TOPES.largoDeLaConversacion`, `conTopeDeLaConversacion`): el último mensaje va siempre
+  entero y se recortan primero los más viejos (el del borde termina en «…»). Vale al contar, al responder una pregunta y
+  en la ventana de la mano de la cuenta; quien propone un cambio a La escala ya leía solo 3.000 letras de antes. La nota
+  que se guarda NO sube: su tope es el de una nota de la preventa (`TOPES.largoDeLaNota`, 4.000; una prueba lo pasa por
+  la validación de `op: "nota"`). Si lo contado pasa de ahí, la nota guarda mensajes ENTEROS (`piezasDeLaNota`): siempre
+  la respuesta de «Responder con Nexus» («Sobre Ventas · Datos (…): …», cuya caja sigue en ese tope: su renglón marca la
+  pregunta como respondida y le dice a «Ubicar» de qué área es), después los más nuevos, y del que queda en el borde, su
+  final, con «…» adelante; los de antes no van. Se ve antes de «Guardar». Lo que Nexus propone con eso (cambios y la
+  revisión de «nada que guardar») se revisa contra lo que QUEDA en la nota, mensaje por mensaje (`loQueQuedaEnLaNota`: un
+  «Unos 40» después de un acta larga sigue valiendo entero): un cambio o un hecho que cita lo que no entró no se propone ni
+  se guarda, porque la nota no lo respalda. Los cortes no parten un emoji (`primerasSinPartir`, `ultimasSinPartir`: medio
+  emoji no se guarda en la base). El resumen de una propuesta a La escala en la historia sigue en 1.200
+  (`TOPE_DEL_TEXTO`: es de Nexus, no de la persona). El chat de la ficha del cliente, los documentos, el cronograma y
+  Tareas siguen en 4.000 (`TOPES_DEL_CHAT.largoDelMensaje`, que ahora usan sus dos rutas y la página de ayuda).
+  *Lo aceptado:* un pedido largo a La escala (un acta pegada) cuenta ENTERO como lo pedido en la revisión de lo interno
+  (lib/pedirle-a-nexus/veracidad.ts): un tema interno que aparece en lo pegado cuenta como nombrado. Lo interno que la IA
+  escriba queda marcado «interno»: fuera de «Aplicar todo» y con la pregunta antes de aplicarse. *Lo que no queda
+  garantizado:* que una vuelta con 24 mensajes largos quede bajo el 1 MB que acepta nginx en producción (por la cuenta,
+  unos 400 KB; si pasa, el panel dice «Nexus no pudo responder»); el gasto con conversaciones largas (hasta 60.000 letras
+  más las fuentes en cada vuelta) y el peso de cada vuelta guardada (lleva la conversación entera); y volver a la versión
+  anterior: una conversación con un mensaje de más de 4.000 la rechaza («Cuerpo inválido») hasta «Nueva conversación».
+  *También aceptado:* una conversación de antes del deploy que juntó más de 4.000 letras sin guardar, cuya nota se guardó
+  con el corte de antes (el principio) y cuya página se cerró antes de anotarla, vuelve a ofrecer «Guardar» (la nota nueva
+  se arma distinto): guardarla deja una nota repetida.
 - **Si la IA falla** al leer lo que contaste, NO se guarda nada (podía ser una pregunta): el texto vuelve al cuadro con
   «Nexus no pudo leerlo esta vez». Si falla la revisión de La escala, el panel dice «No pude revisar si esto cambia La
   escala», nunca «no cambia».
@@ -17620,8 +17649,10 @@ es un pedido de cambio a la página») y, en «Un solo chat «Nexus»», el avis
 - **Lo que no cambia:** La escala de la ficha del cliente sigue con el pedido de un paso; la revisión de lo propuesto
   (cifras, lo interno, lo escrito a mano), «Aplicar», «Aplicar todo», el choque con otra persona, el historial y «Deshacer»;
   el tope de 20 pedidos al día (ahora cada pedido cuenta además como una de las 12 vueltas de la conversación; uno frenado
-  por ese tope, o por pasar de 1.200 caracteres, no gasta la vuelta: si lo decidió el modelo, la vuelta queda medida y no
-  cuenta). Mientras se aplica un cambio a La escala, la caja y «Nueva conversación» esperan.
+  por ese tope no gasta la vuelta: si lo decidió el modelo, la vuelta queda medida y no
+  cuenta). El freno por largo (eran 1.200 caracteres) ya no se dispara desde la conversación: desde el 25 nov un mensaje y
+  un pedido a La escala tienen el mismo tope, 15.000. Mientras se aplica un cambio a La escala, la caja y «Nueva
+  conversación» esperan.
 - **Lo que no queda garantizado:** que el modelo lea bien lo dudoso sin chip (se midió con frases escritas a mano, no con
   conversaciones reales); con un «Guardar» pendiente arriba, la caja espera también para pedir un cambio a La escala
   («Termina lo de arriba»); cerrar el cajón y salir de la pantalla mientras Nexus piensa no deja punto ni aviso (la
@@ -17635,3 +17666,92 @@ es un pedido de cambio a la página») y, en «Un solo chat «Nexus»», el avis
   base local: «agrega un ítem más» trajo el punto entero y sacado de la página; «reuniones que trabajamos juntos, pon 12» no
   propuso nada y explicó que se cambia a mano; «acóplalo más al reto de la integración con Fundatec» cambió solo el problema
   principal.
+
+## «Guardarlo como nota» guarda solo lo que la persona cuenta (2026-11-25, TEC · AE)
+
+En la preventa de TEC · AE alguien le preguntó al chat «cuales son los retos principales del AE?», Nexus respondió con las
+tarjetas y «Guardarlo como nota» dejó la PREGUNTA en «Lo que sabes del cliente» (`sabido:mwwnm8fs1ij`, a las 21:47Z, con
+`boton: "guardarlo-como-nota"`). Ese mismo día «Ubicar» empezó a leer esas notas, y una nota puede fijar el nivel de una
+parte: una pregunta guardada así es ruido, y una respuesta de Nexus guardada como nota sería Nexus confirmándose a sí
+mismo. Elías: que solo quede como nota lo que la PERSONA cuenta (un hecho, o su respuesta a una pregunta de La escala),
+nunca una pregunta suya ni el texto de Nexus. *Enmienda* «Guardarlo como nota» de «Hablar con Nexus» (21 nov), que contaba
+«lo que tenía forma de pregunta».
+
+- **Dos guardas.** *La segura, por el texto* (`esAlgoQueSeCuenta`, lib/chat-de-nexus/conversacion.ts): no es una nota un
+  pedido de la cuenta (`esPedidoDeLaCuenta`), un «gracias», ni un texto que, sin sus preguntas (cada «¿…?», también sin
+  cerrar, lo que termina en «?», y el «？» de ancho completo), no deja ningún pedazo de 2 palabras o más que cuente algo. Los
+  pedazos se cortan por la puntuación, los dos puntos y los renglones. No cuentan: las frases con que se arranca a preguntar
+  («Tengo una duda.», «Tengo una pregunta:», «Hola Nexus, buenas tardes.», «Buen día,», «Una última pregunta.», «Muchas
+  gracias por la info.»), el tema de la pregunta (el arranque y hasta dos palabras: «Sobre la cobranza, ¿…?», «En la
+  reunión del martes, ¿…?», «Con respecto al ERP, ¿…?»; «En esa reunión firmaron el contrato, ¿lo anoto?» sí cuenta, y
+  «Sobre todo…» no es un tema), y los pedidos sin signo («dime…», «quiero saber…», «dame…», «quisiera conocer…», «haz un
+  resumen…», también después de «Oye,» o «Por favor»; seguidos de «que» cuentan: «Explica que no tienen presupuesto»). Lo
+  contado con una pregunta pegada sí
+  puede serlo: «Tienen 40 vendedores, ¿eso cambia el plan?», «Usan Salesforce, ¿lo anoto?», «Tienen 3 sedes en Guatemala» y
+  en otro renglón «¿Cómo lo vemos?», «¿Sabes qué? Tienen 40 vendedores por sede». Con «Responder con Nexus» se mira lo que
+  va después de su encabezado (`sinElEncabezadoDeLaRespuesta`: «Sobre <equipo> · <parte>», con el « · », hasta el último
+  «): », porque la pregunta puede traer paréntesis; una prueba lo compara con `prefijoDeLaRespuesta`). Ahí el signo no
+  corta («¿En un Excel, creo?», «¿Unos 40?» son su respuesta, y una palabra basta: «¿Cuál era? Salesforce»); la corta un
+  pedido, un «gracias» o una pregunta que solo pregunta, con un qué, cuál, cómo, quién, dónde, cuándo o cuánto («¿Qué dijo
+  Ana de esto?»).
+  *La de fondo, por lo que entiende Nexus:* lo que no es seguro («Oye, cuales son los retos del AE», sin signo) se cuenta, y
+  si Nexus no encuentra nada del cliente EN LAS PALABRAS DE LA PERSONA no hay nada que guardar (`NADA_QUE_GUARDAR`): ni un
+  cambio (que ya sale con su cita revisada) ni un hecho cuya cita ella escribió (`laDijoLaPersona`). La cita se busca también
+  en pedazos de lo que escribió (`loQueContoEnPedazos`: sin el encabezado de La escala ni sus signos, y cada pedazo entre
+  preguntas o puntos), porque una cita corta vale solo entera: así «¿Unos 40?» y «Usan SAP, ¿lo anoto?» se guardan (la
+  cuarta revisión las encontró en el aviso). Un hecho con una cita que la persona no dijo, o un cambio descartado por su
+  cita, no cuenta: la tercera revisión encontró que así volvía a quedar la pregunta como nota, sin hechos. Es lo que pasó
+  con esa nota («hechos vacíos»). Responde 422, la vuelta queda en error
+  (al volver no aparece un «Guardar») y el botón no vuelve para ese texto mientras el panel siga abierto. El aviso dice
+  «No encontré nada del cliente para guardar en eso. Si es algo que sabes del cliente, escríbelo empezando con «Ojo:» y lo
+  guardo como nota»: con «Ojo:» se cuenta como siempre, y algo cierto que no encaja en ningún lugar queda como nota. Con el
+  chip de una sección de La escala, lo que arranca contando («Ojo:», «Nos dijeron…») ya no es seguro un cambio a la
+  página: lo decide el modelo (`comoSeLee`), para que ese consejo no termine en una propuesta de cambio.
+  Solo en ese camino (`desdeElBoton`) la regla del modelo dice que de una pregunta no saque un hecho, y **Nexus no
+  pregunta**: si preguntara, lo que la persona contestara se juntaría en la nota con la pregunta de antes. Termina en
+  «listo» o en «nada que guardar». Al contar como siempre, el pedido no cambia. *Por qué no solo por el texto:* las
+  revisiones del 25 nov encontraron que mirar cómo empieza la frase falla para los dos lados («Oye, cuales son…» pasaba y
+  «Quien decide es el gerente» no se podía guardar), y que cortar todo lo que lleva un «?» le quitaba el botón a lo contado
+  con una pregunta al final. La guarda del texto ahorra la llamada y el botón; la que asegura es la de fondo.
+- **El botón no aparece** si lo seguro dice que no es algo que se cuenta (`paraContarComoNota` devuelve null): una consulta
+  de verdad termina en la respuesta. Sigue debajo de lo que el chat tomó por una pregunta y contaba algo («La cobranza la
+  hacen a mano con un Excel», «Es importante, ¿no?», «Quien decide es el gerente», «Pasa que…»).
+- **El servidor tampoco lo cuenta**: una vuelta con `contar` y una pregunta, un pedido o un «gracias» responde 400 (sin
+  llamar a la IA ni gastar una vuelta). Así un cajón viejo, o un pedido armado a mano, no la guarda.
+- **La nota son siempre las palabras de la persona** (`notaDeLaConversacion`, sin cambios): nunca el texto de Nexus ni lo
+  que preguntó. Lo cubre una prueba.
+- **Lo que no cambia:** «¿Era una pregunta? Respóndela», la respuesta a una pregunta de La escala con «Responder con Nexus»,
+  y la nota que se arma al contar.
+- **Lo que quedó guardado:** `scripts/quitar-nota-que-era-pregunta.ts` quita esa nota con la misma operación que «Quitar» de
+  la Preparación (que retira sus hechos: no dejó ninguno), y cierra la conversación donde se guardó solo si su última vuelta
+  es la que la guardó (si no, al volver diría «Guardado» de una nota que ya no está; si la persona siguió conversando, no se
+  toca; relee la vuelta para comprobar que quedó cerrada). Comprueba antes que la nota siga siendo una pregunta y dice qué
+  respondió la revisión de impacto, si el Resumen se rehízo después y si «Ubicar» corrió después. Con `--apply` contra
+  producción, exige antes del respaldo que la copia traiga el commit que corre allá (/api/health), y no pisa la preventa si
+  alguien la cambió entre la lectura y el cambio (`sinCambiosDesde`). Si la nota ya no está, solo cierra la conversación
+  que haya quedado abierta en ella (y avisa si quedaron hechos de esa nota). Simulacro del 25 nov contra producción: la
+  nota «cuales son los retos principales del AE?», a nombre de
+  egonzalez@smarteamcr.com, sin hechos; su revisión de impacto dijo «no cambia La escala», el Resumen no se rehízo y
+  «Ubicar» no corrió después (la última ubicación es del 24 nov); una conversación que termina en esa nota, para cerrar. No
+  se aplicó (lo aplica la coordinadora, después de avisarle a Elías). La cuarta revisión encontró otra igual en la
+  preventa de Cemaco · Ecuador
+  (`cmwkz8fbz002g08myjtzvaaiz`, nota `sabido:mwri604zpe4`, «¿Cuáles son los principales dolores de este cliente?», del 22
+  nov, de la misma persona): el mismo script la quita con `--exploracion` y `--clave`. Su simulacro: sin hechos, la revisión
+  de impacto dijo «no cambia La escala», pero el Resumen se rehízo DESPUÉS (25 nov 18:35Z): una persona revisa si la tomó
+  como algo sabido. Su conversación ya está cerrada. Tampoco se aplicó. `NEXUS_URL` (dónde mirar /api/health) queda en
+  `.env.example`; vacía es producción.
+- **Para producción:** la página «El chat Nexus: qué le puedes pedir» cambia un renglón (el botón no guarda preguntas):
+  volver a correr `scripts/seed-pagina-chat-nexus.ts` (simulacro y `--apply`) después del deploy.
+- **Lo que no queda garantizado:** que el modelo no saque un hecho de una pregunta sin signo (se le dice que no; si lo
+  hace, se ofrece guardar y la persona ve la nota antes de «Guardar»). Una pregunta que la persona escribe como respuesta a
+  una pregunta de Nexus («¿Al mes, creo?») sigue yendo a la nota, como antes (es su respuesta; la salida es «¿Era una
+  pregunta? Respóndela»). Lo que cuenta algo pegado a una pregunta («Tienen 40 vendedores, ¿eso cambia el plan?») pasa la
+  guarda del texto y depende de que Nexus encuentre el hecho. La guarda del texto no ve todo: una pregunta con algo que no
+  es del cliente después («…del AE? Es para la reunión de mañana») muestra el botón y la frena la de fondo. Cada intento de
+  «Guardarlo como nota» sin nada del cliente cuesta una llamada a la IA: el botón no vuelve para ese texto mientras el panel
+  siga abierto, pero al recargar la página vuelve a aparecer (lo que se recuerda es de la pantalla, no se guarda). En «Uso
+  de Nexus», «Guardarlo como nota» cuenta los clics en el botón, también los que terminaron en «nada que guardar»; las
+  notas guardadas se cuentan aparte. El `--apply` del script no se probó contra una base (usa la misma operación que
+  «Quitar» y la misma anotación que «Nueva conversación»); su comprobación de versión sí, sin escribir (sin
+  `ALLOW_PROD_WRITE` el guardián aborta antes del respaldo). Cuántas veces algo contado de verdad termina en «nada que
+  guardar» con la IA real no se midió: después del deploy, leer las vueltas con `nadaQueGuardar`.

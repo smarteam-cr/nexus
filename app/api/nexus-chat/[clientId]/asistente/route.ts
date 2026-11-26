@@ -14,7 +14,7 @@ import { z } from "zod";
 import { abrirHilo, empezarDeCero, hiloVivo } from "@/lib/asistente/hilo";
 import { aVista } from "@/lib/asistente/handler";
 import { MODELO_DEL_ASISTENTE } from "@/lib/asistente/turno";
-import { PIEZA_NEXUS } from "@/lib/nexus-chat/constantes";
+import { PIEZA_NEXUS, TOPES_DEL_CHAT } from "@/lib/nexus-chat/constantes";
 import { quienPide, respuestaDeError } from "@/lib/nexus-chat/http-server";
 import { correrTurnoDeNexus, type FocoDelChat } from "@/lib/nexus-chat/turno-server";
 import { prisma } from "@/lib/db/prisma";
@@ -26,7 +26,7 @@ const piezaSchema = z.literal(PIEZA_NEXUS).optional();
    2026-10-18) dice que la persona abrió el chat desde la guía de una exploración: el turno suma esa guía al mensaje. */
 const chipSchema = z.object({ tipo: z.string().max(20), id: z.string().max(60) }).optional();
 const bodySchema = z.union([
-  z.object({ pieza: piezaSchema, mensaje: z.string().trim().min(1).max(4_000), chip: chipSchema }).passthrough(),
+  z.object({ pieza: piezaSchema, mensaje: z.string().trim().min(1).max(TOPES_DEL_CHAT.largoDelMensaje), chip: chipSchema }).passthrough(),
   z.object({ pieza: piezaSchema, empezarDeCero: z.literal(true) }),
 ]);
 
