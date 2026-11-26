@@ -17967,7 +17967,11 @@ la escala».
   «La escala no está publicada en Nexus», «La escala, en simple», «La escala en el tiempo» (los niveles de cada día),
   «La escala hasta ahora» y el panel «La escala» de la derecha (los niveles de cada área), las dimensiones de la escala,
   el módulo Escala (el documento y sus tests) y la preventa de un proyecto de Customer Success.
-- **No cambia:** claves, rutas, archivos ni datos (`escala` sigue en el código), la página que ya ve el cliente, y los
-  pasos «Resumen» y «Análisis». Nunca se acorta a «Diagnóstico»: choca con el documento «Diagnóstico» de los proyectos de
+- **No cambia:** claves, rutas, archivos ni datos (`escala` sigue en el código) y los pasos «Resumen» y «Análisis».
+  *Enmienda del mismo día (Elías):* la página que ve el cliente también se rotula «Diagnóstico de rendimiento» (la ceja de la escalera, que
+  decía «La escala de rendimiento», el pie, el respaldo del encabezado y la página «sin medir»: `AreaDeLaEscala` y
+  `EscalaSinMedir`, que solo usa esa página). El contenido publicado de cada cliente no cambia, ni el resultado del test
+  ni «Medido con la Escala de Rendimiento de Smarteam» (nombra la regla). El título de la pestaña ya decía «Smarteam», la
+  página no tiene PDF y «Acceso» comparte solo el enlace. Nunca se acorta a «Diagnóstico»: choca con el documento «Diagnóstico» de los proyectos de
   Customer Success.
 - **Para producción:** volver a correr `scripts/seed-pagina-chat-nexus.ts` (simulacro y `--apply`) después del deploy.
