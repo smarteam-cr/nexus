@@ -182,6 +182,7 @@ async function main() {
   let peor = 0;
   let peorNombre = "";
   for (const t of gordos) {
+    if (!t.projectId || !t.project) continue; // un plan general no es un proyecto
     const ctx = await contextoDeCronograma(t.projectId);
     const n = ctx.texto.length;
     if (n > peor) {
@@ -233,6 +234,7 @@ async function main() {
   });
   let reales = 0;
   for (const t of abiertas) {
+    if (!t.projectId || !t.project) continue;
     const ctx = await contextoDeCronograma(t.projectId);
     const p = ctx.propuesta;
     if (!p || p.version === null) continue; // el formato viejo: el chat usa el contexto de hoy
@@ -250,10 +252,11 @@ async function main() {
   /* 2 · Una propuesta GRANDE de prueba (en memoria) sobre los 5 cronogramas con más tareas. */
   console.log("\n  Propuesta de prueba sobre los 5 cronogramas con más tareas (se espera Wherex):");
   const conTareas = await prisma.projectTimeline.findMany({
+    where: { projectId: { not: null } },
     select: { projectId: true, phases: { select: { _count: { select: { tasks: true } } } } },
   });
   const masTareas = conTareas
-    .map((t) => ({ projectId: t.projectId, tareas: t.phases.reduce((n, f) => n + f._count.tasks, 0) }))
+    .flatMap((t) => (t.projectId ? [{ projectId: t.projectId, tareas: t.phases.reduce((n, f) => n + f._count.tasks, 0) }] : []))
     .sort((a, b) => b.tareas - a.tareas)
     .slice(0, 5);
   const paraRehacerTodo = lineaParaRehacerTodo({ conDetalleDeLaIA: true, publicadoAlgunaVez: true, cambiosDeFasesSinDecidir: true });
@@ -267,7 +270,7 @@ async function main() {
         phases: SELECT_DE_FASES_CON_TAREAS,
       },
     });
-    if (!tl) continue;
+    if (!tl?.project) continue;
     const vivo = vivoDeLaBase(tl.anchorStartDate, tl.phases);
     const borrador = borradorDePrueba(vivo);
     const p = propuestaParaElChat({
@@ -309,7 +312,7 @@ async function main() {
 
   console.log("\n=== 3 · EL CONTEXTO, PARA LEERLO CON LOS OJOS ===");
   console.log("  (es literalmente lo que va a ver el modelo en cada turno)\n");
-  if (gordos[0]) {
+  if (gordos[0]?.projectId) {
     const ctx = await contextoDeCronograma(gordos[0].projectId);
     console.log(ctx.texto.split("\n").map((l) => "  │ " + l).join("\n"));
   }

@@ -154,7 +154,7 @@ export async function POST(
     prisma,
     {
       projectId,
-      clientId: phase.timeline.project.clientId,
+      clientId: guard.clientId,
       timelineId: phase.timeline.id,
       actorEmail: guard.user.email ?? null,
       source: "UI_PATCH",

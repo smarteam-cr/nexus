@@ -33,7 +33,7 @@ export async function leerLimitesDelProyecto(projectId: string): Promise<Limites
     where: { projectId },
     select: { ...SELECT_LIMITES, project: { select: { hubspotPipelineId: true } } },
   });
-  if (!tl) return null;
+  if (!tl?.project) return null;
   return limitesDeLaFila({ ...tl, conSemanaCero: conSemanaCeroDelPipeline(tl.project.hubspotPipelineId) });
 }
 

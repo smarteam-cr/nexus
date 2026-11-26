@@ -344,7 +344,9 @@ describe("⛔ ninguna ruta bajo app/api/clients/[id] queda sin guarda de cliente
    * dejarían de valer y habría que volver a acotar por cliente.
    */
   const BASE_CLIENTES = "app/api/clients/[id]";
-  const GUARDAS_CLIENTE = [...GUARDAS, "withClientAccess(", "guardAccessToClient("];
+  // `guardPlanEdit(` / `guardPlanDelete(` (2026-11-26, el plan general): `guardAccessToClient` + la capacidad del
+  // cronograma (lib/auth/api-guards.ts). Acotan al cliente de la URL igual que la de acceso, y encima piden más.
+  const GUARDAS_CLIENTE = [...GUARDAS, "withClientAccess(", "guardAccessToClient(", "guardPlanEdit(", "guardPlanDelete("];
   const EXENTOS_CLIENTE: Record<string, { metodos: string[]; motivo: string; exige: string[] }> = {
     "app/api/clients/[id]/route.ts": {
       metodos: ["DELETE"],

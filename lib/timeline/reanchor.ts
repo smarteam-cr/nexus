@@ -55,7 +55,8 @@ export async function maybeReanchorToKickoff(projectId: string): Promise<Reancho
       changes: { where: { kind: "PROGRESS" }, take: 1, select: { id: true } },
     },
   });
-  if (!tl || tl.phases.length === 0) return { action: "skipped", reason: "no_timeline" };
+  if (!tl?.project || tl.phases.length === 0) return { action: "skipped", reason: "no_timeline" };
+  const clientId = tl.project.clientId;
   if (day(tl.anchorStartDate) === day(kickoffAt)) return { action: "skipped", reason: "same_anchor" };
 
   const hasProgress =
@@ -97,7 +98,7 @@ export async function maybeReanchorToKickoff(projectId: string): Promise<Reancho
     prisma,
     {
       projectId,
-      clientId: tl.project.clientId,
+      clientId,
       timelineId: tl.id,
       actorEmail: null,
       source: "SYSTEM",
@@ -114,7 +115,7 @@ export async function maybeReanchorToKickoff(projectId: string): Promise<Reancho
   );
   // El resumen ejecutivo de la cuenta quedó desactualizado (fechas del plan cambiaron).
   await prisma.csAccountBrief
-    .updateMany({ where: { clientId: tl.project.clientId }, data: { staleAt: new Date() } })
+    .updateMany({ where: { clientId }, data: { staleAt: new Date() } })
     .catch(() => {});
 
   console.log(`[reanchor] ${projectId}: ancla ${day(before) ?? "(vacía)"} → ${day(kickoffAt)}`);

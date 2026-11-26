@@ -13,6 +13,7 @@ import { prisma } from "@/lib/db/prisma";
 import type { ExternalTimelineData } from "@/lib/external/timeline-view-types";
 import { fotoDelPlan, hayCambiosSinPublicar, leerFoto, tieneLoops } from "./foto";
 import { leerPlanParaElCliente } from "./leer";
+import { asegurarPlan } from "./plan";
 
 export interface EstadoDelAccesoAlPlan {
   estado: "sin-generar" | "activo" | "revocado";
@@ -76,7 +77,7 @@ export async function publicarElPlan(clientId: string, porEmail: string | null, 
   const hoy = await fotoDeHoy(clientId);
   if (!tieneLoops(hoy)) {
     const antes = await prisma.accesoAlPlanGeneral.findUnique({ where: { clientId }, select: { publicadoEn: true } });
-    if (!antes?.publicadoEn) throw new ErrorDelAccesoAlPlan(409, "Esta cuenta ya no tiene loops: no hay nada que mostrarle al cliente.");
+    if (!antes?.publicadoEn) throw new ErrorDelAccesoAlPlan(409, "El plan de esta cuenta no tiene fases: no hay nada que mostrarle al cliente.");
   }
   const { count } = await prisma.accesoAlPlanGeneral.updateMany({
     where: { clientId, ...(o.siSigue !== undefined ? { publicadoEn: o.siSigue } : {}) },
@@ -89,8 +90,10 @@ export async function publicarElPlan(clientId: string, porEmail: string | null, 
 /** Crea el enlace (o devuelve el vivo; uno revocado se renueva con un token nuevo). */
 export async function crearAccesoAlPlan(clientId: string, porEmail: string | null): Promise<EstadoDelAccesoAlPlan> {
   if (!tieneLoops(await fotoDeHoy(clientId))) {
-    throw new ErrorDelAccesoAlPlan(409, "Esta cuenta todavía no tiene loops en sus cronogramas: el plan saldría vacío.");
+    throw new ErrorDelAccesoAlPlan(409, "El plan de esta cuenta todavía no tiene fases: saldría vacío.");
   }
+  // El acceso es del plan de la cuenta (los dos únicos por `clientId`): crearlo crea el plan si todavía no existe.
+  await asegurarPlan(clientId, porEmail);
   const token = randomBytes(32).toString("hex");
   await prisma.accesoAlPlanGeneral.createMany({ data: [{ clientId, accessToken: token, creadoPor: porEmail }], skipDuplicates: true });
   await prisma.accesoAlPlanGeneral.updateMany({

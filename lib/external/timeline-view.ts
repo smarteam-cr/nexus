@@ -33,6 +33,7 @@ import { resolveActiveAccess, touchAccess } from "./access";
 import type { ExternalTimelineData } from "./timeline-view-types";
 import { normalizePublishedTimeline } from "./snapshot-normalize";
 import { semanasDeLaTarea } from "@/lib/timeline/weeks";
+import type { DuenoDelCronograma } from "@/lib/timeline/una-tarea";
 
 /** Lo que la página /external/cronograma pasa a su render. */
 export interface ExternalTimelinePage {
@@ -52,8 +53,21 @@ export interface ExternalTimelinePage {
  * eso es de los chokepoints que la llaman. Server-side only.
  */
 export async function readClientTimeline(projectId: string): Promise<ExternalTimelineData> {
+  return leerParaElCliente({ projectId });
+}
+
+/**
+ * El MISMO filtro para el cronograma de un plan general (sus fases propias, 2026-11-26): un cronograma puede ser de un
+ * proyecto o de un plan (DECISIONS «El plan general es un objeto de la cuenta»), y lo que cruza al cliente se decide en
+ * un solo select. Lo une lib/plan-general con los loops de sus proyectos.
+ */
+export async function readClientTimelineDelPlan(planId: string): Promise<ExternalTimelineData> {
+  return leerParaElCliente({ planId });
+}
+
+async function leerParaElCliente(dueno: DuenoDelCronograma): Promise<ExternalTimelineData> {
   const tl = await prisma.projectTimeline.findUnique({
-    where: { projectId },
+    where: dueno,
     select: {
       id: true,
       anchorStartDate: true,

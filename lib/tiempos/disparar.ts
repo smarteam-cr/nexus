@@ -99,7 +99,9 @@ export async function alMarcarTareasHechas(args: {
     if (!persona || !aplicaAPersona(encuesta.config, persona)) return [];
 
     const tareas = await prisma.timelineTask.findMany({
-      where: { id: { in: [...args.taskIds] }, status: "DONE" },
+      // Solo tareas de un PROYECTO: una fase propia de un plan general no lleva «¿cuánto te tomó?» (DECISIONS «El plan
+      // general es un objeto de la cuenta»). El `flatMap` de abajo lo repite para el tipo.
+      where: { id: { in: [...args.taskIds] }, status: "DONE", phase: { timeline: { projectId: { not: null } } } },
       select: {
         id: true,
         title: true,
@@ -124,23 +126,25 @@ export async function alMarcarTareasHechas(args: {
     });
 
     const candidatas = tareas
-      .map((t) => {
+      .flatMap((t) => {
         const tl = t.phase.timeline;
+        const proyecto = tl.project;
+        if (!proyecto) return [];
         const i = tl.phases.findIndex((p) => p.id === t.phase.id);
         const inicio = i >= 0 ? computePhaseRanges(tl.phases)[i].start : 0;
         const finPlaneado = t.dueDateOverride ?? overduePlannedEnd(isoDia(tl.anchorStartDate), inicio, t.weekIndex, t.semanas);
-        return {
+        return [{
           clave: claveDeTarea(t.id),
           id: t.id,
           titulo: t.title,
           familia: familiaDe(t.title),
           tipo: tipoDeFase(t.phase.activityType) as TipoDeFase,
           party: partyDe(t.party),
-          projectId: tl.project.id,
-          clientId: tl.project.clientId,
-          cliente: tl.project.client?.name ?? null,
+          projectId: proyecto.id,
+          clientId: proyecto.clientId,
+          cliente: proyecto.client?.name ?? null,
           finPlaneado,
-        };
+        }];
       })
       .filter((t) => aplicaATarea(encuesta.config, t) && !marcadaDemasiadoTarde(t.finPlaneado, ahora));
     if (candidatas.length === 0) return [];

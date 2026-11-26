@@ -168,15 +168,16 @@ No copia Cobranza/Timeline/Canvas — la generación crea los suyos.
   `scripts/lib/db.ts` (max 2). El pooler comparte ~15 slots entre PROD + 2 PCs + scripts
   (RUNBOOK, invariante #3).
 - **`prisma migrate` clásico no se usa y `db push` está PROHIBIDO**: la base tiene objetos que
-  el schema no declara — la columna pgvector `KnowledgeEmbedding.embedding`, el CHECK
-  `Client_logoScale_rango`, RLS y policies — y un push los DROPEA sin preguntar (ya se llevó la
+  el schema no declara — la columna pgvector `KnowledgeEmbedding.embedding`, los CHECK
+  `Client_logoScale_rango` y `ProjectTimeline_un_solo_dueno` (2026-11-26: un cronograma es de un proyecto O de un plan
+  general, DECISIONS «El plan general es un objeto de la cuenta»), RLS y policies — y un push los DROPEA sin preguntar (ya se llevó la
   tabla `RoleProfile` una vez). No existe una "DB de dev": es la misma base.
 - **Flujo de un cambio de schema**, paso a paso:
   1. Escribir `scripts/sql/AAAA-MM-DD-nombre.sql` — **SOLO ADITIVO**, inocuo durante la ventana
      en que PROD corre el código viejo (columnas nullable / defaults), y que pueda correr dos veces.
   2. `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`
      como **detector de drift ajeno** (2 PCs sobre la misma base). Ruido esperado del diff:
-     la columna `embedding` y el CHECK, que Prisma no modela.
+     la columna `embedding` y los dos CHECK, que Prisma no modela.
   3. Aplicar y anotar: `npm run db:sql -- scripts/sql/...` es el simulacro (cómo correría y qué
      dice el registro); el mismo comando con `--apply` y `ALLOW_PROD_WRITE=1` lo aplica y lo anota
      en `SqlAplicado` en la MISMA transacción (`scripts/aplicar-sql.ts`, con el guard; en PowerShell,
@@ -223,7 +224,7 @@ corre migraciones ni seeds (cap. D + RUNBOOK).
 
 ### F. Los tests: cinco familias que se rompen por razones distintas
 
-**1053**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
+**1054**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
 `unit` de vitest solo incluye `lib/**`, así que un test puesto en otra carpeta NO corre y
 nada avisa. `npm test` es la suite unit. Desde el 2026-08-01 (F4) el project `integration`
 está VIVO: `npm run test:int` corre los `*.int.test.ts` contra la base LOCAL `nexus_test`

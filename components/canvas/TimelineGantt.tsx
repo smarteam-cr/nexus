@@ -192,6 +192,9 @@ export interface GanttPhase {
   loopNumero?: number | null;
   /** 2026-11-19: el proyecto de la fase, cuando el Gantt junta varios (el plan general de la cuenta). */
   proyecto?: string | null;
+  /** 2026-11-26: la fase se edita en otro lado (en el plan general, un loop se edita en el cronograma de su proyecto):
+   *  su fila no deja cambiar el nombre, las semanas ni el arranque, ni borrarla. Sus tareas se editan igual. */
+  estructuraFija?: boolean;
   tasks: GanttTask[];
 }
 
@@ -1722,6 +1725,9 @@ export default function TimelineGantt({
               const arrancaAntesQueLaDeArriba = i > 0 && !p.proyecto && range.start < ranges[i - 1].start;
               const meta = p.activityType ? ACTIVITY_META[p.activityType] : null;
               const isOpen = expanded.has(p.key);
+              // 2026-11-26: una fase con la estructura fija (en el plan general, un loop de un proyecto) no deja editar ni
+              // borrar la fase desde acá —se edita en el cronograma de su proyecto—; sus tareas, sí.
+              const faseEditable = editable && !p.estructuraFija;
               /* La marca de la vista «Ver la propuesta»: el fondo del token TAL CUAL (ya está al 15 %
                  en oscuro y en tono 50 en claro: a la mitad no se vería) y una línea a la izquierda. */
               const marca = marcas?.get(p.key);
@@ -1790,7 +1796,7 @@ export default function TimelineGantt({
                   >
                     <div className="flex flex-col min-w-0 pr-2">
                       <div className="flex items-center gap-1.5 text-xs font-medium text-fg-secondary group-hover:text-fg">
-                        {editable && onReorderPhases && (
+                        {faseEditable && onReorderPhases && (
                           <button
                             {...attributes}
                             {...listeners}
@@ -1828,7 +1834,7 @@ export default function TimelineGantt({
                             {String(p.loopNumero).padStart(2, "0")}
                           </span>
                         )}
-                        {editable && onUpdatePhase ? (
+                        {faseEditable && onUpdatePhase ? (
                           <input
                             value={p.name}
                             onChange={(e) => onUpdatePhase(p.key, { name: e.target.value })}
@@ -1847,7 +1853,7 @@ export default function TimelineGantt({
                             ¿repetida?
                           </span>
                         )}
-                        {(chat.disponible || onRegeneratePhase || (editable && canDelete && onRemovePhase)) && (
+                        {(chat.disponible || onRegeneratePhase || (faseEditable && canDelete && onRemovePhase)) && (
                           <span className="ml-auto flex items-center gap-1 flex-shrink-0">
                             {chat.disponible && idParaElChat(p) && (
                               <button
@@ -1872,7 +1878,7 @@ export default function TimelineGantt({
                                 Regenerar
                               </button>
                             )}
-                            {editable && canDelete && onRemovePhase && (
+                            {faseEditable && canDelete && onRemovePhase && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); onRemovePhase(p.key); }}
                                 className="p-1 rounded text-fg-muted hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity"
@@ -1886,7 +1892,7 @@ export default function TimelineGantt({
                       </div>
                       <div className="ml-[18px] mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
                         {p.proyecto && <span className="text-[10px] font-medium text-fg-muted">{p.proyecto}</span>}
-                        {editable && onUpdatePhase ? (
+                        {faseEditable && onUpdatePhase ? (
                           <span className="flex items-center gap-1.5 text-[10px] text-fg-muted" onClick={(e) => e.stopPropagation()}>
                             <input
                               type="number" min={1}
@@ -2024,16 +2030,16 @@ export default function TimelineGantt({
                       return (
                         <div
                           key={w}
-                          onPointerDown={editable && onUpdatePhase ? (e) => startBarDrag(e, p.key, range.start) : undefined}
+                          onPointerDown={faseEditable && onUpdatePhase ? (e) => startBarDrag(e, p.key, range.start) : undefined}
                           className={`h-3 rounded transition-all ${seSuma ? "bg-success-surface border border-success-line" : (meta?.seg ?? NEUTRAL_SEG)} ${
                             allDone || isPast ? "opacity-35" : ""
                           } ${isCur ? "timeline-now-pulse" : ""} ${
                             weekOverdue && !isCur ? "ring-1 ring-red-500/80" : ""
-                          } ${editable && onUpdatePhase ? "cursor-ew-resize touch-none" : ""}`}
+                          } ${faseEditable && onUpdatePhase ? "cursor-ew-resize touch-none" : ""}`}
                           title={
                             seSuma
                               ? TITULO_SEMANA_QUE_SE_SUMA
-                              : editable && onUpdatePhase
+                              : faseEditable && onUpdatePhase
                                 ? `S${w} — arrastra para mover el inicio de la fase`
                                 : `S${w}${weekTasks.length ? ` · ${weekTasks.length} tareas` : ""}`
                           }

@@ -379,7 +379,8 @@ export async function leerCronogramasDeCartera() {
 type CronogramaDb = Awaited<ReturnType<typeof leerCronogramasDeCartera>>[number];
 
 export function aCronogramas(filas: CronogramaDb[]): CronogramaParaCarga[] {
-  return filas.map((t) => ({
+  // La consulta pide un proyecto de cartera: un cronograma de plan (sin proyecto) no llega. El tipo lo admite.
+  return filas.flatMap((t) => (t.project ? [{ ...t, project: t.project }] : [])).map((t) => ({
     proyectoId: t.project.id,
     clienteId: t.project.clientId,
     responsableEmail: t.project.hubspotOwnerEmail,

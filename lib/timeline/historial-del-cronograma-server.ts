@@ -91,7 +91,7 @@ export async function historialDelCronograma(projectId: string): Promise<Histori
   const ultimas = filas.slice(0, 30);
   const versiones = armarHistorial(ultimas, {
     huellaActual: actual ? huellaDeContenido(actual) : null,
-    publicado: !!t.project.timelinePublishedAt,
+    publicado: !!t.project?.timelinePublishedAt,
     delCliente: huellaDelCliente ? (ultimas.find((f) => f.huella === huellaDelCliente)?.id ?? null) : null,
   });
   return { versiones: await conNombres(versiones), actual };

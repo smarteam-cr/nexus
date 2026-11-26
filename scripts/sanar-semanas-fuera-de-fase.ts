@@ -72,7 +72,7 @@ async function main() {
     const semanasQueFaltan = maxSemana + 1 - f.durationWeeks;
 
     console.log(
-      `${f.timeline.project.name} · «${f.name}» — ${f.durationWeeks} sem ` +
+      `${f.timeline.project?.name ?? "(plan general)"} · «${f.name}» — ${f.durationWeeks} sem ` +
         `(válidas 0..${ultima}) · ${malas.length} tarea(s) fuera` +
         `\n  → para que entraran donde están, la fase necesitaría ${semanasQueFaltan} semana(s) más`,
     );

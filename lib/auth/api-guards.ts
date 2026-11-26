@@ -353,6 +353,32 @@ export async function guardContextoDelDocumento(
 }
 
 /**
+ * EDITAR el plan general de una cuenta (2026-11-26: su lista de proyectos, su arranque, sus fases propias y las tareas de
+ * ellas): la MISMA vara que el cronograma de un proyecto (`guardTimelineEdit`), con el acceso a la CUENTA en vez del
+ * proyecto. DECISIONS «El plan general es un objeto de la cuenta».
+ */
+export async function guardPlanEdit(
+  clientId: string,
+): Promise<(Awaited<ReturnType<typeof requireCapability>> & { clientId: string }) | NextResponse> {
+  const access = await guardAccessToClient(clientId);
+  if (access instanceof NextResponse) return access;
+  const guard = await guardCapability("editTimeline");
+  if (guard instanceof NextResponse) return guard;
+  return { ...guard, clientId };
+}
+
+/** BORRAR del plan general (una fase propia o una tarea suya): la misma vara que `guardTimelineDelete`. */
+export async function guardPlanDelete(
+  clientId: string,
+): Promise<(Awaited<ReturnType<typeof requireCapability>> & { clientId: string }) | NextResponse> {
+  const access = await guardAccessToClient(clientId);
+  if (access instanceof NextResponse) return access;
+  const guard = await guardCapability("deleteTimeline");
+  if (guard instanceof NextResponse) return guard;
+  return { ...guard, clientId };
+}
+
+/**
  * BORRAR del cronograma (tareas/fases/cronograma entero): acceso al CLIENTE del proyecto
  * (igual scope que la edición) + capacidad `deleteTimeline` (todos menos el CSE — el CSE
  * suspende, no borra). 404 si el proyecto no existe; 401/403 si falta acceso o capacidad.

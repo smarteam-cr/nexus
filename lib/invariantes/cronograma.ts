@@ -28,7 +28,7 @@ export const INV22: Invariante = {
       select: {
         name: true,
         durationWeeks: true,
-        timeline: { select: { project: { select: { name: true } } } },
+        timeline: { select: { project: { select: { name: true } }, plan: { select: { client: { select: { name: true } } } } } },
         tasks: { select: { weekIndex: true } },
       },
     });
@@ -38,7 +38,8 @@ export const INV22: Invariante = {
       const malas = f.tasks.filter((t) => t.weekIndex >= f.durationWeeks || t.weekIndex < 0).length;
       if (malas === 0) continue;
       tareasDesbordadas += malas;
-      desbordadas.push(`${f.timeline.project.name} · «${f.name}» (${f.durationWeeks} sem): ${malas} tarea(s)`);
+      // Un cronograma de plan general no tiene proyecto: se nombra el plan (DECISIONS «El plan general es un objeto…»).
+      desbordadas.push(`${f.timeline.project?.name ?? `Plan general de ${f.timeline.plan?.client.name ?? "?"}`} · «${f.name}» (${f.durationWeeks} sem): ${malas} tarea(s)`);
     }
     if (desbordadas.length > 0) {
       return viola(
