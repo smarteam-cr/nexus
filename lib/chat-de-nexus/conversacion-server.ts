@@ -31,14 +31,19 @@ import { topeDeNexusHoy } from "@/lib/ai/tope-de-nexus-server";
 import { prisma } from "@/lib/db/prisma";
 import {
   comoSeLee,
+  esAlgoQueSeCuenta,
   leerElTurno,
+  laDijoLaPersona,
   loQueConto,
+  loQueContoEnPedazos,
   NO_SE_PUDO_LEER,
   pedidoDelTurno,
   porQueNoSigue,
   puedePreguntar,
+  NADA_QUE_GUARDAR,
   RESPUESTA_A_LA_CORTESIA,
   TOPES,
+  UNA_PREGUNTA_NO_ES_UNA_NOTA,
   type ContextoParaNexus,
   type MensajeDeLaConversacion,
   type ResultadoDelTurno,
@@ -244,6 +249,8 @@ export async function correrUnaVuelta(o: {
   const { contexto, mensajes, conversacion, donde } = o;
   // Lo seguro lo decide el código (`comoSeLee`); lo dudoso, el modelo con la conversación a la vista. Un lugar sin la mano
   // de la cuenta no tiene pedidos: lo que el código ve como pedido lo decide el modelo (contar o preguntar).
+  // «Guardarlo como nota» con una pregunta, un pedido o un «gracias» (25 nov, TEC · AE): no se cuenta, ni se gasta una vuelta.
+  if (o.contar && !esAlgoQueSeCuenta(mensajes[mensajes.length - 1]?.texto ?? "")) return { ok: false, status: 400, error: UNA_PREGUNTA_NO_ES_UNA_NOTA };
   const leida = comoSeLee(mensajes, { contar: o.contar, preguntar: o.preguntar, pedir: o.pedir, escala: o.pedirALaEscala ? o.escala : null });
   const lectura = leida === "pedido" && !o.pedirALaCuenta ? "duda" : leida;
   const loUltimo = mensajes[mensajes.length - 1]?.texto.trim().slice(0, TOPES.largoDelMensaje) ?? "";
@@ -301,18 +308,32 @@ export async function correrUnaVuelta(o: {
       // Un cambio a La escala tampoco (25 nov): lo propone la mano de La escala con las palabras de la persona.
       turno = { tipo: "cambio", pedido: loUltimo };
     } else {
-      const respuesta = await conContextoDeIA(ia, () => getAnthropic().messages.create(pedidoDelTurno(contexto, mensajes, lectura)));
+      const respuesta = await conContextoDeIA(ia, () => getAnthropic().messages.create(pedidoDelTurno(contexto, mensajes, lectura, { desdeElBoton: !!o.contar })));
       turno = leerElTurno(respuesta, {
         destinos: new Set(contexto.destinos.map((d) => d.clave)),
         valorValido: o.valorValido,
         loQueDijo: loQueConto(mensajes),
-        puedePreguntar: puedePreguntar(mensajes),
+        // Desde «Guardarlo como nota» no pregunta: ./conversacion.ts › pedidoDelTurno.
+        puedePreguntar: !o.contar && puedePreguntar(mensajes),
         laPregunta: lectura === "duda" ? loUltimo : null,
       });
       // Un lugar sin la mano de la cuenta: lo que el modelo leyó como pedido se responde como pregunta.
       if (turno.tipo === "pedido" && !o.pedirALaCuenta) turno = { tipo: "consulta", pregunta: turno.pedido };
       // Lo mismo con un cambio a La escala sin su mano (o sin página que cambiar).
       if (turno.tipo === "cambio" && (!o.pedirALaEscala || !o.escala)) turno = { tipo: "consulta", pregunta: turno.pedido };
+    }
+    // «Guardarlo como nota» y Nexus no encontró nada del cliente en las palabras de la persona (ni un hecho cuya cita dijo
+    // ella ni un cambio: los cambios ya salen con la cita revisada): era una pregunta o un pedido, y no hay nada que guardar
+    // (25 nov, TEC · AE). Un hecho con una cita que la persona no escribió, o un cambio descartado por la cita, no cuenta
+    // (tercera revisión: así volvía a quedar la pregunta como nota, sin hechos). La cita se busca también en pedazos de lo
+    // que escribió («¿Unos 40?» → «Unos 40», «Usan SAP, ¿lo anoto?» → «Usan SAP»: cuarta revisión). La vuelta no queda:
+    // al volver, no aparece un «Guardar» de una pregunta.
+    const dijo = loQueContoEnPedazos(mensajes);
+    if (o.contar && turno.tipo === "listo" && !turno.sinLeer && !turno.cambios.length && !turno.hechos.some((h) => laDijoLaPersona(h.cita, dijo))) {
+      await prisma.agentRun
+        .update({ where: { id: run.id }, data: { status: "ERROR", output: JSON.stringify({ nadaQueGuardar: true, mensajes }) } })
+        .catch(() => {});
+      return { ok: false, status: 422, error: NADA_QUE_GUARDAR };
     }
     // El pedido (o el cambio) queda en la vuelta recién con su lista (o su propuesta, abajo): si la mano no puede, la vuelta
     // no queda.

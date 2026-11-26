@@ -34,7 +34,7 @@ import { Alert } from "@/components/ui";
 import { BotonEnlace } from "@/components/ui/sistema";
 import CajonDeNexus, { Burbuja, CajaDeNexus, ChatVacio, ChipDeNexus, Pensando, PropuestaEnElHilo, SugerenciasDeNexus } from "@/components/asistente/CajonDeNexus";
 import { devolverALaCaja } from "@/lib/asistente/caja";
-import { notaDeLaConversacion, paraContarComoNota, paraPreguntar, paraSeguirDespuesDeGuardar, TOPES, type ResultadoDelTurno } from "@/lib/chat-de-nexus/conversacion";
+import { NADA_QUE_GUARDAR, notaDeLaConversacion, paraContarComoNota, paraPreguntar, paraSeguirDespuesDeGuardar, TOPES, type ResultadoDelTurno } from "@/lib/chat-de-nexus/conversacion";
 import type { MensajeGuardado } from "@/lib/chat-de-nexus/guardada";
 import { conLaListaAplicada, conLaListaNueva, cuerpoDeLaVuelta, seGuardaComoNota, type ListaEnLaConversacion } from "@/lib/chat-de-nexus/lista";
 import { textoDeLaEscala, type DondeEnLaEscala, type EscalaEnLaConversacion } from "@/lib/chat-de-nexus/escala-en-la-conversacion";
@@ -297,6 +297,11 @@ export default function PanelDeNexus({
   // La persona eligió «Guardarlo como nota»: debajo de lo que iba a guardarse no vuelve «¿Era una pregunta?» (sin ida y
   // vuelta entre los dos botones).
   const [contadoAMano, setContadoAMano] = useState(false);
+  /**
+   * Lo que «Guardarlo como nota» ya intentó y no tenía nada del cliente (25 nov): su botón no vuelve (cada intento es una
+   * llamada a la IA).
+   */
+  const [sinNadaQueGuardar, setSinNadaQueGuardar] = useState<ReadonlySet<string>>(new Set());
   const cajaRef = useRef<HTMLTextAreaElement | null>(null);
   /** La lista que se está aplicando (su vuelta): mientras tanto la caja y «Nueva conversación» esperan. */
   const [aplicando, setAplicando] = useState<string | null>(null);
@@ -374,6 +379,8 @@ export default function PanelDeNexus({
       // Lo escrito mientras Nexus pensaba no se pisa: va debajo de lo que vuelve.
       if (modo === "normal") setTexto((x) => devolverALaCaja(t, x));
       setError(e instanceof Error ? e.message : "Nexus no pudo responder.");
+      // «Guardarlo como nota» sin nada del cliente: ese botón no vuelve para lo mismo.
+      if (modo === "contar" && e instanceof Error && e.message === NADA_QUE_GUARDAR) setSinNadaQueGuardar((s) => new Set([...s, t]));
     } finally {
       setPensando(false);
     }
@@ -399,6 +406,11 @@ export default function PanelDeNexus({
     const c = paraContarComoNota(mensajes, i);
     const l = mensajes[i]?.lista;
     if (c) void mandar(c.texto, c.base, "contar", mensajes, l?.estado === "viva" ? l.id : undefined);
+  };
+  /** ¿Va «Guardarlo como nota» debajo del mensaje `i`? Solo si lo de la persona puede contar algo y no se probó ya sin nada. */
+  const conGuardarComoNota = (i: number) => {
+    const c = paraContarComoNota(mensajes, i);
+    return !!c && !sinNadaQueGuardar.has(c.texto);
   };
 
   /**
@@ -541,7 +553,7 @@ export default function PanelDeNexus({
                 <>
                   <LaLista l={m.lista} aplicando={aplicando === m.lista.id} apagado={ocupado || !!apagado} onAplicar={(d) => void aplicarLista(m.lista!, d)} />
                   {/* Lo que se leyó como pedido y se quería contar: un clic lo cuenta (y la lista, si está viva, ya no va). */}
-                  {!terminado && seGuardaComoNota(m.lista) && paraContarComoNota(mensajes, i) && (
+                  {!terminado && seGuardaComoNota(m.lista) && conGuardarComoNota(i) && (
                     <p className="mr-2 mt-2 flex flex-wrap items-center gap-x-1.5 text-2xs text-fg-muted">
                       ¿Era algo que querías contar?
                       <BotonEnlace className="py-0 text-2xs" disabled={!!apagado || ocupado} onClick={() => contarComoNota(i)}>
@@ -554,7 +566,7 @@ export default function PanelDeNexus({
               /* Lo que tiene formato (una respuesta) no conserva los saltos crudos: los pone el Markdown. */
               <Burbuja de={m.de === "persona" ? "persona" : "nexus"} className={m.de === "nexus" && !m.respuesta ? "whitespace-pre-wrap" : undefined}>
                 {m.respuesta ? <LaRespuesta r={m.respuesta} /> : m.texto}
-                {!terminado && paraContarComoNota(mensajes, i) && (
+                {!terminado && conGuardarComoNota(i) && (
                   <p className="mt-2 flex flex-wrap items-center gap-x-1.5 border-t border-line pt-1.5 text-2xs text-fg-muted">
                     ¿Era algo que querías contar?
                     <BotonEnlace className="py-0 text-2xs" disabled={!!apagado || ocupado} onClick={() => contarComoNota(i)}>

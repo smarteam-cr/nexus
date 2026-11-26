@@ -231,7 +231,7 @@ function bloques(): BloqueGuardado[] {
     vinneta("Acá no anota notas en HubSpot: lo que cuentas va a «Lo que sabes del cliente»."),
     titulo(4, "Si te entendió al revés"),
     vinneta("Debajo de lo que iba a guardar: «¿Era una pregunta? Respóndela»."),
-    vinneta("Debajo de una respuesta: «¿Era algo que querías contar? Guardarlo como nota»."),
+    vinneta("Debajo de una respuesta: «¿Era algo que querías contar? Guardarlo como nota». Solo si lo que escribiste cuenta algo: una pregunta nunca queda como nota."),
     ...ejemplos(
       "Marco habló con el gerente por WhatsApp: pierden unos 40.000 dólares al mes en cartera vencida.",
       "¿Qué dijeron de la cobranza?",

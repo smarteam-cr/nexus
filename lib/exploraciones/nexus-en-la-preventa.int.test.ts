@@ -654,14 +654,18 @@ describe("lo seguro lo decide el código, lo dudoso el modelo, y nada se guarda 
     expect(pedidos[pedidos.length - 1]).not.toContain("¿Qué dijo Liz");
   });
 
-  it("«Guardarlo como nota»: con `contar`, lo que tenía forma de pregunta se cuenta, y la respuesta no vuelve", async () => {
+  it("«Guardarlo como nota»: con `contar`, lo que Nexus tomó por una pregunta se cuenta, y la respuesta no vuelve", async () => {
     const { id } = await sembrar();
-    const TEXTO = "¿Sabías que cobran a mano con un Excel?";
+    // Sin signo de pregunta: lo decidió el modelo y lo tomó por una consulta. Desde el 25 nov, una pregunta de verdad
+    // («¿Sabías que…?») no se guarda como nota (la prueba de abajo).
+    const TEXTO = "La cobranza la hacen a mano con un Excel";
     siguiente = { tipo: "consulta" };
     // Primero Nexus lo tomó como pregunta y respondió.
     const antes = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: TEXTO }], EMAIL, CON_ACCESO);
     if (!antes.ok || antes.turno.tipo !== "respuesta") throw new Error("esperaba una respuesta");
     pedidos.length = 0;
+    // Al contarlo, Nexus encuentra lo del cliente (un hecho): sin eso no habría nada que guardar.
+    siguiente = { tipo: "listo", cambios: [], hechos: [{ tipo: "proceso_hoy", frase: "La empresa cobra a mano con un Excel", cita: "La cobranza la hacen a mano con un Excel" }] };
     // La pantalla saca el par pregunta-respuesta y manda lo escrito con `contar` (paraContarComoNota).
     const v = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: TEXTO }], EMAIL, CON_ACCESO, { contar: true });
     if (!v.ok) throw new Error(v.error);
@@ -672,6 +676,57 @@ describe("lo seguro lo decide el código, lo dudoso el modelo, y nada se guarda 
     const c = await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO);
     expect(c?.mensajes).toEqual([{ de: "persona", texto: TEXTO }]);
     expect(c?.listo).not.toBeNull();
+  });
+
+  it("⛔ «Guardarlo como nota» con una pregunta, un pedido o un «gracias»: no se cuenta, no llama a la IA ni gasta una vuelta (25 nov, TEC · AE)", async () => {
+    const { id } = await sembrar();
+    for (const texto of ["cuales son los retos principales del AE?", "¿Sabías que cobran a mano con un Excel?", "Crea una tarea para llamar a Ana el viernes", "gracias"]) {
+      const v = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto }], EMAIL, CON_ACCESO, { contar: true });
+      expect(v, texto).toMatchObject({ ok: false, status: 400 });
+    }
+    expect(pedidos).toHaveLength(0);
+    expect(await prisma.agentRun.count({ where: { triggeredByEmail: EMAIL } })).toBe(0);
+  });
+
+  it("⛔ «Guardarlo como nota» de una pregunta sin signo: si Nexus no encuentra nada del cliente, no hay nada que guardar y la vuelta no vuelve", async () => {
+    const { id } = await sembrar();
+    siguiente = { tipo: "listo", cambios: [], hechos: [] };
+    const v = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: "Oye, cuales son los retos principales del AE" }], EMAIL, CON_ACCESO, { contar: true });
+    expect(v).toMatchObject({ ok: false, status: 422 });
+    // Al modelo se le dijo que de una pregunta no saque un hecho.
+    expect(pedidos[0]).toContain("no inventes un hecho de una pregunta");
+    const corrida = await prisma.agentRun.findFirstOrThrow({ where: { triggeredByEmail: EMAIL }, select: { status: true } });
+    expect(corrida.status).toBe("ERROR");
+    // Al volver no aparece un «Guardar» de esa pregunta.
+    expect(await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO)).toBeNull();
+  });
+
+  it("⛔ «Guardarlo como nota»: un hecho cuya cita la persona no escribió, o una pregunta de Nexus, tampoco son algo que guardar", async () => {
+    const { id } = await sembrar();
+    const PREGUNTA = [{ de: "persona" as const, texto: "Oye, cuales son los retos principales del AE" }];
+    // Lo que pasó en la tercera revisión: el modelo saca un hecho de lo que sabe (los retos) con una cita que ella no dijo.
+    siguiente = { tipo: "listo", cambios: [], hechos: [{ tipo: "reto", frase: "No tienen un CRM", cita: "no tienen un CRM" }] };
+    expect(await vueltaEnLaPreventa(id, CONVERSACION, PREGUNTA, EMAIL, CON_ACCESO, { contar: true })).toMatchObject({ ok: false, status: 422 });
+    // Un cambio con una cita que no calza se descarta: tampoco cuenta.
+    siguiente = { tipo: "listo", cambios: [{ destino: "negocio", valor: { cartera: "US$ 40.000 al mes vencidos" }, porque: "Es lo que pierden.", cita: "pierden unos 40 mil dólares al mes" }], hechos: [] };
+    expect(await vueltaEnLaPreventa(id, CONVERSACION, PREGUNTA, EMAIL, CON_ACCESO, { contar: true })).toMatchObject({ ok: false, status: 422 });
+    // Si el modelo pregunta («¿Qué quieres contar de los retos?»), no hay pregunta: la respuesta se juntaría con la pregunta.
+    siguiente = { tipo: "pregunta", preguntas: ["¿Qué quieres contar de los retos?"] };
+    expect(await vueltaEnLaPreventa(id, CONVERSACION, PREGUNTA, EMAIL, CON_ACCESO, { contar: true })).toMatchObject({ ok: false, status: 422 });
+    expect(pedidos.at(-1)).toContain("YA NO PREGUNTES");
+    expect(await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO)).toBeNull();
+  });
+
+  it("«Guardarlo como nota» de algo corto que la persona sí dijo («¿Unos 40?» a La escala, «Usan SAP, ¿lo anoto?») se cuenta", async () => {
+    const { id } = await sembrar();
+    for (const [n, texto, cita] of [
+      ["1", "Sobre Ventas · Datos (cuántos vendedores tienen): ¿Unos 40?", "Unos 40"],
+      ["2", "Usan SAP, ¿lo anoto?", "Usan SAP"],
+    ]) {
+      siguiente = { tipo: "listo", cambios: [], hechos: [{ tipo: "cuenta", frase: "Lo que contó", cita }] };
+      const v = await vueltaEnLaPreventa(id, `${CONVERSACION}-${n}`, [{ de: "persona", texto }], EMAIL, CON_ACCESO, { contar: true });
+      expect(v.ok && v.turno.tipo, texto).toBe("listo");
+    }
   });
 
   const RESPONDIO = [
@@ -934,10 +989,14 @@ describe("una sola conversación: topes, medidor, candado y lo que encontró la 
 
   it("«Guardarlo como nota» debajo de una lista viva: la lista queda soltada y no se arrastra al pedido siguiente", async () => {
     const { id, quien } = await conQuienPide();
-    const lista = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: PEDIDO }], SA, CON_ACCESO, { quienPideLaCuenta: quien, pedir: true });
+    // Lo que se leyó como pedido y contaba algo («Pasa que…»): un pedido de verdad no se guarda como nota (25 nov).
+    const CONTABA = "Pasa que tienen una tarea pendiente con el banco";
+    const lista = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: CONTABA }], SA, CON_ACCESO, { quienPideLaCuenta: quien, pedir: true });
     if (!lista.ok || lista.turno.tipo !== "lista") throw new Error("esperaba una lista");
-    // La persona elige contarlo: sale el par y se cuenta, soltando la lista.
-    const contada = await pedir(id, quien, [{ de: "persona", texto: PEDIDO }], { contar: true, soltar: lista.turno.lista.id });
+    // La persona elige contarlo: sale el par y se cuenta, soltando la lista. Nexus saca el hecho de SUS palabras (un hecho
+    // con una cita que ella no escribió no cuenta: «nada que guardar», tercera revisión del 25 nov).
+    siguiente = { tipo: "listo", cambios: [], hechos: [{ tipo: "cuenta", frase: "Tienen una tarea pendiente con el banco", cita: "tienen una tarea pendiente con el banco" }] };
+    const contada = await pedir(id, quien, [{ de: "persona", texto: CONTABA }], { contar: true, soltar: lista.turno.lista.id });
     expect(contada.ok && contada.turno.tipo).toBe("listo");
     const run = await prisma.agentRun.findUniqueOrThrow({ where: { id: lista.turno.lista.id }, select: { output: true } });
     expect(JSON.parse(run.output!).soltada).toBe(true);
@@ -956,10 +1015,12 @@ describe("«Guardarlo como nota» debajo de una lista, si la IA falla al leerlo"
     const s = await sembrar();
     const persona = await prisma.teamMember.create({ data: { name: "Sofía Admin", email: SA, roleEnum: "SUPER_ADMIN" } });
     const quien = async () => ({ persona, veMontos: false });
-    const v = await vueltaEnLaPreventa(s.id, CONVERSACION, [{ de: "persona", texto: "Crea una tarea para llamar a Ana" }], SA, CON_ACCESO, { quienPideLaCuenta: quien });
+    // Lo que se leyó como pedido y contaba algo: un pedido de verdad no se guarda como nota (25 nov).
+    const CONTABA = "Pasa que tienen una tarea pendiente con Ana";
+    const v = await vueltaEnLaPreventa(s.id, CONVERSACION, [{ de: "persona", texto: CONTABA }], SA, CON_ACCESO, { quienPideLaCuenta: quien, pedir: true });
     if (!v.ok || v.turno.tipo !== "lista") throw new Error("esperaba una lista");
     siguiente = "esto no es un JSON";
-    const contada = await vueltaEnLaPreventa(s.id, CONVERSACION, [{ de: "persona", texto: "Crea una tarea para llamar a Ana" }], SA, CON_ACCESO, {
+    const contada = await vueltaEnLaPreventa(s.id, CONVERSACION, [{ de: "persona", texto: CONTABA }], SA, CON_ACCESO, {
       quienPideLaCuenta: quien,
       contar: true,
       soltar: v.turno.lista.id,
