@@ -17804,17 +17804,29 @@ Marco y Mariana (teamnet.com.mx) manejan sistemas para todo el grupo, y el domin
     nada a INV1, 2, 37, 42, 45, 46 ni 57 (INV1, 37, 42 y 45 ya están en rojo por otros clientes). *Lo aceptado:* los
     documentos de Teamnet ya generados no cambian solos (21 corridas de agentes usaron las 17).
   - **La regla del grupo — Elías, 26 nov: «las conjuntas se quedan en Teamnet».** Dos fichas son del mismo GRUPO si una
-    persona del equipo confirmó a alguien en las dos (`gruposDeLaGenteConfirmada`, categorize.ts; no cuentan la casa ni la
-    gente de un dominio de categoría). Cuando la cascada no puede decidir entre fichas de un solo grupo —el título nombra a
-    las dos, hay gente de las dos, o solo gente del grupo y ningún nombre—, la reunión va a la única del grupo con
-    proyectos (`duenaDelProyectoDelGrupo`): en el paso 3·0 y en el empate del título de los pasos 2 y 6 (una interna que
-    nombra a las dos). Cuentan los proyectos que no son el contenedor «Información del cliente» ni de prueba, en cualquier
-    estado (`cargarFichasConProyecto`, resolve-client.ts: que un proyecto se cierre no le cambia la dueña a sus reuniones
-    viejas). Si ninguna o más de una tiene proyectos, o hay una ficha de afuera del grupo entre las candidatas, sigue por
-    decidir. A la otra ficha solo va lo que la nombra a ella sola. *Por qué solo en un grupo que armó una persona:* entre
-    dos clientes cualquiera, un título que nombra a los dos lo sigue asignando alguien en /sessions. *Lo que arrastra:*
-    confirmar a alguien en dos fichas (o quitarle una) cambia reuniones de OTRA gente que nombran a esas fichas; la pestaña
-    y la precarga las suman al aviso y a la mudanza (`reResolverReunionesDe › tambienLasDeLasFichas`: las que las nombran en
-    el título y las de la gente confirmada en ellas).
+    persona del equipo confirmó a alguien en las dos (`gruposDeLaGenteConfirmada`, categorize.ts). Arma grupo solo quien
+    tiene su dominio registrado en una de sus fichas o en su empresa (Laura, de teamnet.com.mx, sí; un consultor de una
+    agencia o de gmail confirmado en dos clientes, no: uniría a dos clientes que no tienen nada que ver), quien está en
+    fichas de dos empresas o más (entre las unidades de UNA empresa manda su propia regla: sin pista, por decidir), y nunca
+    la casa ni la gente de un dominio de categoría. Cuando la cascada no puede decidir entre fichas de un solo grupo y de dos
+    empresas o más —el título nombra a las dos, hay gente de las dos, o solo gente del grupo y ningún nombre—, la reunión
+    va a la ficha del grupo con el proyecto MÁS ANTIGUO (`duenaDelProyectoDelGrupo`): en el paso 3·0 y en el empate del
+    título de los pasos 2 y 6 (una interna que nombra a las dos). Cuentan los proyectos que no son el contenedor
+    «Información del cliente» ni de prueba, en cualquier estado (`cargarPrimerProyecto`, resolve-client.ts). Si ninguna
+    tiene proyectos, si dos empatan en la fecha, o si hay una ficha de afuera del grupo entre las candidatas, sigue por
+    decidir. A la otra ficha solo va lo que la nombra a ella sola. *Por qué el proyecto más antiguo y no «la única con
+    proyectos»* (revisión del 26 nov): con «la única», el primer proyecto de Stratosphere devolvía a por decidir, sin aviso,
+    las conjuntas que el equipo ya usa en los documentos de Teamnet; la fecha del primer proyecto no cambia cuando otra
+    ficha suma uno, ni cuando uno se cierra. Lo que de verdad es de la otra se asigna a mano. *Lo aceptado:* si ninguna
+    ficha del grupo tenía proyectos, el primero que llegue se lleva lo que estaba por decidir en la próxima re-resolución.
+    *Por qué solo en un grupo que armó una persona:* entre dos clientes cualquiera, un título que nombra a los dos lo sigue
+    asignando alguien en /sessions. *Lo que arrastra:* confirmar a alguien en dos fichas (o quitarle una) cambia reuniones
+    de OTRA gente de todo el grupo. La pestaña y la precarga calculan una vez, antes de escribir, qué fichas mira el cambio
+    (`fichasDelGrupoQueCambia` → `fichasQueMiraElGrupo`: todas las del grupo, antes y después) y las suman al aviso, a la
+    recuenta y a la mudanza (`reResolverReunionesDe › tambienLasDeLasFichas`: las reuniones que las nombran en el título y
+    las de la gente confirmada en ellas); quien guarda tiene que abrir esas fichas. El aviso dice «Interna (reunión del
+    equipo)» cuando una reunión vuelve a Interna, no «Por decidir». **Comprobado en producción** (26 nov, solo lectura):
+    con el código de la regla y la gente confirmada de hoy (el TEC, nadie en dos fichas), ninguna de las 9.126 reuniones
+    cambia de dueña.
 - **Sin cambio:** la agenda de «Mi día» (`lib/mi-dia/agenda.ts`) reparte los eventos futuros con su regla de unidades y
   todavía no mira a la gente confirmada.

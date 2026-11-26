@@ -30,6 +30,7 @@ import {
   pistasDeTitulo,
   interlocutoresDesdeFilas,
   fichasQueDaElDominio,
+  fichasQueMiraElGrupo,
   type CategorizeContext,
   type TrazaDeLaCascada,
   type CategorizableSession,
@@ -91,18 +92,46 @@ export async function buildCategorizeCtx(ajustarFichas?: AjustarFichas): Promise
   };
   ctx.personasDeEntidades = await cargarPersonasDeEntidades(ctx);
   ctx.interlocutoresConfirmados = await cargarInterlocutoresConfirmados();
-  ctx.fichasConProyecto = await cargarFichasConProyecto();
+  ctx.primerProyecto = await cargarPrimerProyecto();
   return ctx;
 }
 
 /**
- * Las fichas con algún proyecto que no es el contenedor «Información del cliente» ni de prueba, en CUALQUIER estado
- * (categorize.ts › la regla del grupo, Elías 26 nov). En cualquier estado a propósito: que un proyecto se cierre no le
- * cambia la dueña a sus reuniones viejas. La comparten /sessions y la materialización, como la gente confirmada (INV2).
+ * Ficha → la fecha de su primer proyecto que no es el contenedor «Información del cliente» ni de prueba, en CUALQUIER
+ * estado (categorize.ts › la regla del grupo, Elías 26 nov). En cualquier estado a propósito: que un proyecto se cierre no
+ * le cambia la dueña a sus reuniones viejas. La comparten /sessions y la materialización, como la gente confirmada (INV2).
  */
-export async function cargarFichasConProyecto(db: Pick<typeof prisma, "project"> = prisma): Promise<Set<string>> {
-  const filas = await db.project.groupBy({ by: ["clientId"], where: { esPrueba: false, ...NO_ES_CONTENEDOR_WHERE } });
-  return new Set(filas.map((f) => f.clientId));
+export async function cargarPrimerProyecto(db: Pick<typeof prisma, "project"> = prisma): Promise<Map<string, Date>> {
+  const filas = await db.project.groupBy({ by: ["clientId"], where: { esPrueba: false, ...NO_ES_CONTENEDOR_WHERE }, _min: { createdAt: true } });
+  return new Map(filas.filter((f) => f._min.createdAt).map((f) => [f.clientId, f._min.createdAt!]));
+}
+
+/** La gente confirmada con la hipótesis de un simulacro (correo → fichas; vacía = deja de estar confirmada). */
+function conLaHipotesis(
+  confirmadasHoy: ReadonlyMap<string, readonly string[]>,
+  hipotesis: ReadonlyMap<string, readonly string[]>,
+  clients: CategorizeContext["clients"],
+): Map<string, readonly string[]> {
+  const confirmadas = new Map(confirmadasHoy);
+  const orden = new Map(clients.map((c, i) => [c.id, i]));
+  for (const [correo, fichas] of hipotesis) {
+    const ids = [...new Set(fichas)].filter((id) => orden.has(id)).sort((a, b) => orden.get(a)! - orden.get(b)!);
+    if (ids.length) confirmadas.set(correo.trim().toLowerCase(), ids);
+    else confirmadas.delete(correo.trim().toLowerCase());
+  }
+  return confirmadas;
+}
+
+/**
+ * Las fichas cuyas reuniones puede mover la regla del grupo si la confirmación de esta gente queda como dice `hipotesis`
+ * (categorize.ts › `fichasQueMiraElGrupo`, con el contexto de la materialización). Se calcula UNA vez, antes de escribir, y
+ * se pasa igual al aviso, a la recuenta y a la mudanza (`reResolverReunionesDe › tambienLasDeLasFichas`): después de
+ * escribir, «antes» y «después» ya son lo mismo (revisión del 26 nov).
+ */
+export async function fichasDelGrupoQueCambia(hipotesis: ReadonlyMap<string, readonly string[]>, ajustarFichas?: AjustarFichas): Promise<string[]> {
+  const ctx = await buildCategorizeCtx(ajustarFichas);
+  const antes = ctx.interlocutoresConfirmados ?? new Map<string, readonly string[]>();
+  return fichasQueMiraElGrupo([...hipotesis.keys()], antes, conLaHipotesis(antes, hipotesis, ctx.clients), ctx);
 }
 
 /**
@@ -350,16 +379,7 @@ export async function reResolverReunionesDe(
   if (o.aplicar && o.ajustarFichas) throw new Error("Cambiar las fichas en memoria es solo para un simulacro.");
   const ctx = await buildCategorizeCtx(o.ajustarFichas);
   const confirmadasAntes = ctx.interlocutoresConfirmados ?? new Map<string, readonly string[]>();
-  if (o.hipotesis) {
-    const confirmadas = new Map(ctx.interlocutoresConfirmados ?? []);
-    const orden = new Map(ctx.clients.map((c, i) => [c.id, i]));
-    for (const [correo, fichas] of o.hipotesis) {
-      const ids = [...new Set(fichas)].filter((id) => orden.has(id)).sort((a, b) => orden.get(a)! - orden.get(b)!);
-      if (ids.length) confirmadas.set(correo.trim().toLowerCase(), ids);
-      else confirmadas.delete(correo.trim().toLowerCase());
-    }
-    ctx.interlocutoresConfirmados = confirmadas;
-  }
+  if (o.hipotesis) ctx.interlocutoresConfirmados = conLaHipotesis(ctx.interlocutoresConfirmados ?? new Map(), o.hipotesis, ctx.clients);
   const porId = new Map<string, { id: string; title: string; date: Date; participants: string[]; manualClientId: string | null; resolvedClientId: string | null }>();
   if (o.todas) {
     for (const x of await prisma.firefliesSession.findMany({

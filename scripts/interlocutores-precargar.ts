@@ -194,7 +194,7 @@ async function main() {
 
   const { prisma } = await import("@/lib/db/prisma");
   const { esquemaDesactualizado } = await import("@/lib/db/esquema");
-  const { reResolverReunionesDe } = await import("@/lib/sessions/resolve-client");
+  const { fichasDelGrupoQueCambia, reResolverReunionesDe } = await import("@/lib/sessions/resolve-client");
   const { motivoParaNoGuardar } = await import("@/lib/clients/personas-de-la-empresa-server");
   const { ajustarConLosCambios, fichasQueCambian, huellaDeLaPrecarga, separarLaDeriva } = await import("@/lib/clients/precarga-de-interlocutores");
   const { escribirFichasYPersonas, PrecargaNoEscrita } = await import("@/lib/clients/precarga-de-interlocutores-server");
@@ -344,8 +344,8 @@ async function main() {
     }
     /* Si alguien del mapa queda (o ya estaba) en dos fichas o más, la regla del grupo mueve también reuniones de otra gente
        que nombran a las fichas del mapa: se miran (sin cambios de fichas; con ellos ya se miran todas). */
-    const armaGrupo = [...hipotesis.values()].some((f) => f.length >= 2) || correos.some((c) => confirmadasHoy.filter((x) => x.correo === c).length >= 2);
-    const tambienLasDeLasFichas = armaGrupo ? ids : undefined;
+    const delGrupo = await fichasDelGrupoQueCambia(hipotesis, cambianFichas ? ajustar : undefined);
+    const tambienLasDeLasFichas = delGrupo.length ? delGrupo : undefined;
     /* HubSpot se consulta UNA vez: la cuenta de hoy, la del cambio y el --apply usan lo mismo. */
     const hoy = await reResolverReunionesDe(correos, { aplicar: false, exigirHubspot: true, todas: cambianFichas, tambienLasDeLasFichas });
     const con = await reResolverReunionesDe(correos, {

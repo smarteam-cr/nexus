@@ -160,7 +160,7 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "lib/sessions/resolve-client.ts": {
     modo: "exento",
     razon:
-      "`cargarFichasConProyecto` pregunta por EXISTENCIA (¿la ficha tiene algún proyecto?) para la regla del grupo " +
+      "`cargarPrimerProyecto` pregunta por EXISTENCIA y antigüedad (¿desde cuándo tiene la ficha un proyecto?) para la regla del grupo " +
       "(Elías, 26 nov): no el contenedor ni de prueba (NO_ES_CONTENEDOR_WHERE + esPrueba), en cualquier estado a propósito, " +
       "para que cerrar un proyecto no le cambie la dueña a sus reuniones viejas. No lista proyectos.",
   },

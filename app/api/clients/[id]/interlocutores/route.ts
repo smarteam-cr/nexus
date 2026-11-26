@@ -35,7 +35,7 @@ import {
   restaurarPersona,
 } from "@/lib/clients/personas-de-la-empresa-server";
 import { buildInternalDomainsSet, esLaCasaEn } from "@/lib/sessions/categorize";
-import { fichasDelDominioDe, HubspotNoRespondio, reResolverReunionesDe, type ReunionQueCambia } from "@/lib/sessions/resolve-client";
+import { fichasDelDominioDe, fichasDelGrupoQueCambia, HubspotNoRespondio, reResolverReunionesDe, type ReunionQueCambia } from "@/lib/sessions/resolve-client";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 
 type Params = Promise<{ id: string }>;
@@ -117,8 +117,10 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
     /* Qué reuniones se mueven hoy, y a qué fichas tiene que tener acceso quien pide: las que pierden o ganan una reunión
        de hoy o de las que vengan (`fichasQuePideAbrir`). */
     /* Si la persona queda (o quedaba) en dos fichas o más, arma o desarma un grupo: la regla del grupo mueve también
-       reuniones de otra gente que nombran a esas fichas (Elías, 26 nov). Se miran en el aviso, la recuenta y la mudanza. */
-    const delGrupo = antes.length >= 2 || plan.despues.length >= 2 ? [...new Set([...antes, ...plan.despues])] : undefined;
+       reuniones de otra gente de TODO el grupo (Elías, 26 nov). Se calcula una vez, antes de escribir, y se mira igual en
+       el aviso, la recuenta y la mudanza; quien guarda tiene que abrir esas fichas (sus reuniones futuras también cambian). */
+    const fichasDelGrupo = plan.cambiaLaConfirmacion ? await fichasDelGrupoQueCambia(new Map([[pedido.correo, plan.despues]])) : [];
+    const delGrupo = fichasDelGrupo.length ? fichasDelGrupo : undefined;
     const { cambian: movidas } = plan.cambiaLaConfirmacion
       ? await reResolverReunionesDe([pedido.correo], {
           hipotesis: new Map([[pedido.correo, plan.despues]]),
@@ -128,7 +130,13 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
         })
       : { cambian: [] };
     const delDominio = plan.cambiaLaConfirmacion ? await fichasDelDominioDe(pedido.correo) : [];
-    const acceso = await revisarAcceso(teamMemberId, id, { movidas, antes, despues: plan.despues, delDominio, cambia: plan.cambiaLaConfirmacion });
+    const acceso = await revisarAcceso(teamMemberId, id, {
+      movidas,
+      antes,
+      despues: plan.despues,
+      delDominio: [...delDominio, ...fichasDelGrupo],
+      cambia: plan.cambiaLaConfirmacion,
+    });
     if (!acceso.ok) return NextResponse.json({ error: MUEVE_AJENAS }, { status: 403 });
     const aviso = { reuniones: movidas.length, movidas: resumirMovidas(movidas, acceso.nombre), huella: huellaDeMovidas(movidas) };
     if (simular) return NextResponse.json(aviso);

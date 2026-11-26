@@ -30,7 +30,7 @@ import "./lib/permitir-server-only";
 import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { categorizeSession, buildInternalDomainsSet, computeAmbiguousNameTokens } from "@/lib/sessions/categorize";
-import { cargarFichasConProyecto, cargarInterlocutoresConfirmados, resolveAllSessions } from "@/lib/sessions/resolve-client";
+import { cargarInterlocutoresConfirmados, cargarPrimerProyecto, resolveAllSessions } from "@/lib/sessions/resolve-client";
 
 function bandera(nombre: string): string | null {
   const i = process.argv.indexOf(`--${nombre}`);
@@ -78,7 +78,7 @@ async function main() {
   /* La gente que confirmó el equipo (paso 3·0): sin ella, el simulacro mostraría otro reparto que el que aplica el
      --apply (`resolveAllSessions` sí la carga). */
   const interlocutoresConfirmados = await cargarInterlocutoresConfirmados();
-  const fichasConProyecto = await cargarFichasConProyecto();
+  const primerProyecto = await cargarPrimerProyecto();
   const internos = buildInternalDomainsSet(categorias);
 
   const contar = (nombreDelCliente: string) => {
@@ -93,7 +93,7 @@ async function main() {
       ),
       ambiguousNameTokens: computeAmbiguousNameTokens(lista),
       interlocutoresConfirmados,
-      fichasConProyecto,
+      primerProyecto,
     };
     const out = new Map<string, number>();
     for (const s of sesiones) {

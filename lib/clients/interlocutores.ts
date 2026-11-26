@@ -226,27 +226,34 @@ export function planDelCambio(o: {
 }
 
 /**
- * Cuántas reuniones cambiarían de ficha, agrupadas por de dónde a dónde. PURO. Sin dueña: «Sin ficha» antes, «Por decidir»
- * después. Lo usa el aviso antes de
- * guardar: solo fichas y números, sin títulos (puede haber reuniones de fichas que quien mira no ve).
+ * Cuántas reuniones cambiarían de ficha, agrupadas por de dónde a dónde. PURO. Sin dueña antes: «Sin ficha». Sin dueña
+ * después: «Interna (reunión del equipo)» si la cascada la manda a Interna (una interna que nombra a dos fichas y deja de
+ * ser de un grupo, revisión del 26 nov), «Una categoría» o «Una empresa de HubSpot sin ficha» si va a una de esas, y si
+ * no, «Por decidir». Lo usa el aviso antes de guardar: solo fichas y números, sin títulos (puede haber reuniones de fichas
+ * que quien mira no ve).
  */
 export function resumirMovidas(
-  cambios: readonly { de: string | null; a: string | null }[],
+  cambios: readonly { de: string | null; a: string | null; porQue?: { paso?: string } }[],
   nombreDe: (id: string) => string,
 ): { de: string; a: string; reuniones: number }[] {
-  const n = new Map<string, number>();
+  const sinFicha = (paso: string | undefined) =>
+    paso === "interna"
+      ? "Interna (reunión del equipo)"
+      : paso === "categoria"
+        ? "Una categoría"
+        : paso === "empresa-de-hubspot-sin-ficha"
+          ? "Una empresa de HubSpot sin ficha"
+          : "Por decidir";
+  const n = new Map<string, { de: string; a: string; reuniones: number }>();
   for (const c of cambios) {
-    const k = `${c.de ?? ""}→${c.a ?? ""}`;
-    n.set(k, (n.get(k) ?? 0) + 1);
+    const de = c.de ? nombreDe(c.de) : "Sin ficha";
+    const a = c.a ? nombreDe(c.a) : sinFicha(c.porQue?.paso);
+    const k = `${c.de ?? ""}→${c.a ?? `#${a}`}`;
+    const fila = n.get(k) ?? { de, a, reuniones: 0 };
+    fila.reuniones++;
+    n.set(k, fila);
   }
-  /* Sin dueña HOY no siempre es «por decidir»: también una categoría (HubSpot, partners) o una empresa sin ficha. Después
-     del cambio, sin dueña es por decidir: el paso de la gente confirmada nunca da una categoría. */
-  return [...n]
-    .map(([k, reuniones]) => {
-      const [de, a] = k.split("→") as [string, string];
-      return { de: de ? nombreDe(de) : "Sin ficha", a: a ? nombreDe(a) : "Por decidir", reuniones };
-    })
-    .sort((x, y) => y.reuniones - x.reuniones || x.de.localeCompare(y.de));
+  return [...n.values()].sort((x, y) => y.reuniones - x.reuniones || x.de.localeCompare(y.de));
 }
 
 /**

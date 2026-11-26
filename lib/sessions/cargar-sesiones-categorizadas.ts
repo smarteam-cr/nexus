@@ -19,7 +19,7 @@ import {
   type CategorizeContext,
 } from "@/lib/sessions/categorize";
 import { cachedSearchCompaniesByDomains } from "@/lib/hubspot/companies";
-import { cargarFichasConProyecto, cargarInterlocutoresConfirmados } from "@/lib/sessions/resolve-client";
+import { cargarInterlocutoresConfirmados, cargarPrimerProyecto } from "@/lib/sessions/resolve-client";
 import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
 import { coberturaPorCse } from "@/lib/sessions/cobertura-por-cse";
 import { DONDE_TIENE_TRANSCRIPCION } from "@/lib/sessions/tiene-texto";
@@ -174,7 +174,7 @@ export async function cargarSesionesCategorizadas() {
   ctx.personasDeEntidades = aprenderPersonasDeEntidades(sessions, { ...ctx, hubspotCompaniesByDomain: new Map() });
   // La gente que confirmó el equipo (paso 3·0): la misma que usa la materialización, o /sessions diría otro dueño.
   ctx.interlocutoresConfirmados = await cargarInterlocutoresConfirmados();
-  ctx.fichasConProyecto = await cargarFichasConProyecto();
+  ctx.primerProyecto = await cargarPrimerProyecto();
   const categorized = categorizeSessions(sessions, ctx);
 
   // ── 6. Enriquecer con team members + group ─────────────────────────────────
