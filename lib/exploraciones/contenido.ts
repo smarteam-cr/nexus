@@ -102,6 +102,11 @@ export interface EstimadoGuardado {
   noSabe?: boolean;
   /** Una respuesta dejó ver un riesgo de la dimensión: no se estima por encima de Funcional. */
   riesgo?: boolean;
+  /**
+   * Quién lo validó y cuándo (26 nov, «Validado por Marco · 26 nov»): lo pone el servidor cuando una persona usa lo que
+   * propuso Nexus o marca el nivel (`conQuienLaValido`). Solo en lo confirmado; lo de antes no lo tiene.
+   */
+  validada?: { por: string | null; en: string };
 }
 
 /** Lo que pide Funcional, criterio por criterio: guía de lo que falta. No cambia el nivel estimado. */
@@ -1121,7 +1126,16 @@ export type Operacion =
    * tope), unas cifras suman sus campos y un texto se reemplaza.
    */
   | { op: "sumarACasilla"; clave: ClaveDeCasilla; valor: unknown }
-  | { op: "nivel"; dimensionId: string; estimado: EstimadoGuardado | null }
+  | {
+      op: "nivel";
+      dimensionId: string;
+      estimado: EstimadoGuardado | null;
+      /**
+       * Solo del servidor (el esquema de la pantalla no lo deja pasar): lo medido que se copia de otra exploración
+       * (punto-de-partida.ts) entra TAL CUAL, con quién lo validó allá, o sin nadie. No lo validó quien abre la cuenta.
+       */
+      copia?: true;
+    }
   | { op: "falta"; criterioId: string; estado: EstadoDeCriterio | null }
   | { op: "aExplorar"; dimensionId: string; valor: AExplorar | null }
   | { op: "areas"; areas: string[]; razones?: Record<string, string> }
@@ -1476,6 +1490,19 @@ function soltarDeLaCadena(usadas: readonly UsoDeSugerencia[] | undefined, items:
   return out;
 }
 
+/**
+ * Lo confirmado de una parte, con quién lo validó y cuándo (26 nov): lo pone el servidor, nunca quien manda el cambio.
+ * Un script (`por` null) también deja la fecha.
+ */
+export function conQuienLaValido(estado: EstadoDeExploracion, dimensionId: string, quien: QuienCambia): EstadoDeExploracion {
+  const actual = estado.contenido.chequeo[dimensionId];
+  if (!actual) return estado;
+  return {
+    ...estado,
+    contenido: { ...estado.contenido, chequeo: { ...estado.contenido.chequeo, [dimensionId]: { ...actual, validada: { por: quien.por, en: quien.en } } } },
+  };
+}
+
 function usarUna(
   estado: EstadoDeExploracion,
   x: { itemId: string; valor?: unknown },
@@ -1494,8 +1521,10 @@ function usarUna(
   const previo = usadasAntes.find((u) => u.siguiente === item.id)?.id ?? lista[posicion - 1]?.id ?? null;
   const siguiente = usadasAntes.find((u) => u.previo === item.id)?.id ?? lista[posicion + 1]?.id ?? null;
   const antes = lugarDe(estado, item);
-  const r = aplicarAlDestino(estado, item.destino, x.valor === undefined ? item.valor : x.valor, validez, validador);
-  if (!r.ok) return r;
+  const r0 = aplicarAlDestino(estado, item.destino, x.valor === undefined ? item.valor : x.valor, validez, validador);
+  if (!r0.ok) return r0;
+  // El nivel de una parte guarda quién lo validó (26 nov), ANTES de tomar `despues`: deshacer compara con lo que quedó.
+  const r = item.destino.tipo === "nivel" ? { ...r0, estado: conQuienLaValido(r0.estado, item.destino.dimensionId, quien) } : r0;
   const quedo: EstadoDeExploracion = { ...r.estado, propuesta: { ...r.estado.propuesta, items: r.estado.propuesta.items.filter((it) => it.id !== x.itemId) } };
   const despues = lugarDe(quedo, item);
   // Ya estaba igual (un ítem repetido de una lista): no hay nada que deshacer.
@@ -1648,7 +1677,10 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
     case "sumarACasilla":
       return aplicarAlDestino(estado, { tipo: "casilla", clave: op.clave }, op.valor, validez, validador);
     case "nivel": {
-      if (op.estimado) return aplicarAlDestino(estado, { tipo: "nivel", dimensionId: op.dimensionId }, op.estimado, validez, validador);
+      if (op.estimado) {
+        const r = aplicarAlDestino(estado, { tipo: "nivel", dimensionId: op.dimensionId }, op.estimado, validez, validador);
+        return r.ok && !op.copia ? { ...r, estado: conQuienLaValido(r.estado, op.dimensionId, quien) } : r;
+      }
       const chequeo = { ...c.chequeo };
       delete chequeo[op.dimensionId];
       return { ok: true, estado: { ...estado, contenido: { ...c, chequeo } } };

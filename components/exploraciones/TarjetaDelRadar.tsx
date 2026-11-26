@@ -21,6 +21,7 @@ import { PUNTO_DE_NIVEL } from "@/components/escala/niveles";
 import { cn } from "@/lib/cn";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { diaCorto } from "@/lib/exploraciones/fechas";
+import { rotuloDeLaParte, type EstadoDeLaParte } from "@/lib/exploraciones/validar-la-escala";
 import { llevadaDesdeLaEscala, opsParaLlevar, opsParaQuitar, tarjetaParaMostrar, yaLlevada } from "@/lib/exploraciones/tarjetas-de-la-escala";
 import { conIman, imanDelRadar, resaltarElRadar, ubicarLaTarjeta, type TarjetaPedida } from "@/components/escala/movimiento-del-radar";
 import { useLienzo } from "./contexto";
@@ -35,7 +36,8 @@ export interface DimensionDeLaTarjeta {
   color?: string;
   nivel: Letra | null;
   puntaje: number | null;
-  clase: "evidencia" | "hipotesis" | null;
+  /** Si alguien la validó, si es lo que propuso Nexus o si nadie lo dijo (26 nov): lo propuesto va sin rótulo. */
+  estado: EstadoDeLaParte;
   porQue: string | null;
   pregunta: string;
 }
@@ -213,7 +215,7 @@ const ANCHO_DE_LA_TARJETA = {
 const COLUMNAS_DE_LA_TARJETA = { 1: "", 2: "md:grid-cols-2 md:gap-5", 3: "md:grid-cols-3 md:gap-5" } as const;
 
 function Tarjeta({ ds, donde, ref }: { ds: readonly DimensionDeLaTarjeta[]; donde: TarjetaPedida; ref: RefObject<HTMLDivElement | null> }) {
-  const { exp, lugar } = useLienzo();
+  const { exp } = useLienzo();
 
   /* Se ubica al abrirse (cada dimensión es su propia tarjeta: `key`) y al reubicarla, con la misma regla que la del
      diagnóstico, escribiendo en el DOM: sin estado, sin un render de más. Después entra con el fundido. */
@@ -249,20 +251,33 @@ function Tarjeta({ ds, donde, ref }: { ds: readonly DimensionDeLaTarjeta[]; dond
         ))}
       </div>
       <p className="text-[11px] text-fg-muted">
-        {deAgente && guardadas
-          ? `Lo escribió Nexus con las reuniones el ${diaCorto(guardadas.en)}. `
-          : lugar === "preventa"
-            ? "Con «Ubicar con las reuniones», Nexus la escribe con lo que se habló. "
-            : ""}
+        {deAgente && guardadas ? `Lo escribió Nexus con las reuniones el ${diaCorto(guardadas.en)}. ` : ""}
         Toca el nodo para ver los cinco niveles.
       </p>
     </div>
   );
 }
 
+/** «✓ validado» o «sin dato» (lo que propuso Nexus no lleva rótulo): la tarjeta, el detalle y la lista lo dicen igual. */
+export function ChipDeLaParte({ estado, className }: { estado: EstadoDeLaParte; className?: string }) {
+  const rotulo = rotuloDeLaParte(estado);
+  if (!rotulo) return null;
+  return (
+    <span
+      className={cn(
+        "inline-flex self-start rounded-full border px-2 py-px text-[11px] font-semibold",
+        estado === "validada" ? "border-success-line bg-success-surface text-success-ink" : "border-line bg-surface-muted text-fg-muted",
+        className,
+      )}
+    >
+      {rotulo}
+    </span>
+  );
+}
+
 /**
  * Lo de una dimensión en la tarjeta: el DEPARTAMENTO en grande y con su color (novena vuelta, 8 nov, Elías: «el nombre del
- * departamento mucho más grande, que se note más»), la dimensión, puntaje y nivel, evidencia o por explorar, «cómo está»
+ * departamento mucho más grande, que se note más»), la dimensión, puntaje y nivel, si está validada, «cómo está»
  * y qué preguntar. Con varias áreas, cada una es una columna; desde la segunda, una línea a su izquierda (o arriba, si se
  * apilan en una ventana angosta).
  */
@@ -298,16 +313,8 @@ function SeccionDeLaTarjeta({ d, separada }: { d: DimensionDeLaTarjeta; separada
           </div>
         )}
       </div>
-      {d.clase && (
-        <span
-          className={cn(
-            "self-start rounded-full border px-2 py-px text-[11px] font-semibold",
-            d.clase === "evidencia" ? "border-success-line bg-success-surface text-success-ink" : "border-warn-line bg-warn-surface text-warn-ink",
-          )}
-        >
-          {d.clase === "evidencia" ? "✓ Con evidencia" : "○ Por explorar"}
-        </span>
-      )}
+      {/* Un solo vocabulario (26 nov): «✓ validado», «sin dato», y lo que propuso Nexus sin rótulo. */}
+      <ChipDeLaParte estado={d.estado} />
       {t.comoEsta && <p className="text-[13px] leading-[1.5] text-fg-secondary">{t.comoEsta}</p>}
       {t.preguntas.length > 0 && (
         <div className="flex flex-col gap-1.5">

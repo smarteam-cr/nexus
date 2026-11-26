@@ -132,7 +132,7 @@ export function deDondeSaleElNivel(fuente: FuenteDelNivel | null): string {
     case "test":
       return "Lo marcó en el test (con la escala anterior)";
     case "hipotesis":
-      return "Hipótesis: lo dedujo el agente y alguien la usó";
+      return "Lo dedujo Nexus";
     case "vendedor":
       return "Lo marcó quien exploró";
     case "portal":

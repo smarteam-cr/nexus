@@ -96,7 +96,8 @@ export function medidoDeLaPreventa(preventa: Estado, cuenta: Estado, existe: LoQ
       afuera += 1;
       continue;
     }
-    ops.push({ op: "nivel", dimensionId, estimado: { ...estimado } });
+    // Tal cual (26 nov): quien abre la cuenta no validó lo que se midió en la preventa.
+    ops.push({ op: "nivel", dimensionId, estimado: { ...estimado }, copia: true });
     dimensiones += 1;
   }
   for (const [criterioId, estado] of Object.entries(preventa.contenido.falta)) {

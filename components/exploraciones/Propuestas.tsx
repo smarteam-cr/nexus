@@ -11,7 +11,7 @@
  */
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
-import { BotonAzul, BotonTexto } from "./FranjaDeSugerencias";
+import { BotonAzul, BotonBlanco, BotonTexto } from "./FranjaDeSugerencias";
 import { cn } from "@/lib/cn";
 import { dondeQuedoLoUsado, ordenarPorGrupo, type GrupoDeDestino } from "@/lib/exploraciones/lo-que-aprendimos";
 import { ConfirmDialog } from "@/components/ui";
@@ -129,7 +129,8 @@ export function describirPropuesta(item: ItemPropuesto, escala: EscalaDelLienzo,
       }
     case "nivel": {
       const e = v as EstimadoGuardado;
-      if (esFuenteDeHipotesis(e.fuente)) return `${nombreDeNivel(e.nivel)} (hipótesis)`;
+      // Lo que propuso Nexus va sin rótulo (26 nov): el aro punteado del radar ya dice que lo dedujo.
+      if (esFuenteDeHipotesis(e.fuente)) return nombreDeNivel(e.nivel);
       return `${nombreDeNivel(e.nivel)}${e.evidencia ? ` — «${e.evidencia}»` : ""}`;
     }
     case "falta": {
@@ -172,7 +173,7 @@ export function lineaCorta(item: ItemPropuesto, escala: EscalaDelLienzo, nombreD
   switch (d.tipo) {
     case "nivel": {
       const e = v as EstimadoGuardado;
-      return { antes: nombreDeLaDimension(escala, d.dimensionId), texto: `${nombreDeNivel(e.nivel)}${esFuenteDeHipotesis(e.fuente) ? " (hipótesis)" : ""}` };
+      return { antes: nombreDeLaDimension(escala, d.dimensionId), texto: nombreDeNivel(e.nivel) };
     }
     case "aExplorar":
       return { antes: nombreDeLaDimension(escala, d.dimensionId), texto: "explorar a fondo" };
@@ -383,23 +384,40 @@ export function FilaSugerida({ item, texto, destino }: { item: ItemPropuesto; te
  * corta de lo que va a pasar; el aviso de después deshace el lote entero.
  */
 /** `alUsar`: lo que sigue después de usarlas (Casos de uso, 2026-11-08: personalizar cada caso aceptado). */
-export function BotonUsarTodas({ items, lugar, alUsar }: { items: ItemPropuesto[]; lugar: LugarDelLote; alUsar?: (items: ItemPropuesto[]) => void }) {
+/**
+ * `etiqueta` y `secundario` (26 nov): en el Diagnóstico de rendimiento es «Usar todas», blanco, al lado de «Validar (N)»,
+ * que es lo principal.
+ */
+export function BotonUsarTodas({
+  items,
+  lugar,
+  alUsar,
+  etiqueta: propia,
+  secundario = false,
+}: {
+  items: ItemPropuesto[];
+  lugar: LugarDelLote;
+  alUsar?: (items: ItemPropuesto[]) => void;
+  etiqueta?: string;
+  secundario?: boolean;
+}) {
   const { usar, queHace, puedeEditar, guardando } = useLienzo();
   const [abierto, setAbierto] = useState(false);
   if (!puedeEditar || items.length === 0) return null;
-  const etiqueta = etiquetaDelLote(lugar, items.length);
+  const etiqueta = propia ?? etiquetaDelLote(lugar, items.length);
+  const Boton = secundario ? BotonBlanco : BotonAzul;
   if (items.length === 1) {
     return (
-      <BotonAzul disabled={guardando} title={tituloDeUsar(queHace(items[0]))} onClick={() => void usar(items, { lugar }).then((ok) => ok && alUsar?.(items))}>
+      <Boton disabled={guardando} title={tituloDeUsar(queHace(items[0]))} onClick={() => void usar(items, { lugar }).then((ok) => ok && alUsar?.(items))}>
         {etiqueta}
-      </BotonAzul>
+      </Boton>
     );
   }
   return (
     <>
-      <BotonAzul disabled={guardando} onClick={() => setAbierto(true)}>
+      <Boton disabled={guardando} onClick={() => setAbierto(true)}>
         {etiqueta}
-      </BotonAzul>
+      </Boton>
       <ConfirmDialog
         open={abierto}
         variant="default"
