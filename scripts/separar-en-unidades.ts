@@ -61,7 +61,7 @@ import {
   ORDEN_DE_CLIENTES_PARA_ATRIBUIR,
   type CategorizeContext,
 } from "@/lib/sessions/categorize";
-import { buildHubspotDomainMap, cargarInterlocutoresConfirmados, resolveSessionClientId } from "@/lib/sessions/resolve-client";
+import { buildHubspotDomainMap, cargarInterlocutoresConfirmados, cargarPrimerProyecto, resolveSessionClientId } from "@/lib/sessions/resolve-client";
 import { asignarDuenioManual } from "@/lib/sessions/duenio-manual";
 import { isLockedLink } from "@/lib/sessions/session-project-locks";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
@@ -225,6 +225,7 @@ async function main() {
   ctx.personasDeEntidades = aprenderPersonasDeEntidades(todas, ctx);
   ctx.hubspotCompaniesByDomain = await buildHubspotDomainMap(todas, ctx.internalDomains);
   ctx.interlocutoresConfirmados = await cargarInterlocutoresConfirmados();
+  ctx.primerProyecto = await cargarPrimerProyecto();
   const nuevoDe = new Map(todas.map((s) => [s.id, resolveSessionClientId(s, ctx)]));
   const proyectosCrudos = await prisma.project.findMany({
     where: { clientId: { in: idsAntes } },

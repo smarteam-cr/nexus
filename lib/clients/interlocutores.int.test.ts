@@ -42,7 +42,7 @@ vi.mock("@/lib/analizador-venta/ajenos", async (importOriginal) => ({
 import { prisma } from "@/lib/db/prisma";
 import { copiarPersonasDeLaEmpresa, guardarInterlocutor, interlocutoresDeLaEmpresa } from "./personas-de-la-empresa-server";
 import { escribirFichasYPersonas, PrecargaNoEscrita } from "./precarga-de-interlocutores-server";
-import { reResolverReunionesDe, resolveAllSessions } from "@/lib/sessions/resolve-client";
+import { fichasDelGrupoQueCambia, reResolverReunionesDe, resolveAllSessions } from "@/lib/sessions/resolve-client";
 
 /* Sin «(test)» en el nombre: un cliente de prueba no cuenta en el título (categorize.ts › isTestClient). */
 async function elTec() {
@@ -324,5 +324,43 @@ describe("escribir las fichas y las personas de la precarga (revisión del 26 no
     expect(r).toEqual({ fichas: 1, personas: 1 });
     expect((await prisma.client.findUniqueOrThrow({ where: { id: ae.id } })).siglas).toEqual(["AE", "XYZ"]);
     expect((await prisma.personaDeLaEmpresa.findUniqueOrThrow({ where: { clientId_correo: { clientId: ae.id, correo: "cindy@itcr.test" } } })).confirmadaAt).not.toBeNull();
+  });
+});
+
+describe("la regla del grupo con la base (Elías, 26 nov)", () => {
+  it("confirmar a alguien en las dos fichas muestra también la interna que nombra a las dos, y la deja en la dueña del proyecto", async () => {
+    await prisma.sessionCategory.create({ data: { name: "Interna", slug: "interna", domains: ["smarteamcr.com"], kind: "internal" } });
+    const teamnet = await prisma.client.create({ data: { name: "Teamnet", emailDomains: ["teamnet.test"], createdAt: new Date("2026-01-01") } });
+    const strato = await prisma.client.create({ data: { name: "Stratosphere", siglas: ["SAS"], emailDomains: ["strato.test"], createdAt: new Date("2026-02-01") } });
+    await prisma.project.create({ data: { clientId: teamnet.id, name: "Teamnet - Reimplementación CRM" } });
+    // El contenedor «Información del cliente» no es un proyecto: Stratosphere sigue sin proyectos.
+    await prisma.project.create({ data: { clientId: strato.id, name: "Información del cliente", serviceType: "__strategy__" } });
+    await prisma.firefliesSession.createMany({
+      data: [
+        { id: "s-int", title: "Kick off - Teamnet y Sas", date: new Date("2026-05-07T15:00:00Z"), participants: ["heiver@smarteamcr.com"] },
+        { id: "s-sprint", title: "Sprint semanal | Teamnet y Sas & Smarteam", date: new Date("2026-05-22T15:00:00Z"), participants: ["laura@teamnet.test", "shaula@strato.test"] },
+        // Sin pista en el título y sin Laura: entra solo por la gente confirmada del grupo (Shaula, en Stratosphere).
+        { id: "s-gente", title: "Revisión semanal", date: new Date("2026-06-02T15:00:00Z"), participants: ["shaula@strato.test", "pedro@teamnet.test"] },
+      ],
+    });
+    await guardarInterlocutor({ tocables: [strato.id], cambio: { correo: "shaula@strato.test", confirmadaEn: [strato.id] }, porEmail: "eli@smarteamcr.com" });
+    await resolveAllSessions({ reclassify: false });
+    // Shaula (Stratosphere) con Pedro (Teamnet por su dominio), sin título: hoy por decidir.
+    expect((await prisma.firefliesSession.findUniqueOrThrow({ where: { id: "s-gente" } })).resolvedClientId).toBeNull();
+    // Sin grupo, la interna que nombra a las dos queda sin ficha (Interna).
+    expect((await prisma.firefliesSession.findUniqueOrThrow({ where: { id: "s-int" } })).resolvedClientId).toBeNull();
+
+    const hipotesis = new Map([["laura@teamnet.test", [teamnet.id, strato.id]]]);
+    const delGrupo = await fichasDelGrupoQueCambia(hipotesis);
+    expect([...delGrupo].sort()).toEqual([teamnet.id, strato.id].sort());
+    const sinLasDelGrupo = await reResolverReunionesDe(["laura@teamnet.test"], { hipotesis, aplicar: false });
+    expect(sinLasDelGrupo.cambian.map((c) => c.sessionId)).not.toContain("s-int");
+    expect(sinLasDelGrupo.cambian.map((c) => c.sessionId)).not.toContain("s-gente");
+    const conLasDelGrupo = await reResolverReunionesDe(["laura@teamnet.test"], { hipotesis, aplicar: false, tambienLasDeLasFichas: delGrupo });
+    expect(conLasDelGrupo.cambian.map((c) => [c.sessionId, c.a, c.porQue?.entre])).toContainEqual(["s-int", teamnet.id, "duena-del-proyecto"]);
+    expect(conLasDelGrupo.cambian.map((c) => [c.sessionId, c.a, c.porQue?.entre])).toContainEqual(["s-gente", teamnet.id, "duena-del-proyecto"]);
+    // El sprint conjunto, hoy por decidir (con Shaula confirmada en Stratosphere, el título nombra a las dos), vuelve a
+    // Teamnet, la dueña del proyecto.
+    expect(conLasDelGrupo.cambian.map((c) => [c.sessionId, c.a, c.porQue?.entre])).toContainEqual(["s-sprint", teamnet.id, "duena-del-proyecto"]);
   });
 });

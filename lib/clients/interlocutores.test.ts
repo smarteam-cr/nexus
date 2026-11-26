@@ -148,6 +148,19 @@ describe("resumirMovidas", () => {
       { de: "Teamnet", a: "Por decidir", reuniones: 1 },
     ]);
   });
+  it("sin dueña después dice adónde va: Interna, una categoría o por decidir (revisión del 26 nov)", () => {
+    const n = (id: string) => ({ teamnet: "Teamnet" })[id] ?? id;
+    expect(
+      resumirMovidas(
+        [
+          { de: "teamnet", a: null, porQue: { paso: "interna" } },
+          { de: "teamnet", a: null, porQue: { paso: "gente-confirmada" } },
+          { de: "teamnet", a: null, porQue: { paso: "categoria" } },
+        ],
+        n,
+      ).map((f) => f.a),
+    ).toEqual(["Interna (reunión del equipo)", "Por decidir", "Una categoría"]);
+  });
 });
 
 describe("fichasQuePideAbrir (a qué fichas tiene que tener acceso quien confirma)", () => {

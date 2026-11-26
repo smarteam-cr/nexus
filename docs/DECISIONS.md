@@ -17913,18 +17913,40 @@ Marco y Mariana (teamnet.com.mx) manejan sistemas para todo el grupo, y el domin
     aprobados (`cambiosDeFichas`): Stratosphere gana la sigla «SAS» y el dominio stratospherecorp.com pasa de Teamnet a
     Stratosphere; Laura, Marco y Mariana quedan del grupo y la gente de stratospherecorp.com (5) confirmada en
     Stratosphere. Con cambios de fichas, el simulacro y el --apply miran TODAS las reuniones y el simulacro dice el porqué
-    de cada una (la traza de la cascada: `categorizeSession(…, traza)`, que la anota en el mismo recorrido). **Simulacro:
-    cambian 44 reuniones de Teamnet:** 17 a Stratosphere (el título dice «SAS» o «Stratosphere»); 23 por decidir (22
-    conjuntas, «Teamnet y SAS» o «Teamnet - SAS», porque el título nombra a las dos: la regla de siempre, las asigna una
-    persona en /sessions; y «Health Score Team», sin título y solo con gente del grupo); 4 reuniones internas que
-    nombran a las dos («Demo interna TEAMNET & SAS») pasan a Interna. Lo que cuelga: 17 vínculos (de la IA) al proyecto
-    «Teamnet - Reimplementación CRM» se sueltan; los 27 de las que quedan sin ficha esperan (no alimentan nada sin dueña);
-    23 minutas van con su reunión (5 a Stratosphere); sin tareas, pedidos, hechos ni análisis de venta. **7 de los 27 que
-    esperan los eligió una persona:** «Kick off - Teamnet y Sas», elegida para el handoff, pasa a Interna; cinco
-    capacitaciones y «Health Score Team», elegidas para el diagnóstico, la planificación y la ejecución, quedan por
-    decidir. Salen de esos documentos salvo que alguien las asigne a mano a Teamnet antes del `--apply`. Medido en memoria,
-    el cambio no le suma nada a INV1, 2, 37, 42, 45, 46 ni 57 (INV1, 37, 42 y 45 ya están en rojo por otros clientes).
-    *Lo aceptado:* hasta que una persona asigne las 22 conjuntas, ni Teamnet ni Stratosphere las leen; los documentos de
-    Teamnet ya generados no cambian solos (50 corridas de agentes usaron estas reuniones).
+    de cada una (la traza de la cascada: `categorizeSession(…, traza)`, que la anota en el mismo recorrido). El primer
+    simulacro movía 44 (las 22 conjuntas y «Health Score Team» a por decidir, 4 internas a Interna); con la regla del grupo
+    de abajo (Elías, 26 nov) **cambian 17 reuniones de Teamnet, todas a Stratosphere** (el título dice solo «SAS» o
+    «Stratosphere»). Las 22 conjuntas («Teamnet y Sas», «Teamnet - SAS»), «Health Score Team» y las 4 internas que
+    nombran a las dos («Kick off - Teamnet y Sas», «Demo interna TEAMNET & SAS») se quedan en Teamnet. Lo que cuelga: los
+    17 vínculos (de la IA) de esas reuniones a «Teamnet - Reimplementación CRM» se sueltan; ninguno lo eligió una persona,
+    y los 7 elegidos para el handoff, el diagnóstico, la planificación y la ejecución siguen en Teamnet; 5 minutas van con
+    su reunión a Stratosphere; sin tareas, pedidos, hechos ni análisis de venta. Medido en memoria, el cambio no le suma
+    nada a INV1, 2, 37, 42, 45, 46 ni 57 (INV1, 37, 42 y 45 ya están en rojo por otros clientes). *Lo aceptado:* los
+    documentos de Teamnet ya generados no cambian solos (21 corridas de agentes usaron las 17).
+  - **La regla del grupo — Elías, 26 nov: «las conjuntas se quedan en Teamnet».** Dos fichas son del mismo GRUPO si una
+    persona del equipo confirmó a alguien en las dos (`gruposDeLaGenteConfirmada`, categorize.ts). Arma grupo solo quien
+    tiene su dominio registrado en una de sus fichas o en su empresa (Laura, de teamnet.com.mx, sí; un consultor de una
+    agencia o de gmail confirmado en dos clientes, no: uniría a dos clientes que no tienen nada que ver), quien está en
+    fichas de dos empresas o más (entre las unidades de UNA empresa manda su propia regla: sin pista, por decidir), y nunca
+    la casa ni la gente de un dominio de categoría. Cuando la cascada no puede decidir entre fichas de un solo grupo y de dos
+    empresas o más —el título nombra a las dos, hay gente de las dos, o solo gente del grupo y ningún nombre—, la reunión
+    va a la ficha del grupo con el proyecto MÁS ANTIGUO (`duenaDelProyectoDelGrupo`): en el paso 3·0 y en el empate del
+    título de los pasos 2 y 6 (una interna que nombra a las dos). Cuentan los proyectos que no son el contenedor
+    «Información del cliente» ni de prueba, en cualquier estado (`cargarPrimerProyecto`, resolve-client.ts). Si ninguna
+    tiene proyectos, si dos empatan en la fecha, o si hay una ficha de afuera del grupo entre las candidatas, sigue por
+    decidir. A la otra ficha solo va lo que la nombra a ella sola. *Por qué el proyecto más antiguo y no «la única con
+    proyectos»* (revisión del 26 nov): con «la única», el primer proyecto de Stratosphere devolvía a por decidir, sin aviso,
+    las conjuntas que el equipo ya usa en los documentos de Teamnet; la fecha del primer proyecto no cambia cuando otra
+    ficha suma uno, ni cuando uno se cierra. Lo que de verdad es de la otra se asigna a mano. *Lo aceptado:* si ninguna
+    ficha del grupo tenía proyectos, el primero que llegue se lleva lo que estaba por decidir en la próxima re-resolución.
+    *Por qué solo en un grupo que armó una persona:* entre dos clientes cualquiera, un título que nombra a los dos lo sigue
+    asignando alguien en /sessions. *Lo que arrastra:* confirmar a alguien en dos fichas (o quitarle una) cambia reuniones
+    de OTRA gente de todo el grupo. La pestaña y la precarga calculan una vez, antes de escribir, qué fichas mira el cambio
+    (`fichasDelGrupoQueCambia` → `fichasQueMiraElGrupo`: todas las del grupo, antes y después) y las suman al aviso, a la
+    recuenta y a la mudanza (`reResolverReunionesDe › tambienLasDeLasFichas`: las reuniones que las nombran en el título y
+    las de la gente confirmada en ellas); quien guarda tiene que abrir esas fichas. El aviso dice «Interna (reunión del
+    equipo)» cuando una reunión vuelve a Interna, no «Por decidir». **Comprobado en producción** (26 nov, solo lectura):
+    con el código de la regla y la gente confirmada de hoy (el TEC, nadie en dos fichas), ninguna de las 9.126 reuniones
+    cambia de dueña.
 - **Sin cambio:** la agenda de «Mi día» (`lib/mi-dia/agenda.ts`) reparte los eventos futuros con su regla de unidades y
   todavía no mira a la gente confirmada.

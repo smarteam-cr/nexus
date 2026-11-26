@@ -104,6 +104,13 @@ export interface CategorizeContext {
    * Opcional: sin él (o vacío), la cascada es la de siempre.
    */
   interlocutoresConfirmados?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * Ficha → la fecha de su PRIMER proyecto (que no es el contenedor «Información del cliente» ni de prueba, en cualquier
+   * estado; resolve-client.ts › `cargarPrimerProyecto`). Lo usa la regla del GRUPO (`duenaDelProyectoDelGrupo`): entre
+   * fichas unidas por gente confirmada en las dos, lo que la cascada no puede decidir va a la del proyecto más antiguo.
+   * Opcional: sin él, esa regla no corre.
+   */
+  primerProyecto?: ReadonlyMap<string, Date>;
 }
 
 /** Qué paso de la cascada decidió (`categorizeSession` con `traza`): para los simulacros, que dicen POR QUÉ. */
@@ -126,7 +133,7 @@ export type PasoDeLaCascada =
  */
 export interface TrazaDeLaCascada {
   paso?: PasoDeLaCascada;
-  entre?: DecisionEntreEntidades["por"];
+  entre?: PorDeLaDecision;
 }
 
 export interface CategorizableSession {
@@ -416,8 +423,130 @@ function duenoPorElTitulo(
     const grupos = new Set(r.candidatos.filter((c) => !casa(c)).map((c) => entidadesDelDominio(c.id, ctx)));
     const [grupo] = grupos;
     if (grupos.size === 1 && grupo) return repartirEntreEntidades(grupo[0]!.id, session, externalDomains, ctx, traza);
+    /* El título nombra a dos fichas de un mismo GRUPO (las une gente confirmada en las dos): la dueña del proyecto
+       («Kick off - Teamnet y Sas», interna, va a Teamnet; Elías, 26 nov). */
+    const duena = duenaDelProyectoDelGrupo(
+      r.candidatos.filter((c) => !casa(c)).map((c) => c.id),
+      ctx,
+    );
+    if (duena) {
+      if (traza) traza.entre = "duena-del-proyecto";
+      return { kind: "client", id: duena.id, label: duena.name, company: duena.company };
+    }
   }
   return null;
+}
+
+/** La empresa de una ficha: la principal de sus unidades, o ella misma. */
+const empresaDe = (c: { id: string; comparteDominioConId?: string | null }) => c.comparteDominioConId ?? c.id;
+
+/**
+ * LOS GRUPOS DE LA GENTE CONFIRMADA: dos fichas son del mismo grupo si una persona del equipo confirmó a alguien en las
+ * dos («del grupo»: Laura, Marco y Mariana, en Teamnet y Stratosphere), y el grupo cierra por transitividad. Ficha → la
+ * primera ficha de su grupo (la clave). PURO; memorizado por las fichas y el mapa de confirmadas (cada hipótesis de un
+ * simulacro es otro mapa; un cambio de fichas en memoria, otra lista). Arma grupo SOLO quien (revisión del 26 nov):
+ *  · tiene su dominio registrado en una de sus fichas o en su empresa (Laura, de teamnet.com.mx, sí; un consultor de una
+ *    agencia o de gmail confirmado en dos clientes, no: si no, uniría a dos clientes que no tienen nada que ver);
+ *  · está en fichas de DOS empresas o más (las unidades de una empresa tienen su propia regla, `decidirEntreEntidades`:
+ *    sin pista, por decidir);
+ *  · no es de un dominio de categoría ni de la casa.
+ */
+const gruposPorConfirmadas = new WeakMap<readonly ClienteDelCtx[], WeakMap<object, Map<string, string>>>();
+export function gruposDeLaGenteConfirmada(ctx: CategorizeContext): ReadonlyMap<string, string> {
+  const confirmadas = ctx.interlocutoresConfirmados;
+  if (!confirmadas?.size) return new Map();
+  const porLista = gruposPorConfirmadas.get(ctx.clients) ?? new WeakMap<object, Map<string, string>>();
+  gruposPorConfirmadas.set(ctx.clients, porLista);
+  const hecho = porLista.get(confirmadas);
+  if (hecho) return hecho;
+  const casa = esLaCasa(ctx.internalDomains);
+  const deCategoria = dominiosDeCategoria(ctx.categories);
+  const porId = new Map(ctx.clients.map((c) => [c.id, c]));
+  const empresas = gruposDeEntidades(ctx.clients);
+  const padre = new Map<string, string>();
+  const raiz = (id: string): string => {
+    let x = id;
+    while (padre.get(x) !== x) x = padre.get(x)!;
+    padre.set(id, x);
+    return x;
+  };
+  for (const [correo, fichas] of confirmadas) {
+    const dominio = correo.split("@")[1] ?? "";
+    if (!dominio || deCategoria.has(dominio)) continue;
+    const suyas = fichas.filter((id) => porId.has(id) && !casa(porId.get(id)!));
+    if (new Set(suyas.map((id) => empresaDe(porId.get(id)!))).size < 2) continue;
+    const esDeUna = suyas.some((id) => (empresas.get(id) ?? [porId.get(id)!]).some((c) => effectiveDomainsForClient(c).includes(dominio)));
+    if (!esDeUna) continue;
+    for (const id of suyas) if (!padre.has(id)) padre.set(id, id);
+    for (const id of suyas.slice(1)) {
+      const a = raiz(suyas[0]!);
+      const b = raiz(id);
+      if (a !== b) padre.set(b, a);
+    }
+  }
+  const out = new Map<string, string>();
+  for (const id of padre.keys()) out.set(id, raiz(id));
+  porLista.set(confirmadas, out);
+  return out;
+}
+
+/**
+ * LA REGLA DEL GRUPO (Elías, 26 nov: «las reuniones conjuntas de Teamnet y Stratosphere se quedan en Teamnet»): si todas
+ * las fichas entre las que la cascada no pudo decidir son de UN mismo grupo de la gente confirmada
+ * (`gruposDeLaGenteConfirmada`) y de dos empresas o más, la reunión es de la ficha del grupo con el proyecto MÁS ANTIGUO
+ * (`primerProyecto`): la dueña del proyecto. Null (sigue por decidir) si ninguna tiene proyectos, si dos empatan en la
+ * fecha, o si hay una ficha de afuera del grupo.
+ * *Por qué el más antiguo y no «la única con proyectos»* (revisión del 26 nov): con «la única», el primer proyecto de
+ * Stratosphere devolvía a por decidir, sin aviso, las conjuntas que el equipo ya usa en los documentos de Teamnet. El
+ * proyecto más antiguo del grupo no cambia cuando otra ficha suma uno. Lo que de verdad es de la otra, se asigna a mano.
+ * *Por qué solo en un grupo que armó una persona:* entre dos clientes cualquiera, un título que nombra a los dos lo sigue
+ * asignando alguien.
+ */
+function duenaDelProyectoDelGrupo(ids: readonly string[], ctx: CategorizeContext): ClienteDelCtx | null {
+  const primer = ctx.primerProyecto;
+  if (!primer?.size) return null;
+  const unicas = [...new Set(ids)];
+  if (unicas.length < 2) return null;
+  const grupos = gruposDeLaGenteConfirmada(ctx);
+  const clave = grupos.get(unicas[0]!);
+  if (!clave || unicas.some((id) => grupos.get(id) !== clave)) return null;
+  const porId = new Map(ctx.clients.map((c) => [c.id, c]));
+  if (unicas.some((id) => !porId.has(id))) return null;
+  if (new Set(unicas.map((id) => empresaDe(porId.get(id)!))).size < 2) return null;
+  const conFecha = unicas.filter((id) => primer.has(id)).sort((a, b) => primer.get(a)!.getTime() - primer.get(b)!.getTime());
+  if (!conFecha.length) return null;
+  if (conFecha.length > 1 && primer.get(conFecha[0]!)!.getTime() === primer.get(conFecha[1]!)!.getTime()) return null;
+  return porId.get(conFecha[0]!) ?? null;
+}
+
+/**
+ * Las fichas cuyas reuniones puede mover la regla del grupo si la confirmación de esta gente pasa de `antes` a `despues`
+ * (revisión del 26 nov: el aviso de la pestaña miraba solo las fichas de la persona, no el grupo entero). Si la persona
+ * queda o estaba en dos fichas o más y su confirmación cambia, todas las fichas de los grupos a los que toca, antes y
+ * después. Vacío si ningún grupo cambia. PURO.
+ */
+export function fichasQueMiraElGrupo(
+  correos: readonly string[],
+  antes: ReadonlyMap<string, readonly string[]>,
+  despues: ReadonlyMap<string, readonly string[]>,
+  ctx: CategorizeContext,
+): string[] {
+  const semillas = new Set<string>();
+  for (const bruto of correos) {
+    const correo = bruto.trim().toLowerCase();
+    const a = [...(antes.get(correo) ?? [])].sort();
+    const d = [...(despues.get(correo) ?? [])].sort();
+    if (a.join("|") === d.join("|") || Math.max(a.length, d.length) < 2) continue;
+    for (const id of [...a, ...d]) semillas.add(id);
+  }
+  if (!semillas.size) return [];
+  const out = new Set(semillas);
+  for (const mapa of [antes, despues]) {
+    const grupos = gruposDeLaGenteConfirmada({ ...ctx, interlocutoresConfirmados: mapa });
+    const claves = new Set([...semillas].map((id) => grupos.get(id)).filter((x): x is string => !!x));
+    for (const [id, clave] of grupos) if (claves.has(clave)) out.add(id);
+  }
+  return [...out];
 }
 
 // ── Entidades que comparten dominio ──────────────────────────────────────────
@@ -603,6 +732,9 @@ function unidadesPorDominio(fichas: readonly ClienteDelCtx[]): Map<string, Set<s
   }
   return out;
 }
+
+/** Cómo se decidió entre fichas: lo de `decidirEntreEntidades`, o la regla del grupo (`duenaDelProyectoDelGrupo`). */
+export type PorDeLaDecision = DecisionEntreEntidades["por"] | "duena-del-proyecto";
 
 export type DecisionEntreEntidades =
   | { clientId: string; por: "nombre" | "confirmada" | "gente" | "dominio" }
@@ -796,7 +928,7 @@ function decisionDeLaGenteConfirmada(
   session: CategorizableSession,
   externalDomains: Set<string>,
   ctx: CategorizeContext,
-): { grupo: SessionGroup; por: DecisionEntreEntidades["por"] } | null {
+): { grupo: SessionGroup; por: PorDeLaDecision } | null {
   const confirmadasTodas = ctx.interlocutoresConfirmados;
   if (!confirmadasTodas?.size) return null;
   const afuera = correosDeAfuera(session.participants, ctx.internalDomains);
@@ -863,6 +995,14 @@ function decisionDeLaGenteConfirmada(
   const d = decidirEntre(conElTituloCortado, candidatas, { ...ctx, interlocutoresConfirmados: confirmadas }, porDominio);
   const elegida = d.clientId ? porId.get(d.clientId) : undefined;
   if (elegida) return { grupo: { kind: "client", id: elegida.id, label: elegida.name, company: elegida.company }, por: d.por };
+  /* No se pudo decidir (el título nombra a las dos, gente de las dos, o solo gente del grupo): si las candidatas son un
+     solo grupo de la gente confirmada, la dueña del proyecto (Elías, 26 nov: «Sprint semanal | Teamnet y Sas» y «Health
+     Score Team» se quedan en Teamnet). */
+  const duena = duenaDelProyectoDelGrupo(
+    candidatas.map((c) => c.id),
+    ctx,
+  );
+  if (duena) return { grupo: { kind: "client", id: duena.id, label: duena.name, company: duena.company }, por: "duena-del-proyecto" };
   return {
     grupo: { kind: "orphan", label: `Por decidir: ${candidatas.map((e) => e.name).join(" o ")}`, domain: [...externalDomains][0] },
     por: d.por,

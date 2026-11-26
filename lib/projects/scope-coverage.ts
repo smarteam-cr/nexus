@@ -157,6 +157,13 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   },
   // C-20: las consultas de /sessions viven en el cargador compartido con /api/sessions/grupo.
   "lib/sessions/cargar-sesiones-categorizadas.ts": { modo: "criterio", criterio: "clasificable" },
+  "lib/sessions/resolve-client.ts": {
+    modo: "exento",
+    razon:
+      "`cargarPrimerProyecto` pregunta por EXISTENCIA y antigüedad (¿desde cuándo tiene la ficha un proyecto?) para la regla del grupo " +
+      "(Elías, 26 nov): no el contenedor ni de prueba (NO_ES_CONTENEDOR_WHERE + esPrueba), en cualquier estado a propósito, " +
+      "para que cerrar un proyecto no le cambie la dueña a sus reuniones viejas. No lista proyectos.",
+  },
   // «Actualizar con IA» de la ficha del cliente: los handoffs y encuestas de sus proyectos vivos.
   "lib/clients/ficha-propuesta.ts": { modo: "criterio", criterio: "clasificable" },
   "lib/handoff/resultados.ts": { modo: "criterio", criterio: "clasificable" },

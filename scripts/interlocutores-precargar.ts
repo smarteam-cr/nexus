@@ -194,7 +194,7 @@ async function main() {
 
   const { prisma } = await import("@/lib/db/prisma");
   const { esquemaDesactualizado } = await import("@/lib/db/esquema");
-  const { reResolverReunionesDe } = await import("@/lib/sessions/resolve-client");
+  const { fichasDelGrupoQueCambia, reResolverReunionesDe } = await import("@/lib/sessions/resolve-client");
   const { motivoParaNoGuardar } = await import("@/lib/clients/personas-de-la-empresa-server");
   const { ajustarConLosCambios, fichasQueCambian, huellaDeLaPrecarga, separarLaDeriva } = await import("@/lib/clients/precarga-de-interlocutores");
   const { escribirFichasYPersonas, PrecargaNoEscrita } = await import("@/lib/clients/precarga-de-interlocutores-server");
@@ -342,14 +342,19 @@ async function main() {
       console.log(`Las fichas cambian (en memoria): ${[...siglas.map(([k, v]) => `sigla «${v}» en ${mapa.fichas[k]!.nombre}`), ...dominios.map(([k, v]) => `${v} pasa a ${mapa.fichas[k]!.nombre}`)].join(" · ")}.`);
       console.log("Con eso cambian también reuniones de otra gente: se miran TODAS las reuniones, no solo las de este mapa.");
     }
+    /* Si alguien del mapa queda (o ya estaba) en dos fichas o más, la regla del grupo mueve también reuniones de otra gente
+       que nombran a las fichas del mapa: se miran (sin cambios de fichas; con ellos ya se miran todas). */
+    const delGrupo = await fichasDelGrupoQueCambia(hipotesis, cambianFichas ? ajustar : undefined);
+    const tambienLasDeLasFichas = delGrupo.length ? delGrupo : undefined;
     /* HubSpot se consulta UNA vez: la cuenta de hoy, la del cambio y el --apply usan lo mismo. */
-    const hoy = await reResolverReunionesDe(correos, { aplicar: false, exigirHubspot: true, todas: cambianFichas });
+    const hoy = await reResolverReunionesDe(correos, { aplicar: false, exigirHubspot: true, todas: cambianFichas, tambienLasDeLasFichas });
     const con = await reResolverReunionesDe(correos, {
       hipotesis,
       aplicar: false,
       ajustarFichas: cambianFichas ? ajustar : undefined,
       hubspot: hoy.hubspot,
       todas: cambianFichas,
+      tambienLasDeLasFichas,
     });
     /* La DERIVA: reuniones que ya hoy dan distinto de lo guardado, y que el cambio no toca. Las de la gente del mapa se
        ponen al día con el --apply; las de otra gente no son de este cambio y no se mueven (salvo --con-la-deriva, o que
@@ -650,6 +655,7 @@ async function main() {
         aprobadas: new Map(aprobadas.map((c) => [c.sessionId, { de: c.de, a: c.a }])),
         hubspot: con.hubspot,
         todas: cambianFichas,
+        tambienLasDeLasFichas,
         esperarLoQueCuelga: true,
       }));
     } catch (e) {
@@ -702,6 +708,7 @@ function porQueEnPalabras(t: { paso?: string; entre?: string } | undefined): str
     gente: "lo aprendido de los títulos",
     dominio: "el dominio de su gente",
     "dos-nombres": "el título nombra a las dos fichas",
+    "duena-del-proyecto": "las dos son del grupo: va a la dueña del proyecto",
     "gente-de-varias": "hay gente de dos fichas",
     "sin-pista": "sin pista (la gente del grupo no decide sola)",
   };

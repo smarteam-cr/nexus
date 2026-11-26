@@ -13,6 +13,7 @@ import {
   aprenderPersonasDeEntidades,
   categorizeSession,
   fichasQueDaElDominio,
+  fichasQueMiraElGrupo,
   interlocutoresDesdeFilas,
   type CategorizableSession,
   type CategorizeContext,
@@ -299,6 +300,105 @@ describe("la traza no cambia la decisión en ningún paso de la cascada (revisi�
     expect(conTraza).toEqual(categorizeSession(s, completo));
     expect(traza.paso).toBe(paso);
     expect(conTraza.kind === "client" ? conTraza.id : `(${conTraza.kind})`).toBe(dueno);
+  });
+});
+
+describe("la regla del grupo: lo conjunto va a la dueña del proyecto (Elías, 26 nov)", () => {
+  // Como quedan con lo aprobado: Stratosphere con la sigla SAS y stratospherecorp.com; Teamnet con los proyectos.
+  const TEAMNET_HOY = { ...TEAMNET, emailDomains: [] as string[] };
+  const STRATO_SAS = { ...STRATO, siglas: ["SAS"], emailDomains: ["stratosphere.com.mx", "stratospherecorp.com"] };
+  const ABRIL = new Date("2026-04-28");
+  const conGrupo = (confirmadas: Record<string, string[]>, over: Partial<CategorizeContext> = {}) =>
+    ctx(confirmadas, {
+      clients: [TAE, TEAMNET_HOY, CUATRO_AM, CREDIX, STRATO_SAS, AE],
+      primerProyecto: new Map([
+        ["teamnet", ABRIL],
+        ["credix", new Date("2025-01-01")],
+        ["tae", new Date("2025-06-01")],
+        ["ae", new Date("2025-09-01")],
+      ]),
+      ...over,
+    });
+  const GRUPO = { ...DEL_GRUPO, [SHAULA]: ["strato"] };
+  const interna = (title: string): CategorizableSession => ({ title, participants: ["heiver@smarteamcr.com"], manualClientId: null });
+  const conTraza = (s: CategorizableSession, c: CategorizeContext) => {
+    const traza: TrazaDeLaCascada = {};
+    const g = categorizeSession(s, c, traza);
+    return { dueno: g.kind === "client" ? g.id : `(${g.kind})`, traza };
+  };
+
+  it("el título nombra a las dos: Teamnet, la del proyecto", () => {
+    const r = conTraza(reunion("Sprint semanal | Teamnet y Sas & Smarteam", [LAURA, SHAULA]), conGrupo(GRUPO));
+    expect(r).toEqual({ dueno: "teamnet", traza: { paso: "gente-confirmada", entre: "duena-del-proyecto" } });
+  });
+  it("solo gente del grupo y sin título («Health Score Team»): Teamnet", () => {
+    expect(conTraza(reunion("Health Score Team", [LAURA]), conGrupo(GRUPO)).dueno).toBe("teamnet");
+  });
+  it("una interna que nombra a las dos («Kick off - Teamnet y Sas»): Teamnet, no Interna", () => {
+    const r = conTraza(interna("Kick off - Teamnet y Sas"), conGrupo(GRUPO));
+    expect(r).toEqual({ dueno: "teamnet", traza: { paso: "interna-por-titulo", entre: "duena-del-proyecto" } });
+  });
+  it("lo que nombra solo a SAS o a Stratosphere sigue yendo a Stratosphere", () => {
+    expect(conTraza(reunion("Sales semana 1: Arquitectura | SAS & Smarteam", [LAURA, SHAULA]), conGrupo(GRUPO)).dueno).toBe("strato");
+    expect(conTraza(interna("Stratosphere Marketing"), conGrupo(GRUPO)).dueno).toBe("strato");
+  });
+  it("sin el dato de los proyectos, o sin nadie confirmado en las dos, como antes", () => {
+    expect(conTraza(reunion("Sprint semanal | Teamnet y Sas & Smarteam", [LAURA, SHAULA]), conGrupo(GRUPO, { primerProyecto: undefined })).dueno).toBe("(orphan)");
+    // Sin grupo (Shaula confirmada solo en Stratosphere, nadie en las dos): la interna que nombra a las dos queda en Interna.
+    expect(conTraza(interna("Kick off - Teamnet y Sas"), conGrupo({ [SHAULA]: ["strato"] })).dueno).toBe("(category)");
+  });
+  it("si la otra suma un proyecto después, la dueña no cambia (la del proyecto más antiguo); con la misma fecha o sin proyectos, por decidir", () => {
+    const s = reunion("Sprint semanal | Teamnet y Sas & Smarteam", [LAURA, SHAULA]);
+    const despues = new Map([["teamnet", ABRIL], ["strato", new Date("2026-12-01")]]);
+    expect(conTraza(s, conGrupo(GRUPO, { primerProyecto: despues })).dueno).toBe("teamnet");
+    expect(conTraza(s, conGrupo(GRUPO, { primerProyecto: new Map([["teamnet", ABRIL], ["strato", ABRIL]]) })).dueno).toBe("(orphan)");
+    expect(conTraza(s, conGrupo(GRUPO, { primerProyecto: new Map([["credix", ABRIL]]) })).dueno).toBe("(orphan)");
+  });
+  it("con una ficha de afuera del grupo entre las candidatas, por decidir, tenga o no proyectos", () => {
+    // Credix tiene proyectos; 4am, no: ninguna de las dos deja que la regla elija.
+    expect(conTraza(reunion("Revisión semanal", [LAURA, "ana@credix.com"]), conGrupo(GRUPO)).dueno).toBe("(orphan)");
+    expect(conTraza(reunion("Revisión semanal", [LAURA, "agencia@4amsaatchi.com"]), conGrupo(GRUPO)).dueno).toBe("(orphan)");
+    // Una interna que nombra a Teamnet y a 4am (afuera del grupo) sigue en Interna.
+    expect(conTraza(interna("Teamnet y 4am Saatchi | sincronía"), conGrupo(GRUPO)).dueno).toBe("(category)");
+  });
+  it("alguien de una agencia o de gmail confirmado en dos clientes NO los une en un grupo", () => {
+    expect(conTraza(interna("Kick off - Teamnet y Sas"), conGrupo({ "consultor@gmail.com": ["teamnet", "strato"] })).dueno).toBe("(category)");
+    expect(conTraza(interna("Kick off - Teamnet y Sas"), conGrupo({ "ana@agencia.test": ["teamnet", "strato"] })).dueno).toBe("(category)");
+  });
+  it("entre unidades de UNA empresa no corre: sin pista sigue por decidir (su propia regla)", () => {
+    // Cindy «del grupo» en AE y TAE, sin título: por decidir, aunque TAE tenga el proyecto más antiguo.
+    expect(conTraza(reunion("Revisión semanal", [CINDY]), conGrupo({ [CINDY]: ["tae", "ae"] })).dueno).toBe("(orphan)");
+  });
+  it("la gente de una categoría confirmada en dos fichas no arma grupo", () => {
+    const conPartner = conGrupo(
+      { "rep@partner.test": ["teamnet", "strato"] },
+      {
+        categories: [
+          { id: "int", name: "Interna", slug: "interna", domains: ["smarteamcr.com"], kind: "internal", color: null },
+          { id: "pt", name: "Partner", slug: "partner", domains: ["partner.test"], kind: "partner", color: null },
+        ],
+      },
+    );
+    expect(conTraza(interna("Kick off - Teamnet y Sas"), conPartner).dueno).toBe("(category)");
+  });
+});
+
+describe("qué fichas mira un cambio que arma o desarma un grupo (fichasQueMiraElGrupo)", () => {
+  const P = "p@teamnet.com.mx";
+  const Q = "q@credix.com";
+  const c = ctx();
+  it("todas las fichas del grupo, antes y después, no solo las de la persona", () => {
+    // Q ya une Credix y Stratosphere; P se confirma en Teamnet y Credix: el grupo pasa a ser las tres.
+    const antes = new Map([[Q, ["credix", "strato"]]]);
+    const despues = new Map([[Q, ["credix", "strato"]], [P, ["teamnet", "credix"]]]);
+    expect(fichasQueMiraElGrupo([P], antes, despues, c).sort()).toEqual(["credix", "strato", "teamnet"]);
+    // Quitarle una ficha mira el grupo de antes.
+    expect(fichasQueMiraElGrupo([P], despues, antes, c).sort()).toEqual(["credix", "strato", "teamnet"]);
+  });
+  it("si la confirmación no cambia, o queda en una sola ficha antes y después, nada", () => {
+    const m = new Map([[P, ["teamnet", "credix"]]]);
+    expect(fichasQueMiraElGrupo([P], m, m, c)).toEqual([]);
+    expect(fichasQueMiraElGrupo([P], new Map([[P, ["teamnet"]]]), new Map([[P, ["credix"]]]), c)).toEqual([]);
   });
 });
 
