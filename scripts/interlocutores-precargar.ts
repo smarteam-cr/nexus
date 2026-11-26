@@ -8,6 +8,7 @@
  *   npx tsx scripts/interlocutores-precargar.ts --mapa <archivo.json> --confirmar-sugeridas   # ¿y si las sugeridas se confirman?
  *   … --el-mapa-manda   # el mapa reemplaza lo que ya dijo una persona en esas fichas (por defecto se conserva)
  *   … --con-la-deriva   # mover también las reuniones de otra gente que ya hoy dan distinto de lo guardado
+ *   … --completar <respaldo.json>   # completar una mudanza que se cortó: aprueba lo que esa corrida ya había aprobado
  *   npx tsx scripts/interlocutores-precargar.ts --mapa <archivo.json> --sigla strato=SAS --dominio strato=stratospherecorp.com
  *       # ¿y si además la ficha tuviera esa sigla, o ese dominio (que se quita de la ficha que lo tenga)? Solo en memoria.
  *
@@ -40,8 +41,12 @@ import { leerMapa, normalizarDominio, normalizarSigla } from "./lib/interlocutor
 if (!process.argv.includes("--apply")) process.env.PGOPTIONS = [process.env.PGOPTIONS, "-c default_transaction_read_only=on"].filter(Boolean).join(" ");
 process.env.DB_POOL_MAX ??= "2";
 
-/** El código que decide de quién es cada reunión: producción tiene que correr exactamente este. */
-const LO_QUE_DECIDE = ["lib/sessions/categorize.ts", "lib/sessions/resolve-client.ts"];
+/**
+ * El código que decide de quién es cada reunión y lo que cuelga de la mudanza: producción tiene que correr exactamente
+ * este (revisión del 26 nov: dos archivos no alcanzaban; la cascada usa también match-por-titulo, dominio-propio, la gente
+ * de la empresa, las agendadas, las empresas de HubSpot y las reglas de las lecturas).
+ */
+const LO_QUE_DECIDE = ["lib/sessions/", "lib/clients/", "lib/hubspot/companies.ts", "lib/exploraciones/agendadas.ts", "lib/lecturas/reglas.ts"];
 
 /**
  * Contra producción, el `--apply` solo con el mismo código desplegado: con otro, producción re-resuelve distinto y deshace
@@ -58,17 +63,29 @@ async function assertCodigoDesplegado(): Promise<void> {
     .catch(() => "");
   if (!/^[0-9a-f]{7,40}$/.test(sha)) throw new Error(`No se pudo leer qué commit corre en ${base}/api/health: sin eso no se escribe.`);
   const { execFileSync } = await import("node:child_process");
+  const { existsSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  /* Las rutas van ancladas a la raíz del repo: desde una subcarpeta, `git diff -- lib/…` no encuentra nada y da «igual». */
+  const raiz = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
+  const git = (args: string[]) => execFileSync("git", ["-C", raiz, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  for (const r of LO_QUE_DECIDE) if (!existsSync(join(raiz, r))) throw new Error(`No encuentro ${r} en ${raiz}: sin eso no se compara el código.`);
   try {
-    execFileSync("git", ["cat-file", "-e", `${sha}^{commit}`], { stdio: "ignore" });
+    git(["cat-file", "-e", `${sha}^{commit}`]);
   } catch {
     throw new Error(`Producción corre ${sha.slice(0, 8)}, que este checkout no conoce: haz git fetch y vuelve a correr.`);
   }
-  try {
-    execFileSync("git", ["diff", "--quiet", sha, "--", ...LO_QUE_DECIDE], { stdio: "ignore" });
-  } catch {
+  const distinto = (() => {
+    try {
+      git(["diff", "--quiet", sha, "--", ...LO_QUE_DECIDE]);
+      return git(["status", "--porcelain", "--", ...LO_QUE_DECIDE]).trim() !== "";
+    } catch {
+      return true;
+    }
+  })();
+  if (distinto) {
     throw new Error(
-      `Producción corre ${sha.slice(0, 8)} y su ${LO_QUE_DECIDE.join(" o ")} no es el de este checkout: el simulacro no calcula lo que ` +
-        "calcularía producción. Despliega este código (o deja el checkout en ese commit) y vuelve a correr el simulacro.",
+      `Producción corre ${sha.slice(0, 8)} y este checkout tiene otro código en ${LO_QUE_DECIDE.join(", ")} (o archivos sin commitear): ` +
+        "el simulacro no calcula lo que calcularía producción. Corre el script desde un checkout limpio en ese commit.",
     );
   }
   console.log(`  ✓ producción corre ${sha.slice(0, 8)}, con el mismo código que decide de quién es cada reunión`);
@@ -84,7 +101,6 @@ function fallar(motivo: string): never {
 }
 
 const fecha = (d: Date) => d.toISOString().slice(0, 10);
-const igual = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 
 /** Los `--opcion clave=valor` repetidos. */
 function valores(nombre: string): [string, string][] {
@@ -162,6 +178,16 @@ async function main() {
   const escribir = resolverApply({ tablas: ["PersonaDeLaEmpresa", "Client"] });
   const por = arg("--por");
   const huellaPedida = arg("--huella");
+  /* Completar una mudanza que se cortó: lo que esa corrida aprobó (su respaldo JSON) se vuelve a aprobar aunque ahora
+     salga como deriva de otra gente (las fichas ya están escritas). */
+  const rutaDelRespaldo = arg("--completar");
+  let yaAprobadas: Map<string, string | null> | undefined;
+  if (rutaDelRespaldo) {
+    const { readFileSync } = await import("node:fs");
+    const r = JSON.parse(readFileSync(rutaDelRespaldo, "utf8")) as { reuniones?: { id: string; resolvedClientIdDespues: string | null }[] };
+    yaAprobadas = new Map((r.reuniones ?? []).map((x) => [x.id, x.resolvedClientIdDespues]));
+    if (!yaAprobadas.size) throw new Error(`El respaldo ${rutaDelRespaldo} no trae reuniones aprobadas.`);
+  }
   if (escribir && (!por || !por.includes("@"))) throw new Error("Con --apply, --por <correo de quien dio el mapa> es obligatorio.");
   if (escribir && !huellaPedida) throw new Error("Con --apply, --huella <la del simulacro> es obligatoria: se escribe solo lo que se vio.");
   if (escribir && confirmarSugeridas) throw new Error("--confirmar-sugeridas es solo para el simulacro: las sugeridas se confirman en la pantalla.");
@@ -169,8 +195,9 @@ async function main() {
   const { prisma } = await import("@/lib/db/prisma");
   const { esquemaDesactualizado } = await import("@/lib/db/esquema");
   const { reResolverReunionesDe } = await import("@/lib/sessions/resolve-client");
-  const { guardarInterlocutor, motivoParaNoGuardar, fotoDeLaPersona, restaurarPersona } = await import("@/lib/clients/personas-de-la-empresa-server");
-  const { huellaDeMovidas } = await import("@/lib/clients/interlocutores");
+  const { motivoParaNoGuardar } = await import("@/lib/clients/personas-de-la-empresa-server");
+  const { ajustarConLosCambios, fichasQueCambian, huellaDeLaPrecarga, separarLaDeriva } = await import("@/lib/clients/precarga-de-interlocutores");
+  const { escribirFichasYPersonas, PrecargaNoEscrita } = await import("@/lib/clients/precarga-de-interlocutores-server");
   const { isLockedLink } = await import("@/lib/sessions/session-project-locks");
   const { destinosDelegados } = await import("@/lib/seguimiento/hechos/estado");
   const { INV37 } = await import("@/lib/invariantes/sesiones");
@@ -303,25 +330,13 @@ async function main() {
     const dominios = [...(mapa.cambiosDeFichas?.dominios ?? []), ...dominiosCli];
     for (const [k] of [...siglas, ...dominios]) idDe(k);
     const cambianFichas = siglas.length > 0 || dominios.length > 0;
-    const mismoDominio = (guardado: string, dominio: string) => guardado.trim().toLowerCase().replace(/^@/, "") === dominio;
-    /* El cambio de las fichas, UNA función para el simulacro, la cuenta de INV37 y lo que escribe el --apply. */
-    const ajustar = <T extends { id: string; siglas?: string[] | null; emailDomains: string[] }>(clients: readonly T[]): T[] =>
-      clients.map((c) => {
-        let x = c;
-        for (const [k, sigla] of siglas) {
-          const actuales = x.siglas ?? [];
-          if (idDe(k) === c.id && !actuales.some((s) => normalizarSigla(s) === sigla)) x = { ...x, siglas: [...actuales, sigla] } as T;
-        }
-        for (const [k, dominio] of dominios) {
-          const loTiene = x.emailDomains.some((d) => mismoDominio(d, dominio));
-          if (idDe(k) === c.id) {
-            if (!loTiene) x = { ...x, emailDomains: [...x.emailDomains, dominio] } as T;
-          } else if (loTiene) {
-            x = { ...x, emailDomains: x.emailDomains.filter((d) => !mismoDominio(d, dominio)) } as T;
-          }
-        }
-        return x;
-      });
+    /* El cambio de las fichas, UNA función (lib/clients/precarga-de-interlocutores.ts) para el simulacro, la cuenta de
+       INV37 y lo que escribe el --apply. */
+    const cambios = {
+      siglas: siglas.map(([k, v]) => [idDe(k), v] as const),
+      dominios: dominios.map(([k, v]) => [idDe(k), v] as const),
+    };
+    const ajustar = ajustarConLosCambios(cambios);
     if (cambianFichas) {
       console.log("");
       console.log(`Las fichas cambian (en memoria): ${[...siglas.map(([k, v]) => `sigla «${v}» en ${mapa.fichas[k]!.nombre}`), ...dominios.map(([k, v]) => `${v} pasa a ${mapa.fichas[k]!.nombre}`)].join(" · ")}.`);
@@ -336,22 +351,34 @@ async function main() {
       hubspot: hoy.hubspot,
       todas: cambianFichas,
     });
-    const yaDistintas = new Map(hoy.cambian.map((c) => [c.sessionId, c.a]));
-    const porElMapa = con.cambian.filter((c) => !yaDistintas.has(c.sessionId) || yaDistintas.get(c.sessionId) !== c.a);
     /* La DERIVA: reuniones que ya hoy dan distinto de lo guardado, y que el cambio no toca. Las de la gente del mapa se
-       ponen al día con el --apply; las de otra gente no son de este cambio y no se mueven (salvo --con-la-deriva). */
-    const deriva = con.cambian.filter((c) => yaDistintas.has(c.sessionId) && yaDistintas.get(c.sessionId) === c.a);
+       ponen al día con el --apply; las de otra gente no son de este cambio y no se mueven (salvo --con-la-deriva, o que
+       las haya aprobado la corrida que se cortó: --completar). */
+    const yaDistintas = new Set(hoy.cambian.map((c) => c.sessionId));
+    const candidatas = con.cambian.filter((c) => yaDistintas.has(c.sessionId)).map((c) => c.sessionId);
     const deLaGente = new Set(
-      deriva.length
-        ? (await prisma.firefliesSession.findMany({ where: { id: { in: deriva.map((c) => c.sessionId) } }, select: { id: true, participants: true } }))
+      candidatas.length
+        ? (await prisma.firefliesSession.findMany({ where: { id: { in: candidatas } }, select: { id: true, participants: true } }))
             .filter((s) => s.participants.some((x) => correos.includes(x.trim().toLowerCase())))
             .map((s) => s.id)
         : [],
     );
-    const derivaPropia = deriva.filter((c) => deLaGente.has(c.sessionId));
-    const derivaAjena = deriva.filter((c) => !deLaGente.has(c.sessionId));
-    const aprobadas = [...porElMapa, ...derivaPropia, ...(conLaDeriva ? derivaAjena : [])];
-    const huella = huellaDeMovidas(aprobadas);
+    const { porElMapa, derivaPropia, derivaAjena, deLaCorridaAnterior, aprobadas } = separarLaDeriva({
+      hoy: hoy.cambian,
+      con: con.cambian,
+      deLaGente,
+      conLaDeriva,
+      yaAprobadas,
+    });
+    /* Lo que se escribe de cada persona: lo mismo entra en la huella y en el --apply. Sin rol o sin nombre en el mapa no se
+       borra el que ya tenga; el que puso una persona se conserva (salvo --el-mapa-manda). */
+    const cambiosDePersonas = mapa.personas.map((p) => ({
+      correo: p.correo,
+      ...(mandaNombre.get(p.correo) ? { nombre: p.nombre } : {}),
+      ...(mandaRol.get(p.correo) && p.rol ? { rol: p.rol } : {}),
+      confirmadaEn: queda.get(p.correo)!.confirmadaEn,
+      sugeridaEn: queda.get(p.correo)!.sugeridaEn,
+    }));
 
     const otrasDuenas = [...new Set(con.cambian.flatMap((c) => [c.de, c.a]).filter((x): x is string => !!x && !nombreDe.has(x)))];
     for (const c of otrasDuenas.length ? await prisma.client.findMany({ where: { id: { in: otrasDuenas } }, select: { id: true, name: true } }) : []) {
@@ -394,6 +421,11 @@ async function main() {
       listar(derivaPropia, true);
       console.log("");
     }
+    if (deLaCorridaAnterior.length) {
+      console.log(`### Además, ${deLaCorridaAnterior.length} que aprobó la corrida que se cortó (--completar): el --apply las completa:`);
+      listar(deLaCorridaAnterior, true);
+      console.log("");
+    }
     if (derivaAjena.length) {
       console.log(
         `### Aparte, ${derivaAjena.length} de OTRA gente que ya hoy dan distinto de lo guardado: no son de este cambio. ` +
@@ -410,7 +442,7 @@ async function main() {
     const [vinculos, tareas, pedidos, hechos, analisis, lecturas, minutas, viejos, corridas] = await Promise.all([
       prisma.sessionProject.findMany({
         where: { sessionId: { in: idsCambian } },
-        select: { sessionId: true, ...CANDADOS, project: { select: { name: true, clientId: true } } },
+        select: { sessionId: true, projectId: true, ...CANDADOS, project: { select: { name: true, clientId: true } } },
       }),
       prisma.tarea.findMany({ where: { sessionId: { in: idsCambian } }, select: { numero: true, sessionId: true, clientId: true, cita: true, estado: true } }),
       prisma.pedidoFueraDeAlcance.findMany({ where: { sessionId: { in: idsCambian }, estado: { not: "DESCARTADO" } }, select: { sessionId: true, clientId: true, pedido: true } }),
@@ -556,33 +588,34 @@ async function main() {
       console.log("");
     }
 
-    console.log(`\nHuella del simulacro: ${huella} (${aprobadas.length} reunión(es) que se mueven). El --apply la pide.`);
+    /* La huella cubre TODO lo que se escribe: las reuniones, lo de cada persona, el cambio de las fichas y los vínculos que
+       se sueltan con su candado (un vínculo que una persona eligió después del simulacro la cambia). */
+    const huella = huellaDeLaPrecarga({
+      aprobadas,
+      personas: cambiosDePersonas,
+      cambios,
+      sueltan: seSueltan.map((v) => `${v.sessionId}>${v.projectId}:${isLockedLink(v) ? loQueEligio(v) : "ia"}`),
+    });
+    const opciones = [conLaDeriva && "--con-la-deriva", elMapaManda && "--el-mapa-manda", rutaDelRespaldo && `--completar "${rutaDelRespaldo}"`]
+      .filter(Boolean)
+      .join(" ");
+    console.log(`\nHuella del simulacro: ${huella} (las ${aprobadas.length} reunión(es) que se mueven, lo de cada persona y los vínculos que se sueltan). El --apply la pide.`);
     if (!escribir) {
-      console.log(`Simulacro: no se escribió nada. Para aplicarlo: ALLOW_PROD_WRITE=1 … --por <correo> --huella ${huella}${conLaDeriva ? " --con-la-deriva" : ""} --apply`);
+      console.log(`Simulacro: no se escribió nada. Para aplicarlo, con el MISMO mapa: ALLOW_PROD_WRITE=1 … --por <correo> --huella ${huella}${opciones ? ` ${opciones}` : ""} --apply`);
       return;
     }
     if (rechazos.length) throw new Error("Corrige el mapa antes del --apply.");
     if (huellaPedida !== huella) {
       throw new Error(
-        `La huella de ahora es ${huella} y pediste ${huellaPedida}: lo que se mueve cambió desde que lo viste (una reunión nueva, alguien confirmó ` +
-          "gente…). No se escribió nada: revisa el simulacro de arriba y aplícalo con su huella.",
+        `La huella de ahora es ${huella} y pediste ${huellaPedida}: lo que se escribe cambió desde que lo viste (una reunión nueva, alguien ` +
+          "confirmó gente o eligió un vínculo, otro mapa u otras opciones). No se escribió nada: revisa el simulacro de arriba y aplícalo con su huella.",
       );
     }
 
     /* ── 5. Aplicar ── */
     await assertCodigoDesplegado();
-    /* Lo que hay que poder devolver si escribir falla: las fichas que el cambio toca (como están) y cada persona en las
-       fichas del mapa. */
-    const tocadas = <T extends { id: string; siglas: string[]; emailDomains: string[] }>(todas: T[]): T[] => {
-      const despues = new Map(ajustar(todas).map((c) => [c.id, c]));
-      return todas.filter((c) => {
-        const d = despues.get(c.id)!;
-        return !igual(c.siglas, d.siglas) || !igual(c.emailDomains, d.emailDomains);
-      });
-    };
-    const fichasAntes = cambianFichas ? tocadas(await prisma.client.findMany({ select: { id: true, name: true, siglas: true, emailDomains: true } })) : [];
-    const fotos = new Map<string, Awaited<ReturnType<typeof fotoDeLaPersona>>>();
-    for (const p of mapa.personas) fotos.set(p.correo, await fotoDeLaPersona(p.correo, ids));
+    /* Las fichas que el cambio toca, como están, para el respaldo. */
+    const fichasAntes = cambianFichas ? fichasQueCambian(await prisma.client.findMany({ select: { id: true, name: true, siglas: true, emailDomains: true } }), ajustar) : [];
     /* Todo lo que el --apply toca: las fichas que cambian, las personas, la dueña de cada reunión que se mueve y lo que
        cuelga de ellas COMPLETO (vínculos, también los que puso una persona; hechos; análisis de venta). */
     const respaldo = guardarRespaldoJson({
@@ -598,48 +631,14 @@ async function main() {
     console.log(`Respaldo JSON: ${respaldo}`);
 
     /* Las fichas y las personas: si algo falla, se devuelven como estaban y no se mueve ninguna reunión. */
-    let escritas = 0;
     try {
-      if (cambianFichas) {
-        await prisma.$transaction(async (tx) => {
-          const actuales = await tx.client.findMany({ select: { id: true, siglas: true, emailDomains: true } });
-          const porId = new Map(actuales.map((c) => [c.id, c]));
-          for (const c of ajustar(actuales)) {
-            const a = porId.get(c.id)!;
-            if (igual(a.siglas, c.siglas ?? []) && igual(a.emailDomains, c.emailDomains)) continue;
-            await tx.client.update({ where: { id: c.id }, data: { siglas: c.siglas ?? [], emailDomains: c.emailDomains } });
-          }
-        });
-        console.log("Fichas actualizadas (siglas y dominios).");
-      }
-      for (const p of mapa.personas) {
-        await guardarInterlocutor({
-          tocables: ids,
-          cambio: {
-            correo: p.correo,
-            // Sin rol o sin nombre en el mapa no se borra el que ya tenga; el que puso una persona se conserva (salvo --el-mapa-manda).
-            ...(mandaNombre.get(p.correo) ? { nombre: p.nombre } : {}),
-            ...(mandaRol.get(p.correo) && p.rol ? { rol: p.rol } : {}),
-            confirmadaEn: queda.get(p.correo)!.confirmadaEn,
-            sugeridaEn: queda.get(p.correo)!.sugeridaEn,
-          },
-          porEmail: por!,
-        });
-        escritas++;
-      }
+      const escrito = await escribirFichasYPersonas({ cambios, personas: cambiosDePersonas, tocables: ids, porEmail: por! });
+      if (cambianFichas) console.log(`Fichas actualizadas (siglas y dominios): ${escrito.fichas}.`);
+      console.log(`Personas escritas: ${escrito.personas}.`);
     } catch (e) {
-      const motivo = e instanceof Error ? e.message : String(e);
-      try {
-        for (const p of mapa.personas) await restaurarPersona(fotos.get(p.correo)!, p.correo, ids);
-        if (fichasAntes.length) {
-          await prisma.$transaction(fichasAntes.map((f) => prisma.client.update({ where: { id: f.id }, data: { siglas: f.siglas, emailDomains: f.emailDomains } })));
-        }
-      } catch (e2) {
-        throw new Error(`No se pudo escribir (${motivo}) ni deshacer lo escrito (${e2 instanceof Error ? e2.message : e2}): devuélvelo desde el respaldo ${respaldo}.`);
-      }
-      throw new Error(`No se pudo escribir: ${motivo}. Se deshizo lo escrito (las fichas y las personas quedan como estaban) y no se movió ninguna reunión.`);
+      if (e instanceof PrecargaNoEscrita) throw new Error(`${e.message} No se movió ninguna reunión.`);
+      throw new Error(`${e instanceof Error ? e.message : e} Devuélvelo desde el respaldo ${respaldo}.`);
     }
-    console.log(`Personas escritas: ${escritas}.`);
 
     /* Se mueve exactamente lo aprobado (con su dueña nueva), con lo que HubSpot respondió para el simulacro: no se le vuelve
        a preguntar con las fichas ya escritas. Lo que dé distinto ahora se salta y se lista. */
@@ -657,7 +656,7 @@ async function main() {
       throw new Error(
         `Las fichas y las personas quedaron escritas, pero la mudanza de las reuniones se cortó: ${e instanceof Error ? e.message : e}. ` +
           "Lo que alcanzó a moverse quedó bien (cada reunión se mueve con sus vínculos en una transacción). Para completarlo, vuelve a correr el " +
-          "simulacro con --con-la-deriva (lo que falta sale como «ya hoy dan distinto») y aplícalo con su huella nueva.",
+          `simulacro con --completar "${respaldo}" (aprueba solo lo que esta corrida había aprobado) y aplícalo con su huella nueva.`,
       );
     }
     const ajenas = new Set(conLaDeriva ? [] : derivaAjena.map((c) => c.sessionId));
@@ -680,7 +679,11 @@ async function main() {
       );
       const yaEstaban = noSalieron.filter((c) => ahora.get(c.sessionId) === c.a);
       const yaNo = noSalieron.filter((c) => ahora.get(c.sessionId) !== c.a);
-      if (yaEstaban.length) console.log(`${yaEstaban.length} ya estaban en su ficha nueva (las movió la app): se soltaron sus vínculos a proyectos de otra ficha.`);
+      const enFicha = yaEstaban.filter((c) => c.a !== null).length;
+      if (enFicha) console.log(`${enFicha} ya estaban en su ficha nueva (las movió la app): se soltaron sus vínculos a proyectos de otra ficha.`);
+      if (yaEstaban.length > enFicha) {
+        console.log(`${yaEstaban.length - enFicha} ya estaban sin ficha (las movió la app): sus vínculos esperan a quien las asigne en /sessions.`);
+      }
       if (yaNo.length) {
         console.log(`⚠ ${yaNo.length} ya no cambian (algo cambió desde el simulacro) y no se movieron:`);
         for (const c of yaNo) console.log(`  - ${fecha(c.date)} · ${c.title}: sigue en ${nombre(ahora.get(c.sessionId) ?? null)}`);

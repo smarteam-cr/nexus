@@ -17759,20 +17759,27 @@ Marco y Mariana (teamnet.com.mx) manejan sistemas para todo el grupo, y el domin
 - **La precarga desde un mapa** (`scripts/interlocutores-precargar.ts --mapa <json>`, simulacro por defecto): el mapa NO va
   en el repo (trae correos de personas de los clientes). Solo va confirmado lo que dijo una persona con su correo; un
   correo deducido o una persona sin rol en el mapa va **sugerida** (por confirmar). El simulacro termina con una **huella**
-  de lo que se mueve (`huellaDeMovidas`, la misma de la pestaña), y el `--apply` pide `--por` y `--huella`: si lo que se
-  mueve ahora no es lo que se vio, no escribe nada. Respalda `PersonaDeLaEmpresa` y `Client` (guard) y, en JSON, las fichas
+  de TODO lo que se escribe (`huellaDeLaPrecarga`, lib/clients/precarga-de-interlocutores.ts: las reuniones que se mueven,
+  lo de cada persona, el cambio de las fichas y los vínculos que se sueltan con su candado), y el `--apply` pide `--por` y
+  `--huella`: si algo de eso cambió (un rol que pisa `--el-mapa-manda`, un vínculo que una persona eligió, otro mapa), no
+  escribe nada. Respalda `PersonaDeLaEmpresa` y `Client` (guard) y, en JSON, las fichas
   que cambian, las personas, la dueña de antes y después de cada reunión que se mueve, sus vínculos a proyectos, sus
   hechos y sus análisis de venta; valida todo el mapa antes de escribir; y no corre si el commit de producción no trae el
-  mismo `categorize.ts` y `resolve-client.ts` (`git diff` contra el sha de /api/health). **Revisión del 26 nov, para no
+  mismo código en `lib/sessions/`, `lib/clients/`, `lib/hubspot/companies.ts`, `lib/exploraciones/agendadas.ts` y
+  `lib/lecturas/reglas.ts` (`git diff` y `git status` contra el sha de /api/health, anclados a la raíz del repo: desde una
+  subcarpeta daba «igual» sin comparar nada). **Revisión del 26 nov, para no
   dejar nada a medias:** HubSpot se consulta una vez, para el simulacro, y la mudanza usa esa respuesta (antes se
   volvía a preguntar con las fichas ya escritas); si escribir las fichas o las personas falla, se devuelven como estaban
-  y no se mueve nada; cada reunión se mueve con sus vínculos a otra ficha en la misma transacción
-  (`reResolveSession › soltarVinculosAjenos`), y una aprobada que la app ya había movido suelta igual los suyos; el
+  y no se mueve nada (`escribirFichasYPersonas`, lib/clients/precarga-de-interlocutores-server.ts; un corte del proceso
+  no corre esa vuelta atrás: para eso está el respaldo); cada reunión se mueve con sus vínculos a otra ficha en la misma transacción
+  (`reResolveSession › soltarVinculosAjenos`), y una aprobada que la app ya había movido a esa misma ficha suelta igual
+  los suyos (si está en una tercera, no se toca); el
   `--apply` espera lo que cuelga de cada mudanza (hechos, análisis de venta, lectura, reclasificación), que antes se
   cortaba al cerrar la conexión. Con cambios de fichas, el simulacro arma el contexto con las fichas ya cambiadas
   (`buildCategorizeCtx(ajustarFichas)`): lo aprendido de los títulos con la sigla nueva entra en la cuenta, como en la
   base con el cambio escrito. Las reuniones de OTRA gente que ya hoy dan distinto de lo guardado (la deriva) se listan
-  con su título y no se mueven (`--con-la-deriva` las suma, y sirve para completar una mudanza que se cortó). El
+  con su título y no se mueven (`--con-la-deriva` las suma). Una mudanza que se cortó se completa con
+  `--completar <respaldo.json>`: aprueba otra vez solo lo que esa corrida había aprobado, con la misma ficha. El
   simulacro dice, de cada vínculo que se suelta o que espera, si lo eligió una persona y para qué documento
   (`isLockedLink`), y lo que el cambio le SUMA a cada invariante, medido (INV37 con su propia regla sobre las fichas
   cambiadas), sin decir «verde»: si una ya está en rojo por otra cosa lo dice `check:invariants`. Por defecto **conserva**

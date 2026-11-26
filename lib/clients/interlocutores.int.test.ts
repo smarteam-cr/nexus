@@ -12,9 +12,15 @@ vi.mock("server-only", () => ({}));
 /* Lo que el cambio de dueña dispara en segundo plano (reclasificar con IA, hechos, análisis de venta, lectura) seguiría
    corriendo después de cada caso y chocaría con el TRUNCATE del siguiente: aquí no se prueba, se apaga. */
 vi.mock("@/lib/sessions/reclassify", () => ({ reclassifyClientSessions: async () => undefined }));
+const cuelga = vi.hoisted(() => ({ terminados: 0 }));
 vi.mock("@/lib/seguimiento/hechos-server", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/seguimiento/hechos-server")>()),
-  alCambiarDeDueno: async () => undefined,
+  /* Tarda un poco a propósito: así se ve si la mudanza lo espera (`esperarLoQueCuelga`). */
+  alCambiarDeDueno: async () => {
+    await new Promise((r) => setTimeout(r, 30));
+    cuelga.terminados++;
+    return 0;
+  },
 }));
 /* Cuántas veces se le pregunta a HubSpot (la base de pruebas no tiene cuenta: la respuesta real es «sin cuenta»). */
 const hubspot = vi.hoisted(() => ({ llamadas: 0 }));
@@ -35,6 +41,7 @@ vi.mock("@/lib/analizador-venta/ajenos", async (importOriginal) => ({
 
 import { prisma } from "@/lib/db/prisma";
 import { copiarPersonasDeLaEmpresa, guardarInterlocutor, interlocutoresDeLaEmpresa } from "./personas-de-la-empresa-server";
+import { escribirFichasYPersonas, PrecargaNoEscrita } from "./precarga-de-interlocutores-server";
 import { reResolverReunionesDe, resolveAllSessions } from "@/lib/sessions/resolve-client";
 
 /* Sin «(test)» en el nombre: un cliente de prueba no cuenta en el título (categorize.ts › isTestClient). */
@@ -246,5 +253,76 @@ describe("la mudanza con lo aprobado (revisión del 26 nov)", () => {
     });
     expect(r.cambian.map((c) => c.sessionId)).toEqual(["s-1"]);
     expect(hubspot.llamadas).toBe(antes);
+  });
+});
+
+describe("la mudanza no toca lo que no aprobó, y espera lo que cuelga (revisión del 26 nov)", () => {
+  it("una aprobada que ahora está en una TERCERA ficha no pierde sus vínculos a ella", async () => {
+    const { tae, ae } = await elTec();
+    const credix = await prisma.client.create({ data: { name: "Credilandia", emailDomains: ["credilandia.test"], createdAt: new Date("2026-03-01") } });
+    const deCredix = await prisma.project.create({ data: { clientId: credix.id, name: "Credilandia | CRM (test)" } });
+    await prisma.firefliesSession.create({
+      data: { id: "s-1", title: "Revisión semanal de leads", date: new Date("2026-11-20T15:00:00Z"), participants: ["cindy@itcr.test"], manualClientId: credix.id },
+    });
+    await resolveAllSessions({ reclassify: false });
+    await prisma.sessionProject.create({ data: { sessionId: "s-1", projectId: deCredix.id, isPrimary: true, source: "manual" } });
+    // Aprobada de TAE a AE, pero alguien la asignó a mano a Credilandia entre el simulacro y la escritura.
+    const r = await reResolverReunionesDe(["cindy@itcr.test"], { aplicar: true, aprobadas: new Map([["s-1", { de: tae.id, a: ae.id }]]) });
+    expect(r.cambian).toEqual([]);
+    expect((await prisma.firefliesSession.findUniqueOrThrow({ where: { id: "s-1" } })).resolvedClientId).toBe(credix.id);
+    expect(await prisma.sessionProject.count({ where: { sessionId: "s-1" } })).toBe(1);
+  });
+
+  it("con esperarLoQueCuelga, la mudanza vuelve cuando terminó lo que cuelga de cada reunión", async () => {
+    const { tae, ae } = await elTec();
+    await prisma.firefliesSession.create({
+      data: { id: "s-1", title: "Revisión semanal de leads", date: new Date("2026-11-20T15:00:00Z"), participants: ["cindy@itcr.test", "pedro@itcr.test"] },
+    });
+    await resolveAllSessions({ reclassify: false });
+    await guardarInterlocutor({ tocables: [tae.id, ae.id], cambio: { correo: "cindy@itcr.test", confirmadaEn: [ae.id] }, porEmail: "eli@smarteamcr.com" });
+    const antes = cuelga.terminados;
+    const r = await reResolverReunionesDe(["cindy@itcr.test"], { aplicar: true, esperarLoQueCuelga: true });
+    expect(r.cambian.map((c) => c.sessionId)).toEqual(["s-1"]);
+    expect(cuelga.terminados).toBe(antes + 1);
+  });
+});
+
+describe("escribir las fichas y las personas de la precarga (revisión del 26 nov)", () => {
+  it("si falla la tercera persona, las fichas y las personas quedan EXACTAMENTE como estaban", async () => {
+    const { tae, ae } = await elTec();
+    // La copia ya tenía a Cindy en TAE, sin confirmar.
+    await prisma.personaDeLaEmpresa.create({ data: { clientId: tae.id, correo: "cindy@itcr.test", nombre: "Cindy", origenes: ["reunion"], reuniones: 4 } });
+    const cambios = { siglas: [[ae.id, "XYZ"] as const], dominios: [[ae.id, "itcr.test"] as const] };
+    await expect(
+      escribirFichasYPersonas({
+        cambios,
+        personas: [
+          { correo: "cindy@itcr.test", confirmadaEn: [ae.id] },
+          { correo: "pedro@itcr.test", confirmadaEn: [tae.id] },
+          // Del equipo de Smarteam: el escritor la rechaza.
+          { correo: "heiver@smarteamcr.com", confirmadaEn: [tae.id] },
+        ],
+        tocables: [tae.id, ae.id],
+        porEmail: "eli@smarteamcr.com",
+      }),
+    ).rejects.toBeInstanceOf(PrecargaNoEscrita);
+    const fichas = await prisma.client.findMany({ where: { id: { in: [tae.id, ae.id] } }, select: { id: true, siglas: true, emailDomains: true } });
+    expect(fichas.find((f) => f.id === tae.id)).toMatchObject({ siglas: ["TAE"], emailDomains: ["itcr.test"] });
+    expect(fichas.find((f) => f.id === ae.id)).toMatchObject({ siglas: ["AE"], emailDomains: [] });
+    const personas = await prisma.personaDeLaEmpresa.findMany({ select: { clientId: true, correo: true, confirmadaAt: true, origenes: true } });
+    expect(personas).toEqual([{ clientId: tae.id, correo: "cindy@itcr.test", confirmadaAt: null, origenes: ["reunion"] }]);
+  });
+
+  it("sin fallas, escribe las fichas que cambian y cada persona", async () => {
+    const { tae, ae } = await elTec();
+    const r = await escribirFichasYPersonas({
+      cambios: { siglas: [[ae.id, "XYZ"] as const], dominios: [] },
+      personas: [{ correo: "cindy@itcr.test", confirmadaEn: [ae.id] }],
+      tocables: [tae.id, ae.id],
+      porEmail: "eli@smarteamcr.com",
+    });
+    expect(r).toEqual({ fichas: 1, personas: 1 });
+    expect((await prisma.client.findUniqueOrThrow({ where: { id: ae.id } })).siglas).toEqual(["AE", "XYZ"]);
+    expect((await prisma.personaDeLaEmpresa.findUniqueOrThrow({ where: { clientId_correo: { clientId: ae.id, correo: "cindy@itcr.test" } } })).confirmadaAt).not.toBeNull();
   });
 });
