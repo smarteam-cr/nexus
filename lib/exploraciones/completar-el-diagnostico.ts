@@ -18,55 +18,11 @@
  */
 import { cuandoSeEscribioLaNota, esClaveDeLoQueSabes } from "./lo-que-sabes";
 import { notasQueLeeUbicar } from "./notas-del-equipo";
+import { esRespuesta, respondeA } from "./forma-de-la-respuesta";
 
-/** Una pregunta de La escala que se responde con Nexus. */
-export interface PreguntaParaResponder {
-  /** «Ventas», «Marketing»… */
-  equipo: string;
-  /** El nombre de la parte: «Datos», «Procesos»… */
-  dimension: string;
-  dimensionId: string;
-  /** La pregunta, como se ve en la pantalla. */
-  pregunta: string;
-}
-
-/** La pregunta sin sus signos ni el punto final, para ir entre paréntesis. */
-function sinSignos(pregunta: string): string {
-  return pregunta
-    .replace(/[¿?]/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/[.;:,]+$/, "");
-}
-
-const PALABRA = "Sobre";
-const SEPARADOR = " · ";
-const RAIZ = (equipo: string, dimension: string) => `${PALABRA} ${equipo.trim()}${SEPARADOR}${dimension.trim()}`;
-/** Cualquier respuesta: «Sobre <equipo> · <parte> (» o «…:» al principio de un renglón. Las mismas piezas que `RAIZ`. */
-const UNA_RESPUESTA = new RegExp(`^${PALABRA} .+${SEPARADOR.trim()} .+?( \\(|:)`, "i");
-/** Los renglones de una nota: la nota junta, renglón por renglón, todo lo que la persona contó antes de guardar. */
-const renglones = (texto: string) => texto.split(/\r?\n/).map((l) => l.trim());
-
-/** Lo que el chat antepone a la respuesta: «Sobre Ventas · Datos (cómo registran hoy los contactos): ». */
-export function prefijoDeLaRespuesta(p: Pick<PreguntaParaResponder, "equipo" | "dimension" | "pregunta">): string {
-  const q = sinSignos(p.pregunta);
-  return `${RAIZ(p.equipo, p.dimension)}${q ? ` (${q.slice(0, 200)})` : ""}: `;
-}
-
-/**
- * ¿Esta nota responde a esa pregunta? Un renglón que empieza con su «Sobre <equipo> · <parte>», sin importar mayúsculas.
- * En cualquier renglón (revisión del 24 nov): con algo contado antes sin guardar, la respuesta queda en el medio de la nota.
- */
-export function respondeA(texto: string, equipo: string, dimension: string): boolean {
-  const raiz = RAIZ(equipo, dimension).toLowerCase();
-  return renglones(texto).some((l) => {
-    const t = l.toLowerCase();
-    return t.startsWith(`${raiz} (`) || t.startsWith(`${raiz}:`);
-  });
-}
-
-/** ¿La nota trae la respuesta a alguna pregunta de La escala? (la misma forma que `respondeA`, en cualquier renglón) */
-export const esRespuesta = (texto: string): boolean => renglones(texto).some((l) => UNA_RESPUESTA.test(l));
+/* La forma de una respuesta vive en forma-de-la-respuesta.ts (25 nov: el build de producción se caía con agente-pedido.ts
+   importando este archivo). Se reexporta para que nada más cambie. */
+export { equiposDeLasRespuestas, esRespuesta, prefijoDeLaRespuesta, respondeA, type PreguntaParaResponder } from "./forma-de-la-respuesta";
 
 /** Lo de `contenido.autoresDeLasNotas` que se usa: cuándo se escribió cada nota. */
 type Autores = Readonly<Record<string, { en?: string | null } | undefined>> | null | undefined;
@@ -105,20 +61,6 @@ export function clavesNuevasDesde(notas: Readonly<Record<string, string>>, autor
 export function contarLasNotas(notas: Readonly<Record<string, string>>, claves: readonly string[]): { total: number; respuestas: number } {
   const conTexto = claves.filter((k) => (notas[k] ?? "").trim());
   return { total: conTexto.length, respuestas: conTexto.filter((k) => esRespuesta(notas[k])).length };
-}
-
-/**
- * El equipo que nombra cada respuesta de la nota («Sobre <equipo> · <parte> (…): …», en cualquier renglón), como lo
- * escribió la pantalla (el nombre del área en la escala de la empresa). Vacío si la nota no trae ninguna respuesta. Lo usa
- * «Ubicar» para no fijar con una respuesta de un equipo el nivel de otra área (agente-pedido.ts › `dimensionDeOtroEquipo`).
- */
-export function equiposDeLasRespuestas(texto: string): string[] {
-  return renglones(texto).flatMap((l) => {
-    if (!UNA_RESPUESTA.test(l)) return [];
-    const resto = l.slice(PALABRA.length).trim();
-    const fin = resto.indexOf(SEPARADOR);
-    return fin > 0 ? [resto.slice(0, fin).trim()] : [];
-  });
 }
 
 /** Lo que mira esto de una corrida de «Ubicar» (`CorridaDelAgente`). */

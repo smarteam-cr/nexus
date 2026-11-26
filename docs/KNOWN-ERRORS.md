@@ -69,6 +69,12 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
   si uno falla al reaplicarse lo dice con su nombre: se arregla el `.sql`, no se saltea.
 - **Tests de integración que fallan sin motivo en un worktree: una fila recién creada «no existe», o un único que choca en una tabla que nació vacía.** *Causa:* todos los worktrees usan la MISMA `nexus_test` (el Postgres del checkout principal, puerto 5433): otra sesión corrió `test:int` a la vez (trunca todo antes de cada caso) o su global-setup le aplicó un `.sql` que tu rama no tiene (pasó el 2026-10-25 con el índice único de `Client.hubspotCompanyId`). *Guarda:* correr solo tus archivos (`npx vitest run --project integration <archivo>`), y antes de dar un rojo por tuyo, mirar si el objeto que choca está en algún `.sql` de tu rama.
 - **El deploy falla en `npm run build` con «next/font/google queries have exactly one entry» (o «Can't resolve '@vercel/turbopack-next/internal/font/google/font'») y `app/layout.tsx` no cambió.** *Causa:* el build baja la letra de Google y esa descarga falló por un momento (16 nov). *Guarda:* `deploy.sh` deja corriendo el contenedor viejo; volver a correr el deploy. Si se repite, mirar desde el VPS que `fonts.gstatic.com` responda.
+- **El build de producción se cae con «Dependency tracking is disabled so invalidation is not allowed» (Turbopack),
+  siempre igual, y tsc y las pruebas están en verde.** *Causa (25 nov, rama «Ubicar con notas»):* un import nuevo:
+  `agente-pedido.ts` (servidor, también en el bundle de `instrumentation.ts`) importando `completar-el-diagnostico.ts`
+  (que usan las pantallas). Una línea de import alcanzaba; no había ciclo. *Guarda:* lo que el servidor comparte con la
+  pantalla va a un módulo sin imports (`lib/exploraciones/forma-de-la-respuesta.ts`). *Para encontrarlo:* reproducirlo
+  con `NEXT_DIST_DIR=.next-verify npx next build` (sin el dev arriba) y bisecar por archivo; el panic no dice cuál.
 - **CSS/estilos rotos tras `git pull`.** *Causa:* caché de Turbopack stale. *Guarda:* `rm -rf .next`
   + reiniciar (un restart solo no alcanza).
 - **El preview del navegador no está logueado** → middleware redirige al login. *Guarda:* el E2E de

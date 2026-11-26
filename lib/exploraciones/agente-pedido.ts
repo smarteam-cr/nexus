@@ -78,7 +78,8 @@ import { VALIDADOR_ESTRICTO } from "./esquemas";
 import { diaConAnio, diaYHora } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import { esNotaEnUbicar, GANA_LA_NOTA, ROTULO_DE_LA_NOTA } from "./notas-del-equipo";
-import { equiposDeLasRespuestas, prefijoDeLaRespuesta } from "./completar-el-diagnostico";
+// De forma-de-la-respuesta.ts y NO de completar-el-diagnostico.ts: con ese import el build de producción se cae (25 nov).
+import { equiposDeLasRespuestas, prefijoDeLaRespuesta } from "./forma-de-la-respuesta";
 import { EQUIPOS, type ClaveDeEquipo } from "./equipos";
 import { CUMPLIMIENTOS, MAX_PARA_LA_PROXIMA, type Cumplimiento } from "./despues-de-la-sesion";
 import {
