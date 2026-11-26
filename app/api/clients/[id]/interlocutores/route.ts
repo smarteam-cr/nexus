@@ -116,8 +116,16 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
 
     /* Qué reuniones se mueven hoy, y a qué fichas tiene que tener acceso quien pide: las que pierden o ganan una reunión
        de hoy o de las que vengan (`fichasQuePideAbrir`). */
+    /* Si la persona queda (o quedaba) en dos fichas o más, arma o desarma un grupo: la regla del grupo mueve también
+       reuniones de otra gente que nombran a esas fichas (Elías, 26 nov). Se miran en el aviso, la recuenta y la mudanza. */
+    const delGrupo = antes.length >= 2 || plan.despues.length >= 2 ? [...new Set([...antes, ...plan.despues])] : undefined;
     const { cambian: movidas } = plan.cambiaLaConfirmacion
-      ? await reResolverReunionesDe([pedido.correo], { hipotesis: new Map([[pedido.correo, plan.despues]]), aplicar: false, exigirHubspot: true })
+      ? await reResolverReunionesDe([pedido.correo], {
+          hipotesis: new Map([[pedido.correo, plan.despues]]),
+          aplicar: false,
+          exigirHubspot: true,
+          tambienLasDeLasFichas: delGrupo,
+        })
       : { cambian: [] };
     const delDominio = plan.cambiaLaConfirmacion ? await fichasDelDominioDe(pedido.correo) : [];
     const acceso = await revisarAcceso(teamMemberId, id, { movidas, antes, despues: plan.despues, delDominio, cambia: plan.cambiaLaConfirmacion });
@@ -140,7 +148,7 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
     let ahora: ReunionQueCambia[];
     let hubspot: Awaited<ReturnType<typeof reResolverReunionesDe>>["hubspot"];
     try {
-      ({ cambian: ahora, hubspot } = await reResolverReunionesDe([pedido.correo], { aplicar: false, exigirHubspot: true }));
+      ({ cambian: ahora, hubspot } = await reResolverReunionesDe([pedido.correo], { aplicar: false, exigirHubspot: true, tambienLasDeLasFichas: delGrupo }));
     } catch (e) {
       await restaurarPersona(foto, pedido.correo, plan.tocables);
       throw e;
@@ -155,6 +163,7 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
       aplicar: true,
       aprobadas: new Map(ahora.map((m) => [m.sessionId, { de: m.de, a: m.a }])),
       hubspot,
+      tambienLasDeLasFichas: delGrupo,
     });
     if (hechas.saltadas.length) {
       // Solo si algo cambió en los milisegundos entre la cuenta y la escritura: no se mueve, y la verificación lo marca (INV2).

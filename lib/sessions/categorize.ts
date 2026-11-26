@@ -104,6 +104,13 @@ export interface CategorizeContext {
    * Opcional: sin él (o vacío), la cascada es la de siempre.
    */
   interlocutoresConfirmados?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * Las fichas con algún proyecto que no es el contenedor «Información del cliente» ni de prueba, en cualquier estado
+   * (resolve-client.ts › `cargarFichasConProyecto`). Lo usa la regla del GRUPO (`duenaDelProyectoDelGrupo`): entre fichas
+   * unidas por gente confirmada en las dos, lo que la cascada no puede decidir va a la única que tiene proyectos.
+   * Opcional: sin él, esa regla no corre.
+   */
+  fichasConProyecto?: ReadonlySet<string>;
 }
 
 /** Qué paso de la cascada decidió (`categorizeSession` con `traza`): para los simulacros, que dicen POR QUÉ. */
@@ -126,7 +133,7 @@ export type PasoDeLaCascada =
  */
 export interface TrazaDeLaCascada {
   paso?: PasoDeLaCascada;
-  entre?: DecisionEntreEntidades["por"];
+  entre?: PorDeLaDecision;
 }
 
 export interface CategorizableSession {
@@ -416,8 +423,78 @@ function duenoPorElTitulo(
     const grupos = new Set(r.candidatos.filter((c) => !casa(c)).map((c) => entidadesDelDominio(c.id, ctx)));
     const [grupo] = grupos;
     if (grupos.size === 1 && grupo) return repartirEntreEntidades(grupo[0]!.id, session, externalDomains, ctx, traza);
+    /* El título nombra a dos fichas de un mismo GRUPO (las une gente confirmada en las dos): la dueña del proyecto
+       («Kick off - Teamnet y Sas», interna, va a Teamnet; Elías, 26 nov). */
+    const duena = duenaDelProyectoDelGrupo(
+      r.candidatos.filter((c) => !casa(c)).map((c) => c.id),
+      ctx,
+    );
+    if (duena) {
+      if (traza) traza.entre = "duena-del-proyecto";
+      return { kind: "client", id: duena.id, label: duena.name, company: duena.company };
+    }
   }
   return null;
+}
+
+/**
+ * LOS GRUPOS DE LA GENTE CONFIRMADA: dos fichas son del mismo grupo si una persona del equipo confirmó a alguien en las
+ * dos («del grupo»: Laura, Marco y Mariana, en Teamnet y Stratosphere), y el grupo cierra por transitividad. Ficha → la
+ * primera ficha de su grupo (la clave). No cuentan la casa ni la gente de un dominio de categoría (no decide). PURO;
+ * memorizado por el mapa de confirmadas (cada hipótesis de un simulacro es otro mapa).
+ */
+const gruposPorConfirmadas = new WeakMap<object, Map<string, string>>();
+function gruposDeLaGenteConfirmada(ctx: CategorizeContext): ReadonlyMap<string, string> {
+  const confirmadas = ctx.interlocutoresConfirmados;
+  if (!confirmadas?.size) return new Map();
+  const hecho = gruposPorConfirmadas.get(confirmadas);
+  if (hecho) return hecho;
+  const casa = esLaCasa(ctx.internalDomains);
+  const deCategoria = dominiosDeCategoria(ctx.categories);
+  const porId = new Map(ctx.clients.map((c) => [c.id, c]));
+  const padre = new Map<string, string>();
+  const raiz = (id: string): string => {
+    let x = id;
+    while (padre.get(x) !== x) x = padre.get(x)!;
+    padre.set(id, x);
+    return x;
+  };
+  for (const [correo, fichas] of confirmadas) {
+    if (deCategoria.has(correo.split("@")[1] ?? "")) continue;
+    const suyas = fichas.filter((id) => porId.has(id) && !casa(porId.get(id)!));
+    if (suyas.length < 2) continue;
+    for (const id of suyas) if (!padre.has(id)) padre.set(id, id);
+    for (const id of suyas.slice(1)) {
+      const a = raiz(suyas[0]!);
+      const b = raiz(id);
+      if (a !== b) padre.set(b, a);
+    }
+  }
+  const out = new Map<string, string>();
+  for (const id of padre.keys()) out.set(id, raiz(id));
+  gruposPorConfirmadas.set(confirmadas, out);
+  return out;
+}
+
+/**
+ * LA REGLA DEL GRUPO (Elías, 26 nov: «las reuniones conjuntas de Teamnet y Stratosphere se quedan en Teamnet»): si todas
+ * las fichas entre las que la cascada no pudo decidir son de UN mismo grupo de la gente confirmada
+ * (`gruposDeLaGenteConfirmada`) y exactamente UNA tiene proyectos (`fichasConProyecto`), la reunión es de esa: la dueña
+ * del proyecto. Si ninguna o más de una tiene proyectos, o hay una ficha de afuera del grupo, null (sigue por decidir).
+ * *Por qué no la más vieja:* el proyecto es lo que el equipo lleva; Stratosphere no tiene ninguno. *Por qué solo en un
+ * grupo que armó una persona:* entre dos clientes cualquiera, un título que nombra a los dos lo sigue asignando alguien.
+ */
+function duenaDelProyectoDelGrupo(ids: readonly string[], ctx: CategorizeContext): ClienteDelCtx | null {
+  const conProyecto = ctx.fichasConProyecto;
+  if (!conProyecto?.size) return null;
+  const unicas = [...new Set(ids)];
+  if (unicas.length < 2) return null;
+  const grupos = gruposDeLaGenteConfirmada(ctx);
+  const clave = grupos.get(unicas[0]!);
+  if (!clave || unicas.some((id) => grupos.get(id) !== clave)) return null;
+  const duenas = unicas.filter((id) => conProyecto.has(id));
+  if (duenas.length !== 1) return null;
+  return ctx.clients.find((c) => c.id === duenas[0]) ?? null;
 }
 
 // ── Entidades que comparten dominio ──────────────────────────────────────────
@@ -603,6 +680,9 @@ function unidadesPorDominio(fichas: readonly ClienteDelCtx[]): Map<string, Set<s
   }
   return out;
 }
+
+/** Cómo se decidió entre fichas: lo de `decidirEntreEntidades`, o la regla del grupo (`duenaDelProyectoDelGrupo`). */
+export type PorDeLaDecision = DecisionEntreEntidades["por"] | "duena-del-proyecto";
 
 export type DecisionEntreEntidades =
   | { clientId: string; por: "nombre" | "confirmada" | "gente" | "dominio" }
@@ -796,7 +876,7 @@ function decisionDeLaGenteConfirmada(
   session: CategorizableSession,
   externalDomains: Set<string>,
   ctx: CategorizeContext,
-): { grupo: SessionGroup; por: DecisionEntreEntidades["por"] } | null {
+): { grupo: SessionGroup; por: PorDeLaDecision } | null {
   const confirmadasTodas = ctx.interlocutoresConfirmados;
   if (!confirmadasTodas?.size) return null;
   const afuera = correosDeAfuera(session.participants, ctx.internalDomains);
@@ -863,6 +943,14 @@ function decisionDeLaGenteConfirmada(
   const d = decidirEntre(conElTituloCortado, candidatas, { ...ctx, interlocutoresConfirmados: confirmadas }, porDominio);
   const elegida = d.clientId ? porId.get(d.clientId) : undefined;
   if (elegida) return { grupo: { kind: "client", id: elegida.id, label: elegida.name, company: elegida.company }, por: d.por };
+  /* No se pudo decidir (el título nombra a las dos, gente de las dos, o solo gente del grupo): si las candidatas son un
+     solo grupo de la gente confirmada, la dueña del proyecto (Elías, 26 nov: «Sprint semanal | Teamnet y Sas» y «Health
+     Score Team» se quedan en Teamnet). */
+  const duena = duenaDelProyectoDelGrupo(
+    candidatas.map((c) => c.id),
+    ctx,
+  );
+  if (duena) return { grupo: { kind: "client", id: duena.id, label: duena.name, company: duena.company }, por: "duena-del-proyecto" };
   return {
     grupo: { kind: "orphan", label: `Por decidir: ${candidatas.map((e) => e.name).join(" o ")}`, domain: [...externalDomains][0] },
     por: d.por,

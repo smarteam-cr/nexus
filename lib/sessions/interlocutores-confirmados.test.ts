@@ -302,6 +302,62 @@ describe("la traza no cambia la decisión en ningún paso de la cascada (revisi�
   });
 });
 
+describe("la regla del grupo: lo conjunto va a la dueña del proyecto (Elías, 26 nov)", () => {
+  // Como quedan con lo aprobado: Stratosphere con la sigla SAS y stratospherecorp.com; Teamnet con los proyectos.
+  const TEAMNET_HOY = { ...TEAMNET, emailDomains: [] as string[] };
+  const STRATO_SAS = { ...STRATO, siglas: ["SAS"], emailDomains: ["stratosphere.com.mx", "stratospherecorp.com"] };
+  const conGrupo = (confirmadas: Record<string, string[]>, over: Partial<CategorizeContext> = {}) =>
+    ctx(confirmadas, { clients: [TAE, TEAMNET_HOY, CUATRO_AM, CREDIX, STRATO_SAS, AE], fichasConProyecto: new Set(["teamnet", "credix", "tae"]), ...over });
+  const GRUPO = { ...DEL_GRUPO, [SHAULA]: ["strato"] };
+  const interna = (title: string): CategorizableSession => ({ title, participants: ["heiver@smarteamcr.com"], manualClientId: null });
+  const conTraza = (s: CategorizableSession, c: CategorizeContext) => {
+    const traza: TrazaDeLaCascada = {};
+    const g = categorizeSession(s, c, traza);
+    return { dueno: g.kind === "client" ? g.id : `(${g.kind})`, traza };
+  };
+
+  it("el título nombra a las dos: Teamnet, la que tiene proyectos", () => {
+    const r = conTraza(reunion("Sprint semanal | Teamnet y Sas & Smarteam", [LAURA, SHAULA]), conGrupo(GRUPO));
+    expect(r).toEqual({ dueno: "teamnet", traza: { paso: "gente-confirmada", entre: "duena-del-proyecto" } });
+  });
+  it("solo gente del grupo y sin título («Health Score Team»): Teamnet", () => {
+    expect(conTraza(reunion("Health Score Team", [LAURA]), conGrupo(GRUPO)).dueno).toBe("teamnet");
+  });
+  it("una interna que nombra a las dos («Kick off - Teamnet y Sas»): Teamnet, no Interna", () => {
+    const r = conTraza(interna("Kick off - Teamnet y Sas"), conGrupo(GRUPO));
+    expect(r).toEqual({ dueno: "teamnet", traza: { paso: "interna-por-titulo", entre: "duena-del-proyecto" } });
+  });
+  it("lo que nombra solo a SAS o a Stratosphere sigue yendo a Stratosphere", () => {
+    expect(conTraza(reunion("Sales semana 1: Arquitectura | SAS & Smarteam", [LAURA, SHAULA]), conGrupo(GRUPO)).dueno).toBe("strato");
+    expect(conTraza(interna("Stratosphere Marketing"), conGrupo(GRUPO)).dueno).toBe("strato");
+  });
+  it("sin el dato de los proyectos, o sin nadie confirmado en las dos, como antes", () => {
+    expect(conTraza(reunion("Sprint semanal | Teamnet y Sas & Smarteam", [LAURA, SHAULA]), conGrupo(GRUPO, { fichasConProyecto: undefined })).dueno).toBe("(orphan)");
+    // Sin grupo (Shaula confirmada solo en Stratosphere, nadie en las dos): la interna que nombra a las dos queda en Interna.
+    expect(conTraza(interna("Kick off - Teamnet y Sas"), conGrupo({ [SHAULA]: ["strato"] })).dueno).toBe("(category)");
+  });
+  it("si las dos tienen proyectos, o ninguna, sigue por decidir", () => {
+    const s = reunion("Sprint semanal | Teamnet y Sas & Smarteam", [LAURA, SHAULA]);
+    expect(conTraza(s, conGrupo(GRUPO, { fichasConProyecto: new Set(["teamnet", "strato"]) })).dueno).toBe("(orphan)");
+    expect(conTraza(s, conGrupo(GRUPO, { fichasConProyecto: new Set(["credix"]) })).dueno).toBe("(orphan)");
+  });
+  it("con una ficha de afuera del grupo entre las candidatas, por decidir (nunca se la lleva la dueña del proyecto)", () => {
+    expect(conTraza(reunion("Revisión semanal", [LAURA, "ana@credix.com"]), conGrupo(GRUPO)).dueno).toBe("(orphan)");
+  });
+  it("la gente de una categoría confirmada en dos fichas no arma grupo", () => {
+    const conPartner = conGrupo(
+      { "rep@partner.test": ["teamnet", "strato"] },
+      {
+        categories: [
+          { id: "int", name: "Interna", slug: "interna", domains: ["smarteamcr.com"], kind: "internal", color: null },
+          { id: "pt", name: "Partner", slug: "partner", domains: ["partner.test"], kind: "partner", color: null },
+        ],
+      },
+    );
+    expect(conTraza(interna("Kick off - Teamnet y Sas"), conPartner).dueno).toBe("(category)");
+  });
+});
+
 describe("lo confirmado no se aprende ni enseña", () => {
   it("aprender la gente de las unidades da lo mismo con y sin confirmados", () => {
     const sesiones = [reunion("AE | Reportes", [CINDY, "x@itcr.ac.cr"]), reunion("TAE | CRM", ["jefe@itcr.ac.cr"]), reunion("Revisión", [CINDY])];

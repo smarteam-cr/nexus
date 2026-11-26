@@ -326,3 +326,31 @@ describe("escribir las fichas y las personas de la precarga (revisión del 26 no
     expect((await prisma.personaDeLaEmpresa.findUniqueOrThrow({ where: { clientId_correo: { clientId: ae.id, correo: "cindy@itcr.test" } } })).confirmadaAt).not.toBeNull();
   });
 });
+
+describe("la regla del grupo con la base (Elías, 26 nov)", () => {
+  it("confirmar a alguien en las dos fichas muestra también la interna que nombra a las dos, y la deja en la dueña del proyecto", async () => {
+    await prisma.sessionCategory.create({ data: { name: "Interna", slug: "interna", domains: ["smarteamcr.com"], kind: "internal" } });
+    const teamnet = await prisma.client.create({ data: { name: "Teamnet", emailDomains: ["teamnet.test"], createdAt: new Date("2026-01-01") } });
+    const strato = await prisma.client.create({ data: { name: "Stratosphere", siglas: ["SAS"], emailDomains: ["strato.test"], createdAt: new Date("2026-02-01") } });
+    await prisma.project.create({ data: { clientId: teamnet.id, name: "Teamnet - Reimplementación CRM" } });
+    // El contenedor «Información del cliente» no es un proyecto: Stratosphere sigue sin proyectos.
+    await prisma.project.create({ data: { clientId: strato.id, name: "Información del cliente", serviceType: "__strategy__" } });
+    await prisma.firefliesSession.createMany({
+      data: [
+        { id: "s-int", title: "Kick off - Teamnet y Sas", date: new Date("2026-05-07T15:00:00Z"), participants: ["heiver@smarteamcr.com"] },
+        { id: "s-sprint", title: "Sprint semanal | Teamnet y Sas & Smarteam", date: new Date("2026-05-22T15:00:00Z"), participants: ["laura@teamnet.test", "shaula@strato.test"] },
+      ],
+    });
+    await resolveAllSessions({ reclassify: false });
+    // Sin grupo, la interna que nombra a las dos queda sin ficha (Interna).
+    expect((await prisma.firefliesSession.findUniqueOrThrow({ where: { id: "s-int" } })).resolvedClientId).toBeNull();
+
+    const hipotesis = new Map([["laura@teamnet.test", [teamnet.id, strato.id]]]);
+    const sinLasDelGrupo = await reResolverReunionesDe(["laura@teamnet.test"], { hipotesis, aplicar: false });
+    expect(sinLasDelGrupo.cambian.map((c) => c.sessionId)).not.toContain("s-int");
+    const conLasDelGrupo = await reResolverReunionesDe(["laura@teamnet.test"], { hipotesis, aplicar: false, tambienLasDeLasFichas: [teamnet.id, strato.id] });
+    expect(conLasDelGrupo.cambian.map((c) => [c.sessionId, c.a, c.porQue?.entre])).toContainEqual(["s-int", teamnet.id, "duena-del-proyecto"]);
+    // El sprint conjunto, hoy en Teamnet por el dominio de Laura, no cambia: sigue en Teamnet (la dueña del proyecto).
+    expect(conLasDelGrupo.cambian.map((c) => c.sessionId)).not.toContain("s-sprint");
+  });
+});

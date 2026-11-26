@@ -29,7 +29,7 @@ import {
   computeAmbiguousNameTokens,
   buildInternalDomainsSet,
 } from "@/lib/sessions/categorize";
-import { cargarInterlocutoresConfirmados, resolveAllSessions } from "@/lib/sessions/resolve-client";
+import { cargarFichasConProyecto, cargarInterlocutoresConfirmados, resolveAllSessions } from "@/lib/sessions/resolve-client";
 
 function argValue(flag: string): string | null {
   const i = process.argv.indexOf(flag);
@@ -78,6 +78,7 @@ async function main() {
   /* La gente que confirmó el equipo (paso 3·0): sin ella, el simulacro mostraría otro reparto que el que aplica el
      --apply (`resolveAllSessions` sí la carga). */
   const interlocutoresConfirmados = await cargarInterlocutoresConfirmados();
+  const fichasConProyecto = await cargarFichasConProyecto();
   function correr(cs: typeof clients) {
     const ctx = {
       clients: cs,
@@ -87,6 +88,7 @@ async function main() {
       clientsByHubspotCompanyId: porHs,
       ambiguousNameTokens: computeAmbiguousNameTokens(cs),
       interlocutoresConfirmados,
+      fichasConProyecto,
     };
     const out = new Map<string, string | null>();
     for (const s of sesiones) {
