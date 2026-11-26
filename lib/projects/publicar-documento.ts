@@ -48,7 +48,7 @@ export async function estadoDePublicacion(origen: string, projectId: string, doc
   const publicado = project[surface.flag as "diagnosticoPublishedAt" | "planificacionPublishedAt"];
   const access = project.externalAccess;
   const clientUrl =
-    access && !access.revokedAt ? `${process.env.APP_URL || origen}/external/verify/${access.accessToken}?next=${surface.next}` : null;
+    access && !access.revokedAt ? `${(process.env.APP_URL || origen).replace(/\/+$/, "")}/external/verify/${access.accessToken}?next=${surface.next}` : null;
   return NextResponse.json({
     published: !!publicado,
     publishedAt: publicado?.toISOString() ?? null,

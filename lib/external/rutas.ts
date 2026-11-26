@@ -37,6 +37,32 @@ export function superficieDeNext(next: string | null | undefined): PublishSurfac
   return next && CLAVES.has(next) ? (next as PublishSurfaceKey) : "kickoff";
 }
 
+/** Los flags de publicación de un proyecto, tal como los lee cada página (`<superficie>PublishedAt`). */
+export type FlagsDePublicacion = Partial<Record<(typeof PUBLISH_SURFACES)[number]["flag"], Date | null>>;
+
+/**
+ * A dónde llega el cliente después de la contraseña cuando el enlace no trae `?next=` (2026-11-25, RC Inmobiliaria: con
+ * solo el cronograma publicado, el enlace de siempre caía en el kickoff sin publicar y mostraba «no disponible»).
+ *
+ * La primera superficie PUBLICADA en el orden del registro. El requerimiento técnico va al final: lo abre el
+ * desarrollador con su propio enlace (`?next=desarrollo`), y el mensaje para el cliente tampoco lo nombra; solo es
+ * el destino si es lo único publicado. Sin nada publicado, el kickoff (la página dice «no disponible», como antes).
+ */
+export function primeraSuperficiePublicada(flags: FlagsDePublicacion): PublishSurfaceKey {
+  const publicadas = PUBLISH_SURFACES.filter((s) => flags[s.flag] != null);
+  const paraElCliente = publicadas.find((s) => s.key !== "desarrollo");
+  return (paraElCliente ?? publicadas[0])?.key ?? "kickoff";
+}
+
+/**
+ * El destino del formulario: el `?next=` si es una superficie conocida; si no, la que calculó el servidor
+ * (`primeraSuperficiePublicada`). Las dos pasan por la lista cerrada: nada de la respuesta se usa sin validar.
+ */
+export function destinoDespuesDeEntrar(next: string | null | undefined, delServidor: unknown): PublishSurfaceKey {
+  if (next && CLAVES.has(next)) return next as PublishSurfaceKey;
+  return superficieDeNext(typeof delServidor === "string" ? delServidor : null);
+}
+
 /** La dirección de una superficie de UN proyecto. Lanza con un id inválido: nunca arma basura. */
 export function rutaDeSuperficie(accesoId: string, superficie: PublishSurfaceKey): string {
   if (!esIdDeAcceso(accesoId)) throw new Error("id de acceso inválido");

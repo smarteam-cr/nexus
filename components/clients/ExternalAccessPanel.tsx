@@ -467,7 +467,7 @@ function Activo({
             </span>
             <BotonCopiar onClick={() => void copiar(urlBase, "Link copiado.")} />
             <span />
-            <span className="col-span-2 text-xs text-fg-muted">Abre el kickoff. Para llevarlo directo a otra parte, copia el link de esa fila.</span>
+            <span className="col-span-2 text-xs text-fg-muted">Abre lo primero que esté publicado. Para llevarlo directo a otra parte, copia el link de esa fila.</span>
           </div>
           <Contrasena guardada={state.accessPassword ?? null} onSave={onSavePassword} onCopiar={(t) => void copiar(t, "Contraseña copiada.")} />
         </div>

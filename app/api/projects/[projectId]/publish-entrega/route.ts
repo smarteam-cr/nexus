@@ -58,7 +58,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ proj
   const access = project.externalAccess;
   let clientUrl: string | null = null;
   if (access && !access.revokedAt) {
-    const base = process.env.APP_URL || new URL(req.url).origin;
+    const base = (process.env.APP_URL || new URL(req.url).origin).replace(/\/+$/, "");
     clientUrl = `${base}/external/verify/${access.accessToken}?next=${SURFACE.next}`;
   }
 
