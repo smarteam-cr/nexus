@@ -79,6 +79,11 @@ const PUERTAS: Record<string, { veredicto: Veredicto; motivo: string; delegaEn?:
       "Importa clientes desde HubSpot en lote — pero corre UNA sola pasada de atribución al final, " +
       "que es exactamente la forma correcta para un bucle. Es el molde de lo que le falta a partner-sync.",
   },
+  "lib/clients/unidades-server.ts": {
+    veredicto: "atribuye",
+    motivo:
+      "«Agregar unidad» (26 nov): crea UNA ficha que cuelga de la principal y, en el mismo pedido, le atribuye las reuniones que se vieron en la vista previa (reResolverReunionesDe + reResolveSession de las asignadas a mano).",
+  },
   "lib/cs/partner-sync.ts": {
     veredicto: "masiva-exenta",
     motivo:

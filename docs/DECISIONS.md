@@ -15059,6 +15059,36 @@ con proyectos (abajo). Plan, números y etapas: `docs/empresas-con-dominio-compa
   sale de `client.hubspotCompanyId` de su ficha, que es null, y lo de la empresa de HubSpot es de la principal (arriba). Por eso no puede armar la propuesta comercial hasta tener su
   propia empresa en HubSpot, y el paso lo dice. La propuesta manual (Propuestas › Nueva) sigue entrando por el dominio de
   HubSpot: elige siempre la principal.
+- **La pestaña «Unidades de negocio» de Información del cliente** (26 nov; diseño aprobado por Elías, con el estilo de
+  siempre de la app). Muestra la empresa de la ficha: la principal y sus unidades, o un grupo sin principal (Teamnet y
+  Stratosphere), con siglas, dominio, proyectos, reuniones y la gente confirmada de cada una. Lógica pura en
+  `lib/clients/unidades.ts`; servidor en `lib/clients/unidades-server.ts`; ruta `app/api/clients/[id]/unidades`.
+  - Crear una unidad, separarla y cambiarle siglas o dominio: todo Customer Success (y el Super Admin). Juntar: solo el
+    Super Admin o la CSL (Elías, 26 nov).
+  - El check «Esta empresa tiene varias unidades de negocio» no es una columna: está prendido cuando hay unidades. Prenderlo
+    sin agregar ninguna no guarda nada, y no se apaga mientras haya unidades.
+  - Todo cambio pasa por la vista previa: las reuniones las decide el resolver con las fichas como quedarán
+    (`reResolverReunionesDe` con `ajustarFichas`), y el guardado mueve solo lo que se vio (la huella). Si la cuenta da otra
+    después de escribir la ficha, se deshace la ficha antes de mover nada. *Por qué:* «nunca debe adivinar en silencio».
+  - Una reunión con un vínculo que puso una persona (o elegida para un documento) con un proyecto que queda en otra ficha
+    se queda donde está por defecto, asignada a mano; la persona puede dejarla ir o elegirle otra ficha. Si quedaría por
+    decidir, el guardado espera a que alguien elija su ficha. *Por qué:* mudarla soltaba ese vínculo, y con él la decisión.
+  - Al agregar una unidad se pueden pasar proyectos de la principal, desmarcados por defecto (Elías). Un proyecto pasa con
+    lo que cuelga de él (`SE_MUDAN_CON_EL_PROYECTO`, una prueba la compara con el esquema) y con sus reuniones: si una
+    suya, como principal o con un vínculo de una persona, no termina en la unidad, no pasa. Los vínculos secundarios que
+    puso Nexus de reuniones que se quedan se sueltan. *Por qué:* que ningún vínculo cruce de ficha (invariante 1).
+  - La cuenta de cobro de la unidad se elige después, en Cobranza: crear una unidad no toca la facturación (Elías).
+  - Juntar, en la pantalla, es solo el simulacro (qué pasaría a la principal). *Por qué:* borra la ficha de la unidad y no
+    se puede deshacer; lo aplica una persona con `scripts/merge-duplicate-clients.ts` (invariante 3 de CLAUDE.md).
+  - El grupo sin principal no es un dato nuevo: existe porque alguien está confirmado en las dos fichas
+    (`gruposDeLaGenteConfirmada`). Se suma o se deshace desde «Interlocutores».
+  - Lo que dejó la revisión del 26 nov: quien guarda tiene que abrir cada ficha que gana o pierde una reunión, las que
+    elige a mano y, al agregar, la principal. Una reunión de un proyecto que pasa que el resolver deja donde está sale en
+    la vista previa («Sigue donde está») para poder elegirle la unidad; si al elegirle otra ficha pierde un vínculo o un
+    documento que puso una persona, la fila lo dice antes de guardar. Una ficha que es de un grupo no pasa proyectos
+    (cambiaría cuál tiene el proyecto más antiguo, y con eso las reuniones de todo el grupo, sin vista previa). Si algo
+    falla después de pasar los proyectos, cada reunión de esos proyectos queda en la unidad como se vio (o se suelta su
+    vínculo de Nexus) y la pantalla dice «a medias» y pide avisar al equipo: editar la unidad no lo termina.
 
 ## El Resumen de la escala que ve el cliente, con sus datos rojos (2026-11-09)
 
@@ -18057,3 +18087,40 @@ la escala».
   página no tiene PDF y «Acceso» comparte solo el enlace. Nunca se acorta a «Diagnóstico»: choca con el documento «Diagnóstico» de los proyectos de
   Customer Success.
 - **Para producción:** volver a correr `scripts/seed-pagina-chat-nexus.ts` (simulacro y `--apply`) después del deploy.
+
+
+## La pantalla interna del Diagnóstico de rendimiento no se explica: dice qué falta validar (2026-11-26)
+
+Elías, 26 nov: quien abre el diagnóstico (la CSE de la cuenta o el vendedor de la exploración) sabe que Nexus lo precargó
+y que le toca validarlo. La pantalla dice qué falta validar y marca solo lo que cambia una decisión. Lo que ve el cliente
+(la página publicada, `app/external/**`, el PDF, el resultado del test) NO cambia: allá sigue «por explorar».
+
+- **Un solo vocabulario por parte** (`lib/exploraciones/validar-la-escala.ts`): lo que propuso Nexus y nadie usó va SIN
+  rótulo; «✓ validado» cuando alguien lo usó (está en lo confirmado); «sin dato» cuando nadie lo dijo. Una parte
+  confirmada con algo nuevo encima (lo que dijo el cliente sobre una hipótesis ya usada) vuelve a estar por validar. Fuera
+  «hipótesis», «por explorar», «sugerida» y «con evidencia / parece» del riel, el radar, la lista «Para completar el
+  diagnóstico», el detalle de una parte, la escala guardada de la ficha y los avisos. El trazo del radar (lleno: lo dijo
+  el cliente; punteado: lo dedujo Nexus) sigue siendo la diferencia entre evidencia e hipótesis, y no cambió nada de lo que
+  leen la propuesta y el handoff (`chequeoConfirmado`). Los identificadores, los datos guardados y los prompts no cambian.
+- **Arriba de todo** (`PasoEscala › ArribaDelDiagnostico`): «Faltan 4 de 12 por validar» o «✓ Validado por Marco · 26 nov»;
+  «Validar (N)» como lo principal (recorre lo propuesto una por una: `ValidarLaEscala.tsx`; validar, otro nivel,
+  descartar, saltar; sin recorrido guiado); «Usar todas», secundaria. El riel dice «Diagnóstico de rendimiento · 4» (title
+  «4 partes por validar») o ✓ en verde. Se fue la franja «El agente sugiere… Nada se confirma solo».
+- **Un solo botón de la IA, «Actualizar con Nexus»** (`queHaceActualizar`, con su prueba), en lugar de «Ubicar con las
+  reuniones» / «Volver a ubicar» / «Actualizar» / «Actualizar escala» / «Armar el Resumen con IA» / «Rehacer con IA» del
+  Resumen. Hace cumplir el orden que antes se pedía por escrito: si hay algo que la escala no leyó, ubica; con algo por
+  validar, no rehace el Resumen (contaría los niveles de antes) y no se destaca; sin nada por validar, arma el Resumen que
+  falta o rehace el que quedó atrás (la escala cambió, formato viejo, notas que no leyó, corrida detenida). Nada se confirma
+  ni se publica solo. En la cuenta, el panel del agente se queda con su proyecto y su venta de contexto y registra cómo se
+  lanza (`useRegistrarUbicarDeLaCuenta`). Se quedan: «✨ Mejorar con IA», el chat «Nexus», «Responder con Nexus» (una sola
+  etiqueta, ya no «Sumar algo con Nexus»), «Volver a mirar» del aviso y el «Rehacer con IA» de la DESCRIPCIÓN de cada área
+  (es otra pieza, con su confirmación si la escribió el equipo).
+- **Fuera las explicaciones de lo que hace la IA**: el title largo de ubicar, «Lo que cuenta el equipo puede cambiar el
+  nivel… Nada se confirma ni se publica solo», las ayudas «Súmala si…», «Responde con Nexus lo que ya sepas: queda como
+  nota…», «Es la portada del diagnóstico. Nexus la arma…», «lo lee el agente que escribe la descripción», «Lee todo lo que
+  Nexus sabe de la cuenta…» y las instrucciones de la línea («rehazlo con IA en el Resumen», «vuelve a ubicar… y rehaz…»).
+- **Quién validó, sin SQL**: lo confirmado de una parte guarda `validada: { por, en }` (en el Json de la exploración,
+  `contenido.chequeo`) cuando una persona usa lo que propuso Nexus o marca el nivel (`conQuienLaValido`, lo pone el
+  servidor: lo que manda la pantalla no cuenta). Lo copiado de la preventa a la cuenta entra tal cual (`copia: true`, solo
+  del servidor): no lo validó quien abre la cuenta. Lo confirmado antes del 26 nov no tiene nombre: cuenta como validado
+  (si nadie tiene marca, la línea dice solo «Validado»). El nombre sale del correo (la primera palabra), «ti» si eres tú.

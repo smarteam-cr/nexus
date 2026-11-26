@@ -13,9 +13,10 @@ import type { Letra } from "@/lib/escala/documento/tipos";
 import { esHipotesisDeNivel, type EstimadoGuardado } from "@/lib/exploraciones/contenido";
 import type { DimensionDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { nivelDelVendedor, sinRiesgoSiSube } from "@/lib/exploraciones/mapa";
+import { estadoDeLaParte } from "@/lib/exploraciones/validar-la-escala";
 import { useLienzo } from "./contexto";
 import { IconoDeSugerencia } from "./FranjaDeSugerencias";
-import { PreguntasDeLaDimension } from "./TarjetaDelRadar";
+import { ChipDeLaParte, PreguntasDeLaDimension } from "./TarjetaDelRadar";
 
 const LETRAS: Letra[] = ["D", "I", "F", "E", "O"];
 
@@ -114,31 +115,38 @@ export function DetalleDeDimension({ d, onCerrar, enPanel = false }: { d: Dimens
                   <span className={cn("h-2 w-2 rounded-full", PUNTO_DE_NIVEL[p.nivel])} aria-hidden="true" />
                   {nombreDeNivel(p.nivel)}
                 </span>
-                {p.clase === "evidencia" ? (
-                  <span className="inline-flex rounded-full border border-success-line bg-success-surface px-2 py-px text-[11px] font-semibold text-success-ink">
-                    ✓ Con evidencia
-                  </span>
-                ) : (
-                  <span className="inline-flex rounded-full border border-warn-line bg-warn-surface px-2 py-px text-[11px] font-semibold text-warn-ink">
-                    ○ Hipótesis
-                  </span>
-                )}
+                {/* Un solo vocabulario (26 nov): «✓ validado»; lo que propuso Nexus, sin rótulo. */}
+                <ChipDeLaParte estado={estadoDeLaParte(p)} />
               </p>
               {/* Sin de dónde sale, su porqué ni la frase (novena vuelta, 8 nov, Elías: «toda la parte de dónde sale cada
-                  nivel me parece irrelevante»): el nivel y si está confirmado o por explorar. */}
-              {p.origen === "propuesto" && p.clase === "hipotesis" && puedeEditar && p.pendiente && (
-                <button
-                  type="button"
-                  className="self-start text-xs text-fg-muted hover:text-fg hover:underline"
-                  disabled={guardando}
-                  onClick={() => void cambiar([{ op: "descartar", itemIds: [p.pendiente!.id] }])}
-                >
-                  Descartar esta hipótesis
-                </button>
+                  nivel me parece irrelevante»): el nivel y si está validado. Lo que propuso Nexus se valida o se descarta
+                  acá mismo (26 nov), como en «Validar (N)»; otro nivel, con los cinco de abajo. */}
+              {estadoDeLaParte(p) === "propuesta" && puedeEditar && p.pendiente && (
+                <span className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-brand hover:underline disabled:opacity-60"
+                    disabled={guardando}
+                    onClick={() => void usar([p.pendiente!])}
+                  >
+                    Validar
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs text-fg-muted hover:text-fg hover:underline disabled:opacity-60"
+                    disabled={guardando}
+                    onClick={() => void cambiar([{ op: "descartar", itemIds: [p.pendiente!.id] }])}
+                  >
+                    Descartar
+                  </button>
+                </span>
               )}
             </>
           ) : (
-            <p className="text-[13px] text-fg-muted">Todavía sin dato: pregúntalo en la reunión.</p>
+            <p className="flex flex-wrap items-center gap-2 text-[13px] text-fg-muted">
+              <ChipDeLaParte estado="sinDato" />
+              Pregúntalo en la reunión.
+            </p>
           )}
         </div>
         <div className="flex flex-col gap-1.5">

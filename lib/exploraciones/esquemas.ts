@@ -333,6 +333,7 @@ export const EstimadoSchema: z.ZodType<EstimadoGuardado> = z.object({
   porQue: texto(600).optional(),
   noSabe: z.boolean().optional(),
   riesgo: z.boolean().optional(),
+  validada: z.object({ por: z.string().max(320).nullable(), en: z.string().max(40) }).optional(),
 });
 
 export const EstadoDeCriterioSchema: z.ZodType<EstadoDeCriterio> = z.object({

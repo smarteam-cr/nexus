@@ -8,9 +8,9 @@
  * arma `paginaParaElCse` (lib/exploraciones/escala-para-el-cliente-server.ts), el mismo cálculo que sirve
  * /external/escala/[token]. Toda la edición es EN SU LUGAR (Elías: «se le da clic, se cambia el texto y se guarda»), y
  * entra por los huecos de `EdicionDeLaPagina`:
- *   · la página abre en «Resumen» (9 nov), la portada que presenta el vendedor (ResumenDeLaEscalaVista): «Armar el Resumen» /
- *     «Rehacer con IA» la pide al agente (/api/sales/exploraciones/[id]/escala/resumen), en la franja interna de arriba,
- *     FUERA del marco que imita la página del cliente (Elías, 9 nov), y cada texto se edita en su lugar
+ *   · la página abre en «Resumen» (9 nov), la portada que presenta el vendedor (ResumenDeLaEscalaVista): la arma el agente
+ *     (/api/sales/exploraciones/[id]/escala/resumen) cuando se lo pide «Actualizar con Nexus», arriba del diagnóstico (26 nov;
+ *     antes eran dos botones en la franja interna de arriba); lo interno va en esa franja, FUERA del marco que imita la página del cliente (Elías, 9 nov), y cada texto se edita en su lugar
  *     (la operación `resumenDeLaEscala`); al final de cada pieza, en su renglón, el ícono (i) de de dónde sale (solo adentro;
  *     hasta el 25 nov caía debajo). Desde el
  *     24 nov (Elías con TEC · AE) la corrida sigue en el servidor y el aviso de arriba (`AvisoDelResumen`) dice en qué va,
@@ -57,7 +57,8 @@ import { textoVigenteDelRadar } from "@/lib/exploraciones/escala-para-el-cliente
 import type { PaginaParaElCse } from "@/lib/exploraciones/escala-para-el-cliente-server";
 import { MAX_TEXTO_DE_LA_PAGINA } from "@/lib/external/textos-de-la-pagina";
 import DeDondeSale from "./DeDondeSale";
-import { chequeoDelMapa, cuentaDelArea, fraseDeLaCuenta } from "@/lib/exploraciones/mapa";
+import { chequeoDelMapa } from "@/lib/exploraciones/mapa";
+import { fraseDeLaValidacion, validacionDelArea } from "@/lib/exploraciones/validar-la-escala";
 import { AL_LUGAR, DEL_LUGAR, useLienzo } from "./contexto";
 import ReunionesMalLeidas from "./ReunionesMalLeidas";
 import HistorialDelResumen from "./HistorialDelResumen";
@@ -65,6 +66,7 @@ import { BotonDelHistorial } from "@/components/versiones/HistorialDeVersiones";
 import { avisarQueLaEscalaCambio } from "./escala-al-dia";
 import { useFalloCerrado, useResumenEnCurso } from "./useResumenEnCurso";
 import { useUbicarLaEscala } from "./useUbicarLaEscala";
+import { avisarDelResumenEnLaPagina } from "./useResumenEnLaPagina";
 import { cuantoLleva, MINUTOS_SIN_LATIDO, queDiceElAviso, type AvisoDelResumen as AvisoDelResumenEnPantalla } from "@/lib/exploraciones/corrida-del-resumen";
 import { lasNotasNuevas, leidoHasta, tituloDeLasNuevas } from "@/lib/exploraciones/completar-el-diagnostico";
 import { DetalleDeDimension, useMarcarNivel } from "./DetalleDeLaDimension";
@@ -156,7 +158,8 @@ function LineaDelArea({ areaId, alCliente }: { areaId: string; alCliente: boolea
   const area = escala.areas.find((a) => a.id === areaId);
   if (!area) return null;
   const calculo = chequeoDelMapa(escala, [area.id], mapa.posiciones).areas[0];
-  const cuenta = calculo ? cuentaDelArea(calculo, mapa.posiciones) : null;
+  // El mismo vocabulario que el resto de lo interno (26 nov): validadas, por validar, sin dato.
+  const cuenta = calculo ? validacionDelArea(area.dimensiones, mapa.posiciones) : null;
   const enJuego = exp.estado.areas.includes(area.id);
   const alternar = () => void cambiar([{ op: "areas", areas: enJuego ? exp.estado.areas.filter((a) => a !== area.id) : [...exp.estado.areas, area.id] }]);
   return (
@@ -164,7 +167,7 @@ function LineaDelArea({ areaId, alCliente }: { areaId: string; alCliente: boolea
       <span>
         <span className="font-semibold text-fg">{area.nombre}</span>
         {alCliente ? " · la ve el cliente" : " · el cliente no la ve: súmala en «Acceso» › «Qué equipos ve»"}
-        {cuenta && ` · ${fraseDeLaCuenta(cuenta)}`}
+        {cuenta && ` · ${fraseDeLaValidacion(cuenta)}`}
         {!enJuego && ` · no está en juego ${DEL_LUGAR[lugar]}`}
       </span>
       {puedeEditar && (
@@ -198,7 +201,7 @@ function ContextoParaLaDescripcion({ areaId, nombre, onRehacer, rehaciendo }: { 
     <details className="group rounded-xl border border-line bg-surface" open={!!guardado || undefined}>
       <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-2 px-4 py-2.5 text-sm font-semibold text-fg">
         Contexto para la descripción de {nombre}
-        <span className="text-xs font-normal text-fg-muted">lo lee el agente que escribe la descripción · no lo ve el cliente{guardado ? "" : " · vacío"}</span>
+        <span className="text-xs font-normal text-fg-muted">no lo ve el cliente{guardado ? "" : " · vacío"}</span>
       </summary>
       <div className="flex flex-col gap-2 px-4 pb-4">
         <Field label="Lo que el agente debe tener en cuenta" hint="Por ejemplo: con quién se habló, qué pesa más para esta empresa, qué evitar decir.">
@@ -220,7 +223,7 @@ function ContextoParaLaDescripcion({ areaId, nombre, onRehacer, rehaciendo }: { 
             </Button>
             {recienGuardado && !cambio && (
               <>
-                <span className="text-xs text-fg-muted">Guardado. La descripción no cambia sola:</span>
+                <span className="text-xs text-fg-muted">Guardado.</span>
                 <Button size="sm" variant="secondary" loading={rehaciendo} onClick={onRehacer}>
                   Rehacer la descripción con IA
                 </Button>
@@ -291,43 +294,29 @@ function useAhora(activo: boolean): number {
 
 /**
  * Arriba del Resumen, lo que hay que hacer con él (24 nov, Elías con TEC · AE). Qué dice lo decide `queDiceElAviso`
- * (lib/exploraciones/corrida-del-resumen.ts, con su prueba); acá solo se pinta: «Falta armar el Resumen» con su botón;
- * mientras Nexus lo arma, en qué va (la fase REAL) y cuánto lleva; si no se sabe en qué va o la corrida no late, cómo
- * seguir; si falló, por qué; con notas que el Resumen no leyó, «Rehacer con IA» (y, si «Ubicar» tampoco las leyó, antes
- * «Volver a ubicar»: una nota puede fijar un nivel, 25 nov). Un solo botón de la IA a la vista: cuando este aviso trae el
- * suyo, la fila de abajo no repite «Rehacer con IA».
+ * (lib/exploraciones/corrida-del-resumen.ts, con su prueba); acá solo se pinta: «Falta armar el Resumen»; mientras Nexus
+ * lo arma, en qué va (la fase REAL) y cuánto lleva; si no se sabe en qué va o la corrida no late; si falló, por qué; con
+ * notas que el Resumen (o «Ubicar») no leyó, eso. Desde el 26 nov no trae botones de la IA: el único es «Actualizar con
+ * Nexus», arriba del diagnóstico (PasoEscala › `ArribaDelDiagnostico`), que ubica, arma o rehace según toque.
  */
 function AvisoDelResumen({
   aviso,
   hayResumen,
-  lanzando,
-  puedeEditar,
-  onArmar,
   onMirar,
   onCerrar,
-  ubicar,
-  nivelesPorUsar,
+  ubicando,
 }: {
   aviso: AvisoDelResumenEnPantalla;
   hayResumen: boolean;
-  lanzando: boolean;
-  puedeEditar: boolean;
-  onArmar: () => void;
   onMirar: () => void;
   onCerrar: (id: string) => void;
-  /** «Volver a ubicar» (25 nov, `useUbicarLaEscala`): el mismo pedido que el botón de la línea de debajo de la página. */
-  ubicar: { onUbicar: () => void; lanzando: boolean; corriendo: boolean; ubicando: boolean };
-  /** Hay niveles que propuso «Ubicar» y nadie usó: rehacer el Resumen ahora contaría los de antes. */
-  nivelesPorUsar: boolean;
+  /** Corre «Ubicar» (la corrida `posicionar`). */
+  ubicando: boolean;
 }) {
   const ahora = useAhora(aviso?.tipo === "corriendo");
   if (!aviso) return null;
-  const boton = (texto: string, alTocar: () => void, variante: "primary" | "secondary" = "primary") =>
-    puedeEditar ? (
-      <Button size="sm" variant={variante} loading={lanzando} disabled={lanzando} onClick={alTocar}>
-        {texto}
-      </Button>
-    ) : undefined;
+  /* Sin botones de la IA (26 nov): armar, rehacer y volver a ubicar los hace «Actualizar con Nexus», arriba del
+     diagnóstico, en el orden que corresponde (validar-la-escala.ts › `queHaceActualizar`). El aviso solo dice qué pasa. */
   switch (aviso.tipo) {
     case "corriendo":
       return (
@@ -353,15 +342,14 @@ function AvisoDelResumen({
       );
     case "detenida":
       return (
-        <Alert variant="warning" title={`Nexus no da señales hace más de ${MINUTOS_SIN_LATIDO} minutos`} action={boton("Volver a intentar", onArmar)}>
+        <Alert variant="warning" title={`Nexus no da señales hace más de ${MINUTOS_SIN_LATIDO} minutos`}>
           Puede haberse interrumpido (un reinicio del servidor). No se cambió nada{hayResumen ? ": el Resumen que ves sigue igual" : ""}.
         </Alert>
       );
     case "falta":
       return (
-        <Alert variant="warning" title="Falta armar el Resumen" action={boton("Armar el Resumen con IA", onArmar)}>
-          Es la portada del diagnóstico. Nexus la arma con lo que se habló en las reuniones (unos 3 minutos). Mientras no exista, el cliente no ve esta
-          pestaña: su enlace abre en la página de un equipo.
+        <Alert variant="warning" title="Falta armar el Resumen">
+          Mientras no exista, el cliente no ve esta pestaña: su enlace abre en la página de un equipo.
           {aviso.fallo && <span className="mt-1 block font-medium">La última vez que se pidió, no se pudo. {aviso.fallo}</span>}
         </Alert>
       );
@@ -372,46 +360,19 @@ function AvisoDelResumen({
         </Alert>
       );
     case "nuevas":
-      /* Una nota puede fijar un nivel (25 nov): si «Ubicar» tampoco la leyó, el paso es volver a ubicar; el Resumen, después.
-         Un solo botón por vez (`queDiceElAviso` › `ubicarPrimero`). */
-      if (aviso.ubicar)
-        return (
-          <Alert
-            variant="info"
-            title={aviso.titulo}
-            action={
-              puedeEditar ? (
-                <Button
-                  size="sm"
-                  variant="primary"
-                  loading={ubicar.lanzando}
-                  disabled={ubicar.corriendo}
-                  title={ubicar.corriendo && !ubicar.ubicando ? "Nexus está trabajando en esta preventa: cuando termine, puedes ubicar la escala." : undefined}
-                  onClick={ubicar.onUbicar}
-                >
-                  {ubicar.ubicando ? "Ubicando…" : "Volver a ubicar"}
-                </Button>
-              ) : undefined
-            }
-          >
-            {ubicar.ubicando
-              ? "Nexus está ubicando la escala con lo que contaron. Cuando termine, usa lo que proponga arriba y rehaz el Resumen."
-              : "Lo que cuenta el equipo puede cambiar el nivel de una parte: primero vuelve a ubicar la escala y usa lo que proponga; después, rehaz el Resumen. Nada se confirma ni se publica solo."}
-          </Alert>
-        );
+      /* Una nota puede fijar un nivel (25 nov): si «Ubicar» tampoco la leyó, lo que sigue es volver a ubicar; el Resumen,
+         después. Ese orden lo hace cumplir «Actualizar con Nexus» (26 nov): acá solo se dice quién no las leyó todavía. */
       return (
-        <Alert variant="info" title={aviso.titulo} action={boton("Rehacer con IA", onArmar)}>
-          El Resumen las lee cuando lo rehaces. Lo escrito a mano se queda y nada se publica solo.
-          {/* Lo que propuso «Ubicar» con esas notas todavía no está puesto: rehacer ahora contaría los niveles de antes. */}
-          {nivelesPorUsar && <span className="mt-0.5 block">Antes, usa o descarta arriba los niveles que propuso Nexus: el Resumen cuenta los que estén puestos.</span>}
+        <Alert variant="info" title={aviso.titulo}>
+          {aviso.ubicar ? (ubicando ? "Nexus está ubicando la escala con lo que contaron." : "La escala todavía no las leyó.") : "El Resumen todavía no las leyó."}
         </Alert>
       );
   }
 }
 
 export default function PaginaDeLaEscala() {
-  const { exp, cambiar, puedeEditar, recargar, nombreDeNivel, guardando, lugar, mapa } = useLienzo();
-  // «Volver a ubicar» desde el aviso de arriba (25 nov): solo en la preventa, como la línea de debajo de la página.
+  const { exp, cambiar, puedeEditar, recargar, nombreDeNivel, guardando, lugar } = useLienzo();
+  // Si «Ubicar» está corriendo: el aviso de las notas lo dice (el botón es «Actualizar con Nexus», arriba).
   const ubicacion = useUbicarLaEscala();
   const toast = useToast();
   const { pagina, error, otraVez } = usePagina(exp.id, exp.version);
@@ -434,7 +395,6 @@ export default function PaginaDeLaEscala() {
     sinSaber: sinSaberDelResumen,
     corriendo: armando,
     lanzando: lanzandoElResumen,
-    armar: armarElResumen,
     mirar: mirarElResumen,
   } = useResumenEnCurso(exp.id);
   /** El fallo de rehacer que la persona cerró: no vuelve hasta otro (recordado en este navegador). */
@@ -442,6 +402,10 @@ export default function PaginaDeLaEscala() {
   /* Cuando termina una corrida que esta pantalla vio correr (la lanzara quien la lanzara), el lienzo y la página se ponen
      al día: el Resumen se guarda por su propia ruta y la primera edición no lo encontraría. */
   const vistaCorriendo = useRef<string | null>(null);
+  /* Lo que el agente escribió y no pasó la verificación la última vez que se armó (para revisarlo): el de la última corrida
+     que terminó bien (26 nov: la lanza «Actualizar con Nexus», arriba). Usar otra versión del historial lo esconde. */
+  const [sinDescartadosDe, setSinDescartadosDe] = useState<string | null>(null);
+  const descartados = corridaDelResumen?.estado === "DONE" && corridaDelResumen.id !== sinDescartadosDe ? corridaDelResumen.descartados : null;
   useEffect(() => {
     if (!corridaDelResumen) return;
     if (corridaDelResumen.estado === "RUNNING") vistaCorriendo.current = corridaDelResumen.id;
@@ -454,8 +418,13 @@ export default function PaginaDeLaEscala() {
       }
     }
   }, [corridaDelResumen, recargar, otraVez]);
-  /** Lo que el agente escribió y no pasó la verificación la última vez que se armó (para revisarlo). */
-  const [descartados, setDescartados] = useState<string[] | null>(null);
+  /* «Actualizar con Nexus» (arriba del diagnóstico) ofrece rehacer el Resumen si la escala cambió desde que se armó: eso lo
+     sabe la página, que trae la firma del servidor (26 nov). */
+  const escalaCambioEnLaPagina = !!pagina?.resumen.at && !!pagina.resumen.escalaCambio;
+  const formatoViejoEnLaPagina = !!pagina?.resumen.at && pagina.resumen.formato === 1;
+  useEffect(() => {
+    if (pagina) avisarDelResumenEnLaPagina(exp.id, { escalaCambio: escalaCambioEnLaPagina, formatoViejo: formatoViejoEnLaPagina });
+  }, [exp.id, pagina, escalaCambioEnLaPagina, formatoViejoEnLaPagina]);
   /* El nivel que va a quedar mientras se arrastra, y después de soltar hasta que llega la página nueva: se guarda con la
      página contra la que se dibujó, así que la página nueva lo borra sola. */
   const [enVivo, setEnVivo] = useState<{ de: PaginaParaElCse | null; niveles: Record<string, Letra> }>({ de: null, niveles: {} });
@@ -558,26 +527,12 @@ export default function PaginaDeLaEscala() {
   const fijo = puedeEditar ? (o: EdicionDeUnTextoFijo) => <TextoFijo o={o} guardar={guardarFijo} /> : undefined;
 
   if (enElResumen) {
-    /* Desde el 24 nov la corrida sigue en el servidor y se espera por su fase (useResumenEnCurso): la pantalla ya no se
-       queda colgada de una respuesta que nginx corta a los 10 minutos. Lo que falla se ve en el aviso de arriba. */
-    const armar = async () => {
-      setDescartados(null);
-      const r = await armarElResumen();
-      if (!r.ok) {
-        // Si arrancó y terminó mal, el aviso de arriba dice por qué; si ni arrancó, se dice acá.
-        if (!r.corrida) toast.error(r.error);
-        return;
-      }
-      setDescartados(r.corrida.descartados);
-      const n = r.corrida.descartados.length;
-      toast.success(`Listo en ${cuantoLleva(r.corrida.empezo, Date.parse(r.corrida.termino ?? new Date().toISOString()))}.${n ? ` ${n === 1 ? "Una cosa no pasó" : `${n} cosas no pasaron`} la verificación.` : ""}`);
-      // Ya estaba corriendo otra (otra pestaña, otra persona): lo que se sumó después de que empezó no entró.
-      if (r.ajena) toast.info("Ya se estaba rehaciendo cuando lo pediste: si sumaste algo después, vuelve a rehacerlo.");
-    };
+    /* Desde el 24 nov la corrida sigue en el servidor y se espera por su fase (useResumenEnCurso). Desde el 26 nov la
+       lanza «Actualizar con Nexus», arriba del diagnóstico; lo que falla se ve en el aviso de arriba. */
     /* El historial de versiones (21 nov, lib/exploraciones/versiones-del-resumen-server.ts): usar una manda la huella de lo
        que ve; si otra persona o Nexus lo cambió entretanto, 409 y se carga lo último. Lo publicado no cambia. */
     const alCambiarDeVersion = () => {
-      setDescartados(null);
+      setSinDescartadosDe(corridaDelResumen?.id ?? null);
       // El Resumen se guarda por su propia ruta: el lienzo y la página se ponen al día.
       void recargar();
       otraVez();
@@ -636,7 +591,7 @@ export default function PaginaDeLaEscala() {
        armó y si hay reuniones nuevas lo dice la línea de La escala (PasoEscala › `LineaDeLaUbicacion`, debajo de la
        página desde el 24 nov). Sin Resumen lo dice el aviso de arriba («Falta armar el Resumen», `AvisoDelResumen`). */
     const avisosDelResumen = [
-      res.at && res.formato === 1 && "Está armado con el formato del 9 nov (datos rojos y hallazgos): «Rehacer con IA» lo pasa al resumen ejecutivo y conserva lo que escribiste.",
+      res.at && res.formato === 1 && "Está armado con el formato del 9 nov (datos rojos y hallazgos): «Actualizar con Nexus» lo pasa al resumen ejecutivo y conserva lo que escribiste.",
       res.at && res.formato === 2 && !cifras.length && "Ninguna cifra pasó la verificación: las tarjetas dicen qué dato falta.",
       queNoSalen > 0 &&
         (queSalen
@@ -657,11 +612,7 @@ export default function PaginaDeLaEscala() {
       enLaPreventa: lugar === "preventa",
     });
     const nuevas = tituloDeLasNuevas(delResumen);
-    // Niveles que propuso «Ubicar» (con evidencia) y nadie usó: el Resumen cuenta los que están puestos.
-    const nivelesPorUsar = Object.values(mapa.posiciones).some((p) => p.porRevisar);
     const aviso = queDiceElAviso({ resumenEn: res.at, corrida: corridaDelResumen, lanzando: lanzandoElResumen, sinSaber: sinSaberDelResumen, nuevas, cerrado: falloCerrado, ubicarPrimero });
-    // El aviso con su propio botón de la IA: la fila de abajo no lo repite («IA arriba, una sola vez»).
-    const avisoConBoton = aviso?.tipo === "nuevas" || aviso?.tipo === "detenida";
     // Los equipos que ve el cliente, con su nivel: lo único con datos de la plantilla.
     const equiposDeLaPlantilla = pagina.alCliente.flatMap((id) => {
       const x = pagina.resultados.find((y) => y.areaId === id);
@@ -673,29 +624,15 @@ export default function PaginaDeLaEscala() {
         {/* La franja interna: lo que solo ve el equipo va acá, FUERA del marco que imita la página del cliente. */}
         <div className="flex flex-col gap-2 text-xs text-fg-muted">
           {/* Lo que hay que hacer con el Resumen, a la vista (24 nov): armarlo, en qué va, por qué falló o lo nuevo. */}
-          <AvisoDelResumen
-            aviso={aviso}
-            hayResumen={!!res.at}
-            lanzando={lanzandoElResumen}
-            puedeEditar={puedeEditar}
-            onArmar={() => void armar()}
-            onMirar={() => void mirarElResumen()}
-            onCerrar={setFalloCerrado}
-            ubicar={{ onUbicar: () => void ubicacion.ubicar(), lanzando: ubicacion.lanzando, corriendo: ubicacion.corriendo, ubicando: ubicacion.ubicando }}
-            nivelesPorUsar={nivelesPorUsar}
-          />
+          <AvisoDelResumen aviso={aviso} hayResumen={!!res.at} onMirar={() => void mirarElResumen()} onCerrar={setFalloCerrado} ubicando={ubicacion.ubicando} />
           {res.at && (
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
               <p className="min-w-0 flex-1">{avisosDelResumen.join(" ")}</p>
+              {/* Sin el botón de rehacer el Resumen (26 nov): lo hace «Actualizar con Nexus», arriba, cuando no queda nada por validar. */}
               {puedeEditar && (
                 <div className="flex flex-wrap items-center gap-2">
                   {botonDePedirle}
                   <BotonDelHistorial onClick={() => setHistorialAbierto(true)} />
-                  {!avisoConBoton && (
-                    <Button size="sm" variant="secondary" loading={armando} disabled={armando} onClick={() => void armar()}>
-                      Rehacer con IA
-                    </Button>
-                  )}
                 </div>
               )}
             </div>
@@ -703,7 +640,7 @@ export default function PaginaDeLaEscala() {
           {/* La escala cambió desde que se armó (compara la firma de los niveles): el Resumen puede decir algo viejo. */}
           {res.at && res.escalaCambio && (
             <Alert variant="warning" title="La escala cambió desde este resumen">
-              Los niveles se movieron después de armarlo. Revisa lo que dice o rehazlo con IA.
+              Los niveles se movieron después de armarlo.
             </Alert>
           )}
           {res.malLeidas && res.malLeidas.length > 0 && <ReunionesMalLeidas reuniones={res.malLeidas} enteras={!!res.leidasEnteras} />}

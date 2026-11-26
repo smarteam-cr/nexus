@@ -34,6 +34,7 @@ import { PUNTO_DE_NIVEL, nombreDe } from "@/components/escala/niveles";
 import LienzoDeExploracion from "@/components/exploraciones/LienzoDeExploracion";
 import { useLienzo } from "@/components/exploraciones/contexto";
 import { useCorrida } from "@/components/exploraciones/useCorrida";
+import { useRegistrarUbicarDeLaCuenta } from "@/components/exploraciones/PasoEscala";
 import { caminoDeCrecimiento } from "@/lib/casos-de-uso/camino";
 import type { EscalaDeLaCuenta as LaEscalaDeLaCuenta } from "@/lib/exploraciones/escala-de-la-cuenta";
 import type { EscalaDeLaEmpresa } from "@/lib/exploraciones/escala-de-la-empresa";
@@ -93,12 +94,13 @@ function Nivel({ letra, niveles, hipotesis }: { letra: Letra | null; niveles: Ni
   );
 }
 
+/**
+ * Lo guardado es lo confirmado: cada parte con nivel está validada (26 nov, un solo vocabulario: «✓ validado»; sin «○
+ * Hipótesis»). De dónde sale lo dicen el punto del nivel (hueco: lo dedujo Nexus) y la frase de al lado.
+ */
 function ChipDeClase({ clase }: { clase: "evidencia" | "hipotesis" | null }) {
-  if (clase === "evidencia")
-    return <span className="inline-flex rounded-full border border-success-line bg-success-surface px-2 py-px text-[11px] font-semibold text-success-ink">✓ Con evidencia</span>;
-  if (clase === "hipotesis")
-    return <span className="inline-flex rounded-full border border-warn-line bg-warn-surface px-2 py-px text-[11px] font-semibold text-warn-ink">○ Hipótesis</span>;
-  return null;
+  if (!clase) return null;
+  return <span className="inline-flex rounded-full border border-success-line bg-success-surface px-2 py-px text-[11px] font-semibold text-success-ink">✓ validado</span>;
 }
 
 /** Un área de una versión guardada (solo lectura): cada dimensión y de dónde sale su nivel. */
@@ -164,12 +166,14 @@ function AreaConEvidencia({ a, niveles }: { a: AreaDeLaFoto; niveles: Niveles })
   );
 }
 
-// ── El agente de la cuenta: «Actualizar escala» ──────────────────────────────
+// ── El agente de la cuenta: con qué actualiza Nexus ───────────────────────────
 
 /**
- * En el lugar del agente de la preventa (leer la última reunión, preparar): «Actualizar escala» lee todo lo que Nexus
- * sabe de la cuenta y PROPONE niveles en esta misma escala. Con qué venta y con qué proyecto como contexto, si se eligen.
- * La corrida la sigue el mismo seguimiento del lienzo (useCorrida): al terminar, lo propuesto aparece arriba.
+ * En el lugar del agente de la preventa (leer la última reunión, preparar): con qué venta y con qué proyecto como
+ * contexto lee Nexus todo lo que sabe de la cuenta y PROPONE niveles en esta misma escala. El botón es «Actualizar con
+ * Nexus», arriba del diagnóstico (26 nov; antes «Actualizar escala» acá): este panel registra cómo se lanza
+ * (`useRegistrarUbicarDeLaCuenta`). La corrida la sigue el mismo seguimiento del lienzo (useCorrida): al terminar, lo
+ * propuesto aparece arriba.
  */
 function AgenteDeLaCuenta({ clientId, datos }: { clientId: string; datos: Ok }) {
   const { exp, puedeEditar } = useLienzo();
@@ -203,22 +207,18 @@ function AgenteDeLaCuenta({ clientId, datos }: { clientId: string; datos: Ok }) 
       setLanzando(false);
     }
   };
+  // «Actualizar con Nexus», arriba del diagnóstico, lo lanza con lo elegido acá (26 nov).
+  useRegistrarUbicarDeLaCuenta(() => void actualizar(), { lanzando, corriendo });
 
   return (
-    <section aria-label="Actualizar escala" className="space-y-3 rounded-xl border border-line bg-surface p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-fg">El agente</h3>
+    <section aria-label="Con qué actualiza Nexus" className="space-y-3 rounded-xl border border-line bg-surface p-4">
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold text-fg">El agente</h3>
+        {/* Sin la explicación de lo que hace (26 nov): cuándo corrió y qué propuso. */}
+        {ultima && (
           <p className="text-xs text-fg-muted">
-            {ultima
-              ? `Última vez: ${diaYHora(ultima.en)} · ${ultima.propuestos === 0 ? "nada nuevo que proponer" : `${ultima.propuestos} ${ultima.propuestos === 1 ? "nivel propuesto" : "niveles propuestos"}`}`
-              : "Lee todo lo que Nexus sabe de la cuenta y propone niveles; tú usas o descartas."}
+            {`Última vez: ${diaYHora(ultima.en)} · ${ultima.propuestos === 0 ? "nada nuevo que proponer" : `${ultima.propuestos} ${ultima.propuestos === 1 ? "nivel propuesto" : "niveles propuestos"}`}`}
           </p>
-        </div>
-        {puedeEditar && (
-          <BotonAzul disabled={lanzando || corriendo} onClick={() => void actualizar()}>
-            {corriendo ? "Ubicando…" : "Actualizar escala"}
-          </BotonAzul>
         )}
       </div>
       {puedeEditar && (deProyecto.length > 0 || datos.ventas.length > 0) && (
@@ -533,13 +533,13 @@ function QueSigueDeLaCuenta({ slot, accion }: { slot: HTMLElement | null; accion
   const sinNivel = enJuego.filter((a) => a.faltan.length > 0).map((a) => a.nombre);
   const hipotesis = Object.values(mapa.posiciones).some((p) => p.clase === "hipotesis");
   const texto = propuestos
-    ? `El agente propuso ${propuestos === 1 ? "un nivel" : `${propuestos} niveles`}: úsalos en la escala o descártalos.`
+    ? `Nexus propuso ${propuestos === 1 ? "un nivel" : `${propuestos} niveles`}: valídalos en la escala.`
     : !Object.keys(exp.estado.contenido.chequeo).length
-      ? "La empresa todavía no está ubicada: toca «Actualizar escala» para que el agente proponga dónde está con lo que Nexus ya sabe."
+      ? "La empresa todavía no está ubicada: toca «Actualizar con Nexus»."
       : sinNivel.length
         ? `Faltan dimensiones sin nivel en ${sinNivel.join(" y ")}.`
         : hipotesis
-          ? "Hay niveles que son hipótesis: confírmalos con el cliente en la Exploración del proyecto."
+          ? "Hay niveles que dedujo Nexus: confírmalos con el cliente en la Exploración del proyecto."
           : null;
   if (!texto) return null;
   return createPortal(<QueSigue accion={accion}>{texto}</QueSigue>, slot);
@@ -812,7 +812,7 @@ export default function EscalaDeLaCuenta({
             title="El Diagnóstico de rendimiento de la cuenta todavía no está abierto"
             description={
               puede.exploracion
-                ? "Al abrirlo parte de lo ya medido en la preventa o en la Exploración de un proyecto, si lo hay. Después, «Actualizar escala» lee todo lo que Nexus sabe y propone dónde está; tú usas lo que esté bien."
+                ? "Al abrirlo parte de lo ya medido en la preventa o en la Exploración de un proyecto, si lo hay."
                 : historia.length
                   ? "Lo abre quien puede trabajar la exploración del cliente. Abajo está lo medido en la preventa y en cada proyecto."
                   : "Lo abre quien puede trabajar la exploración del cliente."
