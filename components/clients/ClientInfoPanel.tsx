@@ -10,6 +10,8 @@
  *                  que leen los agentes y se guarda en la empresa de HubSpot al confirmarla.
  *   - Datos de la empresa → DatosDeLaEmpresa (R1, 2026-10-24): cada dato con su fuente y su fecha, las
  *                  propuestas para decidir, el TAM estimado v1, lo que ya paga y la investigación.
+ *   - Unidades de negocio → UnidadesDeNegocio (2026-11-26): las unidades de la empresa (o el grupo), con siglas, dominio,
+ *                  proyectos y gente; agregar una unidad y cambiar siglas o dominio, siempre con vista previa.
  *   - Interlocutores → InterlocutoresDelCliente (2026-11-25): con quién trabajamos, su rol y a qué unidad va cada
  *                  persona. Lo confirmado ahí decide de qué ficha es cada reunión (categorize.ts, paso 3·0).
  *   - Documentos → DocumentUpload (Supabase Storage del proyecto strategy)
@@ -32,6 +34,7 @@ import DocumentUpload from "./DocumentUpload";
 import FichaDelCliente from "./FichaDelCliente";
 import DatosDeLaEmpresa from "./DatosDeLaEmpresa";
 import InterlocutoresDelCliente from "./InterlocutoresDelCliente";
+import UnidadesDeNegocio from "./UnidadesDeNegocio";
 import LicenciasDelCliente from "./LicenciasDelCliente";
 import { LogoUploader } from "@/components/ui/LogoUploader";
 import { ScaleSlider } from "@/components/ui/ScaleSlider";
@@ -41,12 +44,14 @@ import {
   logoHeightCalc, logoScaleStyle, resolveLogoScale,
 } from "@/lib/ui/logo-scale";
 
-type SubTab = "ficha" | "datos" | "interlocutores" | "licencias" | "docs" | "marca";
+type SubTab = "ficha" | "datos" | "unidades" | "interlocutores" | "licencias" | "docs" | "marca";
 
 const TABS: { key: SubTab; label: string }[] = [
   { key: "ficha", label: "Ficha" },
   // Los datos de la empresa con su fuente, sus propuestas y el TAM (R1, 2026-10-24; diseño aprobado por Elías).
   { key: "datos", label: "Datos de la empresa" },
+  // Las unidades de la empresa (2026-11-26): siglas, dominio, proyectos y gente de cada una; agregar y editar con vista previa.
+  { key: "unidades", label: "Unidades de negocio" },
   // Con quién trabajamos y con qué unidad (2026-11-25, «Unidades e interlocutores»): decide de quién es cada reunión.
   { key: "interlocutores", label: "Interlocutores" },
   // Licencias de HubSpot y sus renovaciones (2026-10-02, pedido de Liliana Moreno).
@@ -97,7 +102,7 @@ export default function ClientInfoPanel({
           <p className="mt-0.5 text-[13px] text-fg-muted">
             {enLaPreventa
               ? "La misma de la ficha del cliente: la leen los agentes y se comparte con la empresa en HubSpot."
-              : "La ficha que leen los agentes, los datos de la empresa, con quién trabajamos, las licencias, los documentos y la marca."}
+              : "La ficha que leen los agentes, los datos de la empresa, sus unidades, con quién trabajamos, las licencias, los documentos y la marca."}
           </p>
         </div>
         <span className="flex-1" />
@@ -124,6 +129,7 @@ export default function ClientInfoPanel({
       <div>
         {tab === "ficha" && clientId && <FichaDelCliente clientId={clientId} />}
         {tab === "datos" && clientId && <DatosDeLaEmpresa clientId={clientId} />}
+        {tab === "unidades" && clientId && <UnidadesDeNegocio clientId={clientId} onIrAInterlocutores={() => setTab("interlocutores")} />}
         {tab === "interlocutores" && clientId && <InterlocutoresDelCliente clientId={clientId} />}
         {tab === "licencias" && !enLaPreventa && clientId && <LicenciasDelCliente clientId={clientId} />}
 

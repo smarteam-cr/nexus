@@ -342,6 +342,11 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     motivo: "INV61 (K5, 2026-10-27): mira de qué empresa es la reunión de cada sesión de una exploración. Un control, no le habla a un modelo.",
   },
   "lib/invariantes/google.ts": { clase: "plomeria", motivo: "INV53: cuenta reuniones de 3 a 25 días sin revisar su conferencia. Es un control, no le habla a un modelo." },
+  "lib/clients/unidades-server.ts": {
+    clase: "plomeria",
+    motivo:
+      "«Unidades de negocio» (26 nov): la vista previa y el guardado de un cambio de siglas o dominio, o de una unidad nueva. Re-atribuye dueña con el resolver único y cuenta reuniones por ficha; no le describe reuniones a un modelo.",
+  },
   "lib/sessions/reclassify.ts": { clase: "plomeria", motivo: "Re-atribuye dueño. La fecha no cambia de quién es una reunión." },
   "lib/sessions/resolve-client.ts": { clase: "plomeria", motivo: "La cascada de dueño, sobre el corpus entero a propósito." },
   "lib/sessions/reunion-a-mano-server.ts": {

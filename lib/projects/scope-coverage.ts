@@ -34,6 +34,13 @@ export type Cobertura =
   | { modo: "exento"; razon: string };
 
 export const SCOPE_COVERAGE: Record<string, Cobertura> = {
+  // «Unidades de negocio» (2026-11-26): los proyectos de cada ficha de UNA empresa.
+  "lib/clients/unidades-server.ts": {
+    modo: "exento",
+    razon:
+      "lista los proyectos de las fichas de UNA empresa (todos menos el contenedor y los de prueba) para la tarjeta de cada " +
+      "unidad y para elegir los que pasan a una unidad nueva; no decide cartera, cobro ni navegación.",
+  },
   // El plan general de la cuenta (2026-11-19): junta las fases con loop de los cronogramas de la cuenta.
   "lib/plan-general/leer.ts": {
     modo: "exento",
