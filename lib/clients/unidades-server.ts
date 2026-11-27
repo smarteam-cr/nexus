@@ -20,6 +20,8 @@ import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { whereBelongsToClient } from "@/lib/sessions/project-sources";
 import { ETIQUETA_DEL_ROL, esRolDePersona } from "./roles-de-persona";
 import { fichasDeLaEmpresa } from "./personas-de-la-empresa-server";
+import { esEmpresa } from "./empresa";
+import { cuantasComunicacionesVigentes } from "@/lib/comunicaciones/de-la-empresa-server";
 import { huellaDeMovidas } from "./interlocutores";
 import {
   ID_DE_LA_UNIDAD_NUEVA,
@@ -120,7 +122,7 @@ const conLlaves = (f: FichaCruda, i: number): FichaDeLaEmpresaConLlaves => ({
 /** Las fichas de otro grupo de la gente confirmada (Teamnet y Stratosphere): sin principal, armado por personas. */
 async function fichasDelGrupo(clientId: string): Promise<string[]> {
   const [clients, categories, interlocutoresConfirmados] = await Promise.all([
-    prisma.client.findMany({ select: { id: true, name: true, company: true, emailDomains: true, siglas: true, comparteDominioConId: true } }),
+    prisma.client.findMany({ select: { id: true, name: true, company: true, emailDomains: true, siglas: true, comparteDominioConId: true, kind: true } }),
     prisma.sessionCategory.findMany({ select: { id: true, name: true, slug: true, domains: true, kind: true, color: true } }),
     cargarInterlocutoresConfirmados(),
   ]);
@@ -151,6 +153,10 @@ export interface UnidadEnLaVista {
   id: string;
   nombre: string;
   principal: boolean;
+  /** La empresa arriba de sus unidades (2026-11-26): no trabaja, guarda lo compartido y lo que espera unidad. */
+  esEmpresa: boolean;
+  /** Solo en la empresa: lo de HubSpot que todavía no tiene unidad (se reparte al confirmar a la persona). */
+  enEspera: { contactos: number; correos: number; tickets: number; negocios: number; ventas: number } | null;
   esEsta: boolean;
   /** Quien mira no abre esta ficha: solo se ve el nombre. */
   abre: boolean;
@@ -208,6 +214,17 @@ export async function vistaDeLasUnidades(clientId: string, teamMemberId: string 
   const reuniones = new Map<string, number>();
   await Promise.all(abiertas.map(async (id) => reuniones.set(id, await prisma.firefliesSession.count({ where: whereBelongsToClient(id) }))));
   const porId = new Map(fichas.map((f) => [f.id, f]));
+  /* La empresa arriba (2026-11-26): lo de HubSpot que se quedó en ella, sin unidad. */
+  const laEmpresa = fichas.find((f) => esEmpresa(f) && abiertas.includes(f.id));
+  const enEspera = laEmpresa
+    ? await Promise.all([
+        prisma.contactoDeHubspot.count({ where: { clientId: laEmpresa.id, vigente: true } }),
+        cuantasComunicacionesVigentes(laEmpresa.id),
+        prisma.ticketDeHubspot.count({ where: { clientId: laEmpresa.id, vigente: true } }),
+        prisma.negocioAbierto.count({ where: { clientId: laEmpresa.id, abierto: true } }),
+        prisma.ventaGanada.count({ where: { clientId: laEmpresa.id } }),
+      ]).then(([contactos, correos, tickets, negocios, ventas]) => ({ contactos, correos, tickets, negocios, ventas }))
+    : null;
   const principalId = tipo === "unidades" ? empresa[0]!.id : null;
 
   const vista: UnidadEnLaVista[] = ids
@@ -224,6 +241,8 @@ export async function vistaDeLasUnidades(clientId: string, teamMemberId: string 
         id: f.id,
         nombre: f.name,
         principal,
+        esEmpresa: esEmpresa(f),
+        enEspera: f.id === laEmpresa?.id ? enEspera : null,
         esEsta: f.id === clientId,
         abre,
         siglas: abre ? (f.siglas ?? []) : [],
@@ -254,7 +273,9 @@ export async function vistaDeLasUnidades(clientId: string, teamMemberId: string 
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
   }
   const base = tipo === "unidades" ? empresa[0]!.name : (porId.get(clientId)?.name ?? "");
-  return { tipo, empresa: base.split(/\s+·\s+/)[0]!.trim() || base, fichas: vista, delGrupo };
+  /* Con la empresa arriba, su nombre es el de la empresa («TEC», «Grupo Teamnet»); antes, lo que iba antes del « · ». */
+  const nombreDeLaEmpresa = tipo === "unidades" && esEmpresa(empresa[0]) ? base : base.split(/\s+·\s+/)[0]!.trim() || base;
+  return { tipo, empresa: nombreDeLaEmpresa, fichas: vista, delGrupo };
 }
 
 // ── La vista previa y el guardado ─────────────────────────────────────────────────────────────────────────────────────
@@ -265,7 +286,10 @@ export interface PedidoDeUnidad {
   nombre?: string;
   siglas: string[];
   dominios: string[];
-  /** Solo al agregar: los proyectos de la principal que pasan a la unidad nueva. */
+  /**
+   * Los proyectos de la principal que pasan: al agregar, a la unidad nueva; con `fichaId`, solo si la principal es una
+   * EMPRESA (2026-11-26: «Pasar a una unidad», un proyecto que llegó de HubSpot sin siglas).
+   */
   proyectos?: string[];
   /** Reuniones a las que la persona les eligió la ficha (sessionId → ficha de la empresa, o la unidad nueva). */
   asignar?: Record<string, string>;
@@ -350,6 +374,11 @@ async function calcular(paginaId: string, pedido: PedidoDeUnidad, teamMemberId: 
   if (pedido.fichaId && !empresa.some((f) => f.id === pedido.fichaId)) throw new RechazoDeUnidad("Esa ficha no es de esta empresa.", 400);
   if (!pedido.fichaId && principal.comparteDominioConId) throw new RechazoDeUnidad("Esta ficha cuelga de otra: no puede tener unidades.");
   const editada = pedido.fichaId ? empresa.find((f) => f.id === pedido.fichaId)! : null;
+  /* La empresa arriba (2026-11-26) no lleva siglas ni recibe proyectos: las siglas y el trabajo son de cada unidad. */
+  if (editada && esEmpresa(editada) && pedido.siglas.some((s) => s.trim())) throw new RechazoDeUnidad("La empresa no lleva siglas: van en cada unidad.");
+  if (editada && pedido.proyectos?.length && (!esEmpresa(principal) || editada.id === principal.id)) {
+    throw new RechazoDeUnidad("Los proyectos pasan de la empresa a una de sus unidades.");
+  }
 
   const deLaEmpresa = new Set(empresa.map((f) => f.id));
   const afuera = await prisma.client.findMany({
@@ -366,8 +395,8 @@ async function calcular(paginaId: string, pedido: PedidoDeUnidad, teamMemberId: 
   );
   if (!leido.ok) throw new RechazoDeUnidad(leido.error);
 
-  /* Los proyectos que pasan: solo al agregar, y solo de la principal. */
-  const pasan = pedido.fichaId ? [] : [...new Set(pedido.proyectos ?? [])];
+  /* Los proyectos que pasan: al agregar, de la principal; a una unidad que ya existe, solo de la empresa arriba. */
+  const pasan = pedido.fichaId && !esEmpresa(principal) ? [] : [...new Set(pedido.proyectos ?? [])];
   const proyectosDelGrupo = await prisma.project.findMany({
     where: { clientId: { in: [...deLaEmpresa] } },
     select: { id: true, name: true, clientId: true, serviceType: true },
@@ -447,7 +476,8 @@ async function calcular(paginaId: string, pedido: PedidoDeUnidad, teamMemberId: 
     conCandado: isLockedLink(v),
     elegidaPara: DOCUMENTOS.filter(([col]) => v[col] === true).map(([, etiqueta]) => `${etiqueta} de ${v.project.name.trim()}`),
   }));
-  const fichasValidas = new Set(fichasParaTitulo);
+  /* Una reunión se le elige a una unidad, nunca a la empresa arriba (2026-11-26: no es dueña de nada). */
+  const fichasValidas = new Set(fichasParaTitulo.filter((id) => !esEmpresa(empresa.find((f) => f.id === id))));
   const elegibles = new Set([...deSesiones, ...siguen.map((s) => s.sessionId)]);
   const asignar = new Map(Object.entries(pedido.asignar ?? {}).filter(([s, f]) => elegibles.has(s) && fichasValidas.has(f)));
   const plan = planDeLaMudanza({
@@ -455,7 +485,7 @@ async function calcular(paginaId: string, pedido: PedidoDeUnidad, teamMemberId: 
     vinculos,
     fichaDelProyecto,
     pasan: new Set(pasan),
-    unidad: editada ? null : ID_DE_LA_UNIDAD_NUEVA,
+    unidad: editada ? (pasan.length ? editada.id : null) : ID_DE_LA_UNIDAD_NUEVA,
     actual,
     asignar,
     moverIgual: new Set(pedido.moverIgual ?? []),
@@ -615,7 +645,8 @@ export async function guardarUnidad(
         emailDomains: c.leida.dominios,
         siglas: c.leida.siglas,
         comparteDominioConId: c.principal.id,
-        kind: c.principal.kind as Prisma.ClientCreateInput["kind"],
+        /* Una unidad de la empresa arriba es un cliente: la empresa misma no es de la cartera (2026-11-26). */
+        kind: (esEmpresa(c.principal) ? "CLIENTE" : c.principal.kind) as Prisma.ClientCreateInput["kind"],
         source: "manual",
       },
       select: { id: true },
@@ -805,9 +836,12 @@ export interface SimulacroDeJuntar {
 export async function simularJuntar(unidadId: string): Promise<SimulacroDeJuntar> {
   const unidad = await prisma.client.findUnique({
     where: { id: unidadId },
-    select: { name: true, comparteDominioConId: true, comparteDominioCon: { select: { name: true } } },
+    select: { name: true, comparteDominioConId: true, kind: true, comparteDominioCon: { select: { name: true, kind: true } } },
   });
   if (!unidad?.comparteDominioConId || !unidad.comparteDominioCon) throw new RechazoDeUnidad("Esa ficha no es una unidad: no hay con qué juntarla.");
+  /* Con la empresa arriba (2026-11-26), juntar una unidad con la empresa le daría proyectos, cobro y gente a una ficha que
+     nunca tiene reuniones: los proyectos quedarían sin las suyas. Las unidades se juntan entre ellas, con el equipo de Nexus. */
+  if (unidad.comparteDominioCon.kind === "EMPRESA") throw new RechazoDeUnidad("Una unidad no se junta con la empresa: la empresa no tiene trabajo propio. Para juntar dos unidades, avísale al equipo de Nexus.");
   const [proyectos, reuniones, propuestas, preventas, personasConfirmadas, cuenta] = await Promise.all([
     prisma.project.count({ where: { clientId: unidadId, ...NO_ES_CONTENEDOR_WHERE } }),
     prisma.firefliesSession.count({ where: whereBelongsToClient(unidadId) }),

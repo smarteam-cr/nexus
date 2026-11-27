@@ -24,6 +24,7 @@ import { guardAccessToClient, guardPermission } from "@/lib/auth/api-guards";
 import { parseClientKind, parseTamUsd } from "@/lib/clients/kind";
 import { ErrorDeDato, proponerDatoEnTx, type ResultadoDelDato } from "@/lib/clients/datos-de-la-empresa-server";
 import { escribirEnHubspot } from "@/lib/clients/escritura-en-hubspot-server";
+import { rechazoDeEscrituraEnLaEmpresa } from "@/lib/clients/empresa-server";
 
 export async function PATCH(
   request: NextRequest,
@@ -34,6 +35,9 @@ export async function PATCH(
   // 1) Row-level: ¿tenés acceso a ESTE cliente? (ortogonal a la matriz de permisos)
   const access = await guardAccessToClient(id);
   if (access instanceof NextResponse) return access;
+  /* La EMPRESA arriba de sus unidades (2026-11-26): sus datos los cambia solo quien abre todas sus unidades. */
+  const escrituraEnLaEmpresa = await rechazoDeEscrituraEnLaEmpresa(id);
+  if (escrituraEnLaEmpresa) return NextResponse.json({ error: escrituraEnLaEmpresa.error }, { status: escrituraEnLaEmpresa.status });
 
   let body: unknown;
   try {
@@ -49,6 +53,12 @@ export async function PATCH(
   if ("kind" in raw) {
     const perm = await guardPermission("clientes", "classify");
     if (perm instanceof NextResponse) return perm;
+    /* La categoría de una EMPRESA con unidades no se cambia a mano (2026-11-26): como «Cliente» volvería a ser dueña de
+       las reuniones de su dominio, sin simulacro. La pone y la quita scripts/crear-empresa-de-unidades.ts. */
+    const actual = await prisma.client.findUnique({ where: { id }, select: { kind: true } });
+    if (actual?.kind === "EMPRESA") {
+      return NextResponse.json({ error: "La categoría de una empresa con unidades no se cambia aquí." }, { status: 409 });
+    }
     const kind = parseClientKind(raw.kind);
     if (!kind) {
       return NextResponse.json({ error: "Categoría de empresa desconocida." }, { status: 400 });

@@ -9,6 +9,7 @@ import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
 import { avanzarAlta } from "@/lib/projects/alta-runner";
 import { revalidateClientsSidebar } from "@/lib/cache/clients";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
+import { rechazoSiLaFichaEsEmpresa } from "@/lib/clients/empresa-server";
 
 /**
  * /api/clients/traer-de-hubspot — TRAER UNA EMPRESA QUE HUBSPOT YA TIENE.
@@ -212,6 +213,9 @@ export async function POST(req: NextRequest) {
     }
     const acceso = await guardAccessToClient(adoptarEn);
     if (acceso instanceof NextResponse) return acceso;
+    /* La empresa arriba de sus unidades no tiene proyectos (2026-11-26): se adopta en una de sus unidades. */
+    const enLaEmpresa = await rechazoSiLaFichaEsEmpresa(adoptarEn);
+    if (enLaEmpresa) return NextResponse.json({ error: enLaEmpresa.error }, { status: enLaEmpresa.status });
     /* `hubspotServiceId` es único en toda la tabla: dos clics simultáneos —o uno acá y otro por
        el camino de crear— dan un P2002, no dos proyectos del mismo record. El segundo se queda
        con el que ganó. */

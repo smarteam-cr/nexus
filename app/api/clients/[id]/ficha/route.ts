@@ -23,6 +23,7 @@ import { sincronizarFichaConHubspot } from "@/lib/clients/ficha-hubspot";
 import { traerCambiosDeHubspot } from "@/lib/clients/ficha-desde-hubspot-server";
 import { resultadosDelCliente } from "@/lib/handoff/resultados";
 import { resultadosParaLaFicha } from "@/lib/handoff/resultados-medibles";
+import { rechazoDeEscrituraEnLaEmpresa } from "@/lib/clients/empresa-server";
 
 /**
  * /api/clients/[id]/ficha — la ficha del cliente (lib/clients/ficha.ts).
@@ -102,6 +103,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const { id } = await params;
   const guard = await guardAccessToClient(id);
   if (guard instanceof NextResponse) return guard;
+  const escrituraEnLaEmpresa = await rechazoDeEscrituraEnLaEmpresa(id);
+  if (escrituraEnLaEmpresa) return NextResponse.json({ error: escrituraEnLaEmpresa.error }, { status: escrituraEnLaEmpresa.status });
 
   const body = (await req.json().catch(() => null)) as {
     valores?: unknown;

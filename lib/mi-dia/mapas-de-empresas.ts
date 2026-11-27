@@ -20,6 +20,8 @@ export interface FichaParaMapas {
   company: string | null;
   emailDomains: string[];
   comparteDominioConId: string | null;
+  /** `EMPRESA`: la empresa arriba de sus unidades (2026-11-26). Su dominio y sus contactos son de las unidades que viven en él. */
+  kind?: string | null;
 }
 
 export interface MapasDeLaGente {
@@ -78,6 +80,19 @@ export function armarMapasDeLaGente(
     if (!duena || duena === c.id || !viveEnElDominioDeLaPrincipal(c)) continue;
     for (const mapa of [porDominio, porCorreo]) {
       for (const [k, de] of mapa) if (de.includes(duena) && !de.includes(c.id)) mapa.set(k, [...de, c.id]);
+    }
+  }
+  /* La EMPRESA arriba de sus unidades (2026-11-26) nunca es la ficha de un invitado: solo prestó su dominio y sus
+     contactos a las unidades que viven en él (arriba). Un dominio o un correo que quedaría solo con la empresa no es de
+     nadie todavía. */
+  const empresas = new Set(clientes.filter((c) => c.kind === "EMPRESA").map((c) => c.id));
+  if (empresas.size) {
+    for (const mapa of [porDominio, porCorreo]) {
+      for (const [k, de] of mapa) {
+        const sin = de.filter((id) => !empresas.has(id));
+        if (sin.length) mapa.set(k, sin);
+        else mapa.delete(k);
+      }
     }
   }
   return { porDominio, porCorreo, grupoDe };

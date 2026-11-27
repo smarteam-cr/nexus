@@ -17,6 +17,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { rechazarSiEsEmpresa } from "@/lib/clients/empresa";
 import { proyectoNavegableWhere } from "@/lib/projects/scope";
 import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
 import { getClientSessions } from "./project-sources";
@@ -178,8 +179,11 @@ export async function agregarReunion(
   quien: QuienAgrega,
   opts: { origen?: OrigenDeLoAgregado } = {},
 ): Promise<ResultadoDeAgregar> {
-  const cliente = await prisma.client.findUnique({ where: { id: input.clientId }, select: { id: true } });
+  const cliente = await prisma.client.findUnique({ where: { id: input.clientId }, select: { id: true, kind: true } });
   if (!cliente) return { ok: false, status: 404, error: "Ese cliente no existe." };
+  /* La empresa arriba de sus unidades no tiene reuniones (2026-11-26): la reunión es de una unidad. */
+  const enLaEmpresa = rechazarSiEsEmpresa(cliente);
+  if (enLaEmpresa) return { ok: false, status: enLaEmpresa.status, error: enLaEmpresa.error };
 
   const conAudio = input.contenido.tipo === "audio";
   if (conAudio && !audioPrendido(process.env)) return { ok: false, status: 400, error: "La transcripción de audio no está prendida en este servidor." };

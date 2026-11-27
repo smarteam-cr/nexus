@@ -4,6 +4,7 @@ import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { NextResponse } from "next/server";
 import { asignarEmpresaDeHubspot } from "@/lib/clients/empresa-de-hubspot";
 import { cuerpoDeEmpresaRepetida } from "@/lib/clients/empresa-de-hubspot-aviso";
+import { rechazoDeEscrituraEnLaEmpresa } from "@/lib/clients/empresa-server";
 
 /**
  * PUT — guarda el hubspotCompanyId elegido por el usuario.
@@ -22,6 +23,8 @@ export const PUT = withClientAccess(async (
   { params }: { params: Promise<{ id: string }> }
 ) => {
   const { id: clientId } = await params;
+  const escrituraEnLaEmpresa = await rechazoDeEscrituraEnLaEmpresa(clientId);
+  if (escrituraEnLaEmpresa) return NextResponse.json({ error: escrituraEnLaEmpresa.error }, { status: escrituraEnLaEmpresa.status });
   const body = await request.json() as { hubspotCompanyId: string | null };
   const hubspotCompanyId = body.hubspotCompanyId?.trim() || null;
 

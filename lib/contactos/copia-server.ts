@@ -11,6 +11,10 @@
  *
  * Entran las empresas de Nexus de tipo CLIENTE o PROSPECTO con su empresa de HubSpot. Los aliados y Smarteam no: la
  * empresa de un aliado (HubSpot) tiene miles de contactos que no son de ningún cliente.
+ *
+ * Una EMPRESA con unidades (2026-11-26) también entra: cada contacto va a la unidad que dice el resolver por su correo, y
+ * cada ticket por su asunto y sus contactos (lib/sessions/reparto-de-la-empresa-server.ts). Sin unidad, se queda en la
+ * empresa. DECISIONS «La empresa arriba de sus unidades».
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
@@ -24,6 +28,7 @@ import {
   type Asociaciones,
 } from "@/lib/hubspot/contactos-y-tickets";
 import { huellaDe, planDeCopia, ticketAbierto, type PlanDeCopia } from "./reglas";
+import { cargarRepartoDeEmpresas } from "@/lib/sessions/reparto-de-la-empresa-server";
 
 const LOCK_KEY = "contactos-y-tickets-lock";
 const LOCK_TIMEOUT_MS = 15 * 60 * 1000;
@@ -91,7 +96,7 @@ export async function copiarContactosYTickets(opciones: { escribir?: boolean } =
   const errores: string[] = [];
   try {
     const clientes = await prisma.client.findMany({
-      where: { hubspotCompanyId: { not: null }, kind: { in: ["CLIENTE", "PROSPECTO"] } },
+      where: { hubspotCompanyId: { not: null }, kind: { in: ["CLIENTE", "PROSPECTO", "EMPRESA"] } },
       select: { id: true, hubspotCompanyId: true },
     });
     const clientesPorEmpresa = new Map<string, string[]>();
@@ -100,12 +105,16 @@ export async function copiarContactosYTickets(opciones: { escribir?: boolean } =
       clientesPorEmpresa.set(k, [...(clientesPorEmpresa.get(k) ?? []), c.id]);
     }
     const empresas = [...clientesPorEmpresa.keys()];
+    /* Las unidades de una empresa también cuentan como leídas: una fila que cambia de unidad se da de baja en la vieja. */
+    const reparto = await cargarRepartoDeEmpresas();
+    const leidasPorEmpresa = reparto.conSusUnidades(clientesPorEmpresa);
     let hs = await getSystemHubspotClient();
     const duenos = await leerDuenos(hs).catch(() => null);
     const correoDelDueno = (ownerId: string | null) => (ownerId ? (duenos?.porOwner.get(ownerId)?.email ?? null) : null);
 
     // ── Contactos ────────────────────────────────────────────────────────────
     const contactos = mitadVacia();
+    const correoDelContacto = new Map<string, string>();
     let planContactos: PlanDeCopia | undefined;
     const aC = await asociacionesDeEmpresas(hs, empresas, "contacts");
     if (aC.sinPermiso) contactos.sinPermiso = true;
@@ -131,7 +140,8 @@ export async function copiarContactosYTickets(opciones: { escribir?: boolean } =
                 ultimaActividadAt: c.ultimaActividad,
                 creadoEnHubspot: c.creado,
               };
-              return [{ clientId, hubspotId: id, huella: huellaDe(datos), datos }];
+              const destino = reparto.destino(clientId, { titulo: null, correos: [c.email] });
+              return [{ clientId: destino, hubspotId: id, huella: huellaDe(datos), datos }];
             }),
           ),
         );
@@ -141,8 +151,10 @@ export async function copiarContactosYTickets(opciones: { escribir?: boolean } =
         planContactos = planDeCopia(
           existentes.map(({ clientId, hubspotId, vigente, ...datos }) => ({ clientId, hubspotId, vigente, huella: huellaDe(datos) })),
           filas,
-          clientesLeidos(clientesPorEmpresa, aC, faltoAlgo),
+          clientesLeidos(leidasPorEmpresa, aC, faltoAlgo),
         );
+        /* El correo de cada contacto leído: con él se reparten los tickets de una empresa con unidades. */
+        for (const c of leidos.contactos) if (c.email) correoDelContacto.set(c.id, c.email);
         const datosDe = new Map(filas.map((f) => [`${f.clientId}:${f.hubspotId}`, f.datos]));
         Object.assign(contactos, {
           leidos: leidos.contactos.length,
@@ -180,7 +192,12 @@ export async function copiarContactosYTickets(opciones: { escribir?: boolean } =
       if (leidos.sinPermiso) tickets.sinPermiso = true;
       else {
         const porId = new Map(leidos.tickets.map((t) => [t.id, t]));
-        const faltoAlgo = leidos.fallo || ids.some((id) => !porId.has(id));
+        /* Los contactos de los tickets de una empresa con unidades (solo esos): con ellos y el asunto se elige la unidad. */
+        const deEmpresas = [...aT.porEmpresa.entries()]
+          .filter(([empresa]) => (clientesPorEmpresa.get(empresa) ?? []).some((id) => reparto.esEmpresa(id)))
+          .flatMap(([, hsIds]) => hsIds);
+        const contactosDelTicket = deEmpresas.length ? await asociacionesDeEmpresas(hs, deEmpresas, "contacts", "tickets") : null;
+        const faltoAlgo = leidos.fallo || ids.some((id) => !porId.has(id)) || !!contactosDelTicket?.sinPermiso || !!contactosDelTicket?.ilegibles.size;
         const filas = [...aT.porEmpresa.entries()].flatMap(([empresa, hsIds]) =>
           (clientesPorEmpresa.get(empresa) ?? []).flatMap((clientId) =>
             hsIds.flatMap((id) => {
@@ -198,7 +215,9 @@ export async function copiarContactosYTickets(opciones: { escribir?: boolean } =
                 cerradoEnHubspot: t.cerrado,
                 modificadoEnHubspot: t.modificado,
               };
-              return [{ clientId, hubspotId: id, huella: huellaDe(datos), datos }];
+              const correos = (contactosDelTicket?.porEmpresa.get(id) ?? []).map((c) => correoDelContacto.get(c));
+              const destino = reparto.destino(clientId, { titulo: t.asunto, correos });
+              return [{ clientId: destino, hubspotId: id, huella: huellaDe(datos), datos }];
             }),
           ),
         );
@@ -211,7 +230,7 @@ export async function copiarContactosYTickets(opciones: { escribir?: boolean } =
         planTickets = planDeCopia(
           existentes.map(({ clientId, hubspotId, vigente, ...datos }) => ({ clientId, hubspotId, vigente, huella: huellaDe(datos) })),
           filas,
-          clientesLeidos(clientesPorEmpresa, aT, faltoAlgo),
+          clientesLeidos(leidasPorEmpresa, aT, faltoAlgo),
         );
         const datosDe = new Map(filas.map((f) => [`${f.clientId}:${f.hubspotId}`, f.datos]));
         Object.assign(tickets, {

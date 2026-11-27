@@ -66,12 +66,19 @@ const texto = (v: string | null | undefined): string | null => (v && v.trim() ? 
 // espera ante un 429.
 
 /** Qué contactos (o tickets) tiene asociados cada empresa. */
-export async function asociacionesDeEmpresas(hs: HsClient, companyIds: readonly string[], hacia: ObjetoAsociado): Promise<Asociaciones> {
+export async function asociacionesDeEmpresas(
+  hs: HsClient,
+  companyIds: readonly string[],
+  hacia: ObjetoAsociado,
+  /* Desde otro objeto (2026-11-26: los contactos de los tickets de una empresa con unidades, para repartirlos). La llave de
+     `porEmpresa` es entonces el id de ese objeto. */
+  desde: "companies" | "tickets" = "companies",
+): Promise<Asociaciones> {
   const out: Asociaciones = { sinPermiso: false, porEmpresa: new Map(), ilegibles: new Set(), truncadas: new Set() };
   for (let i = 0; i < companyIds.length; i += LOTE) {
     const lote = companyIds.slice(i, i + LOTE);
     try {
-      const r = await hs.apiRequest({ method: "POST", path: `/crm/v4/associations/companies/${hacia}/batch/read`, body: { inputs: lote.map((id) => ({ id })) } });
+      const r = await hs.apiRequest({ method: "POST", path: `/crm/v4/associations/${desde}/${hacia}/batch/read`, body: { inputs: lote.map((id) => ({ id })) } });
       if (r.status === 403) {
         out.sinPermiso = true;
         return out;

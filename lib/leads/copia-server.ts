@@ -14,6 +14,7 @@
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
+import { cargarRepartoDeEmpresas } from "@/lib/sessions/reparto-de-la-empresa-server";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { leerDuenos } from "@/lib/hubspot/duenos";
@@ -68,15 +69,20 @@ export async function copiarLeads(opciones: { escribir?: boolean; ahora?: Date }
   };
   if (escribir && !(await tomarLock(ahora))) return { ...r, locked: true };
   try {
+    /* Una EMPRESA con unidades (2026-11-26) también: cada lead va a la unidad que dice el resolver por sus contactos, o
+       se queda en la empresa (lib/sessions/reparto-de-la-empresa-server.ts). */
     const clientes = await prisma.client.findMany({
-      where: { hubspotCompanyId: { not: null }, kind: { in: ["CLIENTE", "PROSPECTO"] } },
+      where: { hubspotCompanyId: { not: null }, kind: { in: ["CLIENTE", "PROSPECTO", "EMPRESA"] } },
       select: { id: true, hubspotCompanyId: true },
     });
-    const idsDeClientes = new Set(clientes.map((c) => c.id));
+    const reparto = await cargarRepartoDeEmpresas();
+    const idsDeClientes = new Set(clientes.flatMap((c) => [c.id, ...reparto.unidadesDe(c.id)]));
+    const correoDelContacto = new Map<string, string>();
     const clientesPorEmpresa = new Map<string, string[]>();
     for (const c of clientes) clientesPorEmpresa.set(String(c.hubspotCompanyId), [...(clientesPorEmpresa.get(String(c.hubspotCompanyId)) ?? []), c.id]);
     const clientesPorContacto = new Map<string, string[]>();
-    for (const c of await prisma.contactoDeHubspot.findMany({ where: { vigente: true }, select: { hubspotId: true, clientId: true } })) {
+    for (const c of await prisma.contactoDeHubspot.findMany({ where: { vigente: true }, select: { hubspotId: true, clientId: true, email: true } })) {
+      if (c.email) correoDelContacto.set(c.hubspotId, c.email);
       if (!idsDeClientes.has(c.clientId)) continue;
       const lista = clientesPorContacto.get(c.hubspotId) ?? [];
       if (!lista.includes(c.clientId)) lista.push(c.clientId);
@@ -106,7 +112,16 @@ export async function copiarLeads(opciones: { escribir?: boolean; ahora?: Date }
       if (ilegibles.has(l.id)) continue;
       decididos.add(l.id);
       const contactos = aContactos.porLead.get(l.id) ?? [];
-      const cliente = clienteDelLead({ empresas: aEmpresas.porLead.get(l.id) ?? [], contactos }, clientesPorEmpresa, clientesPorContacto);
+      const porEmpresa = clienteDelLead({ empresas: aEmpresas.porLead.get(l.id) ?? [], contactos }, clientesPorEmpresa, clientesPorContacto);
+      const fila = { titulo: null, correos: contactos.map((c) => correoDelContacto.get(c)) };
+      /* Dos fichas, pero de la misma empresa: es de la empresa, y se reparte (la misma regla que los correos). */
+      const empresaDeLaAmbigua = porEmpresa.tipo === "ambigua" ? reparto.empresaComun(porEmpresa.clientIds) : null;
+      const cliente: typeof porEmpresa =
+        porEmpresa.tipo === "uno" && reparto.esEmpresa(porEmpresa.clientId)
+          ? { ...porEmpresa, clientId: reparto.destino(porEmpresa.clientId, fila) }
+          : empresaDeLaAmbigua
+            ? { tipo: "uno", clientId: reparto.destino(empresaDeLaAmbigua, fila), por: "contacto" }
+            : porEmpresa;
       if (cliente.tipo === "ambigua") {
         r.ambiguos++;
         continue;

@@ -14,6 +14,11 @@ describe("empresaDeLaDuena", () => {
     expect(empresaDeLaDuena({ id: "x", comparteDominioConId: null, comparteDominioCon: null })).toBeNull();
   });
 
+  it("una unidad con empresa de HubSpot propia copia de la suya (Cemaco · Ecuador con Sukasa, 2026-11-26)", () => {
+    expect(empresaDeLaDuena({ id: "ec", hubspotCompanyId: "60198830904", comparteDominioConId: "cemaco", comparteDominioCon: { hubspotCompanyId: "59033632123", comparteDominioConId: null } })).toBeNull();
+    expect(empresaDeLaDuena({ id: "cr", hubspotCompanyId: null, comparteDominioConId: "cemaco", comparteDominioCon: { hubspotCompanyId: "59033632123", comparteDominioConId: null } })).toBe("59033632123");
+  });
+
   it("sin cadenas ni ficha que se apunte a sí misma: el mismo criterio del resolver", () => {
     expect(empresaDeLaDuena({ id: "ae", comparteDominioConId: "ae", comparteDominioCon: DUENA })).toBeNull();
     expect(empresaDeLaDuena({ id: "ae", comparteDominioConId: "tae", comparteDominioCon: { ...DUENA, comparteDominioConId: "otra" } })).toBeNull();

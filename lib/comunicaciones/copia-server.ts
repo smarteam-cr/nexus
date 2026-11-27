@@ -21,6 +21,7 @@
  * llega el texto de Meet (lib/comunicaciones/reuniones.ts; las reuniones de Meet y su dueño salen del chokepoint).
  */
 import "server-only";
+import { cargarRepartoDeEmpresas } from "@/lib/sessions/reparto-de-la-empresa-server";
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
@@ -94,6 +95,11 @@ export interface ResultadoDeLaCopia {
   correosDeCuentasSinUso: number;
   /** U8: los que habían quedado sin leer por la cuenta sin uso, y la cuenta ya se activó: vuelven a la cola. */
   correosReactivados: number;
+  /**
+   * La empresa arriba de sus unidades (2026-11-26): las comunicaciones de la ventana que estaban en la empresa o en una de
+   * sus unidades y cambiaron de ficha al revisarlas otra vez (con sus contactos de hoy y la gente confirmada de hoy).
+   */
+  reubicadasEnUnidades: number;
   errores: string[];
   planes?: Record<TipoDeComunicacion, PlanDeCopia>;
 }
@@ -282,22 +288,33 @@ export async function copiarComunicaciones(opciones: { escribir?: boolean; desde
   const escribir = opciones.escribir ?? true;
   const ahora = opciones.ahora ?? new Date();
   const porTipo = { correo: vacio(), nota: vacio(), llamada: vacio(), reunion: vacio() } satisfies Record<TipoDeComunicacion, ResultadoDelTipo>;
-  const base: ResultadoDeLaCopia = { empresas: 0, porTipo, porCliente: new Map(), correosParaLeer: 0, correosConFechaOCompromiso: 0, correosDeCuentasSinUso: 0, correosReactivados: 0, errores: [] };
+  const base: ResultadoDeLaCopia = { empresas: 0, porTipo, porCliente: new Map(), correosParaLeer: 0, correosConFechaOCompromiso: 0, correosDeCuentasSinUso: 0, correosReactivados: 0, reubicadasEnUnidades: 0, errores: [] };
   if (escribir && !(await tomarLock(ahora))) return { ...base, locked: true };
   try {
     // ── Quién es de quién ─────────────────────────────────────────────────────
+    /* Una EMPRESA con unidades (2026-11-26) también entra: cada comunicación va a la unidad que dice el resolver por su
+       asunto y sus contactos (lib/sessions/reparto-de-la-empresa-server.ts); sin unidad, se queda en la empresa. */
     const clientes = await prisma.client.findMany({
-      where: { hubspotCompanyId: { not: null }, kind: { in: ["CLIENTE", "PROSPECTO"] } },
+      where: { hubspotCompanyId: { not: null }, kind: { in: ["CLIENTE", "PROSPECTO", "EMPRESA"] } },
       select: { id: true, hubspotCompanyId: true },
     });
-    const idsDeClientes = new Set(clientes.map((c) => c.id));
+    const reparto = await cargarRepartoDeEmpresas();
+    const idsDeClientes = new Set(clientes.flatMap((c) => [c.id, ...reparto.unidadesDe(c.id)]));
+    /* Ficha → su empresa arriba, para la empresa y sus unidades (las demás no están). */
+    const empresaDeLaFicha = new Map<string, string>();
+    for (const c of clientes) {
+      if (!reparto.esEmpresa(c.id)) continue;
+      empresaDeLaFicha.set(c.id, c.id);
+      for (const u of reparto.unidadesDe(c.id)) empresaDeLaFicha.set(u, c.id);
+    }
     const clientesPorEmpresa = new Map<string, string[]>();
     for (const c of clientes) {
       const k = String(c.hubspotCompanyId);
       clientesPorEmpresa.set(k, [...(clientesPorEmpresa.get(k) ?? []), c.id]);
     }
     base.empresas = clientesPorEmpresa.size;
-    const contactos = await prisma.contactoDeHubspot.findMany({ where: { vigente: true }, select: { hubspotId: true, clientId: true } });
+    const contactos = await prisma.contactoDeHubspot.findMany({ where: { vigente: true }, select: { hubspotId: true, clientId: true, email: true } });
+    const correoDelContacto = new Map(contactos.filter((c) => c.email).map((c) => [c.hubspotId, c.email!]));
     const clientesPorContacto = new Map<string, string[]>();
     for (const c of contactos) {
       if (!idsDeClientes.has(c.clientId)) continue;
@@ -313,7 +330,7 @@ export async function copiarComunicaciones(opciones: { escribir?: boolean; desde
     const nuevoCursor: Cursor = { ...cursor };
     const desdeOcurrio = +ahora - DIAS_DE_LA_VENTANA * 86_400_000;
     const planes = {} as Record<TipoDeComunicacion, PlanDeCopia>;
-    const leeLaIA = await cuentasQueLeeLaIA(clientes.map((c) => c.id), ahora);
+    const leeLaIA = await cuentasQueLeeLaIA([...idsDeClientes], ahora);
     // Las reuniones de Meet de la ventana (con su dueño, del chokepoint): se piden una vez, solo si hacen falta.
     let indiceDeMeet: IndiceDeMeet | null = null;
     const meet = async (): Promise<IndiceDeMeet> =>
@@ -349,7 +366,18 @@ export async function copiarComunicaciones(opciones: { escribir?: boolean; desde
       const leidas: ComunicacionLeida[] = conDatos
         .filter((x) => !ilegibles.has(x.reg.id))
         .map((x): ComunicacionLeida => {
-          const cliente = clienteDeLaComunicacion({ empresas: aEmpresas.porRegistro.get(x.reg.id) ?? [], contactos: aContactos.porRegistro.get(x.reg.id) ?? [] }, clientesPorEmpresa, clientesPorContacto);
+          const contactosDelRegistro = aContactos.porRegistro.get(x.reg.id) ?? [];
+          const porEmpresa = clienteDeLaComunicacion({ empresas: aEmpresas.porRegistro.get(x.reg.id) ?? [], contactos: contactosDelRegistro }, clientesPorEmpresa, clientesPorContacto);
+          /* De una empresa con unidades: a la unidad de su asunto y su gente, o se queda en la empresa. */
+          const fila = { titulo: x.d.asunto, correos: [x.d.deEmail, ...contactosDelRegistro.map((c) => correoDelContacto.get(c))] };
+          /* Dos fichas, pero de la misma empresa (contactos en la empresa y en una unidad): es de la empresa, y se reparte. */
+          const empresaDeLaAmbigua = porEmpresa.tipo === "ambigua" ? reparto.empresaComun(porEmpresa.clientIds) : null;
+          const cliente: typeof porEmpresa =
+            porEmpresa.tipo === "uno" && reparto.esEmpresa(porEmpresa.clientId)
+              ? { ...porEmpresa, clientId: reparto.destino(porEmpresa.clientId, fila) }
+              : empresaDeLaAmbigua
+                ? { tipo: "uno", clientId: reparto.destino(empresaDeLaAmbigua, fila), por: "contacto" }
+                : porEmpresa;
           // U7: la que ya llega por Meet con texto, o cuya reunión de Meet es de OTRO cliente (invariante 1), cuenta como
           // «de nadie»: no se guarda y, si estaba, se da de baja.
           const claves = { googleEventId: x.d.googleEventId ?? null, codigoDeMeet: x.d.codigoDeMeet ?? null, inicio: +x.d.ocurrioAt };
@@ -463,6 +491,56 @@ export async function copiarComunicaciones(opciones: { escribir?: boolean; desde
       const hasta = modDeIlegibles.length ? Math.min(...modDeIlegibles) : busqueda.ultimaModificacion;
       if (hasta !== null) nuevoCursor[tipo] = Math.max(cursor[tipo] ?? 0, hasta);
       r.completa = busqueda.completa && !ilegibles.size;
+    }
+
+    /* ── La empresa arriba de sus unidades (2026-11-26): lo suyo se revisa otra vez en CADA corrida ──
+       La búsqueda trae solo lo que cambió en HubSpot. Lo de una empresa con unidades cambia de dueña sin cambiar allá:
+       cuando se arma la empresa (lo que estaba en la vieja principal) o cuando alguien confirma a una persona en
+       Interlocutores (lo que esperaba en la empresa). Por eso las de la ventana que están en la empresa o en una unidad
+       sin empresa de HubSpot propia se vuelven a repartir, con sus contactos de hoy en HubSpot. */
+    if (empresaDeLaFicha.size) {
+      const conEmpresaPropia = new Set(clientes.filter((c) => !reparto.esEmpresa(c.id)).map((c) => c.id));
+      const deLaEmpresa = new Map([...empresaDeLaFicha].filter(([id]) => !conEmpresaPropia.has(id)));
+      const yaVistas = new Set(TIPOS_DE_COMUNICACION.flatMap((t) => (planes[t] ? [...planes[t].crear, ...planes[t].actualizar].map((f) => `${t}:${f.hubspotId}`) : [])));
+      const aRevisar = (
+        await prisma.comunicacionDeHubspot.findMany({
+          where: { vigente: true, clientId: { in: [...deLaEmpresa.keys()] }, ocurrioAt: { gte: new Date(desdeOcurrio) } },
+          select: { tipo: true, hubspotId: true, clientId: true, asunto: true, deEmail: true, compromisosEstado: true, direccion: true, ocurrioAt: true, texto: true },
+        })
+      )
+        /* Solo correos y notas (revisión del 26 nov): una reunión o una llamada pasa por el cruce con Meet, que decide de
+           quién es su resumen, y eso lo hace la copia cuando HubSpot la trae. Y no las que la IA ya leyó: sus tareas y lo
+           propuesto viven en la ficha de hoy, y mover el correo los dejaría citando otra ficha. */
+        .filter((f) => (f.tipo === "correo" || f.tipo === "nota") && f.compromisosEstado !== "leido" && f.compromisosEstado !== "leyendo")
+        .filter((f) => !yaVistas.has(`${f.tipo}:${f.hubspotId}`));
+      for (const tipo of TIPOS_DE_COMUNICACION) {
+        const filas = aRevisar.filter((f) => f.tipo === tipo);
+        if (!filas.length) continue;
+        const aContactos = await asociacionesDe(hs, tipo, filas.map((f) => f.hubspotId), "contacts");
+        hs = await getSystemHubspotClient();
+        if (aContactos.sinPermiso) continue;
+        for (const f of filas) {
+          if (aContactos.ilegibles.has(f.hubspotId)) continue;
+          const empresa = deLaEmpresa.get(f.clientId)!;
+          const correos = [f.deEmail, ...(aContactos.porRegistro.get(f.hubspotId) ?? []).map((c) => correoDelContacto.get(c))];
+          const destino = reparto.destino(empresa, { titulo: f.asunto, correos });
+          if (destino === f.clientId) continue;
+          base.reubicadasEnUnidades++;
+          if (!escribir) continue;
+          await prisma.comunicacionDeHubspot.update({
+            where: { tipo_hubspotId: { tipo, hubspotId: f.hubspotId } },
+            data: {
+              clientId: destino,
+              copiadoAt: ahora,
+              compromisosEstado: estadoInicialDeCompromisos(
+                motivoDeLaLectura({ tipo, direccion: f.direccion as Parameters<typeof motivoDeLaLectura>[0]["direccion"], ocurrioAt: f.ocurrioAt, texto: f.texto, asunto: f.asunto }, ahora, { cuentaActiva: leeLaIA.has(destino) }),
+              ),
+              compromisosIntentos: 0,
+              compromisosError: null,
+            },
+          });
+        }
+      }
     }
 
     if (escribir) await guardarCursor(nuevoCursor);

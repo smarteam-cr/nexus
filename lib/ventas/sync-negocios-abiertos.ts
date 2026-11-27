@@ -17,6 +17,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
+import { cargarRepartoDeEmpresas } from "@/lib/sessions/reparto-de-la-empresa-server";
 import { leerDuenos } from "@/lib/hubspot/duenos";
 import { dealPipelineMeta } from "@/lib/hubspot/deals";
 import { ETAPAS_GANADAS, ETAPAS_PERDIDAS, PIPELINES_VENTA_PROPIA, labelDePipeline } from "./pipelines";
@@ -178,6 +179,7 @@ export async function syncNegociosAbiertos(opciones: { dryRun?: boolean } = {}):
       select: { id: true, hubspotCompanyId: true, hubspotOwnerId: true, hubspotOwnerEmail: true },
     });
     const clientePorCompany = new Map(clientes.map((c) => [c.hubspotCompanyId!, c]));
+    const reparto = await cargarRepartoDeEmpresas();
     const empresas = new Set<string>([...companyDe.values(), ...clientes.map((c) => c.hubspotCompanyId!)]);
     const datosDeEmpresa = new Map<string, { nombre: string | null; ownerId: string | null; props: Record<string, string | null> }>();
     const lista = [...empresas];
@@ -262,7 +264,8 @@ export async function syncNegociosAbiertos(opciones: { dryRun?: boolean } = {}):
         ...(duenosLeidos ? { vendedorId: personaDe(ownerId) } : {}),
         hubspotCompanyId: companyId,
         empresaNombre: companyId ? (datosDeEmpresa.get(companyId)?.nombre ?? null) : null,
-        clientId: companyId ? (clientePorCompany.get(companyId)?.id ?? null) : null,
+        /* De una empresa con unidades (2026-11-26): a la unidad que nombra el negocio, o se queda en la empresa. */
+        clientId: companyId && clientePorCompany.get(companyId) ? reparto.destino(clientePorCompany.get(companyId)!.id, { titulo: d.p.dealname ?? null, correos: [] }) : null,
         abierto: true,
         cerradoEn: null,
       };

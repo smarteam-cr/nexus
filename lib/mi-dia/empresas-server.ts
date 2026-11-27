@@ -36,14 +36,16 @@ let enVuelo: Promise<MapasDeEmpresas> | null = null;
 
 async function leer(): Promise<MapasDeEmpresas> {
   const [clientes, contactos, internos] = await Promise.all([
-    prisma.client.findMany({ where: { kind: { in: ["CLIENTE", "PROSPECTO"] } }, select: { id: true, name: true, company: true, siglas: true, emailDomains: true, comparteDominioConId: true } }),
+    /* La EMPRESA arriba de sus unidades (2026-11-26) también: su dominio es de las unidades que viven en él y arma su
+       grupo. Nunca es la empresa de un invitado ni se sugiere (armarMapasDeLaGente y el índice la dejan afuera). */
+    prisma.client.findMany({ where: { kind: { in: ["CLIENTE", "PROSPECTO", "EMPRESA"] } }, select: { id: true, name: true, company: true, siglas: true, emailDomains: true, comparteDominioConId: true, kind: true } }),
     modeloDisponible(prisma.contactoDeHubspot)
       ? prisma.contactoDeHubspot.findMany({ where: { vigente: true, email: { not: null } }, select: { email: true, clientId: true } }).catch(() => [])
       : Promise.resolve([]),
     dominiosDeLaCasa(),
   ]);
   const { porDominio, porCorreo, grupoDe } = armarMapasDeLaGente(clientes, contactos);
-  const indiceDeNombres = indiceDeClientes(clientes.map((c) => ({ id: c.id, name: c.name, company: c.company, siglas: c.siglas, comparteDominioConId: c.comparteDominioConId })));
+  const indiceDeNombres = indiceDeClientes(clientes.map((c) => ({ id: c.id, name: c.name, company: c.company, siglas: c.siglas, comparteDominioConId: c.comparteDominioConId, kind: c.kind })));
   return {
     porCorreo,
     porDominio,

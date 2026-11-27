@@ -14607,6 +14607,8 @@ puede editar».
 - **Datos y SQL:** sin SQL. Los dos campos son opcionales en el Json de la exploración.
 ## Dos fichas que comparten dominio: el TEC se separa en AE y TAE (2026-10-29)
 
+> ⚠ Corregida el 26 nov por «La empresa arriba de sus unidades» (abajo): la empresa es una ficha de tipo Empresa, dueña de lo compartido; ninguna unidad es «la principal».
+
 > Restaurada el 2026-11-07: se perdió al resolver un conflicto cuando la rama del TEC se juntó con las otras (30 oct).
 > La generaliza «Una empresa con varias unidades», justo abajo.
 
@@ -14940,6 +14942,8 @@ diagnóstico» (7 oct) y su repetición en «La escala de un cliente con lo que 
 
 ## Una empresa con varias unidades: cada unidad es una ficha (2026-11-07)
 
+> ⚠ Corregida el 26 nov por «La empresa arriba de sus unidades» (abajo): la empresa es una ficha de tipo Empresa, dueña de lo compartido; ninguna unidad es «la principal».
+
 Elías, 6 nov: «Que una empresa (un dominio) pueda tener varias unidades, y que cada unidad funcione en Nexus como un
 cliente propio […] Nunca debe adivinar en silencio». Generaliza lo del TEC (la sección de arriba) a cualquier empresa:
 TEC (AE y TAE) y CEMACO (Costa Rica y Ecuador) son los primeros. kölbi, que venía en el pedido, se midió y es un cliente
@@ -15089,6 +15093,132 @@ con proyectos (abajo). Plan, números y etapas: `docs/empresas-con-dominio-compa
     (cambiaría cuál tiene el proyecto más antiguo, y con eso las reuniones de todo el grupo, sin vista previa). Si algo
     falla después de pasar los proyectos, cada reunión de esos proyectos queda en la unidad como se vio (o se suelta su
     vínculo de Nexus) y la pantalla dice «a medias» y pide avisar al equipo: editar la unidad no lo termina.
+
+## La empresa arriba de sus unidades: una ficha de tipo «Empresa» (2026-11-26)
+
+Elías, 26 nov: la empresa tiene que existir como registro propio, dueña del dominio compartido y de la empresa de
+HubSpot, con todas sus unidades iguales debajo. «Es importante que la arquitectura esté bien desde el inicio… de la
+forma más sencilla posible». Vale para TEC (AE y TAE), CEMACO (Costa Rica y Ecuador) y el grupo Teamnet + Stratosphere.
+Corrige en su lugar «Una empresa con varias unidades» (7 nov: «No hay tabla de empresas», «La principal es la que tiene
+el dominio», «HubSpot no se reorganiza») y «Dos fichas que comparten dominio» (29 oct: TAE se quedaba con los dominios y
+con todo lo de HubSpot). Las seis decisiones las tomó Elías el 26 nov. Plan y números: `docs/empresas-con-dominio-compartido-plan.md`,
+parte 3.
+
+**Medido antes (producción y HubSpot, solo lectura, 26 nov):**
+- Lo de HubSpot del ITCR caía entero en TEC · TAE: 61 contactos, 112 correos, notas y llamadas, 41 tickets y el único
+  negocio abierto («IA AGENT | WA - TEC AE», que es de AE). AE no tenía nada.
+- De los 61 contactos, 20 son gente de AE, 12 de TAE y 29 no dan pista. La pista es estar confirmado o haber estado en
+  reuniones de una sola unidad.
+- Las reuniones ya se repartían bien (TAE 134, AE 93). Ninguna regla le daba una reunión a la principal por defecto.
+
+**Lo decidido:**
+- **La empresa es una ficha `Client` de tipo `EMPRESA`** (`ClientKind` suma el valor; SQL
+  `scripts/sql/2026-11-26-ficha-de-tipo-empresa.sql`, aditivo). Guarda lo que comparten dos o más unidades: el dominio
+  compartido y la empresa de HubSpot compartida. Lo que es de una sola unidad queda en esa unidad. **Nunca tiene
+  trabajo:** ni reuniones, ni proyectos de trabajo, ni documentos, ni cobranza. Las unidades le cuelgan con la llave de
+  siempre: `comparteDominioConId` ahora significa «la empresa de esta unidad». No se le cambia el nombre: no sería
+  aditivo y el esquema no usa `@map`.
+  - *Por qué una ficha y no una tabla aparte:* unos 30 lugares arman «dominio → ficha» y 145 archivos leen
+    `Client.hubspotCompanyId`, y con una ficha de tipo Empresa todos siguen funcionando. Con una tabla aparte habría
+    que enseñársela a cada uno, y lo que trae empresas de HubSpot vería al ITCR sin ficha y le crearía otra.
+  - Lo que cuelga de `clientId` puede colgar de la empresa sin llaves nuevas. La etapa 2 del plan general («un plan que
+    cruza unidades») cuelga ahí: `PlanGeneral.clientId` = la empresa.
+  - *Por qué el tipo y no una marca aparte:* falla cerrada. Lo que filtra por tipo (la cartera con `CS_CLIENT_WHERE`,
+    «Mi día», cobranza, las listas de la preventa) no la muestra, como a los aliados y a las fichas internas, y un
+    listado nuevo que se olvide tampoco. Lo que sí la tiene que ver (las copias de HubSpot, los eventos, el job de
+    proyectos) la pide a propósito.
+- **Una empresa con una sola unidad no tiene registro.** Sigue siendo una ficha, como siempre: el registro nace con la
+  segunda unidad.
+- **En el resolver (`categorize.ts`, invariante 2), la empresa nunca es dueña de una reunión.** Es la cabeza del grupo
+  (lo que antes hacía la principal): su dominio y su empresa de HubSpot llevan al reparto entre sus unidades, que sigue
+  igual. Primero el título, después la gente confirmada, después el dominio y lo aprendido, y si no, por decidir. No
+  entra al match por título ni a las palabras ambiguas: el título nombra unidades, no la empresa. Las pistas de título de
+  unas unidades se arman con la lista entera de fichas (`pistasDeTitulo(…, todas)`): sin la empresa en la lista, las
+  siglas «cr» y «ec» salían solas y el simulacro de Cemaco traía reuniones de Eurostone. Una reunión asignada a
+  mano a la empresa (no debería pasar: ninguna pantalla la ofrece) se reparte igual. Una empresa sin unidades no se
+  queda con nada: por decidir.
+- **Lo de HubSpot de la empresa se reparte al copiarse, con la regla de las reuniones** (`unidadDeLoDeHubspot` en
+  `categorize.ts`). Cada fila (contacto, correo, nota, llamada, ticket, negocio) se lee como una reunión: el asunto o el
+  nombre del negocio es el título, y sus contactos son la gente.
+  - Una sola unidad: va a esa. Si no, **queda en la empresa** (`clientId` = la empresa), donde no la lee ningún agente.
+  - *Por qué quedarse en la empresa:* «nunca debe adivinar en silencio». Repartir lo dudoso a las dos unidades era
+    volver a la mezcla.
+  - **Elegir es confirmar a la persona** en Interlocutores (Elías, 26 nov): en la copia siguiente, sus correos y
+    tickets van a su unidad. El negocio sin siglas y sin gente se queda en la empresa a la vista.
+  - La empresa y todas sus unidades cuentan como leídas en cada corrida, así que una fila que cambia de unidad se da de
+    alta en la nueva y de baja en la vieja sola.
+- **Una unidad sin empresa de HubSpot propia no escribe en HubSpot** (Elías, 26 nov): el siguiente paso, el encargado y
+  la ficha hacia HubSpot se apagan en sus pantallas, como en AE desde el 29 oct. Los datos de la empresa (industria,
+  tamaño) los copia la empresa.
+- **Un proyecto nuevo de HubSpot va a la unidad cuyas siglas abren su nombre** («AE | …», `unidadPorLasSiglas`). Sin
+  siglas, **queda en la empresa con el aviso «Elige su unidad»** en Unidades de negocio (Elías, 26 nov). Mientras tanto
+  no ve reuniones. Se pasa con «Pasar a una unidad», con la misma mudanza de «Pasar proyectos».
+- **La página de la empresa:** `/clients/<empresa>` muestra solo «Unidades de negocio»: la empresa arriba (dominios y
+  empresa de HubSpot), las unidades iguales debajo y lo que espera unidad (proyectos, negocios, contactos y correos).
+  La abre quien abre alguna de sus unidades (`requireAccessToClient`, reason `empresa-de-una-unidad`). Las unidades que
+  no abre salen como «Otra ficha». Horas, rentabilidad y cobranza sumadas siguen siendo etapa futura.
+- **Nada crea trabajo en una empresa:** ni preventa, ni propuesta, ni proyecto a mano, ni cuenta de cobro, ni una
+  reunión asignada a mano. La guarda vive en `lib/clients/empresa.ts` (`esEmpresa`, `rechazarSiEsEmpresa`) y una
+  prueba de escaneo vigila a los que crean.
+- **Lo que dejó la revisión del 26 nov:**
+  - **Correos y notas.** La copia de cada hora trae solo lo que cambió en HubSpot. Por eso, en CADA corrida, las
+    comunicaciones de los últimos 120 días que están en la empresa o en una unidad sin empresa de HubSpot propia se
+    vuelven a repartir, con sus contactos de hoy. Así lo que quedó en la vieja principal pasa a su unidad, y confirmar a
+    una persona mueve sus correos en la hora siguiente.
+  - **Ventas ganadas.** Una venta que ya es de una ficha de la empresa no se mueve sola: Cobranza, lo vendido y las
+    comisiones la leen ahí. Solo una venta nueva se reparte.
+  - **Lo que nunca cae en la empresa.** Una tarea de HubSpot ligada solo a la empresa queda sin cuenta. Una reunión no
+    se le asigna nunca: lo frena el escritor único (`asignarDuenioManual`), y «Agregar reunión», «Asignar», «Mover» y la
+    vista previa de Unidades no la ofrecen.
+  - **Leads.** Entran a la copia y se reparten por sus contactos.
+  - **Cambiar la empresa desde su ficha** (dominios, empresa de HubSpot, datos, encargado, logo) lo hace solo el Super
+    Admin o quien abre TODAS sus unidades (`rechazoDeEscrituraEnLaEmpresa`). Su categoría no se cambia a mano.
+  - **Juntar.** Una unidad no se junta con la empresa.
+  - **Deshacer** es `--deshacer` del mismo script: todo lo de la empresa, y lo que se repartió a sus unidades sin empresa
+    propia, vuelve a la vieja principal. Nunca se borra la ficha a mano.
+  - **Una unidad con empresa de HubSpot propia copia de la suya**, como cualquier ficha.
+  - **Segunda vuelta de la revisión:**
+    - La revisión de cada corrida mueve solo correos y notas que la IA todavía no leyó. Una reunión o una llamada pasan
+      por el cruce con Meet cuando HubSpot las trae. Un correo ya leído se queda donde está, con sus tareas y lo
+      propuesto: moverlo los dejaba citando otra ficha. *Lo aceptado:* hasta que cambie en HubSpot, un correo ya leído
+      de la gente de AE sigue en TAE.
+    - Una venta ganada que espera en la empresa SÍ se vuelve a repartir (por ejemplo, cuando su nombre suma «AE |»), y
+      la tarjeta de la empresa la cuenta. La que ya es de una unidad no se mueve.
+    - Una tarea de HubSpot con un proyecto que espera unidad queda sin cuenta y sin proyecto. Cuando el proyecto pasa a
+      su unidad, la copia la resuelve otra vez.
+    - Un handoff no se arranca en un proyecto de la empresa. La ficha de la empresa no se borra a mano: se deshace con
+      el script. Deshacer una empresa que solo agrupa deja a sus unidades sin colgar de nadie, como estaban.
+  - **Lo que se acepta al armar la empresa:** la vieja principal deja de escribir en HubSpot (decisión 4). Sus señales de
+    Éxito del cliente que salen de la empresa de HubSpot y su dueño de HubSpot quedan congelados. El simulacro lo lista.
+- **Los tres casos:**
+  - **TEC:** ficha «TEC» con `tec.ac.cr`, `itcr.ac.cr` y la empresa del ITCR. TAE y AE iguales debajo, sin dominio
+    propio.
+  - **Cemaco:** ficha «Cemaco» con «Cemaco Internacional» de HubSpot. Elías, 26 nov: es del grupo, no de Costa Rica.
+    `cemaco.co.cr` sigue en Costa Rica, que es la única que lo usa. **Se aplica solo con el OK explícito de Elías.**
+    **Sukasa es la tercera unidad** (Elías, 27 nov: «una unidad de negocio de Cemaco Internacional, está en Ecuador y en
+    Costa Rica»; no es Ecuador). La ficha «Sukasa» (prospecto del 18 nov, con su empresa de HubSpot, una propuesta, 7
+    contactos y un lead) entra tal cual, con dos cambios:
+    - suelta `sukasa.com`, que es de Ecuador desde el 9 nov y le da sus reuniones (INV37: el dominio en dos fichas);
+    - pasa a llamarse «Cemaco · Sukasa». Si no, las tres unidades no comparten la palabra «Cemaco»: la empresa pierde su
+      marca y la sigla «CR» vale sola, y se lleva reuniones de otros («Claro CR», «Pago de Nómina en CR y NIC»; 20 en el
+      simulacro del 27 nov).
+
+    `--deshacer` le devuelve el dominio y el nombre. **El simulacro del 27 nov mueve 9 de las 13 reuniones de Ecuador,**
+    las que el título llama «SUKASA»: 7 pasan a Sukasa y 2 quedan por decidir. El `--apply` no corre mientras alguna cambie.
+    De quién son lo decide Elías; las que sean de Ecuador se asignan en /sessions antes de aplicar.
+  - **Grupo Teamnet:** ficha que solo agrupa; cada unidad conserva su dominio y su empresa de HubSpot. Se aplica solo
+    si el simulacro no cambia ninguna reunión (Elías, 26 nov). El simulacro del 26 nov movía 27: las conjuntas («Sprint
+    semanal | Teamnet y Sas», las capacitaciones «Teamnet - SAS & Smarteam»), que pasaban de Teamnet a por decidir porque
+    la regla del grupo solo valía entre dos empresas.
+    **La regla del grupo vale también dentro de una empresa que solo agrupa** (Elías, 27 nov: «Sí, que valga»). Lo que
+    la cascada no decide entre sus unidades va a la del proyecto más antiguo (`duenaDelProyectoDelGrupo`), sin pedir gente
+    confirmada en las dos: el grupo lo armó una persona al crear la empresa. «Solo agrupa» es una empresa sin dominio
+    propio y sin empresa de HubSpot (`empresaQueSoloAgrupa`). El TEC y Cemaco no la tienen: lo dudoso entre sus unidades
+    sigue por decidir. Si el cargador no trae `hubspotCompanyId`, se toma que no agrupa, que es lo seguro. Con la regla,
+    el simulacro del 27 nov no cambia ninguna de las 73 reuniones.
+  - **Simulacros** (producción, solo lectura, 26 nov): en el TEC no cambia ninguna de 232 reuniones y en Cemaco ninguna
+    de 53 (con Costa Rica y Ecuador; con Sukasa, ver arriba). Lo de HubSpot del TEC: de los 61 contactos, 20 van a AE, 12 a TAE y 29 quedan en la empresa.
+  - Un solo script: `scripts/crear-empresa-de-unidades.ts --empresa tec|cemaco|teamnet`, con simulacro y respaldo.
 
 ## El Resumen de la escala que ve el cliente, con sus datos rojos (2026-11-09)
 

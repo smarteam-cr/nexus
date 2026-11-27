@@ -48,6 +48,8 @@ export interface ClienteParaMatch {
   siglas?: readonly string[] | null;
   /** La principal de su empresa, si es una unidad (`Client.comparteDominioConId`): la regla de la marca la usa. */
   comparteDominioConId?: string | null;
+  /** `EMPRESA`: la empresa arriba de sus unidades (2026-11-26). Arma el grupo de sus unidades, pero nunca se nombra. */
+  kind?: string | null;
 }
 
 /** Las palabras del título SIN el piso de 4 letras: solo para cotejar siglas declaradas. */

@@ -11,6 +11,10 @@
  *
  * Todo pasa por `/api/clients/[id]/unidades` (lib/clients/unidades-server.ts). La gente de cada unidad no se edita aquí:
  * se ve un resumen y se va a «Interlocutores».
+ *
+ * Con la EMPRESA arriba (2026-11-26, DECISIONS «La empresa arriba de sus unidades») la primera tarjeta es la empresa: sus
+ * dominios, su empresa de HubSpot y lo que espera unidad (proyectos que llegaron sin siglas, con «Pasar a una unidad», y lo
+ * de HubSpot que se reparte al confirmar a la persona). Es también la página de la empresa (`/clients/<empresa>`).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Badge, Drawer, Field, Input, Modal, Selector, Skeleton, Interruptor, Segmentado } from "@/components/ui";
@@ -25,6 +29,8 @@ interface Unidad {
   id: string;
   nombre: string;
   principal: boolean;
+  esEmpresa: boolean;
+  enEspera: { contactos: number; correos: number; tickets: number; negocios: number; ventas: number } | null;
   esEsta: boolean;
   abre: boolean;
   siglas: string[];
@@ -82,8 +88,8 @@ interface SimulacroDeJuntar {
   conCuentaDeCobro: boolean;
 }
 
-/** Qué se edita en el panel: una ficha de la empresa, o la unidad nueva. */
-type Edicion = { tipo: "editar"; ficha: Unidad } | { tipo: "agregar" };
+/** Qué se edita en el panel: una ficha de la empresa, la unidad nueva, o un proyecto de la empresa que pasa a una unidad. */
+type Edicion = { tipo: "editar"; ficha: Unidad } | { tipo: "agregar" } | { tipo: "pasar"; proyecto: { id: string; nombre: string } };
 
 const fecha = (iso: string) => new Date(iso).toLocaleDateString("es-CR", { day: "numeric", month: "short", year: "numeric" });
 const enLista = (texto: string) =>
@@ -95,7 +101,7 @@ const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno
 
 // ── La pestaña ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-export default function UnidadesDeNegocio({ clientId, onIrAInterlocutores }: { clientId: string; onIrAInterlocutores: () => void }) {
+export default function UnidadesDeNegocio({ clientId, onIrAInterlocutores }: { clientId: string; onIrAInterlocutores?: () => void }) {
   const [vista, setVista] = useState<Vista | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [intento, setIntento] = useState(0);
@@ -144,6 +150,7 @@ export default function UnidadesDeNegocio({ clientId, onIrAInterlocutores }: { c
   const esGrupo = vista.tipo === "grupo";
   const activo = conUnidades || prendida;
   const principal = vista.fichas.find((f) => f.principal);
+  const unidades = vista.fichas.filter((f) => !f.esEmpresa);
 
   return (
     <div className="space-y-4">
@@ -154,7 +161,7 @@ export default function UnidadesDeNegocio({ clientId, onIrAInterlocutores }: { c
               <p className={ROTULO_DEL_SISTEMA}>Unidades de negocio</p>
               {conUnidades && (
                 <Badge variant="primary" size="xs">
-                  Parte de {vista.empresa} · {vista.fichas.length} unidades
+                  Parte de {vista.empresa} · {unidades.length} unidades
                 </Badge>
               )}
               {esGrupo && (
@@ -214,6 +221,8 @@ export default function UnidadesDeNegocio({ clientId, onIrAInterlocutores }: { c
               principal={principal}
               puedeEditar={vista.puedeEditar && !esGrupo}
               onEditar={() => setEdicion({ tipo: "editar", ficha: f })}
+              onPasar={(proyecto) => setEdicion({ tipo: "pasar", proyecto })}
+              hayUnidadesQueAbre={unidades.some((u) => u.abre)}
               onIrAInterlocutores={onIrAInterlocutores}
             />
           ))}
@@ -252,16 +261,21 @@ function TarjetaDeUnidad({
   principal,
   puedeEditar,
   onEditar,
+  onPasar,
   onIrAInterlocutores,
+  hayUnidadesQueAbre,
 }: {
+  hayUnidadesQueAbre: boolean;
   f: Unidad;
   esGrupo: boolean;
   principal: Unidad | undefined;
   puedeEditar: boolean;
   onEditar: () => void;
-  onIrAInterlocutores: () => void;
+  onPasar: (proyecto: { id: string; nombre: string }) => void;
+  onIrAInterlocutores?: () => void;
 }) {
   const otras = f.confirmadas - f.personas.length;
+  if (f.esEmpresa) return <TarjetaDeLaEmpresa f={f} puedeEditar={puedeEditar} onEditar={onEditar} onPasar={onPasar} hayUnidadesQueAbre={hayUnidadesQueAbre} />;
   return (
     <section aria-label={f.nombre} className="rounded-xl border border-line bg-surface p-5">
       <div className="flex flex-wrap items-center gap-2">
@@ -295,7 +309,15 @@ function TarjetaDeUnidad({
           </dd>
           <dt className="text-fg-muted">HubSpot</dt>
           <dd className="text-fg-secondary">
-            {f.conEmpresaDeHubspot ? "Tiene su empresa en HubSpot" : f.principal || esGrupo ? "Sin empresa en HubSpot" : "Usa la empresa de la principal"}
+            {f.conEmpresaDeHubspot
+              ? "Tiene su empresa en HubSpot"
+              : f.principal || esGrupo
+                ? "Sin empresa en HubSpot"
+                : principal?.esEmpresa
+                  ? principal.conEmpresaDeHubspot
+                    ? `Lo de la empresa de HubSpot de ${principal.nombre} le llega repartido`
+                    : "Sin empresa en HubSpot"
+                  : "Usa la empresa de la principal"}
           </dd>
           <dt className="text-fg-muted">Proyectos</dt>
           <dd className="text-fg-secondary">
@@ -323,7 +345,7 @@ function TarjetaDeUnidad({
                   .join(" · ")}
               </p>
             )}
-            {f.esEsta ? (
+            {f.esEsta && onIrAInterlocutores ? (
               <BotonEnlace className="mt-1" onClick={onIrAInterlocutores}>
                 Ver en Interlocutores
               </BotonEnlace>
@@ -334,6 +356,90 @@ function TarjetaDeUnidad({
             )}
           </dd>
         </dl>
+      )}
+    </section>
+  );
+}
+
+/** La empresa arriba de sus unidades: lo que comparten y lo que espera unidad. */
+function TarjetaDeLaEmpresa({
+  f,
+  puedeEditar,
+  onEditar,
+  onPasar,
+  hayUnidadesQueAbre,
+}: {
+  f: Unidad;
+  puedeEditar: boolean;
+  onEditar: () => void;
+  onPasar: (proyecto: { id: string; nombre: string }) => void;
+  hayUnidadesQueAbre: boolean;
+}) {
+  const espera = f.enEspera;
+  const deHubspot = espera
+    ? [
+        espera.contactos ? plural(espera.contactos, "contacto", "contactos") : null,
+        espera.correos ? plural(espera.correos, "correo o nota", "correos y notas") : null,
+        espera.tickets ? plural(espera.tickets, "ticket", "tickets") : null,
+        espera.negocios ? plural(espera.negocios, "negocio", "negocios") : null,
+        espera.ventas ? plural(espera.ventas, "venta ganada", "ventas ganadas") : null,
+      ].filter(Boolean)
+    : [];
+  return (
+    <section aria-label={f.nombre} className="rounded-xl border border-line bg-surface p-5 lg:col-span-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <h4 className="text-sm font-semibold text-fg">{f.nombre}</h4>
+        <Badge variant="primary" size="xs">
+          Empresa
+        </Badge>
+        {f.esEsta && <Badge size="xs">Esta página</Badge>}
+        <InfoHint text="La empresa guarda lo que comparten sus unidades: el dominio y la empresa de HubSpot. No tiene trabajo propio: los proyectos, las reuniones y los documentos son de cada unidad." />
+        <span className="flex-1" />
+        {!f.esEsta && f.abre && (
+          <a href={`/clients/${f.id}`} className="text-xs text-brand hover:text-brand-light">
+            Abrir la página de la empresa
+          </a>
+        )}
+        {puedeEditar && f.abre && <BotonTexto onClick={onEditar}>Editar dominio</BotonTexto>}
+      </div>
+      {!f.abre ? (
+        <p className="mt-3 text-[13px] text-fg-muted">No tienes acceso a la empresa: pídeselo a quien lleva sus unidades.</p>
+      ) : (
+      <dl className="mt-3 grid grid-cols-[120px_1fr] gap-x-3 gap-y-2 text-[13px]">
+        <dt className="text-fg-muted">Dominio</dt>
+        <dd className="text-fg-secondary">{f.dominios.length ? `${f.dominios.join(", ")} · lo comparten sus unidades` : "Sin dominio compartido"}</dd>
+        <dt className="text-fg-muted">HubSpot</dt>
+        <dd className="text-fg-secondary">
+          {f.conEmpresaDeHubspot ? "Tiene la empresa de HubSpot: lo que llega se reparte a cada unidad" : "Sin empresa en HubSpot"}
+        </dd>
+        <dt className="text-fg-muted">Proyectos</dt>
+        <dd>
+          {f.proyectos.length === 0 ? (
+            <span className="text-fg-muted">Ninguno esperando unidad</span>
+          ) : (
+            <ul className="space-y-1">
+              {f.proyectos.map((p) => (
+                <li key={p.id} className="flex flex-wrap items-center gap-2">
+                  <span className="text-fg">{p.nombre}</span>
+                  <Badge variant="warning" size="xs">
+                    Elige su unidad
+                  </Badge>
+                  {puedeEditar && hayUnidadesQueAbre && <BotonEnlace onClick={() => onPasar(p)}>Pasar a una unidad</BotonEnlace>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </dd>
+        <dt className="text-fg-muted">De HubSpot sin unidad</dt>
+        <dd className="text-fg-secondary">
+          {deHubspot.length ? deHubspot.join(" · ") : <span className="text-fg-muted">Nada: todo tiene su unidad</span>}
+          {deHubspot.length > 0 && (
+            <p className="mt-0.5 text-xs text-fg-muted">
+              No lo lee ningún agente. Pasa a su unidad cuando confirmas a la persona en «Interlocutores» de esa unidad.
+            </p>
+          )}
+        </dd>
+      </dl>
       )}
     </section>
   );
@@ -370,7 +476,7 @@ function ComoSeReparten() {
   );
 }
 
-function DelGrupo({ vista, onIrAInterlocutores }: { vista: Vista; onIrAInterlocutores: () => void }) {
+function DelGrupo({ vista, onIrAInterlocutores }: { vista: Vista; onIrAInterlocutores?: () => void }) {
   return (
     <section aria-label="Del grupo" className="rounded-xl border border-line bg-surface p-5">
       <div className="flex flex-wrap items-center gap-2">
@@ -378,7 +484,7 @@ function DelGrupo({ vista, onIrAInterlocutores }: { vista: Vista; onIrAInterlocu
         <span className="text-xs text-fg-muted">{vista.delGrupo.length}</span>
         <InfoHint text="Confirmadas en dos fichas del grupo o más: trabajan con todo el grupo y no deciden solas de quién es una reunión." />
         <span className="flex-1" />
-        <BotonEnlace onClick={onIrAInterlocutores}>+ Agregar una ficha al grupo</BotonEnlace>
+        {onIrAInterlocutores && <BotonEnlace onClick={onIrAInterlocutores}>+ Agregar una ficha al grupo</BotonEnlace>}
       </div>
       {vista.delGrupo.length === 0 ? (
         <p className="mt-2 text-[13px] text-fg-muted">Nadie confirmado en las dos fichas.</p>
@@ -422,6 +528,8 @@ function NoSeApaga({ abierto, vista, clientId, onCerrar }: { abierto: boolean; v
   const [simulacro, setSimulacro] = useState<SimulacroDeJuntar | null>(null);
   const [cargando, setCargando] = useState<string | null>(null);
   const unidades = vista.fichas.filter((f) => !f.principal && f.abre);
+  /* Con la empresa arriba (2026-11-26) no hay principal con la que juntar: la empresa no tiene trabajo propio. */
+  const conLaEmpresaArriba = vista.fichas.some((f) => f.principal && f.esEmpresa);
 
   const verQuePasaria = async (unidadId: string) => {
     setCargando(unidadId);
@@ -458,7 +566,12 @@ function NoSeApaga({ abierto, vista, clientId, onCerrar }: { abierto: boolean; v
           unidad se borra. Eso no se puede deshacer.
         </p>
         <p>Lo hace un Super Admin o la CSL, siempre con el simulacro primero.</p>
-        {vista.puedeJuntar ? (
+        {conLaEmpresaArriba ? (
+          <p className="text-fg-muted">
+            Esta empresa tiene su ficha arriba de las unidades: una unidad no se junta con la empresa. Si dos unidades son en realidad
+            una sola, avísale al equipo de Nexus.
+          </p>
+        ) : vista.puedeJuntar ? (
           <div className="space-y-2">
             {unidades.map((u) => (
               <div key={u.id} className="flex items-center gap-3 rounded-lg border border-line p-3">
@@ -517,12 +630,20 @@ function PanelDeUnidad({
 }) {
   const toast = useToast();
   const agregando = edicion.tipo === "agregar";
-  const ficha = edicion.tipo === "editar" ? edicion.ficha : null;
+  const pasando = edicion.tipo === "pasar" ? edicion.proyecto : null;
+  /* «Pasar a una unidad»: la unidad que recibe el proyecto (sus siglas y su dominio no cambian). */
+  const unidadesQueReciben = vista.fichas.filter((f) => !f.esEmpresa && f.abre);
+  const [destinoId, setDestinoId] = useState<string>(unidadesQueReciben[0]?.id ?? "");
+  const ficha = edicion.tipo === "editar" ? edicion.ficha : pasando ? (unidadesQueReciben.find((f) => f.id === destinoId) ?? null) : null;
   const principal = vista.fichas.find((f) => f.principal) ?? (vista.tipo === "sola" ? vista.fichas[0] : undefined);
   const [nombre, setNombre] = useState(agregando ? `${vista.empresa} · ` : (ficha?.nombre ?? ""));
-  const [siglas, setSiglas] = useState((ficha?.siglas ?? []).join(", "));
-  const [propio, setPropio] = useState<"comparte" | "propio">(ficha && !ficha.comparteDominio && (ficha.dominios.length > 0 || ficha.principal) ? "propio" : "comparte");
-  const [dominios, setDominios] = useState((ficha?.dominios ?? []).join(", "));
+  const [siglasEditadas, setSiglas] = useState((ficha?.siglas ?? []).join(", "));
+  const [propioEditado, setPropio] = useState<"comparte" | "propio">(ficha && !ficha.comparteDominio && (ficha.dominios.length > 0 || ficha.principal) ? "propio" : "comparte");
+  const [dominiosEditados, setDominios] = useState((ficha?.dominios ?? []).join(", "));
+  /* Al pasar un proyecto, las siglas y el dominio son los de la unidad elegida, tal como están. */
+  const siglas = pasando ? (ficha?.siglas ?? []).join(", ") : siglasEditadas;
+  const propio = pasando ? (ficha?.comparteDominio ? "comparte" : "propio") : propioEditado;
+  const dominios = pasando ? (ficha?.dominios ?? []).join(", ") : dominiosEditados;
   const [proyectos, setProyectos] = useState<string[]>([]);
   const [elecciones, setElecciones] = useState<Record<string, Eleccion>>({});
   const [previa, setPrevia] = useState<VistaPrevia | null>(null);
@@ -543,13 +664,13 @@ function PanelDeUnidad({
       nombre: ficha ? undefined : nombre,
       siglas: enLista(siglas),
       dominios: esPrincipal || propio === "propio" ? enLista(dominios) : [],
-      ...(agregando ? { proyectos } : {}),
+      ...(agregando ? { proyectos } : pasando ? { proyectos: [pasando.id] } : {}),
       asignar,
       moverIgual,
     };
-  }, [ficha, nombre, siglas, esPrincipal, propio, dominios, agregando, proyectos, elecciones]);
+  }, [ficha, nombre, siglas, esPrincipal, propio, dominios, agregando, pasando, proyectos, elecciones]);
   /* Lo que cambia la cuenta (no las elecciones por reunión): si cambia, la vista previa ya no vale. */
-  const llave = JSON.stringify([pedido.siglas, pedido.dominios, pedido.nombre ?? null, pedido.proyectos ?? []]);
+  const llave = JSON.stringify([pedido.fichaId ?? null, pedido.siglas, pedido.dominios, pedido.nombre ?? null, pedido.proyectos ?? []]);
   const llaveDeLaPrevia = useRef<string | null>(null);
   const vigente = previa && llaveDeLaPrevia.current === llave;
 
@@ -565,7 +686,7 @@ function PanelDeUnidad({
         }).catch(() => null);
         const d = await r?.json().catch(() => null);
         if (!r?.ok) throw new Error(d?.error ?? "No se pudo calcular qué cambia.");
-        llaveDeLaPrevia.current = JSON.stringify([p.siglas, p.dominios, p.nombre ?? null, p.proyectos ?? []]);
+        llaveDeLaPrevia.current = JSON.stringify([p.fichaId ?? null, p.siglas, p.dominios, p.nombre ?? null, p.proyectos ?? []]);
         setPrevia(d as VistaPrevia);
       } catch (e) {
         setPrevia(null);
@@ -633,18 +754,28 @@ function PanelDeUnidad({
   const faltaElegir = previa?.filas.some((f) => f.como === "falta-elegir" && !elecciones[f.sessionId]) ?? false;
   const frenados = previa?.proyectos.filter((p) => p.frenadoPor.length > 0) ?? [];
   const puedeGuardar = !!vigente && previa.listo && !faltaElegir && !calculando && !guardando;
-  const destinos = [...vista.fichas.filter((f) => f.abre).map((f) => ({ value: f.id, label: f.nombre })), ...(agregando ? [{ value: ID_DE_LA_UNIDAD_NUEVA, label: nombre.trim() || "La unidad nueva" }] : [])];
+  const destinos = [...vista.fichas.filter((f) => f.abre && !f.esEmpresa).map((f) => ({ value: f.id, label: f.nombre })), ...(agregando ? [{ value: ID_DE_LA_UNIDAD_NUEVA, label: nombre.trim() || "La unidad nueva" }] : [])];
 
   return (
     <Drawer
       open
       onClose={onCerrar}
       size="lg"
-      title={agregando ? "Agregar unidad" : `Siglas y dominio de ${ficha?.nombre ?? ""}`}
+      title={
+        agregando
+          ? "Agregar unidad"
+          : pasando
+            ? `Pasar «${pasando.nombre}» a una unidad`
+            : ficha?.esEmpresa
+              ? `Dominio de ${ficha.nombre}`
+              : `Siglas y dominio de ${ficha?.nombre ?? ""}`
+      }
       description={
         agregando
           ? `La unidad nueva cuelga de ${principal?.nombre ?? "esta ficha"}. Antes de guardar ves qué reuniones pasan a ella.`
-          : "Antes de guardar ves qué reuniones cambian de ficha."
+          : pasando
+            ? "El proyecto pasa con su handoff, sus tareas y sus documentos. Antes de guardar ves qué cambia."
+            : "Antes de guardar ves qué reuniones cambian de ficha."
       }
       footer={
         <div className="flex items-center justify-end gap-2">
@@ -657,7 +788,9 @@ function PanelDeUnidad({
             <BotonAzul onClick={() => void guardar()} disabled={!puedeGuardar}>
               {guardando
                 ? "Guardando…"
-                : agregando
+                : pasando
+                  ? `Pasar a ${ficha?.nombre ?? "la unidad"}`
+                  : agregando
                   ? `Crear ${pedido.nombre?.trim() || "la unidad"}${cambian ? ` y mover ${cambian}` : ""}`
                   : cambian
                     ? `Guardar y mover ${plural(cambian, "reunión", "reuniones")}`
@@ -673,12 +806,25 @@ function PanelDeUnidad({
             <Input value={nombre} onChange={(e) => setNombre(e.target.value)} />
           </Field>
         )}
-        <Field label="Siglas" hint="Su llave en los títulos de las reuniones («AE | Kickoff»). Varias, separadas por coma.">
-          <Input value={siglas} onChange={(e) => setSiglas(e.target.value)} placeholder="AE, EC" />
-        </Field>
-        {esPrincipal ? (
+        {pasando && (
+          <Field label="La unidad que recibe el proyecto" required>
+            <Selector
+              etiqueta="Unidad"
+              placeholder="Elegir unidad"
+              valor={destinoId}
+              opciones={unidadesQueReciben.map((f) => ({ value: f.id, label: f.nombre }))}
+              onElegir={setDestinoId}
+            />
+          </Field>
+        )}
+        {!pasando && !ficha?.esEmpresa && (
+          <Field label="Siglas" hint="Su llave en los títulos de las reuniones («AE | Kickoff»). Varias, separadas por coma.">
+            <Input value={siglasEditadas} onChange={(e) => setSiglas(e.target.value)} placeholder="AE, EC" />
+          </Field>
+        )}
+        {pasando ? null : esPrincipal ? (
           <Field label="Dominios" hint="Los que comparte con las unidades que no tienen dominio propio.">
-            <Input value={dominios} onChange={(e) => setDominios(e.target.value)} />
+            <Input value={dominiosEditados} onChange={(e) => setDominios(e.target.value)} />
           </Field>
         ) : (
           <div className="space-y-2">
@@ -689,12 +835,12 @@ function PanelDeUnidad({
                 { clave: "comparte", etiqueta: `Comparte el de ${principal?.nombre ?? "la principal"}` },
                 { clave: "propio", etiqueta: "Propio" },
               ]}
-              valor={propio}
+              valor={propioEditado}
               onCambio={setPropio}
             />
-            {propio === "propio" && (
+            {propioEditado === "propio" && (
               <Field label="Dominios propios" hint="La gente de estos dominios es de esta unidad.">
-                <Input value={dominios} onChange={(e) => setDominios(e.target.value)} placeholder="sukasa.com, comohogar.com" />
+                <Input value={dominiosEditados} onChange={(e) => setDominios(e.target.value)} placeholder="sukasa.com, comohogar.com" />
               </Field>
             )}
           </div>

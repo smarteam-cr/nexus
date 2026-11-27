@@ -10,6 +10,8 @@
 
 export interface FichaParaLaCopia {
   id: string;
+  /** La empresa de HubSpot PROPIA de la ficha: una unidad que tiene la suya copia de ella, como cualquier ficha. */
+  hubspotCompanyId?: string | null;
   comparteDominioConId: string | null;
   comparteDominioCon: { hubspotCompanyId: string | null; comparteDominioConId: string | null } | null;
 }
@@ -21,6 +23,8 @@ export interface FichaParaLaCopia {
 export function empresaDeLaDuena(c: FichaParaLaCopia): string | null {
   const d = c.comparteDominioCon;
   if (!c.comparteDominioConId || c.comparteDominioConId === c.id || !d || d.comparteDominioConId) return null;
+  /* Una unidad con empresa de HubSpot propia (Cemaco · Ecuador con «Sukasa», 2026-11-26) copia de la suya. */
+  if (c.hubspotCompanyId) return null;
   return d.hubspotCompanyId;
 }
 

@@ -9,6 +9,7 @@
  *    La red dura del invariante está en scripts/check-invariants.ts.
  */
 import { prisma } from "@/lib/db/prisma";
+import { rechazoSiLaFichaEsEmpresa } from "@/lib/clients/empresa-server";
 import type { Prisma } from "@prisma/client";
 import {
   catchUpYaNoVencidos,
@@ -114,6 +115,9 @@ export async function createCuenta(
 ): Promise<{ cuenta: { id: string }; created: boolean }> {
   const existente = await prisma.cuentaFinanciera.findUnique({ where: { clientId: data.clientId } });
   if (existente) return { cuenta: existente, created: false };
+  /* La EMPRESA arriba de sus unidades no factura (2026-11-26): la cuenta de cobro es de cada unidad. */
+  const enLaEmpresa = await rechazoSiLaFichaEsEmpresa(data.clientId);
+  if (enLaEmpresa) throw new CobranzaError(enLaEmpresa.error, enLaEmpresa.status);
   try {
     const cuenta = await prisma.cuentaFinanciera.create({
       data: {

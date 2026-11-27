@@ -26,7 +26,7 @@ import { clientePorTitulo, type ClienteParaMatch } from "@/lib/sessions/match-po
 
 async function main() {
   const [clientes, categorias, sesiones] = await Promise.all([
-    prisma.client.findMany({ select: { id: true, name: true, company: true, emailDomains: true, siglas: true, comparteDominioConId: true } }),
+    prisma.client.findMany({ select: { id: true, name: true, company: true, emailDomains: true, siglas: true, comparteDominioConId: true, kind: true } }),
     prisma.sessionCategory.findMany(),
     prisma.firefliesSession.findMany({
       select: {

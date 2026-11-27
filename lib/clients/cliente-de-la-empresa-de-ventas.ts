@@ -18,6 +18,7 @@
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
+import { rechazoSiLaFichaEsEmpresa } from "@/lib/clients/empresa-server";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { anotarReapunte, reapuntarEnTx, resolverClienteDeLaEmpresa } from "@/lib/hubspot/cliente-de-la-empresa";
 import { datosAlNacerDesdeHubspot } from "./datos-de-la-empresa-server";
@@ -79,5 +80,8 @@ export async function clienteDeLaEmpresaDeVentas(empresa: EmpresaDeVentas): Prom
       throw e;
     }
   }
+  /* La empresa de HubSpot es de una EMPRESA con unidades (2026-11-26): la propuesta o la preventa son de una unidad. */
+  const rechazo = await rechazoSiLaFichaEsEmpresa(resolucion.clientId);
+  if (rechazo) return { ok: false, ambiguo: true, mensaje: rechazo.error };
   return { ok: true, clientId: resolucion.clientId, creado: false };
 }

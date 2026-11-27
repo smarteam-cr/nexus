@@ -39,6 +39,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
+import { cargarRepartoDeEmpresas } from "@/lib/sessions/reparto-de-la-empresa-server";
 import { leerDuenos } from "@/lib/hubspot/duenos";
 import { huelaAPrueba } from "./clasificar-huecos";
 import { estadoAlDejarDeVolver, labelDePipeline, sigueGanado } from "./pipelines";
@@ -232,6 +233,7 @@ export async function syncVentasGanadas(opciones: {
     }
 
     // ── 3. Los clientes de Nexus, para resolver ───────────────────────────────
+    const reparto = await cargarRepartoDeEmpresas();
     const clientes = await prisma.client.findMany({
       select: { id: true, name: true, hubspotCompanyId: true },
     });
@@ -383,7 +385,12 @@ export async function syncVentasGanadas(opciones: {
         continue;
       }
       if (monto === null) res.sinMonto++;
-      const cli = resolverCliente(d.id, nombre);
+      const resuelto = resolverCliente(d.id, nombre);
+      /* De una empresa con unidades (2026-11-26): a la unidad que nombra el trato, o se queda en la empresa. Una venta que
+         YA es de una ficha de esa empresa no se mueve sola: Cobranza, lo vendido y las comisiones la leen ahí (revisión
+         del 26 nov: «Cemaco Internacional - CRM» pasaba de Costa Rica, que cobra, a la empresa, que no). */
+      const yaEra = previas.get(d.id)?.clientId ?? null;
+      const cli = resuelto.id ? { ...resuelto, id: reparto.destinoSinMoverLoRepartido(resuelto.id, yaEra, { titulo: nombre, correos: [] }) } : resuelto;
       // Sin marca hoy ni guardada, no se compartió. Con marca y la historia sin leer, no se toca (undefined).
       const tieneMarca = !!(d.p[PROPIEDAD_COMPARTIDA] ?? "").trim() || !!previas.get(d.id)?.compartidaConHubspotOwnerId;
       const compartida: CompartidaAlFirmar | undefined = compartidaDe.get(d.id) ?? (tieneMarca && !compartidasLeidas ? undefined : { ownerId: null, despuesDeLaFirma: false });

@@ -22,6 +22,8 @@ vi.mock("@/lib/db/prisma", () => ({
     clientAssignment: { findMany: async ({ where }: { where: { kind?: string } }) => h.asignaciones.filter((a) => !where.kind || a.kind === where.kind) },
     project: { count: async () => 0, findMany: async () => [] },
     client: {
+      /* La empresa arriba de sus unidades (paso 10): ninguna de estas fichas lo es. */
+      findFirst: async () => null,
       count: async () => {
         h.consultas++;
         return h.tecnica ? 1 : 0;

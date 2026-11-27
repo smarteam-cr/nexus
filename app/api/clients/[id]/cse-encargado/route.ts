@@ -17,6 +17,7 @@ import { avisar } from "@/lib/para-ti/avisos-server";
 import { encargadoDe } from "@/lib/cuentas/encargado-server";
 import { planExplicito } from "@/lib/cuentas/pase";
 import { lineaDeLoQuePaso, pasarLoDeLaCuenta, quienesSiguen } from "@/lib/cuentas/pase-server";
+import { rechazoDeEscrituraEnLaEmpresa } from "@/lib/clients/empresa-server";
 
 /**
  * PATCH /api/clients/[id]/cse-encargado — reasignar el CSE encargado de una CUENTA (el «pase de cuenta»).
@@ -56,6 +57,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (permiso instanceof NextResponse) return permiso;
   const guard = await guardAccessToClient(clientId);
   if (guard instanceof NextResponse) return guard;
+  const escrituraEnLaEmpresa = await rechazoDeEscrituraEnLaEmpresa(clientId);
+  if (escrituraEnLaEmpresa) return NextResponse.json({ error: escrituraEnLaEmpresa.error }, { status: escrituraEnLaEmpresa.status });
 
   let body: { email?: unknown };
   try {

@@ -1,5 +1,109 @@
 # Empresas con varias unidades — plan
 
+## Parte 3 · La empresa arriba de sus unidades (26 nov)
+
+> **Estado (2026-11-26):** aprobado por Elías y construido en la rama `claude/empresa-y-unidades-2bee3e`, sin push.
+> Falta: el SQL `2026-11-26-ficha-de-tipo-empresa.sql`, el deploy y los `--apply` (los corre la coordinadora). DECISIONS:
+> «La empresa arriba de sus unidades», que corrige la decisión del 7 nov «No hay tabla de empresas».
+
+Elías, 26 nov: la empresa tiene que existir como registro propio, dueña del dominio compartido y de la empresa de HubSpot,
+con todas sus unidades iguales debajo. «Es importante que la arquitectura esté bien desde el inicio… de la forma más
+sencilla posible».
+
+### Lo medido (producción y HubSpot, solo lectura)
+
+- **Lo de HubSpot del ITCR caía entero en TEC · TAE:** 61 contactos, 112 correos y notas, 41 tickets.
+  - De los 61 contactos, 20 son gente de AE, 12 de TAE y 29 no dan pista.
+  - El negocio «IA AGENT | WA - TEC AE» es de AE.
+  - AE no tenía nada.
+- **Las reuniones ya se repartían bien:** TAE 134, AE 93. Ninguna regla le daba una reunión a la principal por defecto.
+- **En HubSpot, Cemaco tiene una empresa por país:**
+  - «Cemaco Internacional» (cemaco.co.cr): es del grupo (Elías).
+  - «Sukasa» (sukasa.com) ya es de una ficha «Sukasa» aparte en Nexus: prospecto del 19 nov, con una propuesta.
+  - comohogar.com tiene su propia empresa.
+- **Teamnet y Stratosphere** tienen cada una su empresa de HubSpot y su dominio.
+- **En el código:**
+  - 47 archivos leen `comparteDominioConId`.
+  - 145 archivos leen `Client.hubspotCompanyId`.
+  - Unos 30 lugares arman «dominio → ficha».
+  - La memoria de la cuenta lee las COPIAS de HubSpot (contactos, comunicaciones, tickets, negocios), no HubSpot en vivo.
+
+### Las decisiones (Elías, 26 nov)
+
+1. **La empresa es una ficha `Client` de tipo `EMPRESA`** (no una tabla aparte). Así siguen funcionando los lugares que
+   leen el dominio y la empresa de HubSpot de una ficha. Lo que filtra por tipo, que es la mayoría de los listados, no la
+   muestra.
+2. **Lo de HubSpot de «Cemaco Internacional» es del grupo:** sube a la empresa Cemaco y se reparte como en el TEC. Lo que
+   no tiene unidad queda en la empresa.
+3. **Lo de HubSpot sin unidad queda en la empresa.** No alimenta a nadie y pasa a su unidad cuando el equipo confirma a
+   la persona en Interlocutores.
+4. **Una unidad sin empresa de HubSpot propia no escribe en HubSpot**, como AE desde el 29 oct.
+5. **Teamnet + Stratosphere van como unidades de «Grupo Teamnet» solo si el simulacro no mueve ninguna reunión.**
+6. **Un proyecto nuevo de HubSpot sin siglas queda en la empresa**, con el aviso «Elige su unidad».
+
+### Lo que se construyó
+
+- **El resolver** (`categorize.ts`):
+  - La empresa nunca es dueña.
+  - Es la cabeza del grupo, y el reparto entre unidades no cambia.
+  - No entra al título ni a las palabras ambiguas.
+  - Las pistas de título arman el grupo con la lista entera (`pistasDeTitulo(…, todas)`): sin la empresa en la lista,
+    «cr» y «ec» salían solas y traían casi toda la tabla.
+- **El reparto de lo de HubSpot** (`unidadDeLoDeHubspot`, `reparto-de-la-empresa-server.ts`):
+  - En las copias de contactos, tickets, comunicaciones y negocios (abiertos y ganados).
+  - La empresa y sus unidades cuentan como leídas juntas.
+- **La copia de proyectos:**
+  - La empresa corre (job, eventos).
+  - Un proyecto nuevo va a la unidad por sus siglas o se queda en la empresa (`unidadPorLasSiglas`).
+  - Una unidad con empresa de HubSpot propia copia de la suya.
+- **El acceso:** quien abre una unidad abre la empresa.
+- **La página de la empresa:** solo «Unidades de negocio». La tarjeta de la empresa muestra sus dominios, su empresa de
+  HubSpot, los proyectos que esperan unidad (con «Pasar a una unidad») y lo de HubSpot sin unidad.
+- **Las guardas:** nada crea un proyecto, preventa, propuesta, handoff ni cuenta de cobro en la empresa. Tampoco se
+  confirma gente en ella.
+- **«Mi día» y Tareas:** el dominio de la empresa es de las unidades que viven en él, y la empresa nunca se sugiere.
+- **El script:** `scripts/crear-empresa-de-unidades.ts --empresa tec|cemaco|teamnet`, con simulacro.
+
+### Los simulacros (producción, solo lectura, 26 nov)
+
+| Empresa | Reuniones que cambian | Lo de HubSpot (contactos · correos y notas · tickets · negocios) | ¿Se aplica? |
+|---|---|---|---|
+| **TEC** | 0 de 232 | Contactos: AE 20, TAE 12, empresa 29 · Correos y notas: AE 10, TAE 21, empresa 78 · Tickets: TAE 5, AE 1, empresa 35 | Sí |
+| **Cemaco** (26 nov, sin Sukasa) | 0 de 53 | Contactos: CR 10, empresa 3 · Correos y notas: CR 16, empresa 54 · Tickets: empresa 1 · Negocios: EC 1, empresa 1 | Con el OK de Elías |
+| **Grupo Teamnet** (27 nov, con la regla del grupo adentro) | 0 de 73 | — (cada unidad copia de su empresa de HubSpot) | Sí |
+| **Cemaco con Sukasa** (27 nov) | **9 de 53**: de las 13 de Ecuador que el título llama «SUKASA», 7 a Sukasa y 2 por decidir | Correos y notas: Sukasa 1 (el resto, igual) | Con el OK de Elías y esas 9 decididas |
+
+- **Teamnet (26 nov movía 27):** las conjuntas iban a Teamnet por la regla del grupo, que valía solo entre DOS empresas.
+  Desde el 27 nov vale también dentro de una empresa que solo agrupa (Elías: «Sí, que valga»).
+- **Sukasa** entra como «Cemaco · Sukasa» y suelta `sukasa.com` (es de Ecuador). Con el nombre «Sukasa» a secas, las
+  tres unidades no comparten «Cemaco» y la sigla «CR» se llevaba 20 reuniones de otros.
+- **Lo de HubSpot se cuenta por asunto y remitente.** La copia usa además los contactos asociados en HubSpot, así que
+  quedan menos en la empresa.
+
+### Para desplegar (en orden)
+
+1. El SQL `scripts/sql/2026-11-26-ficha-de-tipo-empresa.sql`, con `npm run db:sql … --apply`.
+2. El deploy.
+3. `scripts/crear-empresa-de-unidades.ts --empresa tec --apply`.
+4. `--empresa teamnet --apply`.
+5. Cemaco, solo con el OK de Elías y con las 9 reuniones «SUKASA» decididas: `--empresa cemaco --apply --con-ok-de-elias`.
+6. Esperar la copia de cada hora, o correr `sync-contactos-y-tickets`, `sync-comunicaciones-de-hubspot` y
+   `sync-negocios-abiertos`.
+7. `npm run check:invariants`.
+
+### Lo que queda abierto
+
+- **Las 9 reuniones «SUKASA + CEMACO + COMOHOGAR» y «SUKASA ECUADOR»:** hoy son de Ecuador. ¿Son de Sukasa o de
+  Ecuador? Las de Ecuador se asignan en /sessions antes del `--apply` de Cemaco. Lo decide Elías.
+- **Lo que no se construyó:**
+  - Horas, rentabilidad y cobranza sumadas en la página de la empresa.
+  - El aviso de «este dominio parece tener varios clientes» (U3).
+  - El plan general que cruza unidades: cuelga de la empresa (`PlanGeneral.clientId`), sin construir.
+  - Los leads de HubSpot de una empresa: no se reparten.
+
+
+---
+
 > **Estado (2026-11-07):** plan aprobado con las recomendaciones (kölbi corregido: es un cliente con proyectos, medido en
 > sus 77 transcripciones). **U1 y U6 construidas** en la rama `claude/unidades-u1-u6-f29d44`, sin deploy ni `--apply`:
 > `scripts/separar-en-unidades.ts` (TEC y CEMACO, simulacros corridos) y la regla del título en el clasificador, con

@@ -132,14 +132,16 @@ export async function procesarAvisosDeHubspot(ahora = new Date()): Promise<Resul
   if (!(await tomarLock(ahora))) return { ...r, locked: true };
   try {
     r.pendientes = pendientes.length;
-    /* Una ficha que comparte dominio escucha los eventos de la empresa de su dueña: de ahí copia sus proyectos. */
+    /* Una ficha que comparte dominio escucha los eventos de la empresa de su dueña: de ahí copia sus proyectos. Una
+       EMPRESA con unidades (2026-11-26) también: sus proyectos nuevos se reparten a sus unidades al copiarse, y una unidad
+       con empresa de HubSpot propia escucha la suya. */
     const clientes = await prisma.client.findMany({
-      where: { OR: [{ hubspotCompanyId: { not: null } }, { comparteDominioConId: { not: null } }], kind: { in: ["CLIENTE", "PROSPECTO"] } },
+      where: { OR: [{ hubspotCompanyId: { not: null } }, { comparteDominioConId: { not: null } }], kind: { in: ["CLIENTE", "PROSPECTO", "EMPRESA"] } },
       select: { id: true, hubspotCompanyId: true, comparteDominioCon: { select: { hubspotCompanyId: true } } },
     });
     const clientesPorEmpresa = new Map<string, string[]>();
     for (const c of clientes) {
-      const empresa = String(c.comparteDominioCon?.hubspotCompanyId ?? c.hubspotCompanyId);
+      const empresa = String(c.hubspotCompanyId ?? c.comparteDominioCon?.hubspotCompanyId);
       clientesPorEmpresa.set(empresa, [...(clientesPorEmpresa.get(empresa) ?? []), c.id]);
     }
     const plan = planDeEventos(pendientes, clientesPorEmpresa);

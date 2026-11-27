@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { rechazoSiLaFichaEsEmpresa } from "@/lib/clients/empresa-server";
 import {
   createBusinessCase,
   listBusinessCases,
@@ -43,6 +44,9 @@ export async function POST(
   if (!client) {
     return NextResponse.json({ error: "Cliente no existe" }, { status: 404 });
   }
+  /* La EMPRESA arriba de sus unidades no tiene propuestas (2026-11-26): son de una unidad. */
+  const enLaEmpresa = await rechazoSiLaFichaEsEmpresa(clientId);
+  if (enLaEmpresa) return NextResponse.json({ error: enLaEmpresa.error }, { status: enLaEmpresa.status });
 
   let body: unknown;
   try {

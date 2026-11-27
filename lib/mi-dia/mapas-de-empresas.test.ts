@@ -32,6 +32,28 @@ describe("las unidades de una empresa en «Mi día»", () => {
   });
 });
 
+describe("la empresa arriba de sus unidades (2026-11-26)", () => {
+  const TEC: FichaParaMapas = { id: "tec", name: "TEC", company: null, emailDomains: ["itcr.ac.cr"], comparteDominioConId: null, kind: "EMPRESA" };
+  const TAE2: FichaParaMapas = { id: "tae", name: "TEC · TAE", company: null, emailDomains: [], comparteDominioConId: "tec" };
+  const AE2: FichaParaMapas = { id: "ae", name: "TEC · AE", company: null, emailDomains: [], comparteDominioConId: "tec" };
+
+  it("su dominio y sus contactos son de las unidades que viven en él, como antes de la principal; la empresa nunca", () => {
+    const m = armarMapasDeLaGente([TEC, TAE2, AE2], [{ email: "ana@itcr.ac.cr", clientId: "tec" }]);
+    expect(m.porDominio.get("itcr.ac.cr")).toEqual(["tae", "ae"]);
+    expect(m.porCorreo.get("ana@itcr.ac.cr")).toEqual(["tae", "ae"]);
+    expect(m.grupoDe.get("ae")).toBe("tec");
+  });
+
+  it("un contacto que se quedó en la empresa sin nadie que viva en su dominio no es de nadie", () => {
+    const CEMACO: FichaParaMapas = { id: "cemaco", name: "Cemaco", company: null, emailDomains: [], comparteDominioConId: null, kind: "EMPRESA" };
+    const CR2: FichaParaMapas = { ...CR, comparteDominioConId: "cemaco" };
+    const EC2: FichaParaMapas = { ...EC, comparteDominioConId: "cemaco" };
+    const m = armarMapasDeLaGente([CEMACO, CR2, EC2], [{ email: "x@otra.com", clientId: "cemaco" }, { email: "luis@cemaco.co.cr", clientId: "cemaco" }]);
+    expect(m.porCorreo.has("x@otra.com")).toBe(false);
+    expect(m.porCorreo.get("luis@cemaco.co.cr")).toEqual(["cr"]);
+  });
+});
+
 describe("el dominio del correo manda dentro de la empresa (revisión del 8 nov)", () => {
   it("un contacto de Costa Rica que HubSpot guarda en Ecuador es de Costa Rica, como dice el resolver", () => {
     const m = armarMapasDeLaGente([CR, EC], [{ email: "luis@cemaco.co.cr", clientId: "ec" }]);

@@ -34,6 +34,13 @@ export type Cobertura =
   | { modo: "exento"; razon: string };
 
 export const SCOPE_COVERAGE: Record<string, Cobertura> = {
+  // La empresa arriba de sus unidades (2026-11-26): deshacerla devuelve sus proyectos a la vieja principal.
+  "lib/clients/crear-empresa-server.ts": {
+    modo: "exento",
+    razon:
+      "al deshacer una empresa arriba de sus unidades mueve TODOS los proyectos de la ficha de la empresa (los que esperan " +
+      "unidad) a la vieja principal, o los cuenta para frenar; no decide cartera, cobro ni navegación.",
+  },
   // «Unidades de negocio» (2026-11-26): los proyectos de cada ficha de UNA empresa.
   "lib/clients/unidades-server.ts": {
     modo: "exento",

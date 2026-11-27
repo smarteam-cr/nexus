@@ -11,6 +11,8 @@ import type { Client } from "./sdk";
 import { detectarFusion, explicarFusion } from "@/lib/hubspot/empresa-fusionada";
 import { fusionadoEn } from "@/lib/hubspot/proyecto-fusionado";
 import { empresaDeLaDuena, laCopiaLoSalta } from "@/lib/hubspot/entidades-en-la-copia";
+import { esEmpresa } from "@/lib/clients/empresa";
+import { computeAmbiguousNameTokens, unidadPorLasSiglas } from "@/lib/sessions/categorize";
 import { OBJETO_PROYECTOS } from "@/lib/hubspot/asociaciones-proyecto";
 import { candidatosDelProyecto, ownerQueSeGuarda, type OwnerLeido } from "@/lib/hubspot/encargados";
 import { correosDelEquipoTecnico } from "@/lib/hubspot/equipo-tecnico";
@@ -836,7 +838,8 @@ async function correrElEspejo(
         company: true,
         hubspotCompanyId: true,
         comparteDominioConId: true,
-        comparteDominioCon: { select: { hubspotCompanyId: true, comparteDominioConId: true } },
+        kind: true,
+        comparteDominioCon: { select: { hubspotCompanyId: true, comparteDominioConId: true, kind: true } },
       },
     }),
     prisma.hubspotAccount.findFirst({
@@ -1303,6 +1306,18 @@ async function correrElEspejo(
     }
   }
 
+  /* Una EMPRESA con unidades (2026-11-26): un proyecto NUEVO nace en la unidad cuyas siglas abren su nombre («AE | …»);
+     sin siglas, en la empresa, donde Unidades de negocio avisa «Elige su unidad». DECISIONS «La empresa arriba de sus
+     unidades». La regla vive en el resolver (categorize.ts › unidadPorLasSiglas). */
+  const fichasDelReparto = esEmpresa(client)
+    ? await prisma.client.findMany({ select: { id: true, name: true, company: true, siglas: true, comparteDominioConId: true, kind: true } })
+    : null;
+  const ambiguasDelReparto = fichasDelReparto ? computeAmbiguousNameTokens(fichasDelReparto) : undefined;
+  const fichaDelProyectoNuevo = (nombre: string): string =>
+    fichasDelReparto ? (unidadPorLasSiglas(nombre, clientId, fichasDelReparto, ambiguasDelReparto) ?? clientId) : clientId;
+  /* Las fichas donde nació un proyecto en esta corrida: la de la corrida o, con la empresa arriba, una unidad. */
+  const fichasConProyectoNuevo = new Set<string>();
+
   // 6. Sincronizar cada proyecto HubSpot → DB
   const tecnicos = await correosDelEquipoTecnico();
   for (const project of projects) {
@@ -1587,11 +1602,11 @@ async function correrElEspejo(
       // lo encuentra existente → rama update → nunca los crea). Todo-o-nada:
       // si algo falla, el próximo sync lo re-crea completo.
       try {
-        await prisma.$transaction(async (tx) => {
+        const creado = await prisma.$transaction(async (tx) => {
           const created = await tx.project.create({
             data: {
               ...espejo,
-              clientId,
+              clientId: fichaDelProyectoNuevo(projectName),
               // Proyecto NUEVO: no hay nada curado que preservar, pero igual pasa por
               // mergeHubTag para guardar el SLUG canónico (antes guardaba el label).
               tags: mergeHubTag([], mapping.hubTag),
@@ -1611,12 +1626,14 @@ async function correrElEspejo(
              un no-op para CLIENTE, ALIADO e INTERNO — un aliado con proyecto sigue siendo aliado,
              y no entra a cartera ni a cobranza por un sync que corre solo cada 10 minutos. */
           await tx.client.updateMany({
-            where: { id: clientId, kind: "PROSPECTO" },
+            where: { id: created.clientId, kind: "PROSPECTO" },
             data: { kind: "CLIENTE" },
           });
           return created;
         });
         result.created++;
+        /* (Una transacción simulada en las pruebas puede no devolver la fila: entonces, la ficha de la corrida.) */
+        fichasConProyectoNuevo.add((creado as { clientId?: string } | undefined)?.clientId ?? clientId);
       } catch (e: unknown) {
         /* CARRERA sobre `Project.hubspotServiceId @unique`: el bloque de arriba es check-then-act
            (findUnique → create), así que dos corridas concurrentes del mismo cliente ven las dos
@@ -1674,8 +1691,13 @@ async function correrElEspejo(
      el alta única la paga el motor UNA sola vez al terminar, sellada, para que reintentar no la
      cobre N veces. Si se disparara acá también, cada reintento sumaría un dólar. */
   if (result.created > 0 && !sinDescubrir) {
+    /* Con la empresa arriba (2026-11-26) el proyecto pudo nacer en una unidad: se reclasifican las reuniones de esa unidad.
+       La empresa no tiene reuniones, así que no se reclasifica. */
+    const aReclasificar = [...fichasConProyectoNuevo].filter((id) => id !== clientId || !esEmpresa(client));
     void import("@/lib/sessions/reclassify")
-      .then((m) => m.reclassifyClientSessions(clientId))
+      .then(async (m) => {
+        for (const id of aReclasificar) await m.reclassifyClientSessions(id);
+      })
       .catch(() => {});
   }
 

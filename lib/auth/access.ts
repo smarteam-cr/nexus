@@ -37,7 +37,9 @@
  *      (reason: preventa). Todo Customer Success trabaja las preventas (2026-10-06) y la preventa
  *      muestra la información y los procesos de la empresa. Una empresa que ya es CLIENTE no entra
  *      por acá: su acceso sigue siendo el de la cartera.
- *  10. 403
+ *  10. La EMPRESA arriba de sus unidades (`Client.kind` EMPRESA, 2026-11-26): quien abre alguna de sus unidades
+ *      → OK (reason: empresa-de-una-unidad). DECISIONS «La empresa arriba de sus unidades».
+ *  11. 403
  */
 import { prisma } from "@/lib/db/prisma";
 import type { Prisma, TeamMember } from "@prisma/client";
@@ -49,7 +51,7 @@ import { esDeCustomerSuccess } from "./roles";
 
 /** Por qué se concedió el acceso. Todas las razones son de gente INTERNA: no hay —ni
  *  debe volver a haber— una razón "porque es el cliente dueño". */
-export type AccessReason = "super-admin" | "view-all" | "hubspot-owner" | "granted" | "cuenta-tecnica" | "preventa";
+export type AccessReason = "super-admin" | "view-all" | "hubspot-owner" | "granted" | "cuenta-tecnica" | "preventa" | "empresa-de-una-unidad";
 
 /** La cuenta que abre todo Customer Success: de la cartera y con solo proyectos técnicos. Una regla para los cuatro caminos (Tareas, en lib/tareas/clientes.ts). */
 export const CUENTA_TECNICA_DE_LA_CARTERA: Prisma.ClientWhereInput = { AND: [CS_CLIENT_WHERE, CUENTA_SOLO_TECNICA_WHERE] };
@@ -118,7 +120,22 @@ export async function requireAccessToClient(clientId: string): Promise<AccessRes
     if (enPreventa > 0) return { user, reason: "preventa" };
   }
 
-  // 9. Sin acceso
+  // 9. La EMPRESA arriba de sus unidades (2026-11-26): la abre quien abre alguna de sus unidades. La empresa no tiene
+  //    trabajo propio, y su página muestra como «Otra ficha» las unidades que esa persona no abre.
+  const empresa = await prisma.client.findFirst({
+    where: { id: clientId, kind: "EMPRESA" },
+    select: { entidadesDelDominio: { select: { id: true }, orderBy: { createdAt: "asc" } } },
+  });
+  for (const unidad of empresa?.entidadesDelDominio ?? []) {
+    try {
+      await requireAccessToClient(unidad.id);
+      return { user, reason: "empresa-de-una-unidad" };
+    } catch (e) {
+      if (!(e instanceof ForbiddenError)) throw e;
+    }
+  }
+
+  // 10. Sin acceso
   throw new ForbiddenError("Sin acceso a este cliente");
 }
 
@@ -286,6 +303,17 @@ export async function clientesQueNoAbre(teamMemberId: string, clientIds: readonl
     ),
   ]);
   const abre = new Set([...grants, ...propios, ...tecnicas.map((c) => ({ clientId: c.id })), ...enPreventa].map((x) => x.clientId).filter((id) => !revocadas.has(id)));
+  /* La EMPRESA arriba de sus unidades (2026-11-26, el paso 10 de requireAccessToClient): se abre si se abre alguna de sus
+     unidades. Las unidades nunca son empresas: la vuelta termina ahí. */
+  const quedan = ids.filter((id) => !abre.has(id) && !revocadas.has(id));
+  const empresas = quedan.length
+    ? await prisma.client.findMany({ where: { id: { in: quedan }, kind: "EMPRESA" }, select: { id: true, entidadesDelDominio: { select: { id: true } } } })
+    : [];
+  const unidades = [...new Set(empresas.flatMap((x) => (x.entidadesDelDominio ?? []).map((u) => u.id)))];
+  if (unidades.length) {
+    const noAbreUnidades = await clientesQueNoAbre(teamMemberId, unidades);
+    for (const x of empresas) if ((x.entidadesDelDominio ?? []).some((u) => !noAbreUnidades.has(u.id))) abre.add(x.id);
+  }
   return new Set(ids.filter((id) => !abre.has(id)));
 }
 
