@@ -12,6 +12,7 @@ import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { rotuloDeLaComunicacion, type DireccionDelCorreo, type TipoDeComunicacion } from "./reglas";
+import { elegirResumenDeLaReunion } from "./reuniones";
 
 /** De cuántos días se leen para la memoria. */
 export const DIAS_PARA_LA_MEMORIA = 60;
@@ -96,14 +97,16 @@ export async function unaComunicacion(clientId: string, id: string): Promise<Com
  * en Google). Por el evento (el de la instancia o el de su serie) y SOLO del cliente que se pide: el dueño de la reunión
  * por el chokepoint, nunca el de la asociación de HubSpot (invariante 1). Sin la tabla, null.
  */
-export async function resumenDeLaReunionDeHubspot(o: { clientId: string; googleEventId: string }): Promise<{ texto: string; ocurrioAt: Date } | null> {
+export async function resumenDeLaReunionDeHubspot(o: { clientId: string; googleEventId: string; fecha: Date }): Promise<{ texto: string; ocurrioAt: Date } | null> {
   const eventos = [...new Set([o.googleEventId, o.googleEventId.split("_")[0]])];
   try {
-    const c = await prisma.comunicacionDeHubspot.findFirst({
+    const candidatos = await prisma.comunicacionDeHubspot.findMany({
       where: { tipo: "reunion", vigente: true, clientId: o.clientId, googleEventId: { in: eventos }, texto: { not: null } },
-      orderBy: { ocurrioAt: "desc" },
-      select: { texto: true, ocurrioAt: true },
+      select: { texto: true, ocurrioAt: true, googleEventId: true },
+      take: 200,
     });
+    // El de ESA reunión: el del evento exacto o, de su serie, solo el de ese día (`elegirResumenDeLaReunion`).
+    const c = elegirResumenDeLaReunion(candidatos, { googleEventId: o.googleEventId, fecha: o.fecha });
     return c?.texto ? { texto: c.texto, ocurrioAt: c.ocurrioAt } : null;
   } catch (e) {
     if (esquemaDesactualizado(e)) return null;

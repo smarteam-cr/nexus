@@ -15,6 +15,7 @@ import { contextoDeTareas, tareasDisponible } from "@/lib/tareas/servidor";
 import { contarTareasDeLaReunion } from "@/lib/tareas/consultas";
 import { invitadosDe } from "@/lib/contactos/lectura-server";
 import { quienEstuvoEn } from "@/lib/sessions/quien-estuvo-server";
+import { conElLadoDe } from "@/lib/sessions/quien-estuvo";
 import { SOURCE_CALENDARIO, avisoDePlataforma } from "@/lib/google/plataforma-del-evento";
 import { resumenDeHubspotDe } from "@/lib/sessions/quien-estuvo-server";
 import { diaEnCostaRica } from "@/lib/sessions/reunion-a-mano";
@@ -203,7 +204,7 @@ export default async function SessionPage({
     // «Quién estuvo», arriba (2026-11-27): invitados, su respuesta y, si fue por Meet, quién entró.
     quienEstuvoEn(session.id).catch(() => null),
     // Una de Zoom o Teams que grabó el notetaker de HubSpot: su resumen, del MISMO dueño y por el evento del calendario.
-    session.source === SOURCE_CALENDARIO ? resumenDeHubspotDe({ googleEventId: session.googleEventId, duenoId }).catch(() => null) : Promise.resolve(null),
+    session.source === SOURCE_CALENDARIO ? resumenDeHubspotDe({ googleEventId: session.googleEventId, duenoId, fecha: session.date }).catch(() => null) : Promise.resolve(null),
   ]);
 
   const data: SessionViewData = {
@@ -213,7 +214,9 @@ export default async function SessionPage({
       date: session.date.toISOString(),
       duration: session.duration,
       participants: session.participants,
-      invitados,
+      // El lado de cada uno sale de UNA regla, la de «Quién estuvo» (también reconoce al cliente por el dominio): así
+      // la misma persona no es «El cliente» arriba y «otro» abajo.
+      invitados: invitados && quienEstuvo ? conElLadoDe(invitados, quienEstuvo) : invitados,
       transcript: session.transcript,
       googleDocId: session.googleDocId,
       organizerEmail: session.organizerEmail,

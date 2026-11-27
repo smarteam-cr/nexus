@@ -19,6 +19,7 @@ import {
   respuestaDe,
   soloLasDeAfuera,
   sourceDelEvento,
+  yaEstaAgregadaAMano,
   type EventoMeet,
   type InvitadoGuardado,
   type SesionGuardada,
@@ -398,6 +399,28 @@ describe("soloLasDeAfuera — las que no son de Meet entran solo con alguien de 
     const eventos = new Map([["ev1", fusionarCopia(fusionarCopia(undefined, a), b)]]);
     expect(soloLasDeAfuera(eventos, equipo)).toBe(0);
     expect(eventos.get("ev1")?.plataforma).toBe("TEAMS");
+  });
+});
+
+describe("fusionarCopia — si una copia trae el Meet, gana Meet", () => {
+  it("sin importar el orden de los calendarios", () => {
+    const conMeet = evento({ googleDocId: "doc1" });
+    const sinMeet = evento({ plataforma: "OTRA" });
+    expect(fusionarCopia(fusionarCopia(undefined, sinMeet), conMeet).plataforma).toBeUndefined();
+    expect(fusionarCopia(fusionarCopia(undefined, conMeet), sinMeet).plataforma).toBeUndefined();
+    expect(fusionarCopia(fusionarCopia(undefined, sinMeet), conMeet).googleDocId).toBe("doc1");
+  });
+});
+
+describe("yaEstaAgregadaAMano — un Zoom que alguien ya cargó no se crea otra vez, vacío", () => {
+  const manuales = [{ clientId: "cli_acme", date: new Date(FECHA.getTime() + 20 * 60_000) }];
+  it("mismo cliente a ±30 minutos: es la misma", () => {
+    expect(yaEstaAgregadaAMano(evento(), "cli_acme", manuales)).toBe(true);
+  });
+  it("otro cliente, más de 30 minutos o sin cliente: no", () => {
+    expect(yaEstaAgregadaAMano(evento(), "cli_otro", manuales)).toBe(false);
+    expect(yaEstaAgregadaAMano(evento({ date: new Date(FECHA.getTime() + 90 * 60_000) }), "cli_acme", manuales)).toBe(false);
+    expect(yaEstaAgregadaAMano(evento(), null, manuales)).toBe(false);
   });
 });
 

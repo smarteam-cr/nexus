@@ -68,6 +68,25 @@ export function soloLasDeAfuera(eventos: Map<string, EventoMeet>, dominiosDelEqu
   return sacadas;
 }
 
+/** La ventana para decir que una reunión agregada a mano es la misma (la de Rentabilidad: ±30 minutos). */
+export const MINUTOS_DE_LA_MISMA_REUNION = 30;
+
+/**
+ * ¿Esta reunión que no es de Meet ya la agregó alguien a mano? Hasta el 2026-11-27 un Zoom con un cliente solo existía si
+ * alguien lo cargaba con «Agregar reunión» (`source = "manual"`). Si es del mismo cliente y a ±30 minutos, es la misma:
+ * la sync no crea otra vacía al lado (la regla de Rentabilidad, lib/rentabilidad/horas-del-calendario.ts). Sin cliente
+ * resuelto no se decide nada.
+ */
+export function yaEstaAgregadaAMano(
+  evento: Pick<EventoMeet, "date">,
+  clientId: string | null,
+  manuales: readonly { clientId: string | null; date: Date }[],
+): boolean {
+  if (!clientId) return false;
+  const margen = MINUTOS_DE_LA_MISMA_REUNION * 60_000;
+  return manuales.some((m) => m.clientId === clientId && Math.abs(m.date.getTime() - evento.date.getTime()) <= margen);
+}
+
 /** La `plataforma` que se guarda: null en una de Meet (las de siempre, sin escribir nada nuevo en ~600 filas). */
 export function plataformaQueSeGuarda(e: Pick<EventoMeet, "plataforma">): Exclude<Plataforma, "MEET"> | null {
   return esEventoDeMeet(e) ? null : (e.plataforma as Exclude<Plataforma, "MEET">);
@@ -237,8 +256,9 @@ export function fusionarCopia(previa: EventoMeet | undefined, copia: EventoMeet)
     descripcion: previa.descripcion ?? copia.descripcion,
     conferenceId: previa.conferenceId ?? copia.conferenceId,
     invitados: unirInvitados(previa.invitados, copia.invitados),
-    // La plataforma es del evento (la misma en todas las copias): la primera.
-    plataforma: previa.plataforma ?? copia.plataforma,
+    // La plataforma es del evento, pero una copia puede venir sin el Meet (la vio alguien con otra versión del evento):
+    // si alguna copia trae el Meet, gana Meet, sin importar el orden de los calendarios.
+    plataforma: esEventoDeMeet(previa) || esEventoDeMeet(copia) ? undefined : (previa.plataforma ?? copia.plataforma),
   };
 }
 

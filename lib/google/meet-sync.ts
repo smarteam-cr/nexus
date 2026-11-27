@@ -39,6 +39,7 @@ import { calendar as apiCalendar, type calendar_v3 } from "googleapis/build/src/
 import { prisma } from "@/lib/db/prisma";
 import { getImpersonatedAuth, listDomainUsers } from "@/lib/google/auth";
 import { buildCategorizeCtx, resolveSessionClientId } from "@/lib/sessions/resolve-client";
+import { FUENTE_A_MANO } from "@/lib/sessions/reunion-a-mano";
 import { DOMINIO_PROPIO } from "@/lib/sessions/dominio-propio";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { devolverANoLeidaSiSeMovio } from "./reunion-movida";
@@ -57,9 +58,12 @@ import {
   idDeSesion,
   invitadosDelEvento,
   participantesConOrganizador,
+  esEventoDeMeet,
+  MINUTOS_DE_LA_MISMA_REUNION,
   plataformaQueSeGuarda,
   soloLasDeAfuera,
   sourceDelEvento,
+  yaEstaAgregadaAMano,
   SELECT_SESION_GUARDADA,
   type EventoMeet,
   type InvitadoGuardado,
@@ -152,7 +156,7 @@ async function fetchMeetEventsForUser(userEmail: string, daysBack: number = DAYS
         pageToken,
         // location, hangoutLink y eventType (2026-11-27): por dónde fue una reunión que no es de Meet.
         fields:
-          "nextPageToken,items(id,status,summary,description,location,hangoutLink,eventType,extendedProperties,start,end,attendees,organizer,conferenceData,attachments)",
+          "nextPageToken,items(id,status,summary,description,location,hangoutLink,eventType,visibility,extendedProperties,start,end,attendees,organizer,conferenceData,attachments)",
       });
 
       const items = res.data.items ?? [];
@@ -385,6 +389,25 @@ async function correrSync(daysBack: number, marcarLasCanceladas: boolean): Promi
   let actualizadas = 0;
   let docDiscovered = 0; // contador de docs nuevos encontrados en sesiones existentes
   const invitados = { escritos: 0, sinTabla: false };
+  // Las reuniones agregadas a mano de la ventana, solo si hay alguna nueva que no es de Meet: una de Zoom que alguien ya
+  // cargó con «Agregar reunión» no se crea otra vez, vacía (`yaEstaAgregadaAMano`). Una lectura liviana por corrida.
+  const nuevasFueraDeMeet = [...eventos.values()].filter((e) => !esEventoDeMeet(e) && !guardadas.has(e.eventId));
+  const manuales = nuevasFueraDeMeet.length
+    ? (
+        await prisma.firefliesSession.findMany({
+          where: {
+            source: FUENTE_A_MANO,
+            date: {
+              gte: new Date(Math.min(...nuevasFueraDeMeet.map((e) => e.date.getTime())) - MINUTOS_DE_LA_MISMA_REUNION * 60_000),
+              lte: new Date(Math.max(...nuevasFueraDeMeet.map((e) => e.date.getTime())) + MINUTOS_DE_LA_MISMA_REUNION * 60_000),
+            },
+          },
+          select: { date: true, resolvedClientId: true, manualClientId: true },
+        })
+      // El dueño, como `duenoDeLaSesion` (lib/sessions/project-sources.ts): el resuelto; el manual solo si no hay.
+      ).map((m) => ({ date: m.date, clientId: m.resolvedClientId ?? m.manualClientId ?? null }))
+    : [];
+  let yaAMano = 0;
 
   for (const lote of enLotes([...eventos.values()], LOTE_ESCRITURA)) {
     // La fila de cada reunión del lote que quedó escrita: para poner al día sus invitados.
@@ -426,6 +449,11 @@ async function correrSync(daysBack: number, marcarLasCanceladas: boolean): Promi
           // la lee y la compara completa por la rama de arriba.
           const sessionId = idDeSesion(event.eventId);
           const eventDocId = event.googleDocId ?? null;
+          const clienteNuevo = resolveSessionClientId({ title: event.title, participants: allParticipants, manualClientId: null }, categorizeCtx);
+          if (!esEventoDeMeet(event) && yaEstaAgregadaAMano(event, clienteNuevo, manuales)) {
+            yaAMano++;
+            continue;
+          }
           await prisma.firefliesSession.upsert({
             where: { id: sessionId },
             create: {
@@ -442,7 +470,7 @@ async function correrSync(daysBack: number, marcarLasCanceladas: boolean): Promi
               descripcionDelEvento: event.descripcion ?? null,
               conferenceId: event.conferenceId ?? null,
               // PERF #1: resolver el cliente al crear (sesión nueva → sin override).
-              resolvedClientId: resolveSessionClientId({ title: event.title, participants: allParticipants, manualClientId: null }, categorizeCtx),
+              resolvedClientId: clienteNuevo,
             },
             update: {
               title: event.title,
@@ -488,7 +516,7 @@ async function correrSync(daysBack: number, marcarLasCanceladas: boolean): Promi
   console.log(
     `[google/sync] Completado en ${Math.round((Date.now() - t0) / 1000)} s: ${eventos.size} reuniones (${apariciones} apariciones en calendarios), ` +
       `${synced} nuevas, ${actualizadas} actualizadas, ${alreadyExisted - actualizadas} sin cambios (${docDiscovered} con Doc nuevo descubierto), ` +
-      `${canceladas} canceladas, ${invitados.escritos} cambios de invitados, ${delEquipoSinMeet} del equipo sin Meet (no se guardan)`
+      `${canceladas} canceladas, ${invitados.escritos} cambios de invitados, ${delEquipoSinMeet} del equipo sin Meet (no se guardan), ${yaAMano} ya agregadas a mano`
   );
   return { synced, alreadyExisted, total, actualizadas, apariciones, canceladas, invitados: invitados.escritos };
 }

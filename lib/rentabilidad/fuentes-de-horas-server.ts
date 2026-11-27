@@ -19,7 +19,7 @@ import { rangoDelMes, type RangoDelPeriodo } from "./margen";
 import { reunionesDelCalendario, type CalendarioDeUnaPersona, type LecturaDelCalendario } from "./horas-del-calendario";
 import { horasDeTareas, leerBloques, type HorasDeTareas } from "./horas-de-tareas";
 import type { LecturaDeFuentes } from "./tipos";
-import { SOURCE_CALENDARIO } from "@/lib/google/plataforma-del-evento";
+import { cuentaEnLasHorasComoSesion } from "@/lib/google/plataforma-del-evento";
 
 const VIDA_MS = 15 * 60_000;
 /** Cuántos calendarios se leen a la vez: Google limita por usuario y el pool del proceso es uno solo. */
@@ -92,7 +92,7 @@ export async function leerReunionesDelCalendario(
     empresas: new Map(clientes.map((c) => [c.id, { nombre: c.name, tipo: c.kind as TipoDeEmpresa }])),
     // Las del calendario que no son de Meet (source "google_calendar", 2026-11-27) no cuentan como «ya en una sesión»:
     // `leerReuniones` no las suma, así que sus horas siguen entrando por acá, como antes.
-    eventosDeSesiones: new Set(sesiones.filter((s) => s.source !== SOURCE_CALENDARIO).map((s) => s.googleEventId).filter((x): x is string => !!x)),
+    eventosDeSesiones: new Set(sesiones.filter((s) => cuentaEnLasHorasComoSesion(s.source)).map((s) => s.googleEventId).filter((x): x is string => !!x)),
     manuales: sesiones
       .filter((s) => s.source === "manual" && (s.resolvedClientId ?? s.manualClientId))
       .map((s) => ({ clienteId: (s.resolvedClientId ?? s.manualClientId)!, inicio: s.date })),

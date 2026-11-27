@@ -18342,15 +18342,21 @@ director: no existía en Nexus y la preventa solo le ofrecía un sync de Smartea
 cliente. Elías: «Debería detectar que hay un evento de Google Calendar … donde están invitadas las personas con el
 dominio de la empresa … Deberían aparecer todas», y ver muy arriba de la sesión quiénes participaron, en un desplegable.
 Medido ese día, solo leyendo (`scripts/medir-reuniones-fuera-de-meet.ts`, 30 días, 20 calendarios): 543 reuniones de
-Meet; 840 eventos con hora sin Meet solo del equipo; **47 reuniones nuevas** (29 Zoom, 16 Teams, 2 otro enlace), **39
-con un cliente** (24 clientes, 8 prospectos, 7 fichas internas). De esas 47, 9 tienen el resumen del notetaker de
-HubSpot, las 9 ligadas por el evento del calendario y del mismo cliente.
+Meet; 838 eventos con hora sin Meet solo del equipo; **46 reuniones nuevas** (29 Zoom, 15 Teams, 2 otro enlace), **38
+con un cliente** (23 clientes, 8 prospectos, 7 fichas internas), ninguna ya agregada a mano. De esas 46, 9 tienen el
+resumen del notetaker de HubSpot, las 9 ligadas por el evento del calendario y del mismo cliente.
 
 - **La regla:** se guarda todo evento del calendario del equipo con hora y al menos un invitado de afuera (alguien de
   HubSpot cuenta; un buzón `no-reply@` no), sea Meet, Zoom, Teams, otro enlace o en persona. Los del equipo solo
   (dailies, bloques de tarea) sin Meet siguen fuera, y también los de todo el día, las ausencias, la ubicación de trabajo
   y lo que agrega Gmail. Pura en `lib/google/plataforma-del-evento.ts`; en la sync, `soloLasDeAfuera`
-  (lib/google/meet-sync-cambios.ts), con las copias de todos los calendarios ya juntas.
+  (lib/google/meet-sync-cambios.ts), con las copias de todos los calendarios ya juntas. Si una copia trae el Meet, gana
+  Meet (no depende del orden de los calendarios).
+- **Un evento privado sin Meet no entra** (`visibility` private o confidential): «Cita con el abogado» con un invitado
+  de gmail quedaría con su título e invitados a la vista del equipo (y sin dueño, cualquiera la abre en /sessions). La
+  agenda de «Para ti» ya lo muestra solo como «Ocupado». Las de Meet privadas siguen como antes.
+- **Un Zoom que alguien ya agregó a mano no se crea otra vez** (mismo cliente, ±30 minutos, la regla de Rentabilidad:
+  `yaEstaAgregadaAMano`). Medido el 27 nov: 0 en 30 días.
 - **Mismo id, otro `source`:** la fila es `gmeet_<evento>` como siempre (la preventa, «Después de cada reunión»,
   Tareas y las horas del calendario buscan la sesión de un evento por ese id) pero con `source = "google_calendar"` y su
   `plataforma` (enum `PlataformaDeReunion`, SQL `2026-11-27-reuniones-fuera-de-meet.sql`). *Por qué otro source:* el
@@ -18362,20 +18368,24 @@ HubSpot, las 9 ligadas por el evento del calendario y del mismo cliente.
   título en el Drive podía traer el documento de otra reunión), la serie de títulos del Drive, el job de motivos y el
   tablero de salud (mide lo que deja Meet: no las cuenta). La carga del equipo sigue solo con Meet (decisión de
   «Rentabilidad conectada») y Rentabilidad sigue contando esas horas por su lado, leyendo el calendario: `leerReuniones`
-  y `eventosDeSesiones` dejan fuera `google_calendar`, así nada cuenta dos veces ni cambia de columna.
+  y `eventosDeSesiones` dejan fuera `google_calendar` con UNA regla (`cuentaEnLasHorasComoSesion`, con prueba que ata
+  las dos lecturas), así nada cuenta dos veces ni cambia de columna.
 - **El resolver y el chokepoint son los mismos** (`resolveSessionClientId`, `lib/sessions/project-sources.ts`): no hay
   matching nuevo. Una de Zoom entra al clasificador como cualquier otra.
 - **Su motivo:** «Fue por Zoom: el texto no está en Google» (y Teams, otro enlace, en persona; `fue_por_*` en
   lib/google/por-que-falta.ts), nunca «pendiente de leer» ni «Esperando la transcripción». En la página de la reunión,
   «+ Pegar la transcripción» abre «Agregar reunión» con ESA reunión elegida (lo de agregar lo que pasó ya existía). Si
-  HubSpot la grabó, la página muestra su resumen (plegado), solo del mismo dueño y por el evento del calendario. La API
-  de Zoom no se integra.
+  HubSpot la grabó, la página muestra su resumen (plegado), solo del mismo dueño y por el evento del calendario: el del
+  evento exacto o, de su serie, solo uno a ±2 horas (`elegirResumenDeLaReunion`; sin ese tope, la semanal del 13 nov
+  mostraba el resumen del 27). La API de Zoom no se integra.
 - **«Quién estuvo», arriba de cada sesión** (lib/sessions/quien-estuvo.ts, en /sessions/[id] y en la sesión de la
   preventa): una línea plegable («Estuvieron 2 de 3 · nadie del cliente»); al abrirla, cada persona con su lado
   (Smarteam, el cliente por el dominio o por ser contacto de HubSpot del dueño, u otro con su dominio), su respuesta y,
   si fue por Meet y Meet ya lo dijo, si entró y sus minutos (las filas `meet:users/…` con su nombre). Una de Zoom o Teams
   dice que solo se sabe a quién se invitó. ⚠ Los minutos son para leer la reunión, nunca para evaluar a nadie (Google lo
-  pide). En los buscadores, «Fue por Zoom» y «sin nadie del cliente» (ningún invitado con el dominio de la empresa).
+  pide). En los buscadores, «Fue por Zoom» y «sin nadie del cliente» (ningún invitado con el dominio de la empresa). Sin
+  dominios del dueño ni contactos, ninguna de las dos pantallas afirma «nadie del cliente». «Participantes», más abajo,
+  sigue a la vista y toma el lado de cada persona de la misma regla.
 - **Pendiente:** las agendadas de la preventa (lib/exploraciones/agendadas.ts) siguen ofreciendo solo las de Meet; una
   de Zoom futura aparece cuando ocurre. Y una reunión de Zoom con un recuerdo corto pegado da de baja el resumen de
   HubSpot (U7: «se da de baja el día en que llegue el texto»).

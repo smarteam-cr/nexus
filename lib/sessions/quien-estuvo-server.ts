@@ -22,9 +22,9 @@ import { resumenDeLaReunionDeHubspot } from "@/lib/comunicaciones/lectura-server
  * comunicación de otro cliente nunca llega a esta reunión (invariante 1). Medido el 27 nov: 9 de 47 reuniones nuevas
  * en 30 días lo tienen. null = no hay.
  */
-export async function resumenDeHubspotDe(o: { googleEventId: string | null; duenoId: string | null }): Promise<{ texto: string; ocurrioAt: string } | null> {
+export async function resumenDeHubspotDe(o: { googleEventId: string | null; duenoId: string | null; fecha: Date }): Promise<{ texto: string; ocurrioAt: string } | null> {
   if (!o.googleEventId || !o.duenoId) return null;
-  const c = await resumenDeLaReunionDeHubspot({ clientId: o.duenoId, googleEventId: o.googleEventId });
+  const c = await resumenDeLaReunionDeHubspot({ clientId: o.duenoId, googleEventId: o.googleEventId, fecha: o.fecha });
   return c ? { texto: c.texto, ocurrioAt: c.ocurrioAt.toISOString() } : null;
 }
 

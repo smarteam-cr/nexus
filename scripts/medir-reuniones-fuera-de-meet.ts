@@ -59,7 +59,7 @@ async function main() {
               singleEvents: true,
               orderBy: "startTime",
               pageToken,
-              fields: "nextPageToken,items(id,status,summary,description,location,hangoutLink,eventType,extendedProperties,start,end,attendees,organizer,conferenceData)",
+              fields: "nextPageToken,items(id,status,summary,description,location,hangoutLink,eventType,visibility,extendedProperties,start,end,attendees,organizer,conferenceData)",
             });
             for (const e of res.data.items ?? []) {
               if (!e.id || e.status === "cancelled") continue;
@@ -119,6 +119,16 @@ async function main() {
     porPlataforma.set(f.plataforma, p);
   }
   const conCliente = filas.filter((f) => f.clientId);
+  // Las que la sync NO crearía porque alguien ya las agregó a mano (mismo cliente, ±30 min: `yaEstaAgregadaAMano`).
+  const { yaEstaAgregadaAMano } = await import("@/lib/google/meet-sync-cambios");
+  const manuales = (
+    await prisma.firefliesSession.findMany({
+      where: { source: "manual", date: { gte: new Date(+timeMin - 3_600_000), lte: timeMax } },
+      select: { date: true, resolvedClientId: true, manualClientId: true },
+    })
+  ).map((m) => ({ date: m.date, clientId: m.resolvedClientId ?? m.manualClientId ?? null }));
+  const yaAMano = filas.filter((f) => yaEstaAgregadaAMano({ date: f.fecha }, f.clientId, manuales));
+  console.log(`Ya agregadas a mano (no se crean): ${yaAMano.length}${yaAMano.length ? ` — ${yaAMano.map((f) => `«${f.titulo}»`).join(", ")}` : ""}`);
 
   console.log(`\nVentana: ${DIAS} días hacia atrás hasta mañana · ${usuarios.length} calendarios (${fallaron} fallaron)`);
   console.log(`Reuniones de Meet (ya entran hoy): ${meet}`);
@@ -145,11 +155,15 @@ async function main() {
   // Pieza 2: ¿el notetaker de HubSpot ya trae el resumen de alguna? (ComunicacionDeHubspot tipo «reunion», U7). Se liga
   // por el evento del calendario (el `eid` del enlace) o, sin él, por la misma hora (±10 min) y el mismo título.
   const { reunionesDeHubspotDeLaVentana } = await import("@/lib/comunicaciones/lectura-server");
+  const { elegirResumenDeLaReunion } = await import("@/lib/comunicaciones/reuniones");
   const comunicaciones = await reunionesDeHubspotDeLaVentana(timeMin, timeMax);
   const normal = (t: string | null | undefined) => (t ?? "").trim().toLowerCase().replace(/\s+/g, " ");
   const ligadas = filas.map((f) => {
-    const base = f.eventId.split("_")[0];
-    const porEvento = comunicaciones.find((c) => c.googleEventId && (c.googleEventId === f.eventId || c.googleEventId === base));
+    // La MISMA regla que la página de la reunión: el del evento exacto o, de su serie, solo el de ese día.
+    const porEvento = elegirResumenDeLaReunion(
+      comunicaciones.filter((c) => c.clientId === f.clientId),
+      { googleEventId: f.eventId, fecha: f.fecha },
+    );
     const porHora = porEvento
       ? null
       : comunicaciones.find((c) => Math.abs(c.ocurrioAt.getTime() - f.fecha.getTime()) <= 10 * 60_000 && normal(c.asunto) === normal(f.titulo));

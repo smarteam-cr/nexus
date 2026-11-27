@@ -21,6 +21,20 @@ export type Plataforma = "MEET" | "ZOOM" | "TEAMS" | "OTRA" | "PRESENCIAL";
 /** `FirefliesSession.source` de una reunión del calendario que no es de Meet. Meet escribe "google_meet". */
 export const SOURCE_CALENDARIO = "google_calendar";
 
+/**
+ * ¿Esta sesión cuenta en las horas de la carga del equipo (y, por eso, como «ya en una sesión» para Rentabilidad)? Las
+ * de Meet y las agregadas a mano sí; las del calendario que no son de Meet no: la carga sigue solo con Meet (DECISIONS
+ * «Rentabilidad conectada») y Rentabilidad suma sus horas leyendo el calendario. Las DOS lecturas (`leerReuniones` de
+ * lib/carga/queries.ts y `eventosDeSesiones` de lib/rentabilidad/fuentes-de-horas-server.ts) usan esta regla: si una la
+ * dejara de usar, cada Zoom contaría dos veces o ninguna (lo vigila plataforma-del-evento.test.ts).
+ */
+export function cuentaEnLasHorasComoSesion(source: string): boolean {
+  return source !== SOURCE_CALENDARIO;
+}
+
+/** El mismo criterio, para un `where` de Prisma. */
+export const SESIONES_QUE_CUENTAN_EN_LAS_HORAS = { source: { not: SOURCE_CALENDARIO } } as const;
+
 /** Cómo se nombra en pantalla. */
 export const NOMBRE_DE_LA_PLATAFORMA: Readonly<Record<Plataforma, string>> = {
   MEET: "Meet",
@@ -109,7 +123,10 @@ const TIPOS_QUE_NO_SON_REUNION = new Set(["outOfOffice", "focusTime", "workingLo
  * no es una ausencia, un bloque de concentración, la ubicación de trabajo ni algo que Gmail agregó solo. Si tiene
  * invitados de afuera se decide después, con los dominios del equipo (`tieneInvitadoDeAfuera`).
  */
-export function puedeSerReunionFueraDeMeet(e: { start?: { dateTime?: string | null } | null; eventType?: string | null }): boolean {
+export function puedeSerReunionFueraDeMeet(e: { start?: { dateTime?: string | null } | null; eventType?: string | null; visibility?: string | null }): boolean {
   if (!e.start?.dateTime) return false;
+  // Un evento PRIVADO sin Meet («Cita con el abogado», una entrevista) no entra: su título y sus invitados quedarían en
+  // Nexus a la vista del equipo. La agenda de «Para ti» ya lo muestra solo como «Ocupado».
+  if (e.visibility === "private" || e.visibility === "confidential") return false;
   return !TIPOS_QUE_NO_SON_REUNION.has(e.eventType ?? "default");
 }

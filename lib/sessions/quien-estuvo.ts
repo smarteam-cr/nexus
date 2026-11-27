@@ -147,24 +147,28 @@ export function armarQuienEstuvo(e: EntradaDeQuienEstuvo): QuienEstuvo {
 
   const invitados = [...porCorreo.values()];
   const delCliente = (p: PersonaDeLaReunion) => p.lado === "cliente";
+  // Sin dominios del dueño ni contactos (una reunión sin dueño, o una ficha sin dominios), no hay con qué reconocer a
+  // alguien del cliente: no se afirma «nadie del cliente» (la misma regla que el buscador, `sinNadieDelCliente`).
+  const sePuedeSaber = e.dominiosDelCliente.size > 0 || e.contactos.size > 0;
+  const delClienteEn = (lista: readonly PersonaDeLaReunion[]) => {
+    const n = lista.filter(delCliente).length;
+    return n > 0 ? ` · ${n} del cliente` : sePuedeSaber ? " · nadie del cliente" : "";
+  };
   let resumen: string;
   let nadieDelCliente: boolean;
   if (conAsistencia) {
     const entraron = personas.filter((p) => p.entro === true);
-    nadieDelCliente = !entraron.some(delCliente);
+    nadieDelCliente = sePuedeSaber && !entraron.some(delCliente);
     const deCuantos = Math.max(invitados.length, entraron.length);
     resumen =
       entraron.length === 0
         ? `No entró nadie de ${deCuantos} ${deCuantos === 1 ? "invitado" : "invitados"}`
         : `${entraron.length === 1 ? "Estuvo" : "Estuvieron"} ${entraron.length} de ${deCuantos}`;
-    const clientes = entraron.filter(delCliente).length;
-    resumen += clientes === 0 ? " · nadie del cliente" : ` · ${clientes} del cliente`;
+    resumen += delClienteEn(entraron);
   } else {
-    nadieDelCliente = !invitados.some(delCliente);
+    nadieDelCliente = sePuedeSaber && !invitados.some(delCliente);
     const n = invitados.length;
-    resumen = `${n} ${n === 1 ? "invitado" : "invitados"}`;
-    const clientes = invitados.filter(delCliente).length;
-    resumen += clientes === 0 ? " · nadie del cliente" : ` · ${clientes} del cliente`;
+    resumen = `${n} ${n === 1 ? "invitado" : "invitados"}` + delClienteEn(invitados);
   }
 
   const aviso = avisoDePlataforma(e.plataforma);
@@ -176,6 +180,18 @@ export function armarQuienEstuvo(e: EntradaDeQuienEstuvo): QuienEstuvo {
         ? "La organizó alguien de afuera y nadie del equipo entró: Meet no dice quién estuvo."
         : "Meet todavía no dice quién entró: por ahora, los invitados.";
   return { personas, resumen, conAsistencia, nadieDelCliente, nota };
+}
+
+/**
+ * PURA. La lista de «Participantes» de la página con el lado de cada uno tomado de «Quién estuvo»: una sola regla de
+ * quién es del cliente en la misma página. Quien no está en «Quién estuvo» queda como venía.
+ */
+export function conElLadoDe<T extends { email: string; lado: LadoDeLaPersona }>(lista: readonly T[], q: QuienEstuvo): T[] {
+  const ladoDe = new Map(q.personas.filter((p) => p.correo).map((p) => [p.correo as string, p.lado]));
+  return lista.map((i) => {
+    const lado = ladoDe.get(i.email.trim().toLowerCase());
+    return lado ? { ...i, lado } : i;
+  });
 }
 
 /** «Aceptó», «Quizás», «No va», «Sin responder». null = el calendario no lo dijo. */

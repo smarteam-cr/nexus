@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   avisoDePlataforma,
+  cuentaEnLasHorasComoSesion,
   esDeMeet,
   plataformaDelEvento,
   puedeSerReunionFueraDeMeet,
@@ -64,6 +67,24 @@ describe("puedeSerReunionFueraDeMeet", () => {
     expect(puedeSerReunionFueraDeMeet({ start: {} })).toBe(false);
     expect(puedeSerReunionFueraDeMeet({ start: { dateTime: "2026-11-27T14:00:00Z" }, eventType: "outOfOffice" })).toBe(false);
     expect(puedeSerReunionFueraDeMeet({ start: { dateTime: "2026-11-27T14:00:00Z" }, eventType: "workingLocation" })).toBe(false);
+  });
+  it("un evento privado no entra (su título y sus invitados quedarían a la vista del equipo)", () => {
+    expect(puedeSerReunionFueraDeMeet({ start: { dateTime: "2026-11-27T14:00:00Z" }, visibility: "private" })).toBe(false);
+    expect(puedeSerReunionFueraDeMeet({ start: { dateTime: "2026-11-27T14:00:00Z" }, visibility: "confidential" })).toBe(false);
+    expect(puedeSerReunionFueraDeMeet({ start: { dateTime: "2026-11-27T14:00:00Z" }, visibility: "default" })).toBe(true);
+  });
+});
+
+describe("las horas: Carga y Rentabilidad con UNA regla", () => {
+  it("las del calendario que no son de Meet no cuentan como sesión en las horas; Meet y a mano sí", () => {
+    expect(cuentaEnLasHorasComoSesion("google_calendar")).toBe(false);
+    expect(cuentaEnLasHorasComoSesion("google_meet")).toBe(true);
+    expect(cuentaEnLasHorasComoSesion("manual")).toBe(true);
+  });
+  it("las dos lecturas usan la regla (si una la suelta, cada Zoom cuenta dos veces o ninguna)", () => {
+    const raiz = join(__dirname, "..", "..");
+    expect(readFileSync(join(raiz, "lib/carga/queries.ts"), "utf8")).toMatch(/\.\.\.SESIONES_QUE_CUENTAN_EN_LAS_HORAS/);
+    expect(readFileSync(join(raiz, "lib/rentabilidad/fuentes-de-horas-server.ts"), "utf8")).toMatch(/cuentaEnLasHorasComoSesion\(s\.source\)/);
   });
 });
 

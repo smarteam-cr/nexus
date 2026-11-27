@@ -31,7 +31,7 @@ import { correlacion, factorDeComplejidad, horasPorPuntoDeFactor, type FactorExp
 import { entregaEstimada, type CronogramaParaCarga, type TiempoDeclarado } from "./entrega";
 import { tiempoEnReuniones, type ReunionParaCarga, type TipoDeEmpresa } from "./reuniones";
 import { diasEntre, etiquetaDelLunes, inicioDelLunes, lunesDe, lunesHasta, sumarSemanas } from "./semana";
-import { SOURCE_CALENDARIO } from "@/lib/google/plataforma-del-evento";
+import { SESIONES_QUE_CUENTAN_EN_LAS_HORAS } from "@/lib/google/plataforma-del-evento";
 import { cargaDePersona, cargaDelEquipo, horasPorCuenta, type CargaDelEquipo, type CargaDePersona } from "./utilizacion";
 
 /** Pipelines de HubSpot cuyos proyectos son desarrollo o acompañamiento técnico (integraciones). */
@@ -339,7 +339,7 @@ export async function leerReuniones(desde: Date, hasta: Date): Promise<{ reunion
   const sesiones = await prisma.firefliesSession.findMany({
     // Sin las del calendario que no son de Meet (2026-11-27): la carga sigue solo con Meet (DECISIONS «Rentabilidad
     // conectada»), y Rentabilidad las sigue contando por su lado, leyendo el calendario (horas-del-calendario.ts).
-    where: { date: { gte: desde, lt: hasta }, source: { not: SOURCE_CALENDARIO } },
+    where: { date: { gte: desde, lt: hasta }, ...SESIONES_QUE_CUENTAN_EN_LAS_HORAS },
     select: { id: true, date: true, duration: true, title: true, participants: true, resolvedClientId: true },
   });
   const ids = [...new Set(sesiones.map((s) => s.resolvedClientId).filter((x): x is string => !!x))];

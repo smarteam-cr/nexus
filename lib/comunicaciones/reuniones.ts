@@ -141,3 +141,26 @@ export function cruceConMeet(c: ClavesDeReunion, clientId: string | null, indice
 export function yaLlegaPorMeet(c: ClavesDeReunion, clientId: string | null, indice: IndiceDeMeet): boolean {
   return cruceConMeet(c, clientId, indice) === "ya_llega_por_meet";
 }
+
+/** Cuánto puede separarse el resumen de HubSpot de una reunión de su serie para ser el de ESE día. */
+export const HORAS_DE_LA_MISMA_INSTANCIA = 2;
+
+/**
+ * PURA. El resumen de HubSpot de UNA reunión del calendario (2026-11-27), entre los del mismo dueño con su evento o el de
+ * su serie. Primero el del evento exacto (la instancia); si no hay, uno de la serie SOLO si ocurrió a ±2 horas de esa
+ * reunión. ⚠ Sin el tope de horas, la reunión semanal del 13 nov mostraba el resumen del 27 (KNOWN-ERRORS: «una reunión
+ * tiene el texto de otra reunión»). null = ninguno es de esa reunión.
+ */
+export function elegirResumenDeLaReunion<T extends { googleEventId: string | null; ocurrioAt: Date }>(
+  candidatos: readonly T[],
+  reunion: { googleEventId: string; fecha: Date },
+): T | null {
+  const exacto = candidatos.find((c) => c.googleEventId === reunion.googleEventId);
+  if (exacto) return exacto;
+  const serie = reunion.googleEventId.split("_")[0];
+  const margen = HORAS_DE_LA_MISMA_INSTANCIA * 3_600_000;
+  const cerca = candidatos
+    .filter((c) => c.googleEventId === serie && Math.abs(c.ocurrioAt.getTime() - reunion.fecha.getTime()) <= margen)
+    .sort((a, b) => Math.abs(a.ocurrioAt.getTime() - reunion.fecha.getTime()) - Math.abs(b.ocurrioAt.getTime() - reunion.fecha.getTime()));
+  return cerca[0] ?? null;
+}

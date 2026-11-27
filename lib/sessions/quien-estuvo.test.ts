@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { armarQuienEstuvo, sinNadieDelCliente, textoDeLaRespuesta, type EntradaDeQuienEstuvo, type FilaDeQuienEstuvo } from "./quien-estuvo";
+import { armarQuienEstuvo, conElLadoDe, sinNadieDelCliente, textoDeLaRespuesta, type EntradaDeQuienEstuvo, type FilaDeQuienEstuvo } from "./quien-estuvo";
 
 const equipo = new Map([
   ["liz@smarteamcr.com", "Liz Navarro"],
@@ -93,6 +93,12 @@ describe("armarQuienEstuvo — sin asistencia", () => {
     expect(q.personas.find((p) => p.nombre === "Don Carlos")?.lado).toBe("otro");
   });
 
+  it("sin dominios del dueño ni contactos (sin dueño) no afirma «nadie del cliente»", () => {
+    const q = armarQuienEstuvo(entrada({ dominiosDelCliente: new Set(), filas: [fila("eli@smarteamcr.com"), fila("ana@empresa.com")] }));
+    expect(q.resumen).toBe("2 invitados");
+    expect(q.nadieDelCliente).toBe(false);
+  });
+
   it("un contacto de HubSpot del dueño es del cliente aunque use otro dominio", () => {
     const q = armarQuienEstuvo(entrada({ filas: [fila("gerente@gmail.com")], contactos: new Map([["gerente@gmail.com", { nombre: "Gerente", cargo: "Director" }]]) }));
     expect(q.personas[0]).toMatchObject({ lado: "cliente", nombre: "Gerente", cargo: "Director" });
@@ -108,6 +114,14 @@ describe("sinNadieDelCliente (el buscador)", () => {
   });
   it("sin dominios del cliente no afirma nada", () => {
     expect(sinNadieDelCliente(["liz@smarteamcr.com"], new Set())).toBe(false);
+  });
+});
+
+describe("conElLadoDe — una sola regla de lado en la página", () => {
+  it("alguien del dominio del cliente que no es contacto de HubSpot es «cliente» también abajo", () => {
+    const q = armarQuienEstuvo(entrada({ filas: [fila("dir.saludencasa@lineashospitalarias.com")] }));
+    const abajo = conElLadoDe([{ email: "Dir.SaludEnCasa@lineashospitalarias.com", nombre: null, cargo: null, lado: "otro" as const }], q);
+    expect(abajo[0].lado).toBe("cliente");
   });
 });
 
