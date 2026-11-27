@@ -21,6 +21,27 @@ export interface EmpresaArriba {
   dominiosCompartidos?: readonly string[];
   /** La empresa de HubSpot que comparten: pasa de `desde` a la empresa. */
   empresaDeHubspot?: string;
+  /**
+   * Dominios que una unidad SUELTA al entrar (unidad → dominios), porque otra unidad ya vive en ellos: Sukasa trae
+   * sukasa.com, que es de Cemaco · Ecuador desde el 9 nov (INV37). `--deshacer` se los devuelve.
+   */
+  quitarDominios?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Nombres nuevos de unidades que entran (unidad → nombre). Sukasa pasa a «Cemaco · Sukasa»: sin «Cemaco» en el nombre de
+   * las tres, la empresa pierde su marca y la sigla «CR» vale sola, y se lleva «Claro CR» o «Pago de Nómina en CR y NIC»
+   * (simulacro del 27 nov: 20 reuniones de otros). `--deshacer` devuelve el nombre.
+   */
+  renombrar?: Readonly<Record<string, string>>;
+  /**
+   * El nombre de antes de cada unidad renombrada: lo usa `--deshacer` (la ficha ya tiene el nuevo). El plan exige uno por
+   * cada unidad de `renombrar`, igual al nombre que la ficha tiene hoy.
+   */
+  nombresDeAntes?: Readonly<Record<string, string>>;
+  /**
+   * Las unidades (fuera de `desde`) que hoy no cuelgan de nadie: Sukasa, un prospecto suelto. `--deshacer` las deja sueltas
+   * otra vez en vez de colgarlas de la principal. El plan exige que estén todas: si no, deshacer las dejaría colgando.
+   */
+  sueltasAntes?: readonly string[];
   /** Empresas de HubSpot PROPIAS de una unidad que se ligan al crear (unidad → empresa de HubSpot). */
   propiasDeHubspot?: Readonly<Record<string, string>>;
   /** Si el `--apply` espera un OK explícito (Cemaco: lo usa el cliente, Elías da el OK). */
@@ -96,6 +117,37 @@ export function planDeLaEmpresa(cfg: EmpresaArriba, fichas: readonly FichaParaLa
     const otra = fichas.find((f) => f.hubspotCompanyId === hs && f.id !== unidad);
     if (otra) errores.push(`La empresa de HubSpot ${hs} ya es de «${otra.name}» (una empresa es de una sola ficha, R7b).`);
   }
+  for (const unidad of Object.keys(cfg.renombrar ?? {})) {
+    const u = porId.get(unidad);
+    if (!cfg.unidades.includes(unidad) || !u) {
+      errores.push(`${unidad} no es una de las unidades.`);
+      continue;
+    }
+    if (cfg.nombresDeAntes?.[unidad] !== u.name) errores.push(`Falta el nombre de antes de «${u.name}» para deshacer (nombresDeAntes), o no es el que tiene hoy.`);
+  }
+  if (desde) {
+    const sueltas = new Set(cfg.sueltasAntes ?? []);
+    for (const u of unidades as FichaParaLaEmpresa[]) {
+      if (u.id === desde.id) continue;
+      const suelta = !u.comparteDominioConId;
+      if (suelta !== sueltas.has(u.id)) {
+        errores.push(
+          suelta
+            ? `«${u.name}» hoy no cuelga de nadie: va en sueltasAntes, o deshacer la colgaría de ${desde.name}.`
+            : `«${u.name}» hoy cuelga de otra ficha: no va en sueltasAntes.`,
+        );
+      }
+    }
+  }
+  for (const [unidad, quita] of Object.entries(cfg.quitarDominios ?? {})) {
+    const u = porId.get(unidad);
+    if (!cfg.unidades.includes(unidad) || !u) {
+      errores.push(`${unidad} no es una de las unidades.`);
+      continue;
+    }
+    const suyos = new Set(u.emailDomains.map(norm));
+    for (const d of quita) if (!suyos.has(norm(d))) errores.push(`${d} no es un dominio de ${u.name}.`);
+  }
   if (errores.length) return { ok: false, errores };
 
   const cambios: PlanDeLaEmpresa["cambios"] = [];
@@ -115,6 +167,20 @@ export function planDeLaEmpresa(cfg: EmpresaArriba, fichas: readonly FichaParaLa
       if (cfg.empresaDeHubspot) {
         data.hubspotCompanyId = null;
         antes.hubspotCompanyId = u.hubspotCompanyId;
+      }
+    }
+    const nombre = cfg.renombrar?.[u.id];
+    if (nombre && nombre !== u.name) {
+      data.name = nombre;
+      antes.name = u.name;
+    }
+    const quita = (cfg.quitarDominios?.[u.id] ?? []).map(norm);
+    if (quita.length) {
+      data.emailDomains = (data.emailDomains ?? u.emailDomains).filter((d) => !quita.includes(norm(d)));
+      antes.emailDomains = u.emailDomains;
+      if (u.company && quita.includes(norm(u.company))) {
+        data.company = null;
+        antes.company = u.company;
       }
     }
     const propia = cfg.propiasDeHubspot?.[u.id];

@@ -92,7 +92,16 @@ async function deshacer(cfg: (typeof EMPRESAS_ARRIBA)[string], fichas: FichaPara
   }
   resolverApply({ tablas: ["Client"] });
   console.log(`Respaldo: ${guardarRespaldoJson({ deshacer: cfg.clave, empresa, unidades })}`);
-  const vuelve = await deshacerLaEmpresa({ empresaId: empresa.id, principal: cfg.desde ?? null, unidades: unidades.map((u) => u.id) });
+  const vuelve = await deshacerLaEmpresa({
+    empresaId: empresa.id,
+    principal: cfg.desde ?? null,
+    unidades: unidades.map((u) => u.id),
+    devolverDominios: cfg.quitarDominios,
+    devolverNombres: Object.fromEntries(
+      Object.entries(cfg.renombrar ?? {}).map(([id, nuevo]) => [id, { nuevo, antes: cfg.nombresDeAntes?.[id] ?? nuevo }]),
+    ),
+    sueltasAntes: cfg.sueltasAntes,
+  });
   console.log("Volvió:", vuelve);
   console.log(`✓ Deshecha «${empresa.name}». Corre check:invariants.`);
 }
@@ -192,6 +201,10 @@ async function main() {
   if (cfg.empresaDeHubspot && cfg.desde) {
     console.log(`\n── Lo que se apaga en ${nombreDe(cfg.desde)} al quedarse sin empresa de HubSpot ──`);
     for (const x of LO_QUE_SE_APAGA) console.log(`  · ${x}`);
+  }
+  for (const [u, dominios] of Object.entries(cfg.quitarDominios ?? {})) {
+    console.log(`
+  ${nombreDe(u)} suelta ${dominios.join(", ")}: ya es de otra unidad (sus reuniones las sigue dando esa).`);
   }
   if (cfg.propiasDeHubspot) {
     for (const [u, hs] of Object.entries(cfg.propiasDeHubspot)) console.log(`\n  ${nombreDe(u)} toma su empresa de HubSpot propia (${hs}): sus contactos y correos llegan en la copia siguiente.`);

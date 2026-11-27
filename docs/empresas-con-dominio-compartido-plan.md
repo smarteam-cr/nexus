@@ -69,12 +69,14 @@ sencilla posible».
 | Empresa | Reuniones que cambian | Lo de HubSpot (contactos · correos y notas · tickets · negocios) | ¿Se aplica? |
 |---|---|---|---|
 | **TEC** | 0 de 232 | Contactos: AE 20, TAE 12, empresa 29 · Correos y notas: AE 10, TAE 21, empresa 78 · Tickets: TAE 5, AE 1, empresa 35 | Sí |
-| **Cemaco** | 0 de 53 | Contactos: CR 10, empresa 3 · Correos y notas: CR 16, empresa 54 · Tickets: empresa 1 · Negocios: EC 1, empresa 1 | Con el OK de Elías |
-| **Grupo Teamnet** | **27**: las conjuntas («Sprint semanal \| Teamnet y Sas», las capacitaciones «Teamnet - SAS & Smarteam») pasan de Teamnet a por decidir | — | **No**: mueve reuniones |
+| **Cemaco** (26 nov, sin Sukasa) | 0 de 53 | Contactos: CR 10, empresa 3 · Correos y notas: CR 16, empresa 54 · Tickets: empresa 1 · Negocios: EC 1, empresa 1 | Con el OK de Elías |
+| **Grupo Teamnet** (27 nov, con la regla del grupo adentro) | 0 de 73 | — (cada unidad copia de su empresa de HubSpot) | Sí |
+| **Cemaco con Sukasa** (27 nov) | **9 de 53**: de las 13 de Ecuador que el título llama «SUKASA», 7 a Sukasa y 2 por decidir | Correos y notas: Sukasa 1 (el resto, igual) | Con el OK de Elías y esas 9 decididas |
 
-- **Por qué Teamnet sí mueve:** hoy las conjuntas van a Teamnet por la regla del grupo («la dueña del proyecto más
-  antiguo»), que vale entre DOS empresas. Como unidades de una sola empresa rige la regla de las unidades: sin pista,
-  por decidir.
+- **Teamnet (26 nov movía 27):** las conjuntas iban a Teamnet por la regla del grupo, que valía solo entre DOS empresas.
+  Desde el 27 nov vale también dentro de una empresa que solo agrupa (Elías: «Sí, que valga»).
+- **Sukasa** entra como «Cemaco · Sukasa» y suelta `sukasa.com` (es de Ecuador). Con el nombre «Sukasa» a secas, las
+  tres unidades no comparten «Cemaco» y la sigla «CR» se llevaba 20 reuniones de otros.
 - **Lo de HubSpot se cuenta por asunto y remitente.** La copia usa además los contactos asociados en HubSpot, así que
   quedan menos en la empresa.
 
@@ -83,17 +85,16 @@ sencilla posible».
 1. El SQL `scripts/sql/2026-11-26-ficha-de-tipo-empresa.sql`, con `npm run db:sql … --apply`.
 2. El deploy.
 3. `scripts/crear-empresa-de-unidades.ts --empresa tec --apply`.
-4. Cemaco, solo con el OK de Elías: `--empresa cemaco --apply --con-ok-de-elias`.
-5. Esperar la copia de cada hora, o correr `sync-contactos-y-tickets`, `sync-comunicaciones-de-hubspot` y
+4. `--empresa teamnet --apply`.
+5. Cemaco, solo con el OK de Elías y con las 9 reuniones «SUKASA» decididas: `--empresa cemaco --apply --con-ok-de-elias`.
+6. Esperar la copia de cada hora, o correr `sync-contactos-y-tickets`, `sync-comunicaciones-de-hubspot` y
    `sync-negocios-abiertos`.
-6. `npm run check:invariants`.
+7. `npm run check:invariants`.
 
 ### Lo que queda abierto
 
-- **Sukasa:** ¿la ficha «Sukasa» (prospecto, una propuesta) es Cemaco · Ecuador? Si sí, se fusiona y Ecuador toma
-  «Sukasa» como su empresa de HubSpot (`propiasDeHubspot` en `scripts/lib/empresas-arriba.ts`).
-- **Grupo Teamnet:** para que entre sin mover reuniones, la regla del grupo («a la dueña del proyecto más antiguo»)
-  tendría que valer también dentro de una empresa que solo agrupa.
+- **Las 9 reuniones «SUKASA + CEMACO + COMOHOGAR» y «SUKASA ECUADOR»:** hoy son de Ecuador. ¿Son de Sukasa o de
+  Ecuador? Las de Ecuador se asignan en /sessions antes del `--apply` de Cemaco. Lo decide Elías.
 - **Lo que no se construyó:**
   - Horas, rentabilidad y cobranza sumadas en la página de la empresa.
   - El aviso de «este dominio parece tener varios clientes» (U3).

@@ -18,11 +18,13 @@ export async function aplicarLaEmpresa(plan: PlanDeLaEmpresa): Promise<string> {
     for (const c of plan.cambios) if (c.data.hubspotCompanyId === null) await tx.client.update({ where: { id: c.id }, data: { hubspotCompanyId: null } });
     const empresa = await tx.client.create({ data: plan.crear, select: { id: true } });
     for (const c of plan.cambios) {
-      /* Solo lo que el plan cambia: los dominios, el `company` que era un dominio, la empresa de HubSpot y la llave. */
+      /* Solo lo que el plan cambia: el nombre, los dominios, el `company` que era un dominio, la empresa de HubSpot y la
+         llave. */
       await tx.client.update({
         where: { id: c.id },
         data: {
           comparteDominioConId: empresa.id,
+          ...(c.data.name !== undefined ? { name: c.data.name } : {}),
           ...(c.data.emailDomains !== undefined ? { emailDomains: c.data.emailDomains } : {}),
           ...(c.data.company !== undefined ? { company: c.data.company } : {}),
           ...(c.data.hubspotCompanyId !== undefined ? { hubspotCompanyId: c.data.hubspotCompanyId } : {}),
@@ -76,7 +78,20 @@ async function juntarEnLaPrincipal(tx: Tx, tabla: "contactoDeHubspot" | "ticketD
  * empresa se borra al final, vacía: nada se borra con ella. Sin vieja principal (Grupo Teamnet), las unidades vuelven a no
  * colgar de nadie y lo de la empresa se queda sin mover (una empresa así no tiene empresa de HubSpot).
  */
-export async function deshacerLaEmpresa(o: { empresaId: string; principal: string | null; unidades: readonly string[] }): Promise<LoQueVuelve> {
+export async function deshacerLaEmpresa(o: {
+  empresaId: string;
+  principal: string | null;
+  unidades: readonly string[];
+  /** Los dominios que una unidad soltó al entrar (`EmpresaArriba.quitarDominios`): vuelven a ella. */
+  devolverDominios?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Las unidades renombradas al entrar (unidad → nombre nuevo y el de antes). Vuelve el de antes solo si la ficha sigue con
+   * el nuevo: un nombre que alguien cambió a mano después no se pisa.
+   */
+  devolverNombres?: Readonly<Record<string, { nuevo: string; antes: string }>>;
+  /** Las unidades que antes de la empresa no colgaban de nadie (Sukasa): vuelven sueltas, no a la principal. */
+  sueltasAntes?: readonly string[];
+}): Promise<LoQueVuelve> {
   return prisma.$transaction(async (tx) => {
     const empresa = await tx.client.findUniqueOrThrow({ where: { id: o.empresaId }, select: { kind: true, emailDomains: true, company: true, hubspotCompanyId: true } });
     if (empresa.kind !== "EMPRESA") throw new Error("Esa ficha no es una empresa.");
@@ -102,12 +117,19 @@ export async function deshacerLaEmpresa(o: { empresaId: string; principal: strin
           ...(empresa.hubspotCompanyId && !p.hubspotCompanyId ? { hubspotCompanyId: empresa.hubspotCompanyId } : {}),
         },
       });
-      await tx.client.updateMany({ where: { id: { in: o.unidades.filter((u) => u !== o.principal) } }, data: { comparteDominioConId: o.principal } });
+      const sueltas = new Set(o.sueltasAntes ?? []);
+      await tx.client.updateMany({ where: { id: { in: o.unidades.filter((u) => u !== o.principal && !sueltas.has(u)) } }, data: { comparteDominioConId: o.principal } });
+      if (sueltas.size) await tx.client.updateMany({ where: { id: { in: [...sueltas] } }, data: { comparteDominioConId: null } });
     } else {
       const quedan = await tx.project.count({ where: { clientId: o.empresaId } });
       if (quedan) throw new Error(`La empresa tiene ${quedan} proyecto(s) esperando unidad: pásalos a una unidad antes de deshacerla.`);
       await tx.client.updateMany({ where: { id: { in: [...o.unidades] } }, data: { comparteDominioConId: null } });
     }
+    for (const [unidad, dominios] of Object.entries(o.devolverDominios ?? {})) {
+      const u = await tx.client.findUnique({ where: { id: unidad }, select: { emailDomains: true } });
+      if (u) await tx.client.update({ where: { id: unidad }, data: { emailDomains: [...new Set([...u.emailDomains, ...dominios])] } });
+    }
+    for (const [unidad, n] of Object.entries(o.devolverNombres ?? {})) await tx.client.updateMany({ where: { id: unidad, name: n.nuevo }, data: { name: n.antes } });
     await tx.client.delete({ where: { id: o.empresaId } });
     return vuelve;
   });

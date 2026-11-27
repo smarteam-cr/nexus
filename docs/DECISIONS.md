@@ -15195,16 +15195,29 @@ parte 3.
     propio.
   - **Cemaco:** ficha «Cemaco» con «Cemaco Internacional» de HubSpot. Elías, 26 nov: es del grupo, no de Costa Rica.
     `cemaco.co.cr` sigue en Costa Rica, que es la única que lo usa. **Se aplica solo con el OK explícito de Elías.**
-    «Sukasa» de HubSpot (sukasa.com) no se liga a Ecuador todavía: ya es de una ficha «Sukasa» aparte (un prospecto del
-    19 nov, con una propuesta). Si es Ecuador, primero se fusionan; lo decide Elías.
+    **Sukasa es la tercera unidad** (Elías, 27 nov: «una unidad de negocio de Cemaco Internacional, está en Ecuador y en
+    Costa Rica»; no es Ecuador). La ficha «Sukasa» (prospecto del 18 nov, con su empresa de HubSpot, una propuesta, 7
+    contactos y un lead) entra tal cual, con dos cambios:
+    - suelta `sukasa.com`, que es de Ecuador desde el 9 nov y le da sus reuniones (INV37: el dominio en dos fichas);
+    - pasa a llamarse «Cemaco · Sukasa». Si no, las tres unidades no comparten la palabra «Cemaco»: la empresa pierde su
+      marca y la sigla «CR» vale sola, y se lleva reuniones de otros («Claro CR», «Pago de Nómina en CR y NIC»; 20 en el
+      simulacro del 27 nov).
+
+    `--deshacer` le devuelve el dominio y el nombre. **El simulacro del 27 nov mueve 9 de las 13 reuniones de Ecuador,**
+    las que el título llama «SUKASA»: 7 pasan a Sukasa y 2 quedan por decidir. El `--apply` no corre mientras alguna cambie.
+    De quién son lo decide Elías; las que sean de Ecuador se asignan en /sessions antes de aplicar.
   - **Grupo Teamnet:** ficha que solo agrupa; cada unidad conserva su dominio y su empresa de HubSpot. Se aplica solo
-    si el simulacro no cambia ninguna reunión (Elías, 26 nov). **El simulacro del 26 nov mueve 27, así que no se aplica.**
-    Son las conjuntas («Sprint semanal | Teamnet y Sas», las capacitaciones «Teamnet - SAS & Smarteam»), que pasarían de
-    Teamnet a por decidir. Hoy van a Teamnet por la regla del grupo, que vale entre dos empresas. Dentro de una sola
-    empresa rige la de las unidades: sin pista, por decidir. Teamnet y Stratosphere siguen como un grupo armado por la
-    gente confirmada.
+    si el simulacro no cambia ninguna reunión (Elías, 26 nov). El simulacro del 26 nov movía 27: las conjuntas («Sprint
+    semanal | Teamnet y Sas», las capacitaciones «Teamnet - SAS & Smarteam»), que pasaban de Teamnet a por decidir porque
+    la regla del grupo solo valía entre dos empresas.
+    **La regla del grupo vale también dentro de una empresa que solo agrupa** (Elías, 27 nov: «Sí, que valga»). Lo que
+    la cascada no decide entre sus unidades va a la del proyecto más antiguo (`duenaDelProyectoDelGrupo`), sin pedir gente
+    confirmada en las dos: el grupo lo armó una persona al crear la empresa. «Solo agrupa» es una empresa sin dominio
+    propio y sin empresa de HubSpot (`empresaQueSoloAgrupa`). El TEC y Cemaco no la tienen: lo dudoso entre sus unidades
+    sigue por decidir. Si el cargador no trae `hubspotCompanyId`, se toma que no agrupa, que es lo seguro. Con la regla,
+    el simulacro del 27 nov no cambia ninguna de las 73 reuniones.
   - **Simulacros** (producción, solo lectura, 26 nov): en el TEC no cambia ninguna de 232 reuniones y en Cemaco ninguna
-    de 53. Lo de HubSpot del TEC: de los 61 contactos, 20 van a AE, 12 a TAE y 29 quedan en la empresa.
+    de 53 (con Costa Rica y Ecuador; con Sukasa, ver arriba). Lo de HubSpot del TEC: de los 61 contactos, 20 van a AE, 12 a TAE y 29 quedan en la empresa.
   - Un solo script: `scripts/crear-empresa-de-unidades.ts --empresa tec|cemaco|teamnet`, con simulacro y respaldo.
 
 ## El Resumen de la escala que ve el cliente, con sus datos rojos (2026-11-09)

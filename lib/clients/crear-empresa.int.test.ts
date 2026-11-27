@@ -67,6 +67,48 @@ describe("deshacer la empresa", () => {
     expect((await prisma.client.findUniqueOrThrow({ where: { id: ae.id } })).comparteDominioConId).toBe(tae.id);
   });
 
+  it("Cemaco con Sukasa: el --apply escribe el nombre y suelta el dominio; deshacer devuelve todo como estaba", async () => {
+    const cr = await prisma.client.create({ data: { name: "Cemaco · Costa Rica", emailDomains: ["cemaco.test"], hubspotCompanyId: "hs-cemaco", siglas: ["CR"] } });
+    const ec = await prisma.client.create({ data: { name: "Cemaco · Ecuador", emailDomains: ["sukasa.test"], siglas: ["EC"], comparteDominioConId: cr.id } });
+    const suk = await prisma.client.create({ data: { name: "Sukasa", kind: "PROSPECTO", company: "Sukasa", emailDomains: ["sukasa.test"], hubspotCompanyId: "hs-sukasa" } });
+    const cfg = {
+      clave: "cemaco",
+      nombre: "Cemaco",
+      unidades: [cr.id, ec.id, suk.id],
+      desde: cr.id,
+      empresaDeHubspot: "hs-cemaco",
+      quitarDominios: { [suk.id]: ["sukasa.test"] },
+      renombrar: { [suk.id]: "Cemaco · Sukasa" },
+      nombresDeAntes: { [suk.id]: "Sukasa" },
+      sueltasAntes: [suk.id],
+    };
+    const r = planDeLaEmpresa(cfg, (await prisma.client.findMany({ select: SELECT })) as FichaParaLaEmpresa[]);
+    if (!r.ok) throw new Error(r.errores.join(" "));
+    const cemaco = await aplicarLaEmpresa(r.plan);
+    const sel = { name: true, emailDomains: true, hubspotCompanyId: true, comparteDominioConId: true } as const;
+    expect(await prisma.client.findUniqueOrThrow({ where: { id: suk.id }, select: sel })).toEqual({ name: "Cemaco · Sukasa", emailDomains: [], hubspotCompanyId: "hs-sukasa", comparteDominioConId: cemaco });
+
+    await deshacerLaEmpresa({
+      empresaId: cemaco,
+      principal: cr.id,
+      unidades: [cr.id, ec.id, suk.id],
+      devolverDominios: cfg.quitarDominios,
+      devolverNombres: { [suk.id]: { nuevo: "Cemaco · Sukasa", antes: "Sukasa" } },
+      sueltasAntes: cfg.sueltasAntes,
+    });
+    expect(await prisma.client.findUniqueOrThrow({ where: { id: suk.id }, select: sel })).toEqual({ name: "Sukasa", emailDomains: ["sukasa.test"], hubspotCompanyId: "hs-sukasa", comparteDominioConId: null });
+    expect(await prisma.client.findUniqueOrThrow({ where: { id: ec.id }, select: sel })).toMatchObject({ comparteDominioConId: cr.id });
+    expect(await prisma.client.findUniqueOrThrow({ where: { id: cr.id }, select: sel })).toMatchObject({ hubspotCompanyId: "hs-cemaco", comparteDominioConId: null });
+  });
+
+  it("deshacer no pisa un nombre que alguien cambió a mano después", async () => {
+    const g = await prisma.client.create({ data: { name: "Cemaco", kind: "EMPRESA" } });
+    const suk = await prisma.client.create({ data: { name: "Sukasa Lujo", comparteDominioConId: g.id } });
+    const otra = await prisma.client.create({ data: { name: "Otra", comparteDominioConId: g.id } });
+    await deshacerLaEmpresa({ empresaId: g.id, principal: null, unidades: [suk.id, otra.id], devolverNombres: { [suk.id]: { nuevo: "Cemaco · Sukasa", antes: "Sukasa" } } });
+    expect((await prisma.client.findUniqueOrThrow({ where: { id: suk.id } })).name).toBe("Sukasa Lujo");
+  });
+
   it("una empresa que solo agrupa (sin vieja principal): las unidades vuelven a no colgar de nadie", async () => {
     const g = await prisma.client.create({ data: { name: "Grupo Teamnet", kind: "EMPRESA" } });
     const t = await prisma.client.create({ data: { name: "Teamnet", emailDomains: ["teamnet.test"], comparteDominioConId: g.id } });

@@ -265,3 +265,57 @@ describe("el nombre de la empresa no vuelve ambigua una palabra de OTRO cliente"
     expect(computeAmbiguousNameTokens(fichas).has("holding")).toBe(false);
   });
 });
+
+describe("Grupo Teamnet: dentro de una empresa que solo agrupa vale la regla del grupo (Elías, 27 nov)", () => {
+  const T_ANTES = { id: "t", name: "Teamnet", company: null, emailDomains: ["teamnet.com.mx"], hubspotCompanyId: "hs-t" };
+  const S_ANTES = { id: "s", name: "Stratosphere", company: null, emailDomains: ["stratospherecorp.com"], siglas: ["SAS"], hubspotCompanyId: "hs-s" };
+  const GRUPO = { id: "g", name: "Grupo Teamnet", company: null, emailDomains: [], hubspotCompanyId: null, kind: "EMPRESA" };
+  const T = { ...T_ANTES, comparteDominioConId: "g", kind: "CLIENTE" };
+  const S = { ...S_ANTES, comparteDominioConId: "g", kind: "CLIENTE" };
+  const comun = {
+    interlocutoresConfirmados: new Map([["laura@teamnet.com.mx", ["t", "s"]]]),
+    primerProyecto: new Map([
+      ["t", new Date("2025-03-01")],
+      ["s", new Date("2026-02-01")],
+    ]),
+  };
+  const antes = ctxDe([T_ANTES, OTRO, S_ANTES], comun);
+  const ahora = ctxDe([T, OTRO, S, GRUPO], comun);
+  const CASOS_TEAMNET = [
+    reunion("Sprint semanal | Teamnet y Sas", ["laura@teamnet.com.mx"]),
+    reunion("Health Score Team", ["laura@teamnet.com.mx"]),
+    reunion("Kick off - Teamnet y Sas", []),
+    reunion("Capacitación", ["a@teamnet.com.mx", "b@stratospherecorp.com"]),
+    reunion("Stratosphere | Kickoff", ["b@stratospherecorp.com"]),
+    reunion("Revisión", ["b@stratospherecorp.com"]),
+    reunion("Teamnet | Web", ["laura@teamnet.com.mx"]),
+    reunion("Wherex | QBR", ["x@wherex.com"]),
+  ];
+
+  it("cada reunión tiene el mismo dueño que antes de la empresa", () => {
+    for (const s of CASOS_TEAMNET) expect([s.title, duenoDe(s, ahora)]).toEqual([s.title, duenoDe(s, antes)]);
+    expect(duenoDe(CASOS_TEAMNET[0]!, ahora)).toBe("t");
+    expect(duenoDe(CASOS_TEAMNET[3]!, ahora)).toBe("t");
+  });
+
+  it("sin la regla (la empresa con dominio o con empresa de HubSpot, o sin saberlo) lo dudoso queda por decidir", () => {
+    const capacitacion = CASOS_TEAMNET[3]!;
+    for (const grupo of [
+      { ...GRUPO, hubspotCompanyId: "hs-g" },
+      { ...GRUPO, emailDomains: ["grupoteamnet.com"] },
+      { ...GRUPO, hubspotCompanyId: undefined },
+    ]) {
+      expect(duenoDe(capacitacion, ctxDe([T, OTRO, S, grupo], comun))).toBe("(por decidir)");
+    }
+  });
+
+  it("el TEC y Cemaco no cambian: con proyectos, lo dudoso entre sus unidades sigue por decidir", () => {
+    const conProyectos = { primerProyecto: new Map([["tae", new Date("2024-01-01")], ["ae", new Date("2025-01-01")], ["cr", new Date("2024-01-01")], ["ec", new Date("2025-01-01")]]) };
+    const tec = ctxDe([TAE, OTRO, AE, { ...TEC, hubspotCompanyId: "59180429929" }], conProyectos);
+    expect(duenoDe(reunion("Revisión semanal", ["x@itcr.ac.cr"]), tec)).toBe("(por decidir)");
+    const CEMACO = { id: "cemaco", name: "Cemaco", company: null, emailDomains: [], hubspotCompanyId: "59033632123", kind: "EMPRESA" };
+    const CR = { id: "cr", name: "Cemaco · Costa Rica", company: null, emailDomains: ["cemaco.co.cr"], siglas: ["CR"], comparteDominioConId: "cemaco", kind: "CLIENTE" };
+    const EC = { id: "ec", name: "Cemaco · Ecuador", company: null, emailDomains: ["sukasa.com"], siglas: ["EC"], comparteDominioConId: "cemaco", kind: "CLIENTE" };
+    expect(duenoDe(reunion("Alineación CEMACO", ["a@cemaco.co.cr", "b@sukasa.com"]), ctxDe([CR, CEMACO, EC], conProyectos))).toBe("(por decidir)");
+  });
+});

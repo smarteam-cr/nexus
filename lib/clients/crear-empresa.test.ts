@@ -71,3 +71,39 @@ describe("lo que no vale", () => {
     expect(planDeLaEmpresa({ clave: "x", nombre: "X", unidades: ["tae", "cr"] }, [{ ...TAE, kind: "EMPRESA" }, CR]).ok).toBe(false);
   });
 });
+
+describe("Sukasa entra a Cemaco como tercera unidad (Elías, 27 nov)", () => {
+  const SUKASA: FichaParaLaEmpresa = { id: "suk", name: "Sukasa", kind: "PROSPECTO", company: "Sukasa", emailDomains: ["sukasa.com"], hubspotCompanyId: "60198830904", comparteDominioConId: null };
+  const CFG = {
+    clave: "cemaco",
+    nombre: "Cemaco",
+    unidades: ["cr", "ec", "suk"],
+    desde: "cr",
+    empresaDeHubspot: "59033632123",
+    quitarDominios: { suk: ["sukasa.com"] },
+    renombrar: { suk: "Cemaco · Sukasa" },
+    nombresDeAntes: { suk: "Sukasa" },
+    sueltasAntes: ["suk"],
+  };
+
+  it("suelta sukasa.com (es de Ecuador), toma el nombre con la marca y se queda con su empresa de HubSpot", () => {
+    const r = planDeLaEmpresa(CFG, [CR, EC, SUKASA]);
+    if (!r.ok) throw new Error(r.errores.join(" "));
+    const s = r.plan.cambios.find((c) => c.id === "suk")!;
+    expect(s.data).toEqual({ comparteDominioConId: ID_DE_LA_EMPRESA_NUEVA, name: "Cemaco · Sukasa", emailDomains: [] });
+    expect(s.antes).toMatchObject({ name: "Sukasa", emailDomains: ["sukasa.com"] });
+    expect(r.plan.cambios.find((c) => c.id === "ec")!.data).toEqual({ comparteDominioConId: ID_DE_LA_EMPRESA_NUEVA });
+  });
+
+  it("un dominio que la unidad no tiene, o una unidad de afuera, no valen", () => {
+    expect(planDeLaEmpresa({ ...CFG, quitarDominios: { suk: ["cemaco.co.cr"] } }, [CR, EC, SUKASA]).ok).toBe(false);
+    expect(planDeLaEmpresa({ ...CFG, renombrar: { otra: "X" } }, [CR, EC, SUKASA]).ok).toBe(false);
+  });
+
+  it("para poder deshacer: el nombre de antes es el de hoy, y la unidad suelta está declarada", () => {
+    expect(planDeLaEmpresa({ ...CFG, nombresDeAntes: {} }, [CR, EC, SUKASA]).ok).toBe(false);
+    expect(planDeLaEmpresa({ ...CFG, nombresDeAntes: { suk: "Sukasa SA" } }, [CR, EC, SUKASA]).ok).toBe(false);
+    expect(planDeLaEmpresa({ ...CFG, sueltasAntes: [] }, [CR, EC, SUKASA]).ok).toBe(false);
+    expect(planDeLaEmpresa({ ...CFG, sueltasAntes: ["suk", "ec"] }, [CR, EC, SUKASA]).ok).toBe(false);
+  });
+});

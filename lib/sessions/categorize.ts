@@ -77,6 +77,8 @@ export interface CategorizeContext {
     comparteDominioConId?: string | null;
     /** `EMPRESA`: la empresa arriba de sus unidades, que nunca es dueña (ver arriba). Todo cargador lo pide. */
     kind?: string | null;
+    /** Solo para saber si una empresa SOLO AGRUPA (`empresaQueSoloAgrupa`): sin él (undefined), se toma que no. */
+    hubspotCompanyId?: string | null;
   })[];
   categories: Pick<SessionCategory, "id" | "name" | "slug" | "domains" | "kind" | "color">[];
   hubspotCompaniesByDomain: Map<string, HubspotCompanyLite>;
@@ -553,16 +555,34 @@ function duenaDelProyectoDelGrupo(ids: readonly string[], ctx: CategorizeContext
   const empresas = new Set(ctx.clients.filter(esEmpresa).map((c) => c.id));
   const unicas = [...new Set(ids)].filter((id) => !empresas.has(id));
   if (unicas.length < 2) return null;
-  const grupos = gruposDeLaGenteConfirmada(ctx);
-  const clave = grupos.get(unicas[0]!);
-  if (!clave || unicas.some((id) => grupos.get(id) !== clave)) return null;
   const porId = new Map(ctx.clients.map((c) => [c.id, c]));
   if (unicas.some((id) => !porId.has(id))) return null;
-  if (new Set(unicas.map((id) => empresaDe(porId.get(id)!))).size < 2) return null;
+  /* Todas unidades de UNA empresa que solo agrupa (Grupo Teamnet; Elías, 27 nov: «Sí, que valga»): el grupo ya lo armó
+     una persona al crear la empresa, sin gente confirmada en las dos. */
+  const empresa = porId.get(unicas[0]!)!.comparteDominioConId;
+  const enLaQueAgrupa =
+    !!empresa && unicas.every((id) => porId.get(id)!.comparteDominioConId === empresa) && empresaQueSoloAgrupa(porId.get(empresa));
+  if (!enLaQueAgrupa) {
+    const grupos = gruposDeLaGenteConfirmada(ctx);
+    const clave = grupos.get(unicas[0]!);
+    if (!clave || unicas.some((id) => grupos.get(id) !== clave)) return null;
+    if (new Set(unicas.map((id) => empresaDe(porId.get(id)!))).size < 2) return null;
+  }
   const conFecha = unicas.filter((id) => primer.has(id)).sort((a, b) => primer.get(a)!.getTime() - primer.get(b)!.getTime());
   if (!conFecha.length) return null;
   if (conFecha.length > 1 && primer.get(conFecha[0]!)!.getTime() === primer.get(conFecha[1]!)!.getTime()) return null;
   return porId.get(conFecha[0]!) ?? null;
+}
+
+/**
+ * ¿Una empresa que SOLO AGRUPA? De tipo Empresa, sin dominio propio y sin empresa de HubSpot: no hay nada compartido que
+ * decida de cuál unidad es una reunión (Grupo Teamnet, con Teamnet y Stratosphere, cada una con lo suyo). Dentro de ella
+ * vale la regla del grupo (Elías, 27 nov). El TEC (dominios del instituto) y Cemaco («Cemaco Internacional» de HubSpot)
+ * no solo agrupan: lo dudoso queda por decidir. Si el cargador no trajo `hubspotCompanyId` (undefined), no: sin la regla,
+ * lo dudoso queda por decidir, que es lo seguro.
+ */
+function empresaQueSoloAgrupa(c: ClienteDelCtx | undefined): boolean {
+  return !!c && esEmpresa(c) && c.hubspotCompanyId === null && effectiveDomainsForClient(c).length === 0;
 }
 
 /**
@@ -1090,6 +1110,15 @@ function repartirEntreEntidades(
   if (traza) traza.entre = d.por;
   const elegida = d.clientId ? entidades.find((e) => e.id === d.clientId) : undefined;
   if (elegida) return { kind: "client", id: elegida.id, label: elegida.name, company: elegida.company };
+  /* En una empresa que solo agrupa, lo que no se puede decidir es de la unidad con el proyecto más antiguo (27 nov). */
+  const duena = duenaDelProyectoDelGrupo(
+    entidades.map((e) => e.id),
+    ctx,
+  );
+  if (duena) {
+    if (traza) traza.entre = "duena-del-proyecto";
+    return { kind: "client", id: duena.id, label: duena.name, company: duena.company };
+  }
   const cabeza = ctx.clients.find((c) => c.id === clientId && esEmpresa(c));
   const delGrupo = new Set([...entidades, ...(cabeza ? [cabeza] : [])].flatMap((e) => effectiveDomainsForClient(e)));
   const dominio = [...externalDomains].find((x) => delGrupo.has(x)) ?? [...externalDomains][0];
