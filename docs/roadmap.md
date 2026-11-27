@@ -10,11 +10,11 @@
 ```ejecutivo
 {
  "corte": "2026-11-26",
- "produccion": "133bd131",
+ "produccion": "68c33538",
  "arriba": [
-  "En producción desde el 26 nov: «La escala» se llama «Diagnóstico de rendimiento» en la preventa y para el cliente; interlocutores por unidad (TEC precargado) y Stratosphere separado de Teamnet; 15.000 caracteres en el chat.",
-  "En curso: nada corriendo; el diseño de «Unidades de negocio» espera tu visto bueno.",
-  "Te espera: ver el diseño de Unidades de negocio, rehacer el Resumen de TEC · AE con la nota sobre Meta, Centauro con Marco y las preguntas 118 y 99."
+  "En producción desde el 26 nov: el diagnóstico se valida propuesta por propuesta, Unidades de negocio en «Información del cliente» y el plan general como pieza de la cuenta, con la fase «00 · Transversal» de kölbi cargada.",
+  "En curso: nada corriendo; el plan de kölbi espera que Valentina lo publique.",
+  "Te espera: rehacer el Resumen de TEC · AE con la nota sobre Meta, Centauro con Marco y las preguntas 118 y 99."
  ],
  "iniciativas": [
   {
@@ -110,7 +110,7 @@
    "nombre": "La escala y el diagnóstico",
    "color": "escala",
    "estado": "en-curso",
-   "donde": "La escala se completa con el chat «Nexus» y las notas del equipo ya fijan niveles; falta armar el Resumen de TEC · AE y revisar Centauro con Marco.",
+   "donde": "El diagnóstico ya se valida propuesta por propuesta y las unidades de negocio tienen su pestaña; falta armar el Resumen de TEC · AE y revisar Centauro con Marco.",
    "hecho": [
     "La escala ubica a cada empresa por equipo e industria, con un radar, un Resumen que el cliente ve y su historia en el tiempo.",
     "El test del diagnóstico vive en Nexus, con su página de resultados en dinero y la escalera de niveles, igual a la curva de la app vieja.",
@@ -150,15 +150,15 @@
      "titulo": "El Resumen",
      "pasos": [
       {
-       "texto": "«✨ Mejorar con IA» por sección y por equipo",
-       "estado": "hecho"
-      },
-      {
        "texto": "«Diagnóstico de rendimiento», reuniones enteras y cifras que no se pierden",
        "estado": "hecho"
       },
       {
        "texto": "Un cliente sin sesiones, con lo que ya sabemos",
+       "estado": "hecho"
+      },
+      {
+       "texto": "Validar propuesta por propuesta, con quién validó",
        "estado": "hecho"
       },
       {
@@ -297,10 +297,10 @@
    "nombre": "Cronograma y entrega",
    "color": "cronograma",
    "estado": "en-curso",
-   "donde": "El cronograma sale de lo vendido y kölbi ya tiene su plan general; faltan los loops del handoff y cuatro decisiones tuyas.",
+   "donde": "El plan general ya es una pieza de la cuenta; falta que Valentina publique el de kölbi, los loops del handoff y cuatro decisiones tuyas.",
    "hecho": [
     "El cronograma lee lo vendido (semanas, fecha y horas), avisa claro cuando algo se pasa y saca las tareas de las actividades.",
-    "Una cuenta con varios proyectos tiene un plan general con sus loops y un enlace para el cliente; kölbi ya está cargado.",
+    "El plan general es una pieza de la cuenta, con su lista de proyectos y sus propias fases; kölbi tiene sus tres proyectos y la fase «00 · Transversal».",
     "El Gantt se lee mejor: las semanas sin tareas van en una línea y el contexto arranca plegado."
    ],
    "sigue": [
@@ -353,6 +353,18 @@
       {
        "texto": "kölbi: tres proyectos y siete loops",
        "estado": "hecho"
+      },
+      {
+       "texto": "El plan como pieza de la cuenta, con la fase «00 · Transversal»",
+       "estado": "hecho"
+      },
+      {
+       "texto": "Valentina lo publica",
+       "estado": "espera"
+      },
+      {
+       "texto": "Planes entre unidades y quién los ve",
+       "estado": "por-hacer"
       }
      ]
     },
@@ -714,7 +726,7 @@
 ```linea
 {
  "hoy": "2026-11-26",
- "produccion": "133bd131",
+ "produccion": "68c33538",
  "temasHechoHasta": "2026-10-29",
  "iniciativas": [
   {
@@ -2178,6 +2190,42 @@
     "f464ea7c",
     "b0fb3176"
    ]
+  },
+  {
+   "fecha": "2026-11-26",
+   "iniciativa": "escala",
+   "titulo": "El diagnóstico se valida propuesta por propuesta",
+   "que": "Arriba dice «Faltan N de M por validar» o «✓ Validado por» con su fecha. «Validar» recorre cada propuesta una por una y «Usar todas» queda aparte. Un solo botón «Actualizar con Nexus» ubica, valida y arma el Resumen, en ese orden. Lo que ve el cliente no cambió.",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "si",
+   "tema": 5,
+   "commits": [
+    "f06d3f23"
+   ]
+  },
+  {
+   "fecha": "2026-11-26",
+   "iniciativa": "escala",
+   "titulo": "Unidades de negocio en «Información del cliente»",
+   "que": "Una pestaña nueva con las unidades de la empresa: agregar una, editar sus siglas y su dominio y pasarle proyectos, viendo antes qué cambia y qué reuniones se mueven. «Juntar unidades» por ahora solo muestra el simulacro.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 5,
+   "commits": [
+    "d4d10875"
+   ]
+  },
+  {
+   "fecha": "2026-11-26",
+   "iniciativa": "cronograma",
+   "titulo": "El plan general es una pieza de la cuenta, y kölbi tiene su fase «00 · Transversal»",
+   "que": "El plan general ya no cuelga de un proyecto: tiene su lista de proyectos y sus propias fases («+ Fase del plan», «Proyectos del plan»). kölbi tiene la fase «00 · Transversal», en curso, de la semana 0 a la 8, con 4 filas consensuadas con Valentina. El cliente no ve esa fase hasta que alguien le dé «Publicar».",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 10,
+   "commits": [
+    "14b38153"
+   ]
   }
  ],
  "sigue": [
@@ -2206,10 +2254,10 @@
   },
   {
    "iniciativa": "escala",
-   "titulo": "Unidades de negocio en «Información del cliente»",
-   "que": "Un check «esta empresa tiene varias unidades», la lista con siglas, dominio, proyectos e interlocutores, y agregar o editar una unidad viendo antes qué reuniones se mueven. El diseño está listo y espera tu visto bueno para construirse.",
+   "titulo": "Unidades de negocio: lo que falta",
+   "que": "El chip «Parte de TEC · 2 unidades» en la ficha y juntar unidades de verdad desde la pantalla (hoy solo simula).",
    "paraQuien": "Customer Success",
-   "estado": "te-toca",
+   "estado": "por-hacer",
    "tema": 5
   },
   {
@@ -2620,6 +2668,23 @@
    "tema": 10
   },
   {
+   "iniciativa": "cronograma",
+   "titulo": "Publicar el plan de kölbi con su fase transversal",
+   "que": "Valentina revisa la fase «00 · Transversal» en el plan general de kölbi y le da «Publicar» para que el cliente la vea.",
+   "paraQuien": "Customer Success",
+   "estado": "espera",
+   "esperaA": "Valentina",
+   "tema": 10
+  },
+  {
+   "iniciativa": "cronograma",
+   "titulo": "El plan general, etapas 2 y 3",
+   "que": "Un plan que junta proyectos de varias unidades de la empresa, y decidir qué interlocutores del cliente ven el plan.",
+   "paraQuien": "Customer Success",
+   "estado": "por-hacer",
+   "tema": 10
+  },
+  {
    "iniciativa": "nexus",
    "titulo": "Las trivias de ejemplo en producción",
    "que": "Implementación de HubSpot, Good Strategy / Bad Strategy y Cómo funciona Nexus.",
@@ -2661,7 +2726,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "Todo está en producción (133bd131, 26 nov): «Diagnóstico de rendimiento», interlocutores por unidad y Stratosphere separado de Teamnet. Lo próximo: tu visto bueno al diseño de Unidades de negocio, el Resumen de TEC · AE y Centauro con Marco.",
+ "dondeVamos": "Todo está en producción (68c33538, 26 nov): el diagnóstico se valida propuesta por propuesta, Unidades de negocio y el plan general de kölbi con su fase transversal. Lo próximo: el Resumen de TEC · AE, Centauro con Marco y que Valentina publique el plan de kölbi.",
  "temas": [
   {
    "n": 4,
@@ -3019,7 +3084,7 @@
      "texto": "Una tarea «por validar» ya no llega al cliente."
     }
    ],
-   "sigue": "La sección de loops del handoff. Después, lo que falta de «lo vendido»: elegir la venta, «Fue un error mío», fases en paralelo en Desarrollo y la línea del Kickoff.",
+   "sigue": "Que Valentina publique la fase transversal de kölbi y la sección de loops del handoff. Después, lo de «lo vendido»: elegir la venta, «Fue un error mío», fases en paralelo y la línea del Kickoff.",
    "decisiones": [
     4,
     22,
@@ -3433,7 +3498,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `133bd131` (todo `main`) desde el 26 nov: «Diagnóstico de rendimiento», interlocutores por unidad, Stratosphere separado de Teamnet, 15.000 caracteres en el chat y La escala, «Guardarlo como nota» solo con lo contado, el chat «Nexus» de La escala en una sola conversación, «Ubicar» con las notas del equipo, La escala interna más limpia, La escala sin Resumen con «Responder con Nexus», la página del chat «Nexus» en Documentación, un Resumen de La escala que no pierde las cifras de la empresa, las franjas del kickoff, un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y reuniones enteras, La escala de un cliente con lo que ya sabemos, la pantalla limpia de La escala, el registro de los cambios de base, Hablar con Nexus (etapas 0 y 1), el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
+| Producción | Corre `68c33538` (todo `main`) desde el 26 nov: el diagnóstico que se valida propuesta por propuesta, Unidades de negocio, el plan general como pieza de la cuenta (kölbi con su fase «00 · Transversal», sin publicar), «Diagnóstico de rendimiento», interlocutores por unidad, Stratosphere separado de Teamnet, 15.000 caracteres en el chat y La escala, «Guardarlo como nota» solo con lo contado, el chat «Nexus» de La escala en una sola conversación, «Ubicar» con las notas del equipo, La escala interna más limpia, La escala sin Resumen con «Responder con Nexus», la página del chat «Nexus» en Documentación, un Resumen de La escala que no pierde las cifras de la empresa, las franjas del kickoff, un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y reuniones enteras, La escala de un cliente con lo que ya sabemos, la pantalla limpia de La escala, el registro de los cambios de base, Hablar con Nexus (etapas 0 y 1), el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
 | Por desplegar | Nada. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | Por datos de antes, ninguno nuevo (28 oct): 16 reuniones colgadas de proyectos de otro cliente (INV1) y 9 tareas que citan una reunión de otro cliente (INV42), las que ordena el plan de dominio compartido; el pipeline de Secure Title (INV11: 2 proyectos y 6 en una etapa desconocida); «TEC- AE» fusionada en HubSpot (INV13 e INV54: ya solo ella, kölbi quedó bien); una reunión de Meet leída antes de ocurrir (INV16a), y el corte de cartera de hace 96 días (INV32). |
 | Pruebas | 30 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 83 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
