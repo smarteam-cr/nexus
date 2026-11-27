@@ -10,13 +10,16 @@ import { ErrorDelAccesoAlPlan } from "./acceso";
 import { ErrorDelPlan } from "./plan";
 
 export const SQL_DEL_PLAN = "scripts/sql/2026-11-26-plan-general-objeto-de-la-cuenta.sql";
+/** La página del cliente (2026-11-27): el plan la lee junto con sus fases, así que sin este SQL también falla. */
+export const SQL_DE_LA_PAGINA = "scripts/sql/2026-11-27-pagina-del-cliente.sql";
 
 export async function responderDelPlan(hacer: () => Promise<NextResponse>): Promise<NextResponse> {
   try {
     return await hacer();
   } catch (e) {
     if (e instanceof ErrorDelPlan || e instanceof ErrorDelAccesoAlPlan) return NextResponse.json({ error: e.message }, { status: e.status });
-    if (esquemaDesactualizado(e)) return NextResponse.json({ error: `Falta aplicar ${SQL_DEL_PLAN} y reiniciar.` }, { status: 503 });
+    if (esquemaDesactualizado(e))
+      return NextResponse.json({ error: `Falta aplicar ${SQL_DEL_PLAN} o ${SQL_DE_LA_PAGINA} y reiniciar.` }, { status: 503 });
     throw e;
   }
 }

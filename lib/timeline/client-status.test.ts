@@ -49,3 +49,20 @@ test("cronograma sin tareas detalladas: no inventa el conteo", () => {
   expect(clientStatusLine({ curWeek: 2, totalWeeks: 10, tasksDone: 0, tasksTotal: 0, delayWeeks: 0 }))
     .toBe("Semana 3 de 10 · al día");
 });
+
+test("con tareas atrasadas a la vista no dice «al día» (27 nov)", () => {
+  expect(clientStatusLine({ curWeek: 3, totalWeeks: 12, tasksDone: 3, tasksTotal: 22, delayWeeks: 0, tasksOverdue: 3 }))
+    .toBe("Semana 4 de 12 · 3 de 22 tareas completadas · 3 tareas atrasadas");
+  expect(clientStatusLine({ curWeek: 3, totalWeeks: 12, tasksDone: 3, tasksTotal: 22, delayWeeks: 0, tasksOverdue: 0 })).toContain("al día");
+  // Con un desvío comunicado manda el desvío (la fecha nueva va en «Qué cambió en el plan»).
+  expect(clientStatusLine({ curWeek: 3, totalWeeks: 12, tasksDone: 3, tasksTotal: 22, delayWeeks: 2, tasksOverdue: 3 })).toContain("2 semanas más");
+});
+
+test("con las atrasadas apagadas y alguna vencida: ni las cuenta ni dice «al día»", () => {
+  expect(
+    clientStatusLine({ curWeek: 3, totalWeeks: 12, tasksDone: 3, tasksTotal: 22, delayWeeks: 0, tasksOverdue: 2, mostrarAtrasadas: false }),
+  ).toBe("Semana 4 de 12 · 3 de 22 tareas completadas");
+  expect(
+    clientStatusLine({ curWeek: 3, totalWeeks: 12, tasksDone: 3, tasksTotal: 22, delayWeeks: 0, tasksOverdue: 0, mostrarAtrasadas: false }),
+  ).toContain("al día");
+});

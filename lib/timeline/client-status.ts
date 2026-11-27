@@ -25,6 +25,16 @@ export interface ClientStatusInput {
   tasksTotal: number;
   /** Semanas de desvío ya comunicadas (suma de los desvíos visibles). 0 = al día. */
   delayWeeks: number;
+  /**
+   * Tareas que se pasaron de su fecha sin estar hechas, cuando la página las muestra (2026-11-27). Con alguna, la línea
+   * no dice «al día»: el cliente las ve marcadas en el cronograma y la frase no puede contradecirlas. Ausente = 0.
+   */
+  tasksOverdue?: number;
+  /**
+   * El equipo apagó las atrasadas en la página (2026-11-27). Con alguna vencida, la línea no las cuenta, pero tampoco
+   * dice «al día»: «Pendiente de tu parte» puede estar mostrando una vencida justo arriba. Ausente = se muestran.
+   */
+  mostrarAtrasadas?: boolean;
 }
 
 /** Pluraliza "semana(s)". */
@@ -64,6 +74,10 @@ export function clientStatusLine(i: ClientStatusInput): string | null {
   // En curso.
   const partes = [`Semana ${i.curWeek + 1} de ${i.totalWeeks}`];
   if (i.tasksTotal > 0) partes.push(`${i.tasksDone} de ${i.tasksTotal} tareas completadas`);
-  partes.push(i.delayWeeks > 0 ? `${semanas(i.delayWeeks)} más de lo previsto` : "al día");
+  const vencidas = i.tasksOverdue ?? 0;
+  if (i.delayWeeks > 0) partes.push(`${semanas(i.delayWeeks)} más de lo previsto`);
+  else if (vencidas > 0) {
+    if (i.mostrarAtrasadas !== false) partes.push(`${tareas(vencidas)} ${vencidas === 1 ? "atrasada" : "atrasadas"}`);
+  } else partes.push("al día");
   return partes.join(" · ");
 }

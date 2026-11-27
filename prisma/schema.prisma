@@ -1030,6 +1030,10 @@ model ProjectTimeline {
   // es null (timeline pre-D.3), readPublishedClientTimeline hace un backfill perezoso (congela
   // el vivo actual una vez); si no hay timeline, devuelve vacío (fail-closed).
   publishedSnapshot            Json?
+  // Lo que el equipo decide de la página que ve el cliente (2026-11-27): título, nombre, logo, bienvenida y qué se
+  // muestra. null = como siempre. Se congela en la foto al publicar. Forma: lib/external/pagina-del-cliente.ts.
+  // SQL: scripts/sql/2026-11-27-pagina-del-cliente.sql.
+  paginaDelCliente             Json?
   generatedByAgentRunId        String? // de qué AgentRun salió la propuesta inicial (trazabilidad)
   generatedByAgentRun          AgentRun? @relation(fields: [generatedByAgentRunId], references: [id], onDelete: SetNull)
   // D.1 — cronograma detallado:

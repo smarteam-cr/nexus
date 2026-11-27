@@ -17,6 +17,8 @@
  * `source` de fase NO cruza.
  */
 
+import type { PaginaDelCliente } from "./pagina-del-cliente";
+
 export interface ExternalTimelineTask {
   title: string;
   weekIndex: number; // 0-indexed relativo a la fase
@@ -82,4 +84,7 @@ export interface ExternalTimelineData {
   /** Desviaciones curadas visibles al cliente (visibleExternal=true). Ausente en snapshots
    *  viejos congelados antes de esta feature → el render trata undefined como []. */
   particularidades?: ExternalParticularidad[];
+  /** Lo que el equipo decidió de la página del cliente (título, logo, qué se muestra; 2026-11-27). Ausente = como
+   *  siempre: solo se escribe si alguien tocó algo, así una foto vieja y una nueva de lo mismo son iguales. */
+  pagina?: PaginaDelCliente;
 }
