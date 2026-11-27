@@ -50,6 +50,11 @@ export interface ClienteParaMatch {
   comparteDominioConId?: string | null;
   /** `EMPRESA`: la empresa arriba de sus unidades (2026-11-26). Arma el grupo de sus unidades, pero nunca se nombra. */
   kind?: string | null;
+  /**
+   * Sus dominios (`Client.emailDomains`). Entre las unidades de una empresa, el dominio propio de una es una palabra suya
+   * (27 nov, Sukasa: categorize.ts › palabrasCompartidasDelGrupo). Sin ellos, esa regla no se arma.
+   */
+  emailDomains?: readonly string[] | null;
 }
 
 /** Las palabras del título SIN el piso de 4 letras: solo para cotejar siglas declaradas. */

@@ -619,7 +619,17 @@ export function fichasQueMiraElGrupo(
 
 type ClienteDelCtx = CategorizeContext["clients"][number];
 /** Lo mínimo que hace falta para saber de qué empresa es una ficha (también lo usan Tareas y «Mi día»). */
-type ConEmpresa = ClienteParaMatch & { comparteDominioConId?: string | null; kind?: string | null };
+type ConEmpresa = ClienteParaMatch;
+
+/** Las palabras de los dominios propios de una ficha («sukasa» de sukasa.com; «cemaco» de cemaco.co.cr): sin el final. */
+function palabrasDelDominioPropio(c: ConEmpresa): Set<string> {
+  const out = new Set<string>();
+  for (const d of c.emailDomains ?? []) {
+    const partes = normalize(d).split(".");
+    for (const p of partes.slice(0, -1)) if (p.length >= 4 && !TITLE_MATCH_STOPWORDS.has(p)) out.add(p);
+  }
+  return out;
+}
 
 /** Por cada ficha de un grupo: la dueña y sus entidades, en el orden de la lista. Se arma una vez por lista de clientes. */
 const gruposPorLista = new WeakMap<readonly ConEmpresa[], Map<string, ConEmpresa[]>>();
@@ -683,7 +693,12 @@ function palabrasCompartidasDelGrupo(grupo: readonly ConEmpresa[]): Set<string> 
   if (hechas) return hechas;
   const vistas = new Map<string, number>();
   for (const c of grupo) {
-    for (const t of tokensDelCliente(c, (w) => TITLE_MATCH_STOPWORDS.has(w), normalize).todos) vistas.set(t, (vistas.get(t) ?? 0) + 1);
+    const suyas = new Set(tokensDelCliente(c, (w) => TITLE_MATCH_STOPWORDS.has(w), normalize).todos);
+    /* El dominio PROPIO de una unidad también es una palabra suya (27 nov): sukasa.com es de Cemaco · Ecuador, así que
+       «Sukasa» en el título no nombra solo a la unidad Sukasa y decide el dominio. Elías: las reuniones «SUKASA…» son de
+       Ecuador. Lo que no es dominio propio (el de la empresa, el que se comparte) no suma. */
+    if (!esEmpresa(c)) for (const t of palabrasDelDominioPropio(c)) suyas.add(t);
+    for (const t of suyas) vistas.set(t, (vistas.get(t) ?? 0) + 1);
   }
   const out = new Set([...vistas].filter(([, n]) => n >= 2).map(([t]) => t));
   compartidasPorGrupo.set(grupo, out);

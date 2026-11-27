@@ -323,7 +323,7 @@ export async function clientesDeLasLineas(lineas: readonly LineaDeProximosPasos[
     where: { OR: [{ id: { in: empresas } }, { comparteDominioConId: { in: [...empresas, ...filas.map((c) => c.id)] } }], id: { notIn: [...clientes.ids] } },
     select,
   });
-  const indice = indiceDeClientes([...filas, ...parientes].filter((c) => c.kind !== "INTERNO").map((c) => ({ id: c.id, name: c.name, company: c.company, siglas: c.siglas, comparteDominioConId: c.comparteDominioConId, kind: c.kind })));
+  const indice = indiceDeClientes([...filas, ...parientes].filter((c) => c.kind !== "INTERNO").map((c) => ({ id: c.id, name: c.name, company: c.company, siglas: c.siglas, emailDomains: c.emailDomains, comparteDominioConId: c.comparteDominioConId, kind: c.kind })));
   const internos = new Set(filas.filter((c) => c.kind === "INTERNO").map((c) => c.id));
   const dominiosInternos = new Set(filas.filter((c) => internos.has(c.id)).flatMap((c) => effectiveDomainsForClient(c)));
   const esLaCasa = (c: { id: string }) => internos.has(c.id) || effectiveDomainsForClient(filas.find((f) => f.id === c.id) ?? { emailDomains: [], company: null }).some((d) => dominiosInternos.has(d));

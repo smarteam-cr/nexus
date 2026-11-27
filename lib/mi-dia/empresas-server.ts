@@ -45,7 +45,7 @@ async function leer(): Promise<MapasDeEmpresas> {
     dominiosDeLaCasa(),
   ]);
   const { porDominio, porCorreo, grupoDe } = armarMapasDeLaGente(clientes, contactos);
-  const indiceDeNombres = indiceDeClientes(clientes.map((c) => ({ id: c.id, name: c.name, company: c.company, siglas: c.siglas, comparteDominioConId: c.comparteDominioConId, kind: c.kind })));
+  const indiceDeNombres = indiceDeClientes(clientes.map((c) => ({ id: c.id, name: c.name, company: c.company, siglas: c.siglas, emailDomains: c.emailDomains, comparteDominioConId: c.comparteDominioConId, kind: c.kind })));
   return {
     porCorreo,
     porDominio,
