@@ -74,6 +74,7 @@ import { abrirNexusEnLaPreventa, EVENTO_LA_ESCALA_CAMBIO_CON_NEXUS } from "@/lib
 import { NOMBRE_DEL_BOTON } from "@/lib/pedirle-a-nexus/contrato";
 import { PuntoDeNexus } from "./BotonDeNexus";
 import HistorialDelArea from "./HistorialDelArea";
+import { EnLaFilaDeArriba } from "./ranura-de-arriba";
 import { conLoQueCuestaDelArea, esDeLoQueHicimos, piezasDelArea, piezasDelResumen, type LugarEnLaEscala, type PiezaDeLaEscala } from "@/lib/exploraciones/escala-con-nexus";
 import { esDeLaSeccion } from "@/lib/external/secciones-de-la-escala";
 
@@ -347,12 +348,13 @@ function AvisoDelResumen({
         </Alert>
       );
     case "falta":
-      return (
-        <Alert variant="warning" title="Falta armar el Resumen">
-          Mientras no exista, el cliente no ve esta pestaña: su enlace abre en la página de un equipo.
-          {aviso.fallo && <span className="mt-1 block font-medium">La última vez que se pidió, no se pudo. {aviso.fallo}</span>}
+      /* Que falta lo dice el recuadro de arriba del diagnóstico (27 nov: «Falta generar el diagnóstico», con su botón);
+         acá solo queda por qué falló la última vez. */
+      return aviso.fallo ? (
+        <Alert variant="danger" title="La última vez que se pidió, no se pudo">
+          {aviso.fallo}
         </Alert>
-      );
+      ) : null;
     case "fallo":
       return (
         <Alert variant="danger" title="No se pudo rehacer el Resumen" onDismiss={() => onCerrar(aviso.id)}>
@@ -360,13 +362,9 @@ function AvisoDelResumen({
         </Alert>
       );
     case "nuevas":
-      /* Una nota puede fijar un nivel (25 nov): si «Ubicar» tampoco la leyó, lo que sigue es volver a ubicar; el Resumen,
-         después. Ese orden lo hace cumplir «Actualizar con Nexus» (26 nov): acá solo se dice quién no las leyó todavía. */
-      return (
-        <Alert variant="info" title={aviso.titulo}>
-          {aviso.ubicar ? (ubicando ? "Nexus está ubicando la escala con lo que contaron." : "La escala todavía no las leyó.") : "El Resumen todavía no las leyó."}
-        </Alert>
-      );
+      /* Lo nuevo que no leyó la escala o el Resumen lo dice arriba del diagnóstico (27 nov), al lado de «Actualizar con
+         Nexus» (PasoEscala › `ArribaDelDiagnostico`): acá solo mientras Nexus ubica con eso. */
+      return aviso.ubicar && ubicando ? <Alert variant="info" title={aviso.titulo}>Nexus está ubicando la escala con lo que contaron.</Alert> : null;
   }
 }
 
@@ -590,8 +588,8 @@ export default function PaginaDeLaEscala() {
        primero que ve el cliente… Sale de los equipos que ve» y «Armado el … Cada texto se cambia con un clic»: cuándo se
        armó y si hay reuniones nuevas lo dice la línea de La escala (PasoEscala › `LineaDeLaUbicacion`, debajo de la
        página desde el 24 nov). Sin Resumen lo dice el aviso de arriba («Falta armar el Resumen», `AvisoDelResumen`). */
+    // El formato del 9 nov lo dice la franja de arriba del diagnóstico (27 nov), al lado de «Actualizar con Nexus».
     const avisosDelResumen = [
-      res.at && res.formato === 1 && "Está armado con el formato del 9 nov (datos rojos y hallazgos): «Actualizar con Nexus» lo pasa al resumen ejecutivo y conserva lo que escribiste.",
       res.at && res.formato === 2 && !cifras.length && "Ninguna cifra pasó la verificación: las tarjetas dicen qué dato falta.",
       queNoSalen > 0 &&
         (queSalen
@@ -625,23 +623,16 @@ export default function PaginaDeLaEscala() {
         <div className="flex flex-col gap-2 text-xs text-fg-muted">
           {/* Lo que hay que hacer con el Resumen, a la vista (24 nov): armarlo, en qué va, por qué falló o lo nuevo. */}
           <AvisoDelResumen aviso={aviso} hayResumen={!!res.at} onMirar={() => void mirarElResumen()} onCerrar={setFalloCerrado} ubicando={ubicacion.ubicando} />
+          {res.at && avisosDelResumen.length > 0 && <p>{avisosDelResumen.join(" ")}</p>}
+          {/* «✨ Mejorar con IA» e «Historial», en la fila de arriba (27 nov). Que la escala cambió desde que se armó lo dice
+              la franja de arriba del diagnóstico, al lado de «Actualizar con Nexus». */}
+          {/* El historial lo abre quien ve la página (mirar es leer; usar una versión pide editar): adentro está lo que
+              Nexus descartó, que antes veía cualquiera arriba de la página. */}
           {res.at && (
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-              <p className="min-w-0 flex-1">{avisosDelResumen.join(" ")}</p>
-              {/* Sin el botón de rehacer el Resumen (26 nov): lo hace «Actualizar con Nexus», arriba, cuando no queda nada por validar. */}
-              {puedeEditar && (
-                <div className="flex flex-wrap items-center gap-2">
-                  {botonDePedirle}
-                  <BotonDelHistorial onClick={() => setHistorialAbierto(true)} />
-                </div>
-              )}
-            </div>
-          )}
-          {/* La escala cambió desde que se armó (compara la firma de los niveles): el Resumen puede decir algo viejo. */}
-          {res.at && res.escalaCambio && (
-            <Alert variant="warning" title="La escala cambió desde este resumen">
-              Los niveles se movieron después de armarlo.
-            </Alert>
+            <EnLaFilaDeArriba>
+              {botonDePedirle}
+              <BotonDelHistorial onClick={() => setHistorialAbierto(true)} />
+            </EnLaFilaDeArriba>
           )}
           {res.malLeidas && res.malLeidas.length > 0 && <ReunionesMalLeidas reuniones={res.malLeidas} enteras={!!res.leidasEnteras} />}
           {res.avisos && res.avisos.length > 0 && (
@@ -650,16 +641,6 @@ export default function PaginaDeLaEscala() {
                 <li key={a}>{a}</li>
               ))}
             </ul>
-          )}
-          {descartados && descartados.length > 0 && (
-            <details>
-              <summary className="cursor-pointer font-semibold text-fg-secondary">Lo que Nexus escribió y no pasó la verificación ({descartados.length})</summary>
-              <ul className="mt-1 list-disc space-y-0.5 pl-5">
-                {descartados.map((d) => (
-                  <li key={d}>{d}</li>
-                ))}
-              </ul>
-            </details>
           )}
         </div>
         {error && (
@@ -680,6 +661,8 @@ export default function PaginaDeLaEscala() {
           // Con un texto guardándose, la huella sería de lo de antes y el servidor diría que otra persona lo cambió.
           frenado={armando ? "Nexus está rehaciendo el Resumen: espera a que termine para usar otra versión." : guardando ? "Se está guardando un texto: espera un momento." : null}
           alCambiar={alCambiarDeVersion}
+          // Lo que Nexus descartó, dentro del historial (27 nov: arriba de la página no le servía al día a día).
+          descartados={descartados}
         />
         <div className="overflow-hidden rounded-xl border border-line">
           {/* Sin Resumen, la plantilla (24 nov): la forma de la portada, sin texto inventado. El cliente no ve esta pestaña. */}
@@ -831,10 +814,10 @@ export default function PaginaDeLaEscala() {
     <div data-recorrido="preventa.escala.areas" className="flex flex-col gap-2">
       <LineaDelArea areaId={r.areaId} alCliente={pagina.alCliente.includes(r.areaId)} />
       {puedeEditar && (
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <BotonDelHistorial onClick={() => setHistorialDelArea(true)} />
+        <EnLaFilaDeArriba>
           {botonDePedirle}
-        </div>
+          <BotonDelHistorial onClick={() => setHistorialDelArea(true)} />
+        </EnLaFilaDeArriba>
       )}
       <HistorialDelArea
         open={historialDelArea}

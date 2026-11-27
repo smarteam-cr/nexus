@@ -90,7 +90,9 @@ describe("2 · arriba del Resumen: «Falta armar el Resumen» y en qué va", () 
     expect(aviso).toBeGreaterThan(-1);
     expect(aviso).toBeLessThan(marco);
     expect(resumen).toMatch(/\{res\.at \? \(\s*<ResumenDeLaEscalaVista[\s\S]*?\) : \(\s*<PlantillaDelResumenVista/);
-    expect(pagina).toContain('title="Falta armar el Resumen"');
+    // Desde el 27 nov que falta lo dice el recuadro de arriba del diagnóstico, con su botón; el aviso, solo si falló.
+    expect(codigo("components/exploraciones/PasoEscala.tsx")).toContain(">Falta generar el diagnóstico<");
+    expect(pagina).toContain('title="La última vez que se pidió, no se pudo"');
     // Desde el 26 nov lo arma «Actualizar con Nexus», arriba del diagnóstico: el aviso no trae su botón.
     expect(pagina).not.toContain("Armar el Resumen con IA");
   });
@@ -100,10 +102,11 @@ describe("2 · arriba del Resumen: «Falta armar el Resumen» y en qué va", () 
     expect(pagina).toContain(
       "const aviso = queDiceElAviso({ resumenEn: res.at, corrida: corridaDelResumen, lanzando: lanzandoElResumen, sinSaber: sinSaberDelResumen, nuevas, cerrado: falloCerrado, ubicarPrimero });",
     );
-    // Con respuestas que «Ubicar» tampoco leyó (25 nov): lo dice; volver a ubicar primero lo hace cumplir «Actualizar con
-    // Nexus» (26 nov, validar-la-escala.test.ts).
+    // Lo nuevo que no se leyó lo dice desde el 27 nov la franja de arriba del diagnóstico, con «Actualizar con Nexus»
+    // (`porQueQuedoAtras`, validar-la-escala.test.ts); el aviso solo dice cuando Nexus está ubicando con eso.
     const nuevas = aviso.slice(aviso.indexOf('case "nuevas":'));
-    expect(nuevas).toContain('aviso.ubicar ? (ubicando ? "Nexus está ubicando la escala con lo que contaron." : "La escala todavía no las leyó.") : "El Resumen todavía no las leyó."');
+    expect(nuevas).toContain("aviso.ubicar && ubicando ?");
+    expect(nuevas).toContain("Nexus está ubicando la escala con lo que contaron.");
     expect(pagina).toContain("ubicando={ubicacion.ubicando}");
     // Lo decide `lasNotasNuevas` (con su prueba): solo en la preventa, y desde lo que leyó el Resumen que hay.
     expect(pagina).toMatch(/lasNotasNuevas\(\{[\s\S]{0,300}resumenDesde: res\.at \? leidoHasta\(res\.at, laQueLoArmo\) : null,\s*enLaPreventa: lugar === "preventa",/);
@@ -111,7 +114,8 @@ describe("2 · arriba del Resumen: «Falta armar el Resumen» y en qué va", () 
     // El reloj no se anuncia cada segundo (el Alert es una región viva): solo la fase.
     expect(aviso).toMatch(/<span className="tabular-nums" aria-hidden="true">\s*· lleva \{cuantoLleva\(aviso\.desde, ahora\)\}/);
     expect(aviso).toContain("Volver a mirar");
-    expect(aviso).toContain("La última vez que se pidió, no se pudo. {aviso.fallo}");
+    expect(aviso).toContain('title="La última vez que se pidió, no se pudo"');
+    expect(aviso).toContain("{aviso.fallo}");
   });
 
   it("⛔ un solo botón de la IA, arriba del diagnóstico: ni el aviso ni la fila del Resumen traen el suyo (26 nov)", () => {
@@ -123,7 +127,8 @@ describe("2 · arriba del Resumen: «Falta armar el Resumen» y en qué va", () 
     // El que queda: «Actualizar con Nexus» (PasoEscala), que decide `queHaceActualizar` (con su prueba).
     const paso = codigo("components/exploraciones/PasoEscala.tsx");
     expect(paso).toContain("const que = queHaceActualizar({");
-    expect(paso).toContain('{esperando ? "Nexus está actualizando…" : "Actualizar con Nexus"}');
+    // Sin Resumen y listo para armarlo dice «Generar con Nexus» (27 nov).
+    expect(paso).toContain('{esperando ? "Nexus está actualizando…" : !guardado?.at && que.accion === "resumen" ? "Generar con Nexus" : "Actualizar con Nexus"}');
   });
 
   it("el fallo cerrado no vuelve al cambiar de vista ni al recargar (se recuerda en este navegador, por exploración)", () => {
@@ -154,25 +159,31 @@ describe("2 · arriba del Resumen: «Falta armar el Resumen» y en qué va", () 
   });
 });
 
-describe("3 y 4 · arriba la vista, «Publicado…» y «Acceso»; la línea de la ubicación, debajo de la página", () => {
+describe("3 y 4 · la fila del título con la vista y «Acceso»; el estado; «Publicar» en su franja (27 nov)", () => {
   const paso = codigo("components/exploraciones/PasoEscala.tsx");
   const principal = paso.slice(paso.indexOf("export default function PasoEscala"));
   const escala = paso.slice(paso.indexOf("function DondeEstaHoy("), paso.indexOf("export default function PasoEscala"));
 
-  it("arriba de todo, qué falta validar (26 nov); después «Como lo ve el cliente» / «Comparar áreas», «Publicar» y «Acceso»", () => {
+  it("la fila del título (vista, IA, historial y «Acceso» a la par), después el estado, «Publicar» y la página", () => {
+    const fila = principal.indexOf("<FilaDeArriba");
     const arriba = principal.indexOf("<ArribaDelDiagnostico");
-    const vista = principal.indexOf("<ComoSeVe");
-    expect(arriba).toBeGreaterThan(-1);
-    expect(arriba).toBeLessThan(vista);
-    expect(vista).toBeLessThan(principal.indexOf("<PublicarLaEscala />"));
-    expect(principal.indexOf("<AccesoALaEscala />")).toBeLessThan(principal.indexOf("<DondeEstaHoy"));
+    expect(fila).toBeGreaterThan(-1);
+    expect(fila).toBeLessThan(arriba);
+    expect(arriba).toBeLessThan(principal.indexOf("<PublicarLaEscala />"));
+    expect(principal.indexOf("<PublicarLaEscala />")).toBeLessThan(principal.indexOf("<DondeEstaHoy"));
     expect(principal).toContain("<DondeEstaHoy vista={vista} />");
+    const laFila = paso.slice(paso.indexOf("function FilaDeArriba("), paso.indexOf("/**\n * La escala: la página"));
+    const vista = laFila.indexOf("<ComoSeVe");
+    const ranura = laFila.indexOf("ref={onRanura}");
+    expect(vista).toBeGreaterThan(-1);
+    expect(vista).toBeLessThan(ranura);
+    expect(ranura).toBeLessThan(laFila.indexOf("<AccesoALaEscala />"));
   });
 
-  it("⛔ la línea de la ubicación sube con «Actualizar con Nexus» (26 nov): debajo de la cabecera, solo en la preventa", () => {
+  it("⛔ la línea de la ubicación va en el estado de arriba (27 nov), solo en la preventa", () => {
     expect(escala).not.toContain("{linea}");
     expect(paso).toContain('return lugar === "preventa" ? <ArribaEnLaPreventa /> :');
-    expect(paso).toContain("debajo={<LineaDeLaUbicacion u={u} />}");
+    expect(paso).toContain("linea={u.linea}");
   });
 
   it("se fue el título «Dónde está hoy»; las dos vistas siguen", () => {

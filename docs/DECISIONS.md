@@ -18124,3 +18124,35 @@ y que le toca validarlo. La pantalla dice qué falta validar y marca solo lo que
   servidor: lo que manda la pantalla no cuenta). Lo copiado de la preventa a la cuenta entra tal cual (`copia: true`, solo
   del servidor): no lo validó quien abre la cuenta. Lo confirmado antes del 26 nov no tiene nombre: cuenta como validado
   (si nadie tiene marca, la línea dice solo «Validado»). El nombre sale del correo (la primera palabra), «ti» si eres tú.
+
+## La parte de arriba del Diagnóstico de rendimiento: la misma información, ordenada por el trabajo (2026-11-27)
+
+Elías, probando TEC · TAE y TEC · AE: «es la misma información, pero mejor ordenada». Con TAE la pantalla decía «✓ Validado ·
+11 sin dato» con el diagnóstico sin generar, y «Actualizar con Nexus» quedaba en el otro extremo de la fila. El trabajo es:
+venir, generar el diagnóstico, revisar lo que generó y cambiarlo con «✨ Mejorar con IA» o a mano, y publicar. Diseño:
+«Cabecera del Diagnóstico de rendimiento», v2 (una primera versión con cuatro pasos —ubicar, validar, Resumen, publicar— la
+descartó: «no me hace mucho sentido»).
+
+- **Fila del título**: el nombre de la pieza, sin «Dónde está cada equipo en la escala.», y a la par «Como lo ve el cliente /
+  Comparar áreas» (el segmentado), «✨ Mejorar con IA», «Historial» y «Acceso». Los dos del medio son de la página a la vista
+  (el Resumen o un área) y entran por una ranura (`components/exploraciones/ranura-de-arriba.tsx`). En la preventa el título
+  lo pone la pieza (el lienzo ya no pinta su encabezado para la escala); en la cuenta, la ficha.
+- **Sin diagnóstico**: un recuadro «Falta generar el diagnóstico» con el botón («Generar con Nexus» cuando ya puede
+  armarlo), el contexto, lo validado y lo sin dato. Reemplaza al aviso «Falta armar el Resumen» de la página, que solo queda
+  si la última vez falló.
+- **Con diagnóstico**: una línea de estado («✓ Niveles validados por …», «N sin dato: respóndelas para afinar el resultado ↓»
+  —baja a «Para completar el diagnóstico» y la marca un momento—, cuándo se ubicó y el contexto) y, si hay algo que hacer,
+  una franja con el porqué y «Actualizar con Nexus» al lado: amarilla si el diagnóstico quedó atrás (los niveles se
+  movieron, se validó después, llegaron respuestas, el formato del 9 nov, se detuvo), azul si hay algo que la escala no
+  leyó. Sin nada que hacer, el botón va al final de la línea, sin destacarse. Si quedó atrás pero antes hay algo por
+  validar, la franja amarilla se ve igual, sin botón («Valida lo que falta y después actualízalo.»): la revisión vio que
+  si no, nadie se enteraba y «Publicar» seguía a la vista. Las reglas, puras: `franjaDeArriba` y
+  `porQueQuedoAtras` (lib/exploraciones/validar-la-escala.ts, con su prueba). El aviso «La escala cambió desde este
+  resumen» y el de respuestas nuevas de la página se fueron: lo dice la franja.
+- **«Publicar»** sale de la fila de «Acceso» y va en su propia franja, solo con cambios sin publicar (como «Subir al
+  cliente» del kickoff); al día, una línea corta.
+- **Lo que Nexus escribió y no pasó la verificación** pasa al Historial del Resumen, debajo de la lista de versiones
+  (`alPie` de HistorialDeVersiones): sirve para revisar al agente, no para el día a día. Elías lo aprobó. El historial del
+  Resumen lo abre quien ve la página (mirar es leer; usar una versión sigue pidiendo editar), así lo descartado lo sigue
+  viendo quien antes lo veía.
+- «Validado» a secas confundía («¿qué es lo de validado?»): la línea dice «Niveles validados».

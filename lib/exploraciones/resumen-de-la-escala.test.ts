@@ -965,13 +965,14 @@ describe("9 · lo que pidió Elías al probarla (9 nov)", () => {
     // Desde el 24 nov el aviso (armarlo, en qué va, por qué falló) es `AvisoDelResumen`, que va antes del marco. Desde el
     // 26 nov armarlo y rehacerlo es «Actualizar con Nexus», arriba del diagnóstico (PasoEscala): tampoco entra al marco.
     expect(resumen).not.toContain("Rehacer con IA");
-    for (const control of ["<AvisoDelResumen", "no pasó la verificación ("]) {
-      const donde = resumen.indexOf(control);
-      expect(donde, control).toBeGreaterThan(-1);
-      expect(donde, control).toBeLessThan(marco);
-    }
+    const donde = resumen.indexOf("<AvisoDelResumen");
+    expect(donde).toBeGreaterThan(-1);
+    expect(donde).toBeLessThan(marco);
+    // Lo que Nexus descartó va dentro del Historial desde el 27 nov (no le servía al día a día arriba de la página).
+    expect(resumen).toContain("descartados={descartados}");
+    expect(fs.readFileSync(path.join(RAIZ, "components/exploraciones/HistorialDelResumen.tsx"), "utf8")).toContain("no pasó la verificación (");
     const aviso = pagina.slice(pagina.indexOf("function AvisoDelResumen("), pagina.indexOf("export default function PaginaDeLaEscala"));
-    for (const control of ["Falta armar el Resumen", "Nexus está armando el Resumen"]) expect(aviso, control).toContain(control);
+    for (const control of ["La última vez que se pidió, no se pudo", "Nexus está armando el Resumen"]) expect(aviso, control).toContain(control);
     expect(resumen).not.toMatch(/rs-barra|rd-btn/);
   });
 

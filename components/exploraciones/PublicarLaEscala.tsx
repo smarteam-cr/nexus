@@ -1,7 +1,9 @@
 "use client";
 
 /**
- * PublicarLaEscala — «Publicar» de La escala, al lado de «Acceso» (16 nov; Elías: «hay que publicarlo actualizado»).
+ * PublicarLaEscala — «Publicar» de La escala (16 nov; Elías: «hay que publicarlo actualizado»). Desde el 27 nov va en su
+ * propia franja debajo del estado del diagnóstico, como «Subir al cliente» del kickoff: con cambios sin publicar, el aviso y
+ * el botón; al día, una línea corta («Acceso» quedó en la fila del título).
  *
  * El cliente ve la FOTO publicada (lib/exploraciones/escala-publicada.ts), no lo que se está editando: un nivel arrastrado
  * o un texto a medio corregir no le llega hasta que alguien publica. Este botón dice si lo de hoy es distinto de lo
@@ -77,12 +79,14 @@ export default function PublicarLaEscala() {
       </span>
     );
   return (
-    <span className="inline-flex flex-wrap items-center gap-2">
-      <span className="text-xs text-fg-muted">
-        {cuando ? `Hay cambios que el cliente no ve: tiene la versión del ${cuando}.` : "El cliente todavía no ve nada: falta publicar."}
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-[10px] border border-line bg-surface px-3.5 py-2.5">
+      <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-[13px] text-fg-secondary">
+          {cuando ? `Hay cambios que el cliente no ve: tiene la versión del ${cuando}.` : "El cliente todavía no ve nada: falta publicar."}
+        </span>
+        {estado.areas === 0 && <span className="text-xs text-fg-muted">Sin equipos elegidos: publicar le quita la página al cliente.</span>}
+        {estado.noSePublica && <span className="text-xs font-semibold text-warn-ink">{estado.noSePublica}</span>}
       </span>
-      {estado.areas === 0 && <span className="text-xs text-fg-muted">Sin equipos elegidos: publicar le quita la página al cliente.</span>}
-      {estado.noSePublica && <span className="text-xs font-semibold text-warn-ink">{estado.noSePublica}</span>}
       {puedeEditar ? (
         <BotonAzul disabled={publicando || !!estado.noSePublica} onClick={() => void publicar()}>
           {publicando ? "Publicando…" : "Publicar"}
@@ -92,6 +96,6 @@ export default function PublicarLaEscala() {
           Sin publicar
         </span>
       )}
-    </span>
+    </div>
   );
 }

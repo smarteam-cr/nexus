@@ -40,6 +40,8 @@ export interface HistorialDeVersionesProps {
   verboDePublicar?: string;
   /** El documento se comparte EN VIVO (el Requerimiento técnico): el cliente ve el cambio en cuanto se usa. */
   enVivo?: boolean;
+  /** Algo más del documento que se mira de vez en cuando, debajo de la lista (el Diagnóstico: lo que Nexus descartó). */
+  alPie?: ReactNode;
 }
 
 const DIA = new Intl.DateTimeFormat("es-CR", { weekday: "long", day: "numeric", month: "short" });
@@ -296,6 +298,7 @@ export default function HistorialDeVersiones(p: HistorialDeVersionesProps) {
                 Se guardan las últimas 30. Las que vio el cliente no se borran nunca. Lo escrito a mano se guarda como versión cuando algo lo va a reemplazar.
               </p>
             )}
+            {p.alPie}
           </div>
 
           {/* La vista previa */}

@@ -68,6 +68,7 @@ export default function HistorialDelResumen({
   puedeEditar,
   frenado,
   alCambiar,
+  descartados,
 }: {
   open: boolean;
   onClose: () => void;
@@ -79,6 +80,8 @@ export default function HistorialDelResumen({
   /** Por qué no se puede usar ahora (Nexus lo está rehaciendo, o hay un texto guardándose). */
   frenado: string | null;
   alCambiar: () => void;
+  /** Lo que Nexus escribió y no pasó la verificación la última vez que lo generó (27 nov: estaba arriba de la página). */
+  descartados?: readonly string[] | null;
 }) {
   const firma = useRef<string | null>(null);
   const [cache] = useState(() => new Map<string, PaginaParaElCse>());
@@ -115,6 +118,18 @@ export default function HistorialDelResumen({
       usar={puedeEditar ? usar : undefined}
       frenado={frenado}
       alCambiar={alCambiar}
+      alPie={
+        descartados && descartados.length > 0 ? (
+          <details className="px-2 text-xs text-fg-muted">
+            <summary className="cursor-pointer font-semibold text-fg-secondary">Lo que Nexus escribió y no pasó la verificación ({descartados.length})</summary>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5">
+              {descartados.map((d) => (
+                <li key={d}>{d}</li>
+              ))}
+            </ul>
+          </details>
+        ) : null
+      }
       vista={(v: VersionParaElPopup) =>
         v.esActual || !v.id ? <VistaDeLaPagina pagina={paginaDeHoy} /> : <VistaDeUnaVersion exploracionId={exploracionId} versionId={v.id} cache={cache} />
       }
