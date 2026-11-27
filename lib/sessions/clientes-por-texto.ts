@@ -23,6 +23,7 @@ import {
   unidadesDeLaEmpresa,
 } from "./categorize";
 import { palabrasSinSufijoLegal } from "@/lib/clients/gemelas";
+import { esEmpresa } from "@/lib/clients/empresa";
 
 export interface ClientesDeUnTexto {
   /** El cliente que el cascade elegiría para este texto, o null. */
@@ -32,7 +33,10 @@ export interface ClientesDeUnTexto {
 }
 
 export interface IndiceDeClientes {
+  /** Todas, también la EMPRESA arriba de sus unidades: con ella se arma el grupo de cada unidad. */
   clientes: readonly ClienteParaMatch[];
+  /** Las que un texto puede nombrar: sin las empresas (2026-11-26, nunca se sugieren). */
+  nombrables: readonly ClienteParaMatch[];
   ambiguos: ReadonlySet<string>;
 }
 
@@ -42,18 +46,19 @@ export interface IndiceDeClientes {
  * ni nombra a una, y sus siglas valen solo junto a la marca.
  */
 export function indiceDeClientes(clientes: readonly ClienteParaMatch[]): IndiceDeClientes {
-  const ambiguos = computeAmbiguousNameTokens(clientes.map((c) => ({ id: c.id, name: c.name, company: c.company, comparteDominioConId: c.comparteDominioConId ?? null })));
-  return { clientes: clientes.filter((c) => !isTestClient(c.name)), ambiguos };
+  const ambiguos = computeAmbiguousNameTokens(clientes.map((c) => ({ id: c.id, name: c.name, company: c.company, comparteDominioConId: c.comparteDominioConId ?? null, kind: c.kind })));
+  const sinPrueba = clientes.filter((c) => !isTestClient(c.name));
+  return { clientes: sinPrueba, nombrables: sinPrueba.filter((c) => !esEmpresa(c)), ambiguos };
 }
 
 export function clientesDeUnTexto(texto: string, indice: IndiceDeClientes, esLaCasa?: (c: ClienteParaMatch) => boolean): ClientesDeUnTexto {
   const skip = (w: string) => TITLE_MATCH_STOPWORDS.has(w) || indice.ambiguos.has(w);
-  const r = clientePorTitulo(texto, clientesQueValenEnElTitulo(texto, indice.clientes), { modo: "mejor-fraccion", skip, normalize, esClienteDePrueba: isTestClient, esLaCasa });
+  const r = clientePorTitulo(texto, clientesQueValenEnElTitulo(texto, indice.clientes).filter((c) => !esEmpresa(c)), { modo: "mejor-fraccion", skip, normalize, esClienteDePrueba: isTestClient, esLaCasa });
   /* Si cae en una unidad, decide cuál como la cascada (por la sigla o por lo que la distingue); la marca sola no sugiere. */
   const empresa = r.cliente ? unidadesDeLaEmpresa(r.cliente.id, indice.clientes) : null;
   const sugerido = empresa ? unidadQueNombraElTitulo(texto, empresa, indice.ambiguos).clientId : (r.cliente?.id ?? null);
   const palabras = [...tokensDelTitulo(texto, skip, normalize)];
-  const laxos = indice.clientes.filter((c) => {
+  const laxos = indice.nombrables.filter((c) => {
     if (esLaCasa?.(c)) return false;
     const { delNombre } = tokensDelCliente(c, skip, normalize);
     return [...delNombre].some((t) => t.length >= 5 && palabras.some((w) => w.length >= 5 && (w.startsWith(t) || t.startsWith(w))));
@@ -86,7 +91,7 @@ export function clientesNombradosEnteros(textoCrudo: string, indice: IndiceDeCli
   // Los signos que el corte de palabras del título no conoce («Automáticos:», «demo/ACCESOS») no pegan nada a la palabra.
   const texto = textoCrudo.replace(/[^\p{L}\p{M}\p{N}]+/gu, " ");
   const skip = (w: string) => TITLE_MATCH_STOPWORDS.has(w) || indice.ambiguos.has(w);
-  const r = clientePorTitulo(texto, clientesQueValenEnElTitulo(texto, indice.clientes), { modo: "una-palabra", skip, normalize, esClienteDePrueba: isTestClient });
+  const r = clientePorTitulo(texto, clientesQueValenEnElTitulo(texto, indice.clientes).filter((c) => !esEmpresa(c)), { modo: "una-palabra", skip, normalize, esClienteDePrueba: isTestClient });
   const palabras = tokensDelTitulo(texto, skip, normalize);
   const porNombre = new Map<string, string>();
   for (const c of r.candidatos) {

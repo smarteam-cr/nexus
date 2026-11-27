@@ -224,7 +224,7 @@ corre migraciones ni seeds (cap. D + RUNBOOK).
 
 ### F. Los tests: cinco familias que se rompen por razones distintas
 
-**1056**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
+**1061**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
 `unit` de vitest solo incluye `lib/**`, así que un test puesto en otra carpeta NO corre y
 nada avisa. `npm test` es la suite unit. Desde el 2026-08-01 (F4) el project `integration`
 está VIVO: `npm run test:int` corre los `*.int.test.ts` contra la base LOCAL `nexus_test`
@@ -492,7 +492,8 @@ Lógica de resolución:
 8. Si el cliente tiene algún `Project.hubspotOwnerEmail === user.email` en un proyecto de Customer Success → OK.
 9. Si es de Customer Success (CSE o CSL) y la cuenta, de la cartera, tiene solo proyectos técnicos activos → OK (reason: cuenta-tecnica).
 10. Un prospecto con preventa viva, para quien tiene `preventa.read` → OK.
-11. Si no → 403.
+11. La empresa arriba de sus unidades (una ficha de tipo `EMPRESA`, 2026-11-26), para quien abre alguna de sus unidades → OK (reason: empresa-de-una-unidad).
+12. Si no → 403.
 
 **Endpoints internos** llaman a `requireAccessToClient(clientId)` en la primera línea. **Endpoints externos** viven en `app/api/external/<modulo>/...` y filtran por `clientId` del JWT sin excepción.
 

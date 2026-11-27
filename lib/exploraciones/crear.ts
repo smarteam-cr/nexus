@@ -22,6 +22,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { clienteDeLaEmpresaDeVentas } from "@/lib/clients/cliente-de-la-empresa-de-ventas";
 import { prisma } from "@/lib/db/prisma";
+import { rechazoSiLaFichaEsEmpresa } from "@/lib/clients/empresa-server";
 import { esUnicoViolado } from "@/lib/db/unico-violado";
 import { contenidoVacio, propuestaVacia, type ContenidoDeExploracion } from "./contenido";
 import { leerEmpresa } from "./hubspot";
@@ -67,7 +68,7 @@ export function abrirPreventaDeLaOpcion(o: { companyId?: string; clientId?: stri
 export async function crearExploracionDeLaUnidad(clientId: string, email: string): Promise<ResultadoDelAlta> {
   const ficha = await prisma.client.findUnique({
     where: { id: clientId },
-    select: { id: true, industry: true, comparteDominioConId: true },
+    select: { id: true, industry: true, comparteDominioConId: true, kind: true },
   });
   if (!ficha) return { ok: false, status: 404, error: "Esa ficha no existe." };
   if (!ficha.comparteDominioConId) {
@@ -79,6 +80,9 @@ export async function crearExploracionDeLaUnidad(clientId: string, email: string
 /** Abre la preventa viva de la ficha o la crea. `industria` es la de ESA ficha; `deDonde`, para el porqué de la edición. */
 async function abrirEnLaFicha(o: { clientId: string; industria: string | null; deDonde: string; email: string }): Promise<ResultadoDelAlta> {
   const { clientId, email } = o;
+  /* Nunca en la EMPRESA arriba de sus unidades (2026-11-26): la preventa es de una unidad. */
+  const rechazo = await rechazoSiLaFichaEsEmpresa(clientId);
+  if (rechazo) return { ok: false, status: rechazo.status, error: rechazo.error };
   const viva = await prisma.exploracionDeVenta.findFirst({
     where: { clientId, archivadaEn: null, ...DE_LA_PREVENTA },
     select: { id: true },

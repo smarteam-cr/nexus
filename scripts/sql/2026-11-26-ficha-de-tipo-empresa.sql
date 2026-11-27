@@ -1,0 +1,26 @@
+-- 2026-11-26 · La empresa arriba de sus unidades: una ficha de tipo «Empresa»
+--
+-- Pedido de Elías del 26 nov: la empresa existe como registro propio, dueña del dominio compartido y de la empresa de
+-- HubSpot, con todas sus unidades iguales debajo (TEC, Cemaco, Grupo Teamnet). La empresa es una fila de "Client" con
+-- kind = 'EMPRESA': nunca tiene reuniones, proyectos de trabajo, documentos ni cobranza. Sus unidades le cuelgan por
+-- "comparteDominioConId", como antes a la principal. Decisión en docs/DECISIONS.md › «La empresa arriba de sus unidades».
+--
+-- Un solo `ADD VALUE`, al final del enum y solo: Postgres 12 o más lo corre en una transacción mientras el valor
+-- nuevo no se use en ella, y acá no se usa. Agregar un valor que nadie usa todavía es inocuo para el código viejo.
+-- Re-ejecutable (`IF NOT EXISTS`).
+--
+-- ⛔ ORDEN: ANTES del deploy. Con el código nuevo y sin el valor, /api/health responde 503 (el cliente Prisma lo
+-- espera) y el deploy se revierte solo. Ninguna fila lo usa antes del deploy: lo escribe
+-- scripts/crear-empresa-de-unidades.ts --apply, que va DESPUÉS.
+--
+-- ⛔ REVERTIR: una fila con este valor revienta las lecturas de "Client" del código viejo. ANTES de volver al código
+-- anterior, deshacer cada empresa con el script (NO borrar la ficha a mano: se llevaría sus proyectos, contactos, correos
+-- y tickets, y dejaría sin cliente sus negocios y ventas):
+--   ALLOW_PROD_WRITE=1 SIN_RESPALDO=1 npx tsx scripts/crear-empresa-de-unidades.ts --empresa <clave> --deshacer --apply
+--
+--   PowerShell:  $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/aplicar-sql.ts scripts/sql/2026-11-26-ficha-de-tipo-empresa.sql --apply; Remove-Item Env:ALLOW_PROD_WRITE
+--   bash:        ALLOW_PROD_WRITE=1 npm run db:sql -- scripts/sql/2026-11-26-ficha-de-tipo-empresa.sql --apply
+--
+-- NUNCA `prisma db push`. Después: `npx prisma generate` y reiniciar el dev server.
+
+ALTER TYPE "ClientKind" ADD VALUE IF NOT EXISTS 'EMPRESA';

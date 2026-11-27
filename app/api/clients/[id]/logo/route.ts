@@ -24,6 +24,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToClient } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getStorageClient } from "@/lib/storage/client";
+import { rechazoDeEscrituraEnLaEmpresa } from "@/lib/clients/empresa-server";
 import {
   uploadPublicAsset,
   removePublicAsset,
@@ -42,6 +43,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const guard = await guardAccessToClient(id);
   if (guard instanceof NextResponse) return guard;
+  const escrituraEnLaEmpresa = await rechazoDeEscrituraEnLaEmpresa(id);
+  if (escrituraEnLaEmpresa) return NextResponse.json({ error: escrituraEnLaEmpresa.error }, { status: escrituraEnLaEmpresa.status });
 
   if (!getStorageClient()) {
     return NextResponse.json({ error: "El almacenamiento no está configurado." }, { status: 503 });
@@ -88,6 +91,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const { id } = await params;
   const guard = await guardAccessToClient(id);
   if (guard instanceof NextResponse) return guard;
+  const escrituraEnLaEmpresa = await rechazoDeEscrituraEnLaEmpresa(id);
+  if (escrituraEnLaEmpresa) return NextResponse.json({ error: escrituraEnLaEmpresa.error }, { status: escrituraEnLaEmpresa.status });
 
   const dark = esDark(req);
 

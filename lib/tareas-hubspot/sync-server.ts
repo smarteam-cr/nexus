@@ -213,15 +213,23 @@ async function paraQuien(asoc: Map<string, Asociadas>) {
     prisma.negocioAbierto
       .findMany({ where: { hubspotDealId: { in: todas.map((a) => a.dealId).filter((x): x is string => !!x) } }, select: { hubspotDealId: true, clientId: true } })
       .catch(() => []),
-    prisma.client.findMany({ where: { hubspotCompanyId: { in: todas.map((a) => a.companyId).filter((x): x is string => !!x) } }, select: { id: true, hubspotCompanyId: true } }),
+    prisma.client.findMany({ where: { hubspotCompanyId: { in: todas.map((a) => a.companyId).filter((x): x is string => !!x) } }, select: { id: true, hubspotCompanyId: true, kind: true } }),
   ]);
   const proyectoPor = new Map(proyectos.map((p) => [p.hubspotServiceId!, p]));
   const negocioPor = new Map(negocios.map((n) => [n.hubspotDealId, n.clientId]));
-  const clientePor = new Map(clientes.map((c) => [c.hubspotCompanyId!, c.id]));
+  /* La EMPRESA arriba de sus unidades (2026-11-26) no tiene trabajo: una tarea ligada solo a su empresa de HubSpot (o a un
+     negocio que espera unidad) queda sin cuenta, nunca como tarea de la empresa. */
+  const clientePor = new Map(clientes.filter((c) => c.kind !== "EMPRESA").map((c) => [c.hubspotCompanyId!, c.id]));
+  /* Todas, no solo las de estas tareas: un negocio o un proyecto que esperan unidad también son de la empresa. */
+  const empresas = new Set((await prisma.client.findMany({ where: { kind: "EMPRESA" }, select: { id: true } }).catch(() => [])).map((c) => c.id));
   return (taskId: string): { clientId: string | null; projectId: string | null; registro: DatosDeHubspot["registro"] } => {
     const a = asoc.get(taskId) ?? {};
     const proyecto = a.projectId ? proyectoPor.get(a.projectId) : undefined;
-    const clientId = proyecto?.clientId ?? (a.dealId ? (negocioPor.get(a.dealId) ?? null) : null) ?? (a.companyId ? (clientePor.get(a.companyId) ?? null) : null);
+    const encontrado = proyecto?.clientId ?? (a.dealId ? (negocioPor.get(a.dealId) ?? null) : null) ?? (a.companyId ? (clientePor.get(a.companyId) ?? null) : null);
+    const enLaEmpresa = !!encontrado && empresas.has(encontrado);
+    const clientId = enLaEmpresa ? null : encontrado;
+    /* Un proyecto que espera unidad en la empresa no se le pone: la tarea vuelve a resolverse cuando pase a su unidad. */
+    const proyectoDeLaTarea = proyecto && !empresas.has(proyecto.clientId) ? proyecto : undefined;
     const registro: DatosDeHubspot["registro"] = a.dealId
       ? { objeto: "deal", id: a.dealId }
       : a.companyId
@@ -229,7 +237,7 @@ async function paraQuien(asoc: Map<string, Asociadas>) {
         : a.projectId
           ? { objeto: "0-970", id: a.projectId }
           : null;
-    return { clientId, projectId: proyecto?.id ?? null, registro };
+    return { clientId, projectId: proyectoDeLaTarea?.id ?? null, registro };
   };
 }
 

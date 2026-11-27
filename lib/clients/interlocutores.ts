@@ -20,6 +20,8 @@ export interface FichaDeLaEmpresa {
   nombre: string;
   /** La que tiene el dominio y la empresa de HubSpot; las demás le cuelgan (`comparteDominioConId`). */
   principal: boolean;
+  /** La empresa arriba de sus unidades (2026-11-26): no es una unidad y en ella no se confirma a nadie. */
+  esEmpresa?: boolean;
 }
 
 /** Una fila de `PersonaDeLaEmpresa`, lo que hace falta para la vista. */

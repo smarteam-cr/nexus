@@ -13,6 +13,11 @@
 import { numeroEscrito, TAM_MAX_USD } from "./datos-de-la-empresa";
 import type { ClientKind } from "@prisma/client";
 
+/**
+ * Las categorías que una PERSONA puede elegir (el selector de la ficha y las pestañas del listado). `EMPRESA` no está a
+ * propósito: la crea solo `scripts/crear-empresa-de-unidades.ts` y no se elige a mano (DECISIONS «La empresa arriba de
+ * sus unidades»).
+ */
 export const CLIENT_KINDS = ["CLIENTE", "PROSPECTO", "ALIADO", "INTERNO"] as const;
 
 /**
@@ -65,6 +70,13 @@ export const CLIENT_KIND_META: Record<
       "cliente. No es lo mismo que un proyecto interno — eso lo marca cada proyecto, y esos " +
       "proyectos tienen su propia pestaña en el índice de clientes.",
   },
+  /** La empresa arriba de sus unidades (2026-11-26). Nunca tiene trabajo: lo tienen sus unidades. */
+  EMPRESA: {
+    label: "Empresa con unidades",
+    plural: "Empresas con unidades",
+    contable: { uno: "empresa con unidades", varios: "empresas con unidades" },
+    help: "La empresa arriba de sus unidades de negocio: guarda el dominio y la empresa de HubSpot que comparten. El trabajo lo tiene cada unidad.",
+  },
 };
 
 // ── QUÉ SE ABRE al entrar a una empresa ────────────────────────────────────────
@@ -82,19 +94,21 @@ export const CLIENT_KIND_META: Record<
 //   · ALIADO    → las reuniones que tuvimos con ellos. No son cartera ni tienen propuesta;
 //                 lo que hay es historia de conversación.
 //   · INTERNO   → ídem: somos nosotros, no nos vendemos ni nos gestionamos como cuenta.
+//   · EMPRESA   → sus unidades de negocio: la empresa no tiene trabajo propio (2026-11-26).
 //
 // ⚠ Este mapa es el único lugar donde se decide. Un `kind === "PROSPECTO"` escrito a mano en
 // una pantalla nueva es exactamente la divergencia que `CS_CLIENT_WHERE` vino a cerrar arriba.
 // Cuando cada categoría tenga su propio juego de canvas, se declaran acá.
 
 /** El espacio de trabajo que abre una empresa. */
-export type EspacioDeEmpresa = "proyectos" | "propuestas" | "sesiones";
+export type EspacioDeEmpresa = "proyectos" | "propuestas" | "sesiones" | "unidades";
 
 export const ESPACIO_POR_CATEGORIA = {
   CLIENTE: "proyectos",
   PROSPECTO: "propuestas",
   ALIADO: "sesiones",
   INTERNO: "sesiones",
+  EMPRESA: "unidades",
 } as const satisfies Record<ClientKind, EspacioDeEmpresa>;
 
 /** Qué espacio abre esta empresa. */

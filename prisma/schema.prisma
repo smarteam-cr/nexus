@@ -152,6 +152,8 @@ model Client {
   // reunión (las `siglas`), después por la gente de cada una, y sin pista queda POR DECIDIR (resolvedClientId null).
   // La regla vive SOLO en lib/sessions/categorize.ts. La escribe una persona (scripts/separar-tec.ts); nada la deduce.
   // nullable porque casi ninguna ficha comparte dominio. Ver DECISIONS «Dos fichas que comparten dominio».
+  // Desde el 2026-11-26 apunta a LA EMPRESA de la unidad: una ficha kind=EMPRESA, dueña de lo que comparten sus unidades
+  // y sin trabajo (DECISIONS «La empresa arriba de sus unidades»). El nombre se queda: renombrar no es aditivo.
   comparteDominioConId String?
   comparteDominioCon   Client?   @relation("DominioCompartido", fields: [comparteDominioConId], references: [id], onDelete: SetNull)
   entidadesDelDominio  Client[]  @relation("DominioCompartido")
@@ -2633,11 +2635,15 @@ enum AppUserKind {
 ///   PROSPECTO — Ventas la creó para un business case; todavía no compró.
 ///   ALIADO    — aliado comercial / partner (ej. una agencia con la que se co-vende).
 ///   INTERNO   — Smarteam misma y sus entidades: no somos nuestro propio cliente.
+///   EMPRESA   — la empresa arriba de sus unidades (2026-11-26): dueña del dominio y de la empresa de HubSpot que
+///               comparten; nunca tiene trabajo. Sus unidades le cuelgan por `comparteDominioConId`.
+///               DECISIONS «La empresa arriba de sus unidades».
 enum ClientKind {
   CLIENTE
   PROSPECTO
   ALIADO
   INTERNO
+  EMPRESA
 }
 
 // ─── ClientAssignment ─────────────────────────────────────────────────────────

@@ -36,6 +36,7 @@ import { pisoDelProyecto, quedaAntesDelPiso } from "./piso-del-proyecto";
 import { NO_ES_CONTENEDOR_WHERE } from "@/lib/projects/scope";
 import { NO_ES_CANCELADA_SIN_TEXTO, noEsCanceladaSinTextoSql } from "./canceladas";
 import { Prisma } from "@prisma/client";
+import { rechazoSiLaFichaEsEmpresa } from "@/lib/clients/empresa-server";
 
 /** Compatible con `RawTranscript` de analyze (date en epoch ms). */
 export interface ProjectSourceSession {
@@ -163,6 +164,8 @@ export async function adoptarSesionSinDuenio(
     select: { resolvedClientId: true, manualClientId: true },
   });
   if (!s || s.resolvedClientId !== null || s.manualClientId !== null) return false;
+  /* La EMPRESA arriba de sus unidades nunca es dueña (2026-11-26): un proyecto suyo que espera unidad no adopta reuniones. */
+  if (await rechazoSiLaFichaEsEmpresa(clientId)) return false;
 
   /* Con procedencia "adopcion": es un EFECTO de agregar la reunión al proyecto, no una
      decisión de a quién pertenece. Es lo único que un "devolver a internas" puede deshacer

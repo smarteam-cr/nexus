@@ -28,7 +28,7 @@ const PAIRS = [
 async function main() {
   console.log("READ-ONLY — riesgo de title-match tras el merge (des-ambiguación de tokens)\n");
 
-  const clients = await prisma.client.findMany({ select: { id: true, name: true, company: true, emailDomains: true, comparteDominioConId: true } });
+  const clients = await prisma.client.findMany({ select: { id: true, name: true, company: true, emailDomains: true, comparteDominioConId: true, kind: true } });
   const nameById = new Map(clients.map((c) => [c.id, c.name]));
   const dupIds = new Set(PAIRS.map((p) => p.dupId));
 

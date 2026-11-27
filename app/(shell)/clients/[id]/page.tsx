@@ -5,6 +5,7 @@ import { can } from "@/lib/auth/permissions/engine";
 import { espacioDe } from "@/lib/clients/kind";
 import EspacioPropuestas from "@/components/clients/EspacioPropuestas";
 import EspacioSesiones from "@/components/clients/EspacioSesiones";
+import UnidadesDeNegocio from "@/components/clients/UnidadesDeNegocio";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { ensureStrategyProject } from "@/lib/canvas/strategy-project";
@@ -117,6 +118,15 @@ export default async function ClientPage({
 
   if (espacio === "sesiones") {
     return <EspacioSesiones clientId={id} clientName={empresa.name} kind={empresa.kind} />;
+  }
+
+  /* La EMPRESA arriba de sus unidades (2026-11-26): su página es «Unidades de negocio», sin trabajo propio. */
+  if (espacio === "unidades") {
+    return (
+      <div className="mx-auto w-full max-w-5xl px-6 py-6">
+        <UnidadesDeNegocio clientId={id} />
+      </div>
+    );
   }
 
   const [projects, hubspotAccount, equipo] = await Promise.all([

@@ -46,9 +46,16 @@
  *    por su dominio o por lo aprendido. Todas de la misma ficha: esa. Si no, POR DECIDIR.
  *  · Sin nadie confirmado en la reunión, el paso no existe y la cascada es la de siempre. A mano sigue ganando (paso 1).
  * DECISIONS «Unidades e interlocutores».
+ *
+ * ⚠ La empresa ARRIBA de sus unidades (2026-11-26). La empresa es una ficha de tipo `EMPRESA` (lib/clients/empresa.ts):
+ * guarda el dominio y la empresa de HubSpot que comparten sus unidades, y NUNCA es dueña de una reunión. Es la cabeza
+ * del grupo (lo que hacía la principal): su dominio y su empresa de HubSpot llevan al reparto entre sus unidades, que no
+ * cambia. No entra al match por título ni a las palabras ambiguas. Lo de HubSpot de la empresa se reparte con la misma
+ * regla (`unidadDeLoDeHubspot`). DECISIONS «La empresa arriba de sus unidades».
  */
 
 import type { Client, SessionCategory } from "@prisma/client";
+import { esEmpresa } from "@/lib/clients/empresa";
 import type { HubspotCompanyLite } from "@/lib/hubspot/companies";
 import { esDominioDeCalendario } from "./dominio-propio";
 
@@ -68,6 +75,8 @@ export interface CategorizeContext {
   clients: (Pick<Client, "id" | "name" | "company" | "emailDomains"> & {
     siglas?: string[] | null;
     comparteDominioConId?: string | null;
+    /** `EMPRESA`: la empresa arriba de sus unidades, que nunca es dueña (ver arriba). Todo cargador lo pide. */
+    kind?: string | null;
   })[];
   categories: Pick<SessionCategory, "id" | "name" | "slug" | "domains" | "kind" | "color">[];
   hubspotCompaniesByDomain: Map<string, HubspotCompanyLite>;
@@ -302,11 +311,17 @@ const EMPTY_TOKEN_SET: Set<string> = new Set();
  * 8 nov): con ellos, las unidades de una empresa no se cuentan como empresas distintas. Opcionales, el aviso de
  * Cobranza calculaba otra cosa que el resolver y dejaba pasar sin aviso una ficha que vuelve ambigua la marca.
  */
-export type ClienteParaAmbiguas = Pick<Client, "name" | "company"> & { id: string; comparteDominioConId: string | null | undefined };
+export type ClienteParaAmbiguas = Pick<Client, "name" | "company"> & {
+  id: string;
+  comparteDominioConId: string | null | undefined;
+  /** La empresa arriba de sus unidades no cuenta: su nombre no nombra a nadie (2026-11-26). */
+  kind?: string | null;
+};
 
 export function computeAmbiguousNameTokens(
-  clients: readonly ClienteParaAmbiguas[],
+  todas: readonly ClienteParaAmbiguas[],
 ): Set<string> {
+  const clients = todas.filter((c) => !esEmpresa(c));
   const empresaDe = clients.map((c) => c.comparteDominioConId ?? c.id);
   const sets = clients.map((c) => {
     const s = new Set<string>();
@@ -379,7 +394,7 @@ function findClientByTitleMatch(
   ambiguous: Set<string>,
   internalDomains: Set<string>,
 ): ResultadoDeMatch {
-  return clientePorTitulo(title, clientesQueValenEnElTitulo(title, clients), {
+  return clientePorTitulo(title, sinEmpresas(clientesQueValenEnElTitulo(title, clients)), {
     modo: "mejor-fraccion",
     skip: (w) => TITLE_MATCH_STOPWORDS.has(w) || ambiguous.has(w),
     normalize,
@@ -414,10 +429,7 @@ function duenoPorElTitulo(
   traza?: TrazaDeLaCascada,
 ): SessionGroup | null {
   const r = findClientByTitleMatch(session.title, ctx.clients, ambiguous, ctx.internalDomains);
-  if (r.cliente) {
-    const c = r.cliente;
-    return repartirEntreEntidades(c.id, session, externalDomains, ctx, traza) ?? { kind: "client", id: c.id, label: c.name, company: c.company };
-  }
+  if (r.cliente) return duenoDeLaFicha(r.cliente, session, externalDomains, ctx, traza);
   if (r.motivo === "empate") {
     const casa = esLaCasa(ctx.internalDomains);
     const grupos = new Set(r.candidatos.filter((c) => !casa(c)).map((c) => entidadesDelDominio(c.id, ctx)));
@@ -439,6 +451,34 @@ function duenoPorElTitulo(
 
 /** La empresa de una ficha: la principal de sus unidades, o ella misma. */
 const empresaDe = (c: { id: string; comparteDominioConId?: string | null }) => c.comparteDominioConId ?? c.id;
+
+/** La lista sin las fichas de tipo Empresa: la empresa no se nombra por título ni es candidata (2026-11-26). */
+const sinEmpresasPorLista = new WeakMap<readonly object[], readonly object[]>();
+function sinEmpresas<C extends { kind?: string | null }>(clients: readonly C[]): readonly C[] {
+  const hecho = sinEmpresasPorLista.get(clients);
+  if (hecho) return hecho as readonly C[];
+  const out = clients.some(esEmpresa) ? clients.filter((c) => !esEmpresa(c)) : clients;
+  sinEmpresasPorLista.set(clients, out);
+  return out;
+}
+
+/**
+ * El dueño cuando una regla da ESTA ficha: si es de un grupo, el reparto entre sus unidades; si no, ella. Una empresa
+ * sin unidades no se queda con nada: por decidir (nunca es dueña).
+ */
+function duenoDeLaFicha(
+  c: { id: string; name: string; company: string | null },
+  session: CategorizableSession,
+  externalDomains: Set<string>,
+  ctx: CategorizeContext,
+  traza?: TrazaDeLaCascada,
+): SessionGroup {
+  const repartida = repartirEntreEntidades(c.id, session, externalDomains, ctx, traza);
+  if (repartida) return repartida;
+  const ficha = ctx.clients.find((x) => x.id === c.id);
+  if (esEmpresa(ficha)) return { kind: "orphan", label: `Por decidir: ${c.name}`, domain: [...externalDomains][0] };
+  return { kind: "client", id: c.id, label: c.name, company: c.company };
+}
 
 /**
  * LOS GRUPOS DE LA GENTE CONFIRMADA: dos fichas son del mismo grupo si una persona del equipo confirmó a alguien en las
@@ -475,7 +515,11 @@ export function gruposDeLaGenteConfirmada(ctx: CategorizeContext): ReadonlyMap<s
     if (!dominio || deCategoria.has(dominio)) continue;
     const suyas = fichas.filter((id) => porId.has(id) && !casa(porId.get(id)!));
     if (new Set(suyas.map((id) => empresaDe(porId.get(id)!))).size < 2) continue;
-    const esDeUna = suyas.some((id) => (empresas.get(id) ?? [porId.get(id)!]).some((c) => effectiveDomainsForClient(c).includes(dominio)));
+    const esDeUna = suyas.some((id) => {
+      const ficha = porId.get(id)!;
+      const cabeza = ficha.comparteDominioConId ? porId.get(ficha.comparteDominioConId) : undefined;
+      return [...(empresas.get(id) ?? [ficha]), ...(cabeza ? [cabeza] : [])].some((c) => effectiveDomainsForClient(c).includes(dominio));
+    });
     if (!esDeUna) continue;
     for (const id of suyas) if (!padre.has(id)) padre.set(id, id);
     for (const id of suyas.slice(1)) {
@@ -505,7 +549,9 @@ export function gruposDeLaGenteConfirmada(ctx: CategorizeContext): ReadonlyMap<s
 function duenaDelProyectoDelGrupo(ids: readonly string[], ctx: CategorizeContext): ClienteDelCtx | null {
   const primer = ctx.primerProyecto;
   if (!primer?.size) return null;
-  const unicas = [...new Set(ids)];
+  /* Una empresa nunca es la dueña, aunque tenga un proyecto esperando unidad (2026-11-26). */
+  const empresas = new Set(ctx.clients.filter(esEmpresa).map((c) => c.id));
+  const unicas = [...new Set(ids)].filter((id) => !empresas.has(id));
   if (unicas.length < 2) return null;
   const grupos = gruposDeLaGenteConfirmada(ctx);
   const clave = grupos.get(unicas[0]!);
@@ -553,7 +599,7 @@ export function fichasQueMiraElGrupo(
 
 type ClienteDelCtx = CategorizeContext["clients"][number];
 /** Lo mínimo que hace falta para saber de qué empresa es una ficha (también lo usan Tareas y «Mi día»). */
-type ConEmpresa = ClienteParaMatch & { comparteDominioConId?: string | null };
+type ConEmpresa = ClienteParaMatch & { comparteDominioConId?: string | null; kind?: string | null };
 
 /** Por cada ficha de un grupo: la dueña y sus entidades, en el orden de la lista. Se arma una vez por lista de clientes. */
 const gruposPorLista = new WeakMap<readonly ConEmpresa[], Map<string, ConEmpresa[]>>();
@@ -565,14 +611,19 @@ function gruposDeEntidades<C extends ConEmpresa>(clients: readonly C[]): Map<str
   const entidadesDe = new Map<string, Set<string>>();
   for (const c of clients) {
     const duena = c.comparteDominioConId ? porId.get(c.comparteDominioConId) : undefined;
-    /* Sin cadenas: una dueña que a su vez es entidad de otra no arma grupo (sería una regla que nadie decidió). */
-    if (!duena || duena.id === c.id || duena.comparteDominioConId) continue;
+    /* Sin cadenas: una dueña que a su vez es entidad de otra no arma grupo (sería una regla que nadie decidió). Una
+       empresa no cuelga de nadie. */
+    if (!duena || duena.id === c.id || duena.comparteDominioConId || esEmpresa(c)) continue;
     entidadesDe.set(duena.id, (entidadesDe.get(duena.id) ?? new Set()).add(c.id));
   }
   const out = new Map<string, C[]>();
   for (const [duenaId, entidades] of entidadesDe) {
-    const grupo = clients.filter((c) => c.id === duenaId || entidades.has(c.id));
+    /* Una dueña de tipo Empresa (2026-11-26) no es parte de su grupo: es solo la llave. El grupo son sus unidades, todas
+       iguales, y la empresa da su grupo (por su dominio o su empresa de HubSpot) sin poder ser elegida. */
+    const cabezaEsEmpresa = esEmpresa(porId.get(duenaId));
+    const grupo = clients.filter((c) => (c.id === duenaId && !cabezaEsEmpresa) || entidades.has(c.id));
     for (const c of grupo) out.set(c.id, grupo);
+    if (cabezaEsEmpresa) out.set(duenaId, grupo);
   }
   gruposPorLista.set(clients, out);
   return out;
@@ -721,14 +772,23 @@ export function unidadQueNombraElTitulo<C extends ConEmpresa>(
  * (`viveEnElDominioDeLaPrincipal`); el propio de una unidad, solo esa. Las fichas pueden ser de varias empresas (el paso
  * de la gente confirmada): cada unidad vive solo en el dominio de SU principal. Con una sola empresa da lo de siempre.
  */
-function unidadesPorDominio(fichas: readonly ClienteDelCtx[]): Map<string, Set<string>> {
+function unidadesPorDominio(fichas: readonly ClienteDelCtx[], todas: readonly ClienteDelCtx[] = fichas): Map<string, Set<string>> {
   const out = new Map<string, Set<string>>();
+  const sumar = (d: string, ids: readonly string[]) => out.set(d, new Set([...(out.get(d) ?? []), ...ids]));
+  let porId: Map<string, ClienteDelCtx> | null = null;
   for (const c of fichas) {
     const propios = effectiveDomainsForClient(c);
-    const duenas = c.comparteDominioConId
-      ? [c.id]
-      : [c.id, ...fichas.filter((u) => u.comparteDominioConId === c.id && viveEnElDominioDeLaPrincipal(u)).map((u) => u.id)];
-    for (const d of propios) out.set(d, new Set([...(out.get(d) ?? []), ...duenas]));
+    const viven = fichas.filter((u) => u.comparteDominioConId === c.id && viveEnElDominioDeLaPrincipal(u)).map((u) => u.id);
+    /* La empresa nunca es una de las fichas del dominio: su dominio es de las unidades que viven en él (2026-11-26). */
+    const duenas = esEmpresa(c) ? viven : c.comparteDominioConId ? [c.id] : [c.id, ...viven];
+    for (const d of propios) sumar(d, duenas);
+    /* Una unidad que vive en el dominio de su EMPRESA, cuando la empresa no está entre las fichas (es solo la llave del
+       grupo): el dominio de la empresa es suyo y de las otras unidades que viven en él. */
+    if (c.comparteDominioConId && viveEnElDominioDeLaPrincipal(c)) {
+      porId ??= new Map(todas.map((x) => [x.id, x]));
+      const empresa = porId.get(c.comparteDominioConId);
+      if (empresa && esEmpresa(empresa) && !fichas.includes(empresa)) for (const d of effectiveDomainsForClient(empresa)) sumar(d, [c.id]);
+    }
   }
   return out;
 }
@@ -770,9 +830,10 @@ export function decidirEntreEntidades(
   session: CategorizableSession,
   entidades: readonly ClienteDelCtx[],
   ctx: Pick<CategorizeContext, "internalDomains" | "ambiguousNameTokens" | "personasDeEntidades" | "interlocutoresConfirmados"> &
-    Partial<Pick<CategorizeContext, "categories">>,
+    Partial<Pick<CategorizeContext, "categories" | "clients">>,
 ): DecisionEntreEntidades {
-  return decidirEntre(session, entidades, ctx, unidadesPorDominio(entidades));
+  /* Una empresa nunca es candidata (2026-11-26); `ctx.clients` deja leer el dominio de la empresa de las unidades. */
+  return decidirEntre(session, sinEmpresas(entidades), ctx, unidadesPorDominio(entidades, ctx.clients ?? entidades));
 }
 
 /** `decidirEntreEntidades` con el mapa dominio → fichas armado afuera (el paso de la gente confirmada le suma HubSpot). */
@@ -904,12 +965,12 @@ export function fichasQueDaElDominio(correo: string, ctx: CategorizeContext): st
   if (!r) return [];
   const grupo = gruposDeEntidades(ctx.clients).get(r.ficha.id);
   if (!grupo) return [r.ficha.id];
-  const porDominio = unidadesPorDominio(grupo).get(dominio);
+  const porDominio = unidadesPorDominio(grupo, ctx.clients).get(dominio);
   if (porDominio) return [...porDominio];
-  /* Ligada por HubSpot (el dominio no está registrado): la ficha y, si es una principal, las unidades que viven en ella. */
-  return r.ficha.comparteDominioConId
-    ? [r.ficha.id]
-    : [r.ficha.id, ...grupo.filter((u) => u.comparteDominioConId === r.ficha.id && viveEnElDominioDeLaPrincipal(u)).map((u) => u.id)];
+  /* Ligada por HubSpot (el dominio no está registrado): la ficha y, si es una principal, las unidades que viven en ella.
+     Una empresa nunca está entre las fichas: no pierde ni gana reuniones (2026-11-26). */
+  const viven = grupo.filter((u) => u.comparteDominioConId === r.ficha.id && viveEnElDominioDeLaPrincipal(u)).map((u) => u.id);
+  return r.ficha.comparteDominioConId ? [r.ficha.id] : esEmpresa(r.ficha) ? viven : [r.ficha.id, ...viven];
 }
 
 /**
@@ -982,14 +1043,16 @@ function decisionDeLaGenteConfirmada(
   const t = findClientByTitleMatch(conElTituloCortado.title, ctx.clients, ambiguous, ctx.internalDomains);
   const nombradas = t.cliente ? [t.cliente] : t.motivo === "empate" ? t.candidatos : [];
   if (nombradas.some((c) => !casa(c) && !ids.has(c.id))) return null;
+  if (!ctx.clients.some((c) => ids.has(c.id) && !esEmpresa(c))) return null;
 
-  const candidatas = ctx.clients.filter((c) => ids.has(c.id));
-  const porDominio = unidadesPorDominio(candidatas);
+  /* La empresa (2026-11-26) nunca es candidata: es la llave de sus unidades. */
+  const candidatas = ctx.clients.filter((c) => ids.has(c.id) && !esEmpresa(c));
+  const porDominio = unidadesPorDominio(candidatas, ctx.clients);
   for (const [d, id] of porHubspot) {
     if (porDominio.has(d)) continue;
     const c = porId.get(id)!;
     const viven = c.comparteDominioConId ? [] : candidatas.filter((u) => u.comparteDominioConId === c.id && viveEnElDominioDeLaPrincipal(u));
-    porDominio.set(d, new Set([c.id, ...viven.map((u) => u.id)]));
+    porDominio.set(d, new Set([...(esEmpresa(c) ? [] : [c.id]), ...viven.map((u) => u.id)]));
   }
 
   const d = decidirEntre(conElTituloCortado, candidatas, { ...ctx, interlocutoresConfirmados: confirmadas }, porDominio);
@@ -1027,20 +1090,81 @@ function repartirEntreEntidades(
   if (traza) traza.entre = d.por;
   const elegida = d.clientId ? entidades.find((e) => e.id === d.clientId) : undefined;
   if (elegida) return { kind: "client", id: elegida.id, label: elegida.name, company: elegida.company };
-  const delGrupo = new Set(entidades.flatMap((e) => effectiveDomainsForClient(e)));
+  const cabeza = ctx.clients.find((c) => c.id === clientId && esEmpresa(c));
+  const delGrupo = new Set([...entidades, ...(cabeza ? [cabeza] : [])].flatMap((e) => effectiveDomainsForClient(e)));
   const dominio = [...externalDomains].find((x) => delGrupo.has(x)) ?? [...externalDomains][0];
   return { kind: "orphan", label: `Por decidir: ${entidades.map((e) => e.name).join(" o ")}`, domain: dominio };
+}
+
+// ── Lo de HubSpot de una empresa, a su unidad (2026-11-26) ─────────────────────────────────────────────────────────────
+
+/** Las unidades de una ficha de tipo Empresa (en el orden de la lista), o null si `empresaId` no es una con unidades. */
+export function unidadesDeLaEmpresaArriba<C extends ConEmpresa>(empresaId: string, clients: readonly C[]): readonly C[] | null {
+  const empresa = clients.find((c) => c.id === empresaId);
+  if (!esEmpresa(empresa)) return null;
+  const grupo = gruposDeEntidades(clients).get(empresaId);
+  return grupo?.length ? grupo : null;
+}
+
+/**
+ * A qué unidad va UNA fila que llega de la empresa de HubSpot de una empresa con unidades: un contacto, un correo, una
+ * nota, una llamada, un ticket o un negocio. Se lee como una reunión, con la regla de siempre entre unidades
+ * (`decidirEntreEntidades`): el asunto o el nombre del negocio es el título y sus contactos son la gente (la confirmada
+ * primero, después su dominio y lo aprendido de los títulos). Devuelve la unidad, o null: la fila queda en la empresa,
+ * donde no la lee ningún agente, hasta que alguien confirme a la persona en Interlocutores. PURO.
+ * *Por qué la misma regla que las reuniones:* una sola definición de «de qué unidad es» (invariante 2). Elías, 26 nov: lo
+ * que no tiene unidad queda en la empresa; nunca se adivina.
+ */
+export function unidadDeLoDeHubspot(
+  empresaId: string,
+  fila: { titulo: string | null; correos: readonly (string | null | undefined)[] },
+  ctx: CategorizeContext,
+): string | null {
+  const unidades = unidadesDeLaEmpresaArriba(empresaId, ctx.clients);
+  if (!unidades) return null;
+  const session: CategorizableSession = {
+    title: fila.titulo ?? "",
+    participants: fila.correos.filter((c): c is string => !!c?.trim()).map((c) => c.trim().toLowerCase()),
+    manualClientId: null,
+  };
+  return decidirEntreEntidades(session, unidades, ctx).clientId;
+}
+
+/**
+ * La unidad de un PROYECTO nuevo de HubSpot de una empresa con unidades: la que nombra lo que abre su nombre, antes del
+ * primer «|» («AE | Reimplementación», «TEC TAE | CRM»). Sin «|», o si no nombra a una sola: null, y el proyecto queda en
+ * la empresa con el aviso «Elige su unidad» (Elías, 26 nov). PURO.
+ */
+export function unidadPorLasSiglas<C extends ConEmpresa>(
+  nombreDelProyecto: string,
+  empresaId: string,
+  clients: readonly C[],
+  ambiguous: ReadonlySet<string> = EMPTY_TOKEN_SET,
+): string | null {
+  const unidades = unidadesDeLaEmpresaArriba(empresaId, clients);
+  if (!unidades) return null;
+  const corte = nombreDelProyecto.indexOf("|");
+  if (corte <= 0) return null;
+  return unidadQueNombraElTitulo(nombreDelProyecto.slice(0, corte), unidades, ambiguous).clientId;
 }
 
 /**
  * Lo que un título tiene que traer para poder nombrar a una de estas fichas: sus siglas y las palabras de su nombre.
  * Va en minúsculas, normalizado y tal como se escribe (la consulta de la base no quita acentos).
  */
-export function pistasDeTitulo(clients: readonly ClienteDelCtx[], ambiguous: Set<string> = EMPTY_TOKEN_SET): string[] {
+export function pistasDeTitulo(
+  clients: readonly ClienteDelCtx[],
+  ambiguous: Set<string> = EMPTY_TOKEN_SET,
+  /* Todas las fichas, para armar el grupo de cada una: con la empresa arriba (2026-11-26), la cabeza del grupo no está en
+     una lista de unidades, y sin ella «cr» y «ec» saldrían como pistas solas. */
+  todas: readonly ClienteDelCtx[] = clients,
+): string[] {
   const skip = (w: string) => TITLE_MATCH_STOPWORDS.has(w) || ambiguous.has(w);
   const out = new Set<string>();
-  const grupos = gruposDeEntidades(clients);
+  const grupos = gruposDeEntidades(todas);
   for (const c of clients) {
+    /* La empresa no se nombra por título: su nombre no es pista. */
+    if (esEmpresa(c)) continue;
     /* En una empresa con marca, la sigla vale solo junto a la marca, que ya es pista: como pista sola, «cr» y «ec» traen
        casi toda la tabla («CRM», «proyecto») en cada armado del contexto (revisión del 8 nov). */
     const grupo = grupos.get(c.id);
@@ -1073,7 +1197,7 @@ export function aprenderPersonasDeEntidades(
   /* Sin la gente aprendida NI la confirmada: lo aprendido sale solo del título, y confirmar a alguien no cambia lo que
      Nexus aprende de los demás (la gente confirmada ya decide por su cuenta, en el paso 3·0). */
   const sinGente: CategorizeContext = { ...ctx, personasDeEntidades: undefined, interlocutoresConfirmados: undefined };
-  const pistas = pistasDeTitulo(ctx.clients.filter((c) => grupos.has(c.id)), ctx.ambiguousNameTokens);
+  const pistas = pistasDeTitulo(ctx.clients.filter((c) => grupos.has(c.id) && !esEmpresa(c)), ctx.ambiguousNameTokens, ctx.clients);
   const visto = new Map<string, Map<string, number>>();
   for (const s of sessions) {
     /* Sin ninguna pista en el título no hay nombre que decida: se ahorra la cascada entera (es por reunión). */
@@ -1115,7 +1239,8 @@ export function categorizeSession(
   // ── 1. Manual override ─────────────────────────────────────────────────────
   if (session.manualClientId) {
     const c = clients.find((cl) => cl.id === session.manualClientId);
-    if (c) {
+    /* Asignada a mano a una EMPRESA (ninguna pantalla lo ofrece): no es dueña, la cascada sigue y reparte (2026-11-26). */
+    if (c && !esEmpresa(c)) {
       paso("a-mano");
       return { kind: "client", id: c.id, label: c.name, company: c.company };
     }
@@ -1173,10 +1298,7 @@ export function categorizeSession(
     const hit = domains.some((d) => externalDomains.has(d));
     if (hit) {
       paso("dominio");
-      return (
-        repartirEntreEntidades(c.id, session, externalDomains, ctx, traza) ??
-        { kind: "client", id: c.id, label: c.name, company: c.company }
-      );
+      return duenoDeLaFicha(c, session, externalDomains, ctx, traza);
     }
   }
 
@@ -1212,10 +1334,7 @@ export function categorizeSession(
     if (linkedClient) {
       // Señal FUERTE: la company de HubSpot está ligada a un Client → ese Client.
       paso("hubspot");
-      return (
-        repartirEntreEntidades(linkedClient.id, session, externalDomains, ctx, traza) ??
-        { kind: "client", id: linkedClient.id, label: linkedClient.name, company: linkedClient.company }
-      );
+      return duenoDeLaFicha(linkedClient, session, externalDomains, ctx, traza);
     }
     unlinkedCompany ??= company; // primera company de HubSpot que NO es Client de Nexus
   }

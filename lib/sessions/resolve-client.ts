@@ -67,6 +67,7 @@ export async function buildCategorizeCtx(ajustarFichas?: AjustarFichas): Promise
         hubspotCompanyId: true,
         siglas: true,
         comparteDominioConId: true,
+        kind: true,
       },
     }),
     prisma.sessionCategory.findMany({
@@ -163,10 +164,10 @@ export async function cargarInterlocutoresConfirmados(db: Pick<typeof prisma, "p
  * consulta nada.
  */
 async function cargarPersonasDeEntidades(ctx: CategorizeContext): Promise<Map<string, string>> {
-  const delGrupo = ctx.clients.filter((c) => entidadesDelDominio(c.id, ctx));
+  const delGrupo = ctx.clients.filter((c) => entidadesDelDominio(c.id, ctx) && c.kind !== "EMPRESA");
   if (delGrupo.length === 0) return new Map();
   const sesiones = await prisma.firefliesSession.findMany({
-    where: { OR: pistasDeTitulo(delGrupo, ctx.ambiguousNameTokens).map((p) => ({ title: { contains: p, mode: "insensitive" as const } })) },
+    where: { OR: pistasDeTitulo(delGrupo, ctx.ambiguousNameTokens, ctx.clients).map((p) => ({ title: { contains: p, mode: "insensitive" as const } })) },
     select: { title: true, participants: true, manualClientId: true },
   });
   return aprenderPersonasDeEntidades(sesiones, ctx);
@@ -400,6 +401,7 @@ export async function reResolverReunionesDe(
     const pistas = pistasDeTitulo(
       ctx.clients.filter((c) => fichas.has(c.id)),
       ctx.ambiguousNameTokens,
+      ctx.clients,
     );
     const gente = new Set<string>();
     for (const mapa of [confirmadasAntes, ctx.interlocutoresConfirmados ?? new Map<string, readonly string[]>()]) {

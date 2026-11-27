@@ -105,6 +105,7 @@ export async function cargarSesionesCategorizadas() {
         hubspotCompanyId: true,
         siglas: true,
         comparteDominioConId: true,
+        kind: true,
         createdAt: true,
       },
     }),
@@ -266,5 +267,7 @@ export async function cargarSesionesCategorizadas() {
     return { conCliente, conClienteSinTr, adentro, adentroSinTr, porCse };
   })();
 
-  return { sessionsWithMeta, clients, categories, hubspotCompanies, teamMembersLite, cobertura };
+  /* La EMPRESA arriba de sus unidades (2026-11-26) arma el reparto pero no es una opción: nunca es dueña de una reunión
+     (los selectores de «Asignar», «Mover» y «Agregar reunión» salen de esta lista). */
+  return { sessionsWithMeta, clients: clients.filter((c) => c.kind !== "EMPRESA"), categories, hubspotCompanies, teamMembersLite, cobertura };
 }

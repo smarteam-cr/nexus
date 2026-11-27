@@ -103,18 +103,18 @@ export async function personasDeLaEmpresa(clientId: string) {
  * `gruposDeEntidades`).
  */
 export async function fichasDeLaEmpresa(clientId: string): Promise<FichaDeLaEmpresa[]> {
-  const ficha = await prisma.client.findUnique({ where: { id: clientId }, select: { id: true, comparteDominioConId: true } });
+  const ficha = await prisma.client.findUnique({ where: { id: clientId }, select: { id: true, comparteDominioConId: true, kind: true } });
   if (!ficha) return [];
   const principalId = ficha.comparteDominioConId ?? ficha.id;
   const todas = await prisma.client.findMany({
     where: { OR: [{ id: principalId }, { comparteDominioConId: principalId }] },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    select: { id: true, name: true, comparteDominioConId: true },
+    select: { id: true, name: true, comparteDominioConId: true, kind: true },
   });
   const principal = todas.find((c) => c.id === principalId);
   /* Una principal que a su vez cuelga de otra no arma grupo en el resolver: acá tampoco. */
   if (!principal || principal.comparteDominioConId) return [{ id: ficha.id, nombre: todas.find((c) => c.id === ficha.id)?.name ?? "", principal: true }];
-  return [principal, ...todas.filter((c) => c.id !== principalId)].map((c) => ({ id: c.id, nombre: c.name, principal: c.id === principalId }));
+  return [principal, ...todas.filter((c) => c.id !== principalId)].map((c) => ({ id: c.id, nombre: c.name, principal: c.id === principalId, esEmpresa: c.kind === "EMPRESA" }));
 }
 
 /**
@@ -125,7 +125,8 @@ export async function interlocutoresDeLaEmpresa(
   clientId: string,
   o: { abre?: (id: string) => boolean } = {},
 ): Promise<{ fichas: FichaDeLaEmpresa[]; personas: Interlocutor[] }> {
-  const fichas = (await fichasDeLaEmpresa(clientId)).filter((f) => f.id === clientId || (o.abre?.(f.id) ?? true));
+  /* La empresa arriba de sus unidades no es una opción: la gente se confirma en una unidad (2026-11-26). */
+  const fichas = (await fichasDeLaEmpresa(clientId)).filter((f) => !f.esEmpresa && (f.id === clientId || (o.abre?.(f.id) ?? true)));
   const ids = fichas.map((f) => f.id);
   const filas = await prisma.personaDeLaEmpresa.findMany({
     where: { clientId: { in: ids }, OR: [{ vigente: true }, { confirmadaAt: { not: null } }, { origenes: { has: "equipo" } }] },
@@ -166,7 +167,8 @@ export class RechazoDeInterlocutor extends Error {}
  *  · nadie del equipo de Smarteam es una persona del cliente (INV51), por su correo o su dominio;
  *  · un correo de una categoría de reuniones (HubSpot, partners) no es gente de un cliente: confirmarlo le daba a una
  *    ficha las reuniones del partner, que suelen tratar varias cuentas;
- *  · en la ficha de Smarteam («la casa», la misma regla que el resolver: `esLaCasaEn`) no se confirma ni se sugiere a nadie.
+ *  · en la ficha de Smarteam («la casa», la misma regla que el resolver: `esLaCasaEn`) no se confirma ni se sugiere a nadie;
+ *  · en la EMPRESA arriba de sus unidades tampoco (2026-11-26): la gente es de una unidad.
  */
 export async function motivoParaNoGuardar(a: { correo: string; fichas: readonly string[] }): Promise<string | null> {
   const correo = a.correo.trim().toLowerCase();
@@ -174,7 +176,7 @@ export async function motivoParaNoGuardar(a: { correo: string; fichas: readonly 
   const [categorias, delEquipo, fichas] = await Promise.all([
     prisma.sessionCategory.findMany({ select: { domains: true, kind: true } }),
     prisma.teamMember.count({ where: { email: { equals: correo, mode: "insensitive" } } }),
-    a.fichas.length ? prisma.client.findMany({ where: { id: { in: [...a.fichas] } }, select: { name: true, company: true, emailDomains: true } }) : [],
+    a.fichas.length ? prisma.client.findMany({ where: { id: { in: [...a.fichas] } }, select: { name: true, company: true, emailDomains: true, kind: true } }) : [],
   ]);
   const internos = buildInternalDomainsSet(categorias);
   if (delEquipo || internos.has(dominio)) return "Esa persona es del equipo de Smarteam.";
@@ -182,6 +184,8 @@ export async function motivoParaNoGuardar(a: { correo: string; fichas: readonly 
     return "Ese correo es de HubSpot o de un partner (una categoría de reuniones), no de la gente de un cliente.";
   }
   if (fichas.some(esLaCasaEn(internos))) return "En la ficha de Smarteam no se confirma gente del cliente.";
+  /* La empresa arriba de sus unidades (2026-11-26): la gente trabaja con una unidad, no con la empresa. */
+  if (fichas.some((f) => f.kind === "EMPRESA")) return "La gente se confirma en una unidad, no en la empresa.";
   return null;
 }
 

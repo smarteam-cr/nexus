@@ -410,6 +410,8 @@ export default function ClientsGrid({
     if (!busqueda.trim()) return undefined;
     const acc: Partial<Record<ClientKind, number>> = {};
     for (const c of filtrarPorBusqueda(clients, (x) => `${x.name} ${x.company ?? ""}`, busqueda)) {
+      /* La empresa arriba de sus unidades no tiene pestaña: se abre desde sus unidades (2026-11-26). */
+      if (c.kind === "EMPRESA") continue;
       acc[c.kind] = (acc[c.kind] ?? 0) + 1;
     }
     return acc;

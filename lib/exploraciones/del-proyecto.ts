@@ -25,6 +25,7 @@ import { lecturasDeLaExploracion, type SesionPlaneada } from "./guia";
 import { definicionEnElMarco, MARCO_DE_CS } from "./marco";
 import { ubicacionPreviaDelProyecto } from "./para-el-cuestionario";
 import { escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila } from "./servidor";
+import { rechazoSiLaFichaEsEmpresa } from "@/lib/clients/empresa-server";
 
 export const SQL_DE_LA_EXPLORACION_DEL_PROYECTO = "scripts/sql/2026-10-07-exploracion-del-proyecto.sql";
 
@@ -91,6 +92,9 @@ export async function asegurarExploracionDelProyecto(projectId: string, email: s
 
   const proyecto = await prisma.project.findUnique({ where: { id: projectId }, select: { clientId: true, tags: true } });
   if (!proyecto) return { ok: false, status: 404, error: "Proyecto no existe" };
+  /* Un proyecto que espera unidad en la EMPRESA arriba (2026-11-26) no se explora: primero se pasa a su unidad. */
+  const enLaEmpresa = await rechazoSiLaFichaEsEmpresa(proyecto.clientId);
+  if (enLaEmpresa) return { ok: false, status: enLaEmpresa.status, error: "Este proyecto espera su unidad: pásalo a una unidad (Unidades de negocio) y después explóralo." };
   const previo = await ubicacionPreviaDelProyecto(projectId).catch(() => null);
   let edicion = previo?.edicion ?? null;
   let cierre = previo?.perfil?.cierre ?? null;

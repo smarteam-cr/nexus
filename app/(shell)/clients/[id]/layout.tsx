@@ -199,7 +199,7 @@ export default async function ClientLayout({
                 Color: {NOMBRE_DE_LA_SALUD[correccionVigente.salud].toLowerCase()} (lo corrigió {quienCorrigio(correccionVigente)})
               </span>
             )}
-            {client.hubspotAccount ? (
+            {client.kind === "EMPRESA" ? null : client.hubspotAccount ? (
               <ChipHubspot conectado title={client.hubspotAccount.hubName ?? "HubSpot conectado"} />
             ) : (
               <ChipHubspot conectado={false} title="Conectar HubSpot del cliente" href={`/clients/${id}/settings`} />
@@ -207,6 +207,9 @@ export default async function ClientLayout({
           </>
         }
         acciones={
+          /* La EMPRESA arriba de sus unidades (2026-11-26) no tiene trabajo: ni reuniones, ni chat, ni documentos, ni
+             configuración propia. Todo eso vive en cada unidad. */
+          client.kind === "EMPRESA" ? undefined : (
           <>
             {/* Una reunión que no pasó por Meet, o lo que pasó en una que no dejó transcripción (etapa 4f). */}
             <BotonAgregarReunion clienteFijo={{ id, nombre: client.name }} etiqueta="+ Reunión" />
@@ -232,6 +235,7 @@ export default async function ClientLayout({
               </svg>
             </Link>
           </>
+          )
         }
       />
 

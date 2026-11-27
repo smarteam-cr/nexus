@@ -239,9 +239,9 @@ describe("planDeLaMudanza", () => {
 });
 
 describe("el pedido de la ruta", () => {
-  it("los proyectos pasan solo al agregar una unidad", () => {
+  it("los proyectos pasan al agregar, o a una unidad que ya existe (desde la empresa: lo comprueba el servidor)", () => {
     expect(PedidoDeUnidadSchema.safeParse({ accion: "simular", siglas: ["AE"], dominios: [], proyectos: ["p1"] }).success).toBe(true);
-    expect(PedidoDeUnidadSchema.safeParse({ accion: "simular", fichaId: "ae", siglas: ["AE"], dominios: [], proyectos: ["p1"] }).success).toBe(false);
+    expect(PedidoDeUnidadSchema.safeParse({ accion: "simular", fichaId: "ae", siglas: ["AE"], dominios: [], proyectos: ["p1"] }).success).toBe(true);
     expect(PedidoDeUnidadSchema.safeParse({ accion: "borrar", siglas: [], dominios: [] }).success).toBe(false);
   });
 });

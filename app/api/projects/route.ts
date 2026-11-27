@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { rechazoSiLaFichaEsEmpresa } from "@/lib/clients/empresa-server";
 import { crearOReusarFicha, mensajeDeEmpresaRepetida, quienTieneLaEmpresaTrasChocar } from "@/lib/clients/empresa-de-hubspot";
 import { guardPermission, guardAccessToClient, guardCapability } from "@/lib/auth/api-guards";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
@@ -199,6 +200,9 @@ export async function POST(req: NextRequest) {
     where: { id: clientId },
     select: { hubspotCompanyId: true, ignoredHubspotServiceIds: true, comparteDominioCon: { select: { hubspotCompanyId: true } } },
   });
+  /* La EMPRESA arriba de sus unidades no tiene proyectos (2026-11-26): el proyecto se crea en una de sus unidades. */
+  const enLaEmpresa = await rechazoSiLaFichaEsEmpresa(clientId);
+  if (enLaEmpresa) return malo(enLaEmpresa.error, enLaEmpresa.status);
   /* Una ficha que comparte dominio no tiene empresa propia: su proyecto cuelga de la de su dueña (alta-runner.ts). */
   if (!client?.hubspotCompanyId && !client?.comparteDominioCon?.hubspotCompanyId) {
     return malo("Ese cliente no tiene empresa en HubSpot. Primero se crea la empresa allá.");

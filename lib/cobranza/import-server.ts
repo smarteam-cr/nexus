@@ -90,7 +90,7 @@ export async function buildDedupIndices(): Promise<DedupIndices> {
   const [clients, empresas] = await Promise.all([
     prisma.client.findMany({
       where: { ...CS_CLIENT_WHERE },
-      select: { id: true, name: true, company: true, emailDomains: true, source: true, sourceExternalId: true, comparteDominioConId: true },
+      select: { id: true, name: true, company: true, emailDomains: true, source: true, sourceExternalId: true, comparteDominioConId: true, kind: true },
     }),
     cargarEmpresasExistentes(),
   ]);

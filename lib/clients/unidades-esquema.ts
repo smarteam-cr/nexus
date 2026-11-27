@@ -17,7 +17,7 @@ export const PedidoDeUnidadSchema = z
     moverIgual: z.array(z.string().min(1).max(128)).max(500).optional(),
     huella: z.string().max(64).optional(),
   })
-  .strict()
-  .refine((p) => !(p.fichaId && p.proyectos?.length), { message: "Los proyectos pasan solo al agregar una unidad." });
+  /* Con `fichaId`, los proyectos pasan solo de la empresa arriba a esa unidad: lo comprueba unidades-server.ts › calcular. */
+  .strict();
 
 export const PedidoDeJuntarSchema = z.object({ unidadId: z.string().min(1).max(64) }).strict();

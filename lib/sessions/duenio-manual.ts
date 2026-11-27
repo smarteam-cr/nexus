@@ -24,6 +24,7 @@
  * módulo existe para no cometer.
  */
 import { prisma } from "@/lib/db/prisma";
+import { exigirQueNoSeaEmpresa } from "@/lib/clients/empresa-server";
 
 /** Cómo llegó el sello. `null` en la base = fila histórica = se trata como `"humano"`. */
 export type OrigenDelDuenio = "humano" | "adopcion";
@@ -50,6 +51,9 @@ export async function asignarDuenioManual(
     db?: Pick<typeof prisma, "firefliesSession">;
   },
 ): Promise<boolean> {
+  /* La EMPRESA arriba de sus unidades nunca es dueña de una reunión (2026-11-26): se elige una unidad. Las pantallas no la
+     ofrecen; esto frena cualquier camino que se olvide (lanza TrabajoEnLaEmpresa, 409). */
+  if (clientId) await exigirQueNoSeaEmpresa(clientId);
   const db = opts.db ?? prisma;
   const data = {
     manualClientId: clientId,

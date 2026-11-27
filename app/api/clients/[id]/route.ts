@@ -11,6 +11,7 @@ import { can } from "@/lib/auth/permissions/engine";
 import { ErrorDeDato, proponerDato } from "@/lib/clients/datos-de-la-empresa-server";
 import { limpiarDominio, normalizarSigla } from "@/lib/clients/siglas-y-dominios";
 import { escribirEnHubspot } from "@/lib/clients/escritura-en-hubspot-server";
+import { rechazoDeEscrituraEnLaEmpresa } from "@/lib/clients/empresa-server";
 
 /* A-20 (auditoría 2026-09-03): el PATCH escribía lo que llegaba en el body (`data.name.trim()`
    sobre cualquier cosa). Estricto: los campos que la ficha edita, con sus topes, y nada más —
@@ -68,6 +69,8 @@ export async function PATCH(
   if (guard instanceof NextResponse) return guard;
 
   const parsed = patchClientSchema.safeParse(await request.json().catch(() => null));
+  const escrituraEnLaEmpresa = await rechazoDeEscrituraEnLaEmpresa(id);
+  if (escrituraEnLaEmpresa) return NextResponse.json({ error: escrituraEnLaEmpresa.error }, { status: escrituraEnLaEmpresa.status });
   if (!parsed.success) return cuerpoInvalido(parsed.error);
   const data = parsed.data;
   const client = await prisma.client.update({
@@ -139,6 +142,12 @@ export async function DELETE(
   const { id } = await params;
   const guard = await guardCapability("deleteClients");
   if (guard instanceof NextResponse) return guard;
+  /* La EMPRESA arriba de sus unidades no se borra a mano (2026-11-26): se llevaría lo que espera unidad y les quitaría a
+     sus unidades el dominio y la empresa de HubSpot. Se deshace con scripts/crear-empresa-de-unidades.ts --deshacer. */
+  const aBorrar = await prisma.client.findUnique({ where: { id }, select: { kind: true } });
+  if (aBorrar?.kind === "EMPRESA") {
+    return NextResponse.json({ error: "Una empresa con unidades no se borra aquí: la deshace el equipo de Nexus." }, { status: 409 });
+  }
 
   /* ⚠ SOLTAR LAS SESIONES ANTES DE BORRAR, Y DENTRO DE LA MISMA TRANSACCIÓN.
      Desde R7 (2026-10-24) `resolvedClientId` es una llave con RESTRICT y `manualClientId` una con SET NULL: sin

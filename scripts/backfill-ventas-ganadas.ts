@@ -12,6 +12,8 @@
  *   ALLOW_PROD_WRITE=1 npx tsx scripts/backfill-ventas-ganadas.ts --desde=2026-01-01 --hasta=2026-12-31 --apply
  */
 import "dotenv/config";
+/* La copia de ventas ganadas reparte las de una empresa con unidades con el resolver (2026-11-26), que llega a server-only. */
+import "./lib/permitir-server-only";
 import { resolverApply } from "./lib/guard";
 import { syncVentasGanadas } from "../lib/ventas/sync-ganadas";
 import { clasificarVentas } from "../lib/ventas/clasificar-huecos";

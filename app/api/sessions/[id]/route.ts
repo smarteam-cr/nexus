@@ -3,6 +3,7 @@ import { guardInternalUser } from "@/lib/auth/api-guards";
 import { asignarDuenioManual } from "@/lib/sessions/duenio-manual";
 import { withAuth, apiError } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
+import { rechazarSiEsEmpresa } from "@/lib/clients/empresa";
 import { reResolveSession } from "@/lib/sessions/resolve-client";
 import { guardAccesoALaReunion } from "@/lib/sessions/acceso-a-la-reunion";
 
@@ -58,10 +59,13 @@ export const PATCH = withAuth(async (req, ctx) => {
   const destino = typeof crudo === "string" && crudo.trim() ? crudo.trim() : null;
 
   if (destino) {
-    const existe = await prisma.client.findUnique({ where: { id: destino }, select: { id: true } });
+    const existe = await prisma.client.findUnique({ where: { id: destino }, select: { id: true, kind: true } });
     if (!existe) {
       return apiError("Ese cliente no existe: la sesión quedaría con un dueño fantasma", 400);
     }
+    /* La empresa arriba de sus unidades no tiene reuniones (2026-11-26): se asigna a una unidad. */
+    const enLaEmpresa = rechazarSiEsEmpresa(existe);
+    if (enLaEmpresa) return NextResponse.json({ error: enLaEmpresa.error }, { status: enLaEmpresa.status });
   }
 
   await asignarDuenioManual(id, destino, { origen: "humano", actorEmail: usuario.teamMember.email ?? null });

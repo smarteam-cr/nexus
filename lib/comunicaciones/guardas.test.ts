@@ -41,7 +41,8 @@ describe("⛔ las comunicaciones de HubSpot", () => {
   it("la escriben solo la copia y la lectura de compromisos", () => {
     const escritura = /comunicacionDeHubspot\s*\.\s*(create|createMany|update|updateMany|upsert|delete|deleteMany)\b/;
     const escriben = TODO.filter((rel) => escritura.test(leer(rel))).sort();
-    expect(escriben).toEqual(["lib/comunicaciones/compromisos-server.ts", "lib/comunicaciones/copia-server.ts"]);
+    /* de-la-empresa-server.ts: solo para deshacer una empresa arriba de sus unidades (2026-11-26). */
+    expect(escriben).toEqual(["lib/comunicaciones/compromisos-server.ts", "lib/comunicaciones/copia-server.ts", "lib/comunicaciones/de-la-empresa-server.ts"]);
   });
 
   it("nada de lo que ve el cliente importa lib/comunicaciones", () => {
@@ -73,6 +74,10 @@ describe("⛔ las comunicaciones de HubSpot", () => {
       "lib/exploraciones/agente.ts",
       // El borrador del contexto de la exploración (2026-11-06): las notas de UNA empresa, por la puerta de lectura.
       "lib/exploraciones/contexto-server.ts",
+      // La empresa arriba de sus unidades (2026-11-26): cuántas esperan unidad y adónde irían, por de-la-empresa-server.ts.
+      "lib/clients/unidades-server.ts",
+      "lib/clients/crear-empresa-server.ts",
+      "scripts/crear-empresa-de-unidades.ts",
     ]);
     const malos = TODO.filter((rel) => !rel.startsWith("lib/comunicaciones/") && /["']@\/lib\/comunicaciones\//.test(leer(rel)) && !permitidos.has(rel));
     expect(malos).toEqual([]);

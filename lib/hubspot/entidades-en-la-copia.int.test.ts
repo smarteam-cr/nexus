@@ -192,3 +192,47 @@ describe("la copia de proyectos de dos fichas que comparten empresa", () => {
     expect((await proyecto(P_TAE))?.status).toBe("inactive");
   });
 });
+
+/** La empresa ARRIBA de sus unidades (2026-11-26): «TEC» tiene la empresa del ITCR; AE y TAE, ninguna. */
+async function elTecConLaEmpresaArriba() {
+  const tec = await prisma.client.create({ data: { name: "TEC", kind: "EMPRESA", hubspotCompanyId: ITCR, emailDomains: ["itcr.ac.cr"] } });
+  const tae = await prisma.client.create({ data: { name: "TEC · TAE", siglas: ["TAE"], comparteDominioConId: tec.id } });
+  const ae = await prisma.client.create({ data: { name: "TEC · AE", siglas: ["AE"], comparteDominioConId: tec.id } });
+  await prisma.project.create({ data: { clientId: ae.id, name: "AE | HUBSPOT", hubspotServiceId: P_AE, status: "active", hubspotOwnerEmail: "heiver@smarteamcr.com" } });
+  await prisma.project.create({ data: { clientId: tae.id, name: "TEC TAE | CRM", hubspotServiceId: P_TAE, status: "active", hubspotOwnerEmail: "heiver@smarteamcr.com" } });
+  mundo.asociados = [P_AE, P_TAE];
+  mundo.existen = new Map([
+    [P_AE, { nombre_del_proyecto: "AE | HUBSPOT", hubspot_owner_id: "111" }],
+    [P_TAE, { nombre_del_proyecto: "TEC TAE | CRM", hubspot_owner_id: "222" }],
+  ]);
+  mundo.lecturaCaida = false;
+  return { tec, tae, ae };
+}
+
+describe("la copia de proyectos con la empresa arriba", () => {
+  beforeEach(() => {
+    vi.spyOn(Date, "now").mockImplementation(() => ahora);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("un proyecto nuevo va a la unidad que abren sus siglas; sin siglas, se queda en la empresa", async () => {
+    const { tec, tae, ae } = await elTecConLaEmpresaArriba();
+    const CON_SIGLAS = "600000000002";
+    const SIN_SIGLAS = "600000000003";
+    mundo.asociados.push(CON_SIGLAS, SIN_SIGLAS);
+    mundo.existen.set(CON_SIGLAS, { nombre_del_proyecto: "AE | Agente de WhatsApp" });
+    mundo.existen.set(SIN_SIGLAS, { nombre_del_proyecto: "Proyecto Y" });
+
+    const r = await correr(tec.id);
+    expect(r.errors).toEqual([]);
+    expect((await proyecto(CON_SIGLAS))?.clientId).toBe(ae.id);
+    expect((await proyecto(SIN_SIGLAS))?.clientId).toBe(tec.id);
+    /* Los de siempre siguen donde estaban, y cada unidad copia los suyos de la empresa de arriba. */
+    expect((await proyecto(P_AE))?.clientId).toBe(ae.id);
+    expect((await proyecto(P_TAE))?.clientId).toBe(tae.id);
+    expect((await correr(tae.id)).errors).toEqual([]);
+    expect((await proyecto(P_TAE))?.hubspotOwnerEmail).toBe("222@smarteamcr.com");
+  });
+});

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { rechazoSiLaFichaEsEmpresa } from "@/lib/clients/empresa-server";
 import { crearOReusarFicha } from "@/lib/clients/empresa-de-hubspot";
 import { guardCapability, guardAccessToClient } from "@/lib/auth/api-guards";
 import { createDefaultCanvases, createHandoffCanvas } from "@/lib/canvas/default-canvases";
@@ -95,6 +96,10 @@ export async function POST(req: NextRequest) {
   }
 
   const targetProjectId = body.targetProjectId?.trim() || null;
+  /* La EMPRESA arriba de sus unidades no tiene handoffs (2026-11-26): ni en un proyecto suyo que espera unidad, ni uno
+     nuevo. El handoff se arranca en la unidad. */
+  const handoffEnLaEmpresa = await rechazoSiLaFichaEsEmpresa(clientId);
+  if (handoffEnLaEmpresa) return NextResponse.json({ error: handoffEnLaEmpresa.error }, { status: handoffEnLaEmpresa.status });
 
   // ── 3. Adjuntar a un proyecto existente, o crear uno nuevo (atómico en Nexus) ─
   try {
@@ -157,6 +162,9 @@ export async function POST(req: NextRequest) {
     } else {
       // ── CREAR: proyecto nuevo con nombre seteable (default "Onboarding"). ──────
       const projectName = body.projectName?.trim() || "Onboarding";
+      /* La EMPRESA arriba de sus unidades no tiene proyectos (2026-11-26). */
+      const enLaEmpresa = await rechazoSiLaFichaEsEmpresa(clientId);
+      if (enLaEmpresa) return NextResponse.json({ error: enLaEmpresa.error }, { status: enLaEmpresa.status });
       result = await prisma.$transaction(async (tx) => {
         const project = await tx.project.create({
           data: { clientId, name: projectName, status: "active", hubspotDealId: dealId },

@@ -23,6 +23,7 @@ import { calcularTamV1 } from "@/lib/clients/tam-v1";
 import { corridaDeLaInvestigacion, ultimaInvestigacion } from "@/lib/clients/investigacion/servidor";
 import { escribirEnHubspot } from "@/lib/clients/escritura-en-hubspot-server";
 import { loQueLeFaltaComprarDeLaEmpresa } from "@/lib/clients/lo-que-le-falta-comprar-server";
+import { rechazoDeEscrituraEnLaEmpresa } from "@/lib/clients/empresa-server";
 
 const SIN_SQL = "Falta aplicar scripts/sql/2026-10-25-datos-de-la-empresa.sql y reiniciar.";
 
@@ -60,6 +61,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const acceso = await guardAccessToClient(id);
   if (acceso instanceof NextResponse) return acceso;
+  const escrituraEnLaEmpresa = await rechazoDeEscrituraEnLaEmpresa(id);
+  if (escrituraEnLaEmpresa) return NextResponse.json({ error: escrituraEnLaEmpresa.error }, { status: escrituraEnLaEmpresa.status });
   const tm = acceso.user.teamMember;
   if (!tm) return NextResponse.json({ error: "Solo el equipo edita los datos de la empresa." }, { status: 403 });
 

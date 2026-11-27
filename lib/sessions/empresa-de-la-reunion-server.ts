@@ -24,6 +24,7 @@
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
+import { rechazarSiEsEmpresa } from "@/lib/clients/empresa";
 import { accessibleClientWhere, clientesQueNoAbre } from "@/lib/auth/access";
 import type { AppUserWithTeamMember } from "@/lib/auth/supabase";
 import { clienteDeLaEmpresaDeVentas } from "@/lib/clients/cliente-de-la-empresa-de-ventas";
@@ -103,8 +104,11 @@ export async function decidirEmpresaDeLaReunion(sessionId: string, gesto: GestoS
     destino = gesto.clientId;
   }
 
-  const empresa = await prisma.client.findUnique({ where: { id: destino }, select: { id: true, name: true } });
+  const empresa = await prisma.client.findUnique({ where: { id: destino }, select: { id: true, name: true, kind: true } });
   if (!empresa) return { ok: false, status: 400, error: "Esa empresa no existe." };
+  /* La empresa arriba de sus unidades no tiene reuniones (2026-11-26): se mueve a una unidad. */
+  const enLaEmpresa = rechazarSiEsEmpresa(empresa);
+  if (enLaEmpresa) return { ok: false, status: enLaEmpresa.status, error: enLaEmpresa.error };
   // Una empresa recién creada desde la propuesta todavía no tiene a nadie asignado: no se le pide acceso a quien la creó.
   if (!creada && (await clientesQueNoAbre(quien.teamMemberId, [destino])).size) {
     return { ok: false, status: 403, error: "No tienes esa empresa asignada: pídele a la líder de Customer Success que la elija." };
