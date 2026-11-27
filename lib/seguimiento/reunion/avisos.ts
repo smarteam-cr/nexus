@@ -36,6 +36,8 @@ export interface EntradaDeLosAvisos {
   tieneTexto: boolean;
   /** La sync ya intentó traer su texto (`enrichedAt`). */
   enriquecida: boolean;
+  /** No fue por Meet (Zoom, Teams, otro enlace, en persona): Google no va a traer texto. Sin el campo = de Meet. */
+  fueraDeMeet?: boolean;
   /** El estado de su lectura de seguimiento (`LecturaDeReunion.seguimiento*`), si tiene. */
   lectura: { estado: string | null; error: string | null } | null;
   /** Cuántos proyectos tiene el cliente y cuántos están vinculados a esta reunión. */
@@ -79,7 +81,8 @@ export function avisosDeLaReunion(e: EntradaDeLosAvisos): AvisoDeLaReunion[] {
 
   if (fin <= ahora && !e.tieneTexto) {
     const horas = (ahora - fin) / 3_600_000;
-    if (!e.enriquecida || horas < HORAS_ESPERANDO_EL_TEXTO) {
+    // Una de Zoom, Teams o en persona no espera nada de Google (2026-11-27): nunca dice «Esperando la transcripción».
+    if (!e.fueraDeMeet && (!e.enriquecida || horas < HORAS_ESPERANDO_EL_TEXTO)) {
       avisos.push({ clave: "esperando-texto", tono: "info", texto: "Esperando la transcripción: Google la deja un rato después de que termina, y Nexus la vuelve a buscar sola durante dos días." });
     } else {
       avisos.push({

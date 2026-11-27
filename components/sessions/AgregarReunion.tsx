@@ -52,6 +52,13 @@ export interface AgregarReunionProps {
   clientes?: { id: string; nombre: string }[];
   /** El proyecto que se marca al abrir (la ficha de un proyecto). */
   proyectoInicial?: string;
+  /**
+   * La reunión a la que se le agrega lo que pasó, ya elegida (2026-11-27: desde la página de una reunión de Zoom o Teams,
+   * «Pegar la transcripción»). `fecha` = su día en Costa Rica (yyyy-mm-dd). Si no está entre las del día, se elige a mano.
+   */
+  reunionInicial?: { id: string; fecha: string };
+  /** Qué se agrega al abrir. Sin esto, lo que recuerdas. */
+  tipoInicial?: TipoDeContenido;
   onAgregada?: (sessionId: string) => void;
 }
 
@@ -63,24 +70,24 @@ function horaCR(iso: string): string {
   return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
 }
 
-export function AgregarReunion({ open, onClose, clienteFijo, clientes, proyectoInicial, onAgregada }: AgregarReunionProps) {
+export function AgregarReunion({ open, onClose, clienteFijo, clientes, proyectoInicial, reunionInicial, tipoInicial, onAgregada }: AgregarReunionProps) {
   const toast = useToast();
   const router = useRouter();
   const me = useMe();
   const archivoRef = useRef<HTMLInputElement>(null);
 
   const [clientId, setClientId] = useState(clienteFijo?.id ?? "");
-  const [fecha, setFecha] = useState(() => diaEnCostaRica(new Date()));
+  const [fecha, setFecha] = useState(() => reunionInicial?.fecha ?? diaEnCostaRica(new Date()));
   const [hora, setHora] = useState("");
   const [opciones, setOpciones] = useState<Opciones | null>(null);
   const [cargando, setCargando] = useState(false);
-  const [cual, setCual] = useState<string | null>(null);
+  const [cual, setCual] = useState<string | null>(reunionInicial?.id ?? null);
   const [titulo, setTitulo] = useState("");
   const [duracion, setDuracion] = useState("");
   const [equipo, setEquipo] = useState<Set<string>>(new Set());
   const [delCliente, setDelCliente] = useState("");
   const [proyectos, setProyectos] = useState<Set<string>>(new Set(proyectoInicial ? [proyectoInicial] : []));
-  const [tipo, setTipo] = useState<QueSeAgrega>("recuerdo");
+  const [tipo, setTipo] = useState<QueSeAgrega>(tipoInicial ?? "recuerdo");
   // T5: la reunión ya se agregó y espera su audio.
   const [paraElAudio, setParaElAudio] = useState<string | null>(null);
   const [texto, setTexto] = useState("");

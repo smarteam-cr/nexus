@@ -16,8 +16,12 @@
  * Sin dependencias de base ni de red: lo prueba `meet-sync-cambios.test.ts`.
  */
 import { esRecursoDeCalendario } from "@/lib/sessions/dominio-propio";
+import { SOURCE_CALENDARIO, tieneInvitadoDeAfuera, type Plataforma } from "./plataforma-del-evento";
 
-/** Una reunión de Google Meet tal como la trae el calendario de UN usuario. */
+/**
+ * Una reunión del calendario tal como la trae el calendario de UN usuario: de Google Meet o, desde el 2026-11-27, una con
+ * alguien de afuera por Zoom, Teams, otro enlace o en persona (`plataforma`, lib/google/plataforma-del-evento.ts).
+ */
 export interface EventoMeet {
   eventId: string;
   title: string;
@@ -32,6 +36,60 @@ export interface EventoMeet {
   conferenceId?: string;
   /** Los invitados con su respuesta, tal como los trae el evento (sin salas). undefined = no se pidieron. */
   invitados?: InvitadoDelEvento[];
+  /** Por dónde fue. undefined o "MEET" = de Google Meet (la de siempre). */
+  plataforma?: Plataforma;
+}
+
+/** ¿Es de Google Meet? Las de siempre no traen plataforma. */
+export function esEventoDeMeet(e: Pick<EventoMeet, "plataforma">): boolean {
+  return !e.plataforma || e.plataforma === "MEET";
+}
+
+/** El `source` de la fila: "google_meet" para Meet; SOURCE_CALENDARIO para las otras, que el circuito de Meet no lee. */
+export function sourceDelEvento(e: Pick<EventoMeet, "plataforma">): "google_meet" | typeof SOURCE_CALENDARIO {
+  return esEventoDeMeet(e) ? "google_meet" : SOURCE_CALENDARIO;
+}
+
+/**
+ * Saca de la corrida las reuniones que no son de Meet y no tienen a nadie de afuera (dailies, bloques, almuerzos del
+ * equipo): con todas las copias ya juntas, porque el invitado de afuera puede estar solo en la copia de otra persona.
+ * Las de Meet quedan todas, como siempre. Devuelve cuántas sacó.
+ */
+export function soloLasDeAfuera(eventos: Map<string, EventoMeet>, dominiosDelEquipo: ReadonlySet<string>): number {
+  let sacadas = 0;
+  for (const [id, e] of eventos) {
+    if (esEventoDeMeet(e)) continue;
+    const invitados = e.invitados ?? e.participants.map((correo) => ({ correo: correo.trim().toLowerCase() }));
+    if (!tieneInvitadoDeAfuera(invitados, dominiosDelEquipo)) {
+      eventos.delete(id);
+      sacadas++;
+    }
+  }
+  return sacadas;
+}
+
+/** La ventana para decir que una reunión agregada a mano es la misma (la de Rentabilidad: ±30 minutos). */
+export const MINUTOS_DE_LA_MISMA_REUNION = 30;
+
+/**
+ * ¿Esta reunión que no es de Meet ya la agregó alguien a mano? Hasta el 2026-11-27 un Zoom con un cliente solo existía si
+ * alguien lo cargaba con «Agregar reunión» (`source = "manual"`). Si es del mismo cliente y a ±30 minutos, es la misma:
+ * la sync no crea otra vacía al lado (la regla de Rentabilidad, lib/rentabilidad/horas-del-calendario.ts). Sin cliente
+ * resuelto no se decide nada.
+ */
+export function yaEstaAgregadaAMano(
+  evento: Pick<EventoMeet, "date">,
+  clientId: string | null,
+  manuales: readonly { clientId: string | null; date: Date }[],
+): boolean {
+  if (!clientId) return false;
+  const margen = MINUTOS_DE_LA_MISMA_REUNION * 60_000;
+  return manuales.some((m) => m.clientId === clientId && Math.abs(m.date.getTime() - evento.date.getTime()) <= margen);
+}
+
+/** La `plataforma` que se guarda: null en una de Meet (las de siempre, sin escribir nada nuevo en ~600 filas). */
+export function plataformaQueSeGuarda(e: Pick<EventoMeet, "plataforma">): Exclude<Plataforma, "MEET"> | null {
+  return esEventoDeMeet(e) ? null : (e.plataforma as Exclude<Plataforma, "MEET">);
 }
 
 /** La respuesta de un invitado, con los valores del enum `RespuestaAlEvento` del schema. */
@@ -100,6 +158,8 @@ export interface SesionGuardada {
   enrichedAt: Date | null;
   /** Los reintentos de lectura gastados: una que espera material también cuenta como ya intentada. */
   enrichAttempts: number;
+  /** Por dónde fue, si no es de Meet (2026-11-27). null o sin el campo = de Meet. */
+  plataforma?: Plataforma | null;
 }
 
 /** El `select` de Prisma que arma una `SesionGuardada`: la sync no necesita más que esto. */
@@ -120,6 +180,7 @@ export const SELECT_SESION_GUARDADA = {
   canceladaEn: true,
   enrichedAt: true,
   enrichAttempts: true,
+  plataforma: true,
 } as const;
 
 /** Solo los campos que cambiaron. Si el Doc es nuevo, además se reinicia el enriquecimiento. */
@@ -131,7 +192,8 @@ export interface CambiosDeSesion {
   googleEventId?: string;
   googleDocId?: string;
   organizerEmail?: string;
-  source?: "google_meet";
+  source?: "google_meet" | typeof SOURCE_CALENDARIO;
+  plataforma?: Exclude<Plataforma, "MEET"> | null;
   resolvedClientId?: string | null;
   descripcionDelEvento?: string | null;
   conferenceId?: string;
@@ -194,6 +256,9 @@ export function fusionarCopia(previa: EventoMeet | undefined, copia: EventoMeet)
     descripcion: previa.descripcion ?? copia.descripcion,
     conferenceId: previa.conferenceId ?? copia.conferenceId,
     invitados: unirInvitados(previa.invitados, copia.invitados),
+    // La plataforma es del evento, pero una copia puede venir sin el Meet (la vio alguien con otra versión del evento):
+    // si alguna copia trae el Meet, gana Meet, sin importar el orden de los calendarios.
+    plataforma: esEventoDeMeet(previa) || esEventoDeMeet(copia) ? undefined : (previa.plataforma ?? copia.plataforma),
   };
 }
 
@@ -249,7 +314,12 @@ export function cambiosDeSesion(
   if (!mismosParticipantes(guardada.participants, participantes)) c.participants = participantes;
   if (guardada.googleEventId !== evento.eventId) c.googleEventId = evento.eventId;
   if (guardada.organizerEmail !== evento.organizerEmail) c.organizerEmail = evento.organizerEmail;
-  if (guardada.source !== "google_meet") c.source = "google_meet";
+  // De Meet → «google_meet»; si no, «google_calendar». Si a una reunión de Zoom le ponen un Meet, pasa al circuito de Meet
+  // (y al revés deja de gastar intentos en una lectura que no va a encontrar nada).
+  const source = sourceDelEvento(evento);
+  if (guardada.source !== source) c.source = source;
+  const plataforma = plataformaQueSeGuarda(evento);
+  if ((guardada.plataforma ?? null) !== plataforma) c.plataforma = plataforma;
   if (guardada.resolvedClientId !== resolvedClientId) c.resolvedClientId = resolvedClientId;
   // La agenda (ficha G): si Google la cambió o la borró, se copia tal cual. Un evento sin el dato no la toca.
   if (evento.descripcion !== undefined && (guardada.descripcionDelEvento ?? null) !== (evento.descripcion ?? null)) c.descripcionDelEvento = evento.descripcion ?? null;

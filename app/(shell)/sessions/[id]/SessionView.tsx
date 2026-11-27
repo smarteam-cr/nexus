@@ -29,6 +29,8 @@ import { AvisosDeLaReunion } from "@/components/sessions/reunion/AvisosDeLaReuni
 import { AgendaDeLaReunion } from "@/components/sessions/reunion/AgendaDeLaReunion";
 import { TareasDeLaReunion } from "@/components/sessions/reunion/TareasDeLaReunion";
 import { DespuesDeLaReunion } from "@/components/sessions/reunion/DespuesDeLaReunion";
+import QuienEstuvo from "@/components/sessions/QuienEstuvo";
+import type { QuienEstuvo as QuienEstuvoDatos } from "@/lib/sessions/quien-estuvo";
 
 // ─── Tipos compartidos con page.tsx ──────────────────────────────────────────
 
@@ -46,6 +48,12 @@ export interface SessionViewData {
     organizerEmail: string | null;
     source: string;
     summary: { overview?: string } | null;
+    /** Por dónde fue, si no es de Meet (2026-11-27): «Fue por Zoom». null = de Meet o agregada a mano. */
+    avisoDePlataforma?: string | null;
+    /** «Quién estuvo» (lib/sessions/quien-estuvo.ts). null = no se pudo leer. */
+    quienEstuvo?: QuienEstuvoDatos | null;
+    /** El resumen del notetaker de HubSpot de una de Zoom o Teams (lib/sessions/quien-estuvo-server.ts). */
+    resumenDeHubspot?: { texto: string; ocurrioAt: string } | null;
   };
   client: { id: string; name: string; company: string | null } | null;
   minute: {
@@ -143,6 +151,12 @@ export default function SessionView({
               <span>{formatDuration(session.duration)}</span>
             </>
           )}
+          {session.avisoDePlataforma && (
+            <>
+              <span className="text-fg-muted">·</span>
+              <span className="rounded-md border border-line bg-surface-muted px-1.5 text-xs text-fg-secondary">{session.avisoDePlataforma}</span>
+            </>
+          )}
           {client && (
             <>
               <span className="text-gray-700">·</span>
@@ -168,6 +182,19 @@ export default function SessionView({
             </>
           )}
         </div>
+        {session.quienEstuvo && (
+          <div className="mt-3">
+            <QuienEstuvo datos={session.quienEstuvo} />
+          </div>
+        )}
+        {session.resumenDeHubspot && (
+          <details className="mt-2 rounded-xl border border-line bg-surface">
+            <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-fg-muted hover:bg-surface-hover rounded-xl">
+              La grabó el notetaker de HubSpot · su resumen
+            </summary>
+            <p className="whitespace-pre-wrap border-t border-line px-3 py-2 text-xs leading-relaxed text-fg">{session.resumenDeHubspot.texto}</p>
+          </details>
+        )}
       </div>
 
       {/* ── Avisos y agenda (ficha G) ──────────────────────────────────────── */}

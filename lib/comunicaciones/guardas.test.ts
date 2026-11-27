@@ -78,6 +78,10 @@ describe("⛔ las comunicaciones de HubSpot", () => {
       "lib/clients/unidades-server.ts",
       "lib/clients/crear-empresa-server.ts",
       "scripts/crear-empresa-de-unidades.ts",
+      // El resumen del notetaker de HubSpot de UNA reunión de Zoom o Teams, del dueño de la reunión (2026-11-27).
+      "lib/sessions/quien-estuvo-server.ts",
+      // La medición de las reuniones fuera de Meet (2026-11-27, solo lectura).
+      "scripts/medir-reuniones-fuera-de-meet.ts",
     ]);
     const malos = TODO.filter((rel) => !rel.startsWith("lib/comunicaciones/") && /["']@\/lib\/comunicaciones\//.test(leer(rel)) && !permitidos.has(rel));
     expect(malos).toEqual([]);

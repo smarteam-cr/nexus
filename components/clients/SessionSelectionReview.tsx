@@ -107,6 +107,10 @@ interface CandidateSession {
    * de ofrecer un botón que la puerta va a rechazar.
    */
   motivoNoAdoptable?: string | null;
+  /** «Fue por Zoom», «Fue en persona» (2026-11-27, «De tu calendario»). */
+  avisoDePlataforma?: string | null;
+  /** Ninguno de sus invitados tiene el dominio del cliente (2026-11-27, «De tu calendario»). */
+  sinNadieDelCliente?: boolean;
   /** Todavía no ocurrió (solo las reuniones del proyecto que se ofrecen en el cronograma). */
   futura?: boolean;
   /** Nexus la sugirió para este documento y alguien la descartó (etapa 7). Se puede elegir igual. */
@@ -771,6 +775,16 @@ export default function SessionSelectionReview({
                        marcada: la reunión pasó y no quedó nada de qué leer. */
                     <span className="text-[9px] font-medium text-warn-ink bg-warn-surface border border-warn-line rounded-full px-1.5 py-0.5 flex-shrink-0">
                       sin información
+                    </span>
+                  )}
+                  {c.avisoDePlataforma && (
+                    <span className="text-[9px] font-medium text-fg-muted bg-surface-muted border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
+                      {c.avisoDePlataforma.toLowerCase()}
+                    </span>
+                  )}
+                  {c.sinNadieDelCliente && (
+                    <span className="text-[9px] font-medium text-fg-muted bg-surface-muted border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
+                      sin nadie del cliente
                     </span>
                   )}
                   {c.excluidaAca && (

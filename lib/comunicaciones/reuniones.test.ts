@@ -2,7 +2,27 @@
  * lib/comunicaciones/reuniones.test.ts — ¿una reunión o una llamada de HubSpot ya llega por Meet? (U7).
  */
 import { describe, expect, it } from "vitest";
-import { codigoDeMeetDe, cruceConMeet, eventoDeGoogleDe, indexarReunionesDeMeet, reunionDeMeetQueLaCubre, yaLlegaPorMeet, type ReunionDeMeet } from "./reuniones";
+import { codigoDeMeetDe, cruceConMeet, elegirResumenDeLaReunion, eventoDeGoogleDe, indexarReunionesDeMeet, reunionDeMeetQueLaCubre, yaLlegaPorMeet, type ReunionDeMeet } from "./reuniones";
+
+describe("elegirResumenDeLaReunion — el resumen de HubSpot de ESA reunión, no de otra semana", () => {
+  const d = (iso: string) => new Date(iso);
+  const serie = [
+    { googleEventId: "serie1", ocurrioAt: d("2026-11-13T15:00:00Z"), texto: "13 nov" },
+    { googleEventId: "serie1", ocurrioAt: d("2026-11-27T15:00:00Z"), texto: "27 nov" },
+  ];
+  it("una semanal: cada fecha con el suyo, nunca el más reciente", () => {
+    /* La edición que la pone en rojo: quedarse con el más reciente de la serie (el resumen del 27 en la sesión del 13). */
+    expect(elegirResumenDeLaReunion(serie, { googleEventId: "serie1_20261113T150000Z", fecha: d("2026-11-13T15:00:00Z") })?.texto).toBe("13 nov");
+    expect(elegirResumenDeLaReunion(serie, { googleEventId: "serie1_20261127T150000Z", fecha: d("2026-11-27T15:00:00Z") })?.texto).toBe("27 nov");
+  });
+  it("una fecha de la serie sin resumen propio no toma el de otra", () => {
+    expect(elegirResumenDeLaReunion(serie, { googleEventId: "serie1_20261120T150000Z", fecha: d("2026-11-20T15:00:00Z") })).toBeNull();
+  });
+  it("el del evento exacto gana", () => {
+    const exacto = [...serie, { googleEventId: "serie1_20261120T150000Z", ocurrioAt: d("2026-11-20T18:00:00Z"), texto: "exacto" }];
+    expect(elegirResumenDeLaReunion(exacto, { googleEventId: "serie1_20261120T150000Z", fecha: d("2026-11-20T15:00:00Z") })?.texto).toBe("exacto");
+  });
+});
 
 /** El `eid` de Google Calendar: base64 url-safe sin relleno de «idDelEvento correo». */
 const eid = (evento: string, correo = "cse@smarteamcr.com") => Buffer.from(`${evento} ${correo}`).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");

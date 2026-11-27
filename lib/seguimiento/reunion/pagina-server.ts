@@ -78,7 +78,7 @@ async function avisosPersonales(email: string, sessionId: string) {
 export async function cargarPaginaDeLaReunion(o: {
   sessionId: string;
   user: AppUserWithTeamMember;
-  reunion: { titulo: string; fecha: Date; duracionMin: number; participantes: string[]; organizador: string | null; descripcion: string | null; tieneTexto: boolean; enriquecida: boolean };
+  reunion: { titulo: string; fecha: Date; duracionMin: number; participantes: string[]; organizador: string | null; descripcion: string | null; tieneTexto: boolean; enriquecida: boolean; fueraDeMeet?: boolean };
   dueno: { id: string; nombre: string; kind: string } | null;
   proyectosDelCliente: number;
   proyectosVinculados: number;
@@ -111,6 +111,7 @@ export async function cargarPaginaDeLaReunion(o: {
     puertasAdentro,
     tieneTexto: o.reunion.tieneTexto,
     enriquecida: o.reunion.enriquecida,
+    fueraDeMeet: o.reunion.fueraDeMeet,
     lectura: alrededor.lectura,
     proyectosDelCliente: o.proyectosDelCliente,
     proyectosVinculados: o.proyectosVinculados,

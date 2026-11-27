@@ -551,3 +551,41 @@ describe("U1: los invitados en la corrida completa", () => {
     expect(h.invitadosEscritos).toEqual([{ tipo: "deleteMany", data: ["p3"] }]);
   });
 });
+
+describe("2026-11-27: las reuniones que no son de Meet", () => {
+  /** Un evento sin Meet: Zoom por el lugar, con un Doc adjunto (la agenda) y un código de conferencia de otra herramienta. */
+  function sinMeet(eventId: string, o: { asistentes?: string[]; lugar?: string; privado?: boolean } = {}) {
+    const base = item(eventId, { asistentes: o.asistentes, doc: "agenda1" });
+    return {
+      ...base,
+      location: o.lugar ?? "https://us02web.zoom.us/j/8123",
+      conferenceData: { conferenceId: "zoom-123", conferenceSolution: { key: { type: "addOn" }, name: "Zoom Meeting" } },
+      ...(o.privado ? { visibility: "private" } : {}),
+    };
+  }
+
+  it("un Zoom con alguien de afuera entra como google_calendar, con su plataforma y sin el Doc ni el código", async () => {
+    /* La edición que la pone en rojo: guardarlo como «google_meet» (entra al circuito de Meet), o tomar la agenda adjunta
+       como su transcripción. */
+    calendarios({ [ELI]: [sinMeet("z1")] });
+    const r = await correr();
+    expect(r).toMatchObject({ synced: 1 });
+    expect(h.escrituras).toHaveLength(1);
+    const data = h.escrituras[0]!.data;
+    expect(data).toMatchObject({ id: "gmeet_z1", source: "google_calendar", plataforma: "ZOOM", googleDocId: null, conferenceId: null });
+  });
+
+  it("una daily del equipo sin Meet, o un evento privado, no entran", async () => {
+    /* La edición que la pone en rojo: guardar todo evento sin Meet (840 dailies y bloques del equipo por mes). */
+    calendarios({ [ELI]: [sinMeet("daily", { asistentes: [ELI, PAU], lugar: "" }), sinMeet("cita", { privado: true })] });
+    const r = await correr();
+    expect(h.escrituras).toEqual([]);
+    expect(r).toMatchObject({ synced: 0 });
+  });
+
+  it("una de Meet sigue entrando como siempre, con plataforma null", async () => {
+    calendarios({ [ELI]: [item("m1")] });
+    await correr();
+    expect(h.escrituras[0]?.data).toMatchObject({ source: "google_meet", plataforma: null });
+  });
+});

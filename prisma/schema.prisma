@@ -2800,6 +2800,9 @@ model FirefliesSession {
   // U1 (2026-10-25): el código de Meet de la reunión (abc-defg-hij), del evento del calendario. U3 lo cruza con el
   // registro de conferencia de la API de Meet. Lo escribe la sync de Meet; null = el evento no lo traía.
   conferenceId         String?
+  // 2026-11-27: por dónde fue una reunión del calendario que NO es de Meet (source "google_calendar"). La escribe solo la
+  // sync del calendario (lib/google/plataforma-del-evento.ts). null = de Meet (las de siempre) o agregada a mano.
+  plataforma           PlataformaDeReunion?
   // U1 (2026-10-25): cuándo vio la sync que el evento se canceló en TODOS los calendarios donde estaba. Nunca se borra
   // la fila: la cancelada con texto, minuta, hechos o tareas queda para revisar; la que no tiene nada sale de las
   // lecturas (lib/sessions/canceladas.ts). null = vigente (si el evento vuelve, la sync la desmarca).
@@ -2883,6 +2886,15 @@ enum RespuestaAlEvento {
   TENTATIVA
   RECHAZO
   SIN_RESPONDER
+}
+
+/// 2026-11-27 · Por dónde fue una reunión del calendario que no es de Meet (lib/google/plataforma-del-evento.ts).
+enum PlataformaDeReunion {
+  MEET
+  ZOOM
+  TEAMS
+  OTRA
+  PRESENCIAL
 }
 
 /// U1 (2026-10-25) · Un invitado de una reunión, con su respuesta al evento y si es del equipo. Lo escribe SOLO la sync

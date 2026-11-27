@@ -35,7 +35,7 @@ export async function filasParaElMotivo(ahora: Date, dias = DIAS_DEL_MOTIVO): Pr
       ${sqlClaseDeTexto("s")} AS "clase",
       coalesce(jsonb_typeof(s."summary") = 'object' AND s."summary" ? 'aMano', false) AS "aMano",
       coalesce(jsonb_typeof(s."summary") = 'object' AND coalesce(btrim(s."summary"->>'overview'), '') <> '', false) AS "tieneNotas",
-      s."motivoSinTexto"
+      s."motivoSinTexto", s."plataforma"::text AS "plataforma"
     FROM "FirefliesSession" s
     WHERE s."date" >= ${desde} AND s."date" <= ${ahora}`;
 }

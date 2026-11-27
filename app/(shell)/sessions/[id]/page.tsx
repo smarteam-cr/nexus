@@ -14,6 +14,11 @@ import { tieneTexto } from "@/lib/sessions/tiene-texto";
 import { contextoDeTareas, tareasDisponible } from "@/lib/tareas/servidor";
 import { contarTareasDeLaReunion } from "@/lib/tareas/consultas";
 import { invitadosDe } from "@/lib/contactos/lectura-server";
+import { quienEstuvoEn } from "@/lib/sessions/quien-estuvo-server";
+import { conElLadoDe } from "@/lib/sessions/quien-estuvo";
+import { SOURCE_CALENDARIO, avisoDePlataforma } from "@/lib/google/plataforma-del-evento";
+import { resumenDeHubspotDe } from "@/lib/sessions/quien-estuvo-server";
+import { diaEnCostaRica } from "@/lib/sessions/reunion-a-mano";
 import { cargarPaginaDeLaReunion } from "@/lib/seguimiento/reunion/pagina-server";
 import { esLiderDeCs } from "@/lib/cs/acceso";
 import { largoDeLasNotas } from "@/lib/sessions/tiene-texto";
@@ -92,6 +97,8 @@ export default async function SessionPage({
           enrichError: true,
           canceladaEn: true,
           source: true,
+          plataforma: true,
+          googleEventId: true,
           googleDocId: true,
           organizerEmail: true,
           resolvedClientId: true,
@@ -192,7 +199,13 @@ export default async function SessionPage({
     : [];
 
   // Quién estuvo, con nombre y cargo: el equipo y los contactos de HubSpot del DUEÑO de la reunión (etapa 6a).
-  const invitados = await invitadosDe(session.participants, duenoId).catch(() => null);
+  const [invitados, quienEstuvo, resumenDeHubspot] = await Promise.all([
+    invitadosDe(session.participants, duenoId).catch(() => null),
+    // «Quién estuvo», arriba (2026-11-27): invitados, su respuesta y, si fue por Meet, quién entró.
+    quienEstuvoEn(session.id).catch(() => null),
+    // Una de Zoom o Teams que grabó el notetaker de HubSpot: su resumen, del MISMO dueño y por el evento del calendario.
+    session.source === SOURCE_CALENDARIO ? resumenDeHubspotDe({ googleEventId: session.googleEventId, duenoId, fecha: session.date }).catch(() => null) : Promise.resolve(null),
+  ]);
 
   const data: SessionViewData = {
     session: {
@@ -201,12 +214,17 @@ export default async function SessionPage({
       date: session.date.toISOString(),
       duration: session.duration,
       participants: session.participants,
-      invitados,
+      // El lado de cada uno sale de UNA regla, la de «Quién estuvo» (también reconoce al cliente por el dominio): así
+      // la misma persona no es «El cliente» arriba y «otro» abajo.
+      invitados: invitados && quienEstuvo ? conElLadoDe(invitados, quienEstuvo) : invitados,
       transcript: session.transcript,
       googleDocId: session.googleDocId,
       organizerEmail: session.organizerEmail,
       source: session.source,
       summary: session.summary as { overview?: string } | null,
+      avisoDePlataforma: avisoDePlataforma(session.plataforma),
+      quienEstuvo,
+      resumenDeHubspot,
     },
     client: matchedClient
       ? { id: matchedClient.id, name: matchedClient.name, company: matchedClient.company }
@@ -277,6 +295,7 @@ export default async function SessionPage({
       descripcion: session.descripcionDelEvento,
       tieneTexto: textoDeLaReunion,
       enriquecida: !!session.enrichedAt,
+      fueraDeMeet: !!avisoDePlataforma(session.plataforma),
     },
     dueno: matchedClient ? { id: matchedClient.id, nombre: matchedClient.name, kind: matchedClient.kind } : null,
     proyectosDelCliente: availableProjects.length,
@@ -313,6 +332,7 @@ export default async function SessionPage({
               participants: session.participants,
               tieneNotas: largoDeLasNotas(session.summary) > 0,
               canceladaEn: session.canceladaEn,
+              plataforma: session.plataforma,
             },
             ahora,
           ),
@@ -352,6 +372,7 @@ export default async function SessionPage({
             preguntas={preguntas}
             cliente={matchedClient ? { id: matchedClient.id, nombre: matchedClient.name } : null}
             audio={audio}
+            fechaDeLaReunion={diaEnCostaRica(session.date)}
           />
         )}
       </>

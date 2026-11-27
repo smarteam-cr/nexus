@@ -30,6 +30,7 @@ import { areaDelJuicio, exploracionEnFoco, leerResultadoGuardado, separarArea, t
 import type { QuienHablo } from "./quien-hablo";
 import { empresasConPreventaAbierta, quienHabloEnLasReuniones } from "./analizar-server";
 import { atribuirLaReunion, delEquipoQueHablo } from "./tendencia";
+import type { Plataforma } from "@/lib/google/plataforma-del-evento";
 import { DIAS_PARA_ANALIZAR_SOLA, delEquipoEnLaReunion, porQueNoEsDeVenta, seAnalizaAMano, vendedoresDeLaReunion } from "./reglas";
 
 const DIA_MS = 86_400_000;
@@ -99,13 +100,14 @@ export async function reunionesDeVenta(o: { dias: number; ahora?: Date; clientId
         googleDocId: string | null;
         canceladaEn: Date | null;
         motivoSinTexto: string | null;
+        plataforma: Plataforma | null;
         tieneNotas: boolean;
       }[]
     >`
       SELECT s."id", s."title", s."date", s."duration", s."participants", s."organizerEmail",
         c."id" AS "empresaId", c."name" AS "empresa", c."kind"::text AS "kind",
         ${sqlClaseDeTexto("s")} AS "clase",
-        s."enrichedAt", s."enrichAttempts", s."enrichError", s."googleDocId", s."canceladaEn", s."motivoSinTexto",
+        s."enrichedAt", s."enrichAttempts", s."enrichError", s."googleDocId", s."canceladaEn", s."motivoSinTexto", s."plataforma"::text AS "plataforma",
         coalesce(jsonb_typeof(s."summary") = 'object' AND coalesce(btrim(s."summary"->>'overview'), '') <> '', false) AS "tieneNotas"
       FROM "FirefliesSession" s
       JOIN "Client" c ON c."id" = coalesce(s."resolvedClientId", s."manualClientId")
@@ -182,7 +184,7 @@ export async function reunionesDeVenta(o: { dias: number; ahora?: Date; clientId
         ? DE_QUIEN_ES[
             motivoParaMostrar(
               f.motivoSinTexto,
-              { date: f.date, duration: f.duration, enrichedAt: f.enrichedAt, enrichAttempts: f.enrichAttempts, enrichError: f.enrichError, googleDocId: f.googleDocId, organizerEmail: f.organizerEmail, participants: f.participants ?? [], tieneNotas: f.tieneNotas, canceladaEn: f.canceladaEn },
+              { date: f.date, duration: f.duration, enrichedAt: f.enrichedAt, enrichAttempts: f.enrichAttempts, enrichError: f.enrichError, googleDocId: f.googleDocId, organizerEmail: f.organizerEmail, participants: f.participants ?? [], tieneNotas: f.tieneNotas, canceladaEn: f.canceladaEn, plataforma: f.plataforma },
               ahora,
             )
           ].texto

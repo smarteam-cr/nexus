@@ -18,7 +18,7 @@ import { BotonAgregarReunion } from "@/components/sessions/AgregarReunion";
 import { SubirAudio, type AudioVisto } from "@/components/sessions/SubirAudio";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { problemaDeLasRespuestas, type PreguntaDeContexto } from "@/lib/sessions/preguntas-de-contexto";
-import type { MotivoVistoEnLaReunion } from "@/lib/sessions/motivo-sin-texto";
+import { MOTIVOS_FUERA_DE_MEET, type MotivoVistoEnLaReunion } from "@/lib/sessions/motivo-sin-texto";
 import type { DuenoDelArreglo } from "@/lib/google/por-que-falta";
 
 const QUIEN_LO_ARREGLA: Record<DuenoDelArreglo, string> = {
@@ -34,6 +34,7 @@ export function SinTextoDeLaReunion({
   preguntas,
   cliente,
   audio,
+  fechaDeLaReunion,
 }: {
   sessionId: string;
   motivo: MotivoVistoEnLaReunion;
@@ -42,7 +43,11 @@ export function SinTextoDeLaReunion({
   cliente: { id: string; nombre: string } | null;
   /** null = la transcripción de audio está apagada en este servidor. */
   audio: { inicial: AudioVisto | null } | null;
+  /** El día de la reunión en Costa Rica (yyyy-mm-dd): para pegarle la transcripción a ESTA reunión. */
+  fechaDeLaReunion?: string;
 }) {
+  // 2026-11-27: una de Zoom, Teams, otro enlace o en persona no tiene texto en Google. Lo que hay es pegarlo.
+  const fueraDeMeet = MOTIVOS_FUERA_DE_MEET.has(motivo.motivo);
   const router = useRouter();
   const toast = useToast();
   const [abierto, setAbierto] = useState(false);
@@ -131,7 +136,21 @@ export function SinTextoDeLaReunion({
         </div>
       )}
 
-      {(audio || (!preguntas?.length && cliente)) && (
+      {fueraDeMeet && cliente && (
+        <div className="space-y-1">
+          <p className="text-xs font-semibold text-fg-secondary">
+            {motivo.motivo === "fue_en_persona" ? "¿Tomaste notas?" : "¿Tienes la transcripción?"}
+          </p>
+          <BotonAgregarReunion
+            clienteFijo={cliente}
+            etiqueta={motivo.motivo === "fue_en_persona" ? "+ Agregar lo que pasó" : "+ Pegar la transcripción"}
+            reunionInicial={fechaDeLaReunion ? { id: sessionId, fecha: fechaDeLaReunion } : undefined}
+            tipoInicial={motivo.motivo === "fue_en_persona" ? "recuerdo" : "transcripcion"}
+          />
+        </div>
+      )}
+
+      {(audio || (!preguntas?.length && cliente && !fueraDeMeet)) && (
         <div className="flex flex-wrap items-start gap-4">
           {audio && (
             <div className="min-w-0 flex-[1_1_360px] space-y-1">
@@ -139,7 +158,7 @@ export function SinTextoDeLaReunion({
               <SubirAudio sessionId={sessionId} inicial={audio.inicial} />
             </div>
           )}
-          {!preguntas?.length && cliente && (
+          {!preguntas?.length && cliente && !fueraDeMeet && (
             <div className="space-y-1">
               <p className="text-xs font-semibold text-fg-secondary">¿Sabes qué pasó?</p>
               <BotonAgregarReunion clienteFijo={cliente} etiqueta="+ Agregar lo que pasó" />

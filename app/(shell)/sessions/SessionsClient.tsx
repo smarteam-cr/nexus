@@ -18,6 +18,7 @@ import { IconCheck, Alert } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { BotonAgregarReunion } from "@/components/sessions/AgregarReunion";
 import { fetchJson } from "@/lib/api/fetch-json";
+import { SOURCE_CALENDARIO } from "@/lib/google/plataforma-del-evento";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -261,6 +262,16 @@ function SourceBadge({ source }: { source: string }) {
         className="flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full bg-surface-hover text-fg-secondary border border-line"
       >
         A mano
+      </span>
+    );
+  }
+  if (source === SOURCE_CALENDARIO) {
+    return (
+      <span
+        title="Zoom, Teams, otro enlace o en persona: el texto no está en Google"
+        className="flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full bg-surface-hover text-fg-secondary border border-line"
+      >
+        Fuera de Meet
       </span>
     );
   }
@@ -1348,11 +1359,11 @@ function SessionDetail({
         {tab === "transcript" && (
           <div className="px-7 py-6 max-w-3xl">
 
-            {/* Acción re-enriquecer */}
+            {/* Acción re-enriquecer (no en una de Zoom o Teams: no hay nada que buscar en Google) */}
             <div className="flex items-center justify-end mb-5">
               <button
                 onClick={handleReEnrich}
-                disabled={reEnriching || transcriptLoading || sinAcceso}
+                disabled={reEnriching || transcriptLoading || sinAcceso || session.source === SOURCE_CALENDARIO}
                 className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-400 disabled:opacity-40 transition-colors"
               >
                 <svg className={`w-3.5 h-3.5 ${reEnriching ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1370,6 +1381,16 @@ function SessionDetail({
               </div>
             ) : transcript ? (
               <FormattedTranscript text={transcript} />
+            ) : session.source === SOURCE_CALENDARIO ? (
+              <div className="mx-auto flex max-w-md flex-col items-center justify-center py-16 text-center">
+                <p className="text-sm text-fg-secondary">No fue por Meet: el texto no está en Google.</p>
+                <p className="mt-2 text-xs leading-relaxed text-fg-muted">
+                  Si tienes la transcripción de Zoom o Teams, o tus notas, ábrela y pégala: Nexus la lee como cualquier otra.
+                </p>
+                <Link href={`/sessions/${session.id}`} className="mt-4 text-xs font-medium text-brand hover:text-brand-dark">
+                  Abrir la reunión
+                </Link>
+              </div>
             ) : !session.hasTranscript ? (
               <div className="flex flex-col items-center justify-center py-16 text-center max-w-md mx-auto">
                 <svg className="w-8 h-8 text-gray-700 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">

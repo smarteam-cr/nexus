@@ -18,6 +18,7 @@ import { encargadosDeLasCuentas } from "@/lib/cuentas/encargado-server";
 import { clientesQueNoAbre } from "@/lib/auth/access";
 import { dominiosDeLaCasa } from "@/lib/sessions/reuniones-para-seguimiento";
 import { noEsCanceladaSinTextoSql } from "@/lib/sessions/canceladas";
+import { SOURCE_CALENDARIO } from "@/lib/google/plataforma-del-evento";
 import { sqlClaseDeTexto, type ClaseDeTexto } from "@/lib/sessions/tiene-texto";
 import { propuestasDe } from "@/lib/sessions/propuesta-de-empresa-server";
 import { armarSaludDeLasReuniones, type PeriodoDeLaSalud, type PersonaDelEquipo, type ReunionParaLaSalud, type SaludDeLasReuniones } from "./salud-de-las-reuniones";
@@ -80,6 +81,8 @@ export async function saludDeLasReuniones(o: {
       LEFT JOIN "Client" c ON c."id" = coalesce(s."resolvedClientId", s."manualClientId")
       WHERE s."date" >= ${desde} AND s."date" <= ${ahora}
         AND ${noEsCanceladaSinTextoSql("s")}
+        -- Las de Zoom, Teams o en persona (2026-11-27) no pasan por Meet: no bajan el indicador de lo que deja Meet.
+        AND s."source" <> ${SOURCE_CALENDARIO}
       ORDER BY s."date" DESC`,
     prisma.teamMember.findMany({ where: { deactivatedAt: null }, select: { email: true, name: true, area: true, roleEnum: true } }),
     dominiosDeLaCasa(),
