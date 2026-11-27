@@ -125,14 +125,14 @@ const OVERDUE_META_LIGHT = { label: "atrasada", text: OCRE_TEXTO, bg: "#fbf0e1",
  * saber si falta algo. Un círculo en una columna fija se escanea de un vistazo: lo que no está
  * cerrado salta porque es el único claro.
  *
- * Desde el 27 nov con los colores de las semanas: hecha = verde con ✓, en curso = azul a medio
- * llenar, pendiente = aro claro. Estilos inline: esta vista se le comparte al cliente y se
+ * Desde el 27 nov, igual que el cronograma de adentro: hecha = verde lleno con ✓ (y el título tachado), en curso =
+ * aro azul con ✓, pendiente = aro gris con ✓. Estilos inline: esta vista se le comparte al cliente y se
  * imprime, así que no puede depender de las clases del tema de la app.
  *
  * ⚠ «Atrasada» NO entra acá: es ortogonal al estado (una tarea en curso puede estar atrasada)
  * y sigue siendo su propio chip. Meterla en el círculo perdería una de las dos cosas.
  */
-function EstadoCirculo({ status, size = 15 }: { status: string; size?: number }) {
+function EstadoCirculo({ status, size = 17 }: { status: string; size?: number }) {
   if (status === "DONE") {
     return (
       <span
@@ -148,19 +148,18 @@ function EstadoCirculo({ status, size = 15 }: { status: string; size?: number })
       </span>
     );
   }
-  if (status === "IN_PROGRESS") {
-    return (
-      <svg aria-hidden width={size} height={size} viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
-        <circle cx="12" cy="12" r="9.5" fill="#ffffff" stroke={SEMANA_META["en-curso"].marca} strokeWidth={2.5} />
-        <path d="M12 2.5 A9.5 9.5 0 0 0 12 21.5 Z" fill={SEMANA_META["en-curso"].marca} />
-      </svg>
-    );
-  }
+  // En curso y pendiente: el aro con su ✓, como en el cronograma de adentro (27 nov, Elías): azul si está en curso,
+  // gris si falta. Solo la hecha va llena y en verde.
+  const enCurso = status === "IN_PROGRESS";
   const suspendida = status === "SUSPENDED";
+  const color = enCurso ? SEMANA_META["en-curso"].marca : suspendida ? "#b45309" : "#a3aec0";
+  const grosor = enCurso ? 2.5 : 2;
   return (
-    <svg aria-hidden width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
-      <circle cx="12" cy="12" r="9.5" stroke={suspendida ? "#b45309" : "#b7c1d3"} strokeWidth={2.5} />
-      {suspendida && <path strokeLinecap="round" strokeWidth={2.5} stroke="#b45309" d="M8.5 12h7" />}
+    <svg aria-hidden width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} style={{ flexShrink: 0 }}>
+      <circle cx="12" cy="12" r="9" strokeWidth={grosor} />
+      {suspendida
+        ? <path strokeLinecap="round" strokeWidth={grosor} d="M8.5 12h7" />
+        : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={grosor} d="M8.5 12.5l2.5 2.5 4.5-5" />}
     </svg>
   );
 }
@@ -284,11 +283,11 @@ function DetalleDeFase({
         return (
           <div key={relWeek}>
             {/* «Semana 2 · 9 – 15 nov»: la semana de la fase y sus fechas. El «S#» del proyecto es del equipo. */}
-            <div style={{ ...SUB_LABEL, borderBottom: "1px dashed var(--border)", paddingBottom: 3, marginBottom: 6 }}>
+            <div style={{ ...SUB_LABEL, borderBottom: "1px dashed var(--border)", paddingBottom: 5, marginBottom: 10 }}>
               Semana {relWeek + 1}
               {anchor && <span style={{ fontWeight: 600, marginLeft: 6, opacity: 0.8, textTransform: "none", letterSpacing: 0 }}>{rangoDeLaSemana(anchor, absW)}</span>}
             </div>
-            <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+            <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 12 }}>
               {weekTasks.map((t, ti) => {
                 // Solo los estados que sabemos dibujar; uno desconocido no pinta círculo.
                 const conEstado = showProgress && !!t.status && t.status in ESTADO_TEXTO;
@@ -304,7 +303,8 @@ function DetalleDeFase({
                         <span style={SR_ONLY}>{ESTADO_TEXTO[t.status!] ?? ""}: </span>
                       </span>
                     )}
-                    <span style={{ flex: "1 1 220px", minWidth: 0, ...(t.status === "DONE" ? { color: "var(--text-muted)" } : {}) }}>{t.title}</span>
+                    {/* La hecha, tachada y apagada: como en el cronograma de adentro. */}
+                    <span style={{ flex: "1 1 220px", minWidth: 0, ...(t.status === "DONE" && showProgress ? { color: "var(--text-muted)", textDecoration: "line-through" } : {}) }}>{t.title}</span>
                     {(t.semanas ?? 1) > 1 && (
                       <span style={chipStyle(DURACION_META_LIGHT)} title={`Corre de la semana ${relWeek + 1} a la ${relWeek + t.semanas!} de esta fase`}>
                         {t.semanas} semanas
@@ -607,7 +607,7 @@ export default function TimelineSection({
                   </div>
 
                   {isOpen && hasDetail && (
-                    <div style={{ marginTop: 10, borderLeft: "2px solid var(--border)", paddingLeft: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ marginTop: 12, marginBottom: 6, borderLeft: "2px solid var(--border)", paddingLeft: 12, display: "flex", flexDirection: "column", gap: 16 }}>
                       <DetalleDeFase
                         notas={p.notes}
                         durationWeeks={p.durationWeeks}
@@ -731,7 +731,7 @@ export default function TimelineSection({
 
                     {/* Expandido: notas de fase + acciones por semana (read-only) */}
                     {isOpen && hasDetail && (
-                      <div style={{ marginLeft: 18, marginRight: 8, marginTop: 2, marginBottom: 14, borderLeft: "1px solid var(--border)", paddingLeft: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div style={{ marginLeft: 18, marginRight: 8, marginTop: 8, marginBottom: 22, borderLeft: "1px solid var(--border)", paddingLeft: 16, paddingTop: 4, paddingBottom: 4, display: "flex", flexDirection: "column", gap: 18 }}>
                         <DetalleDeFase
                           notas={p.notes}
                           durationWeeks={p.durationWeeks}
