@@ -15203,9 +15203,11 @@ parte 3.
       marca y la sigla «CR» vale sola, y se lleva reuniones de otros («Claro CR», «Pago de Nómina en CR y NIC»; 20 en el
       simulacro del 27 nov).
 
-    `--deshacer` le devuelve el dominio y el nombre. **El simulacro del 27 nov mueve 9 de las 13 reuniones de Ecuador,**
-    las que el título llama «SUKASA»: 7 pasan a Sukasa y 2 quedan por decidir. El `--apply` no corre mientras alguna cambie.
-    De quién son lo decide Elías; las que sean de Ecuador se asignan en /sessions antes de aplicar.
+    `--deshacer` le devuelve el dominio y el nombre. **Las reuniones «SUKASA…» siguen en Ecuador** (Elías, 27 nov: «Todas
+    siguen en Ecuador»). El primer simulacro movía 9 de las 13 de Ecuador, porque entre unidades el título gana al
+    dominio y «Sukasa» nombraba a la unidad Sukasa. Desde entonces el dominio PROPIO de una unidad es una palabra suya
+    (`palabrasCompartidasDelGrupo`, categorize.ts): sukasa.com es de Ecuador, así que «Sukasa» no distingue a la unidad
+    Sukasa y decide el dominio. Vale igual en Tareas y «Mi día». El simulacro queda en 0 de 53; TEC y Teamnet siguen en 0.
   - **Grupo Teamnet:** ficha que solo agrupa; cada unidad conserva su dominio y su empresa de HubSpot. Se aplica solo
     si el simulacro no cambia ninguna reunión (Elías, 26 nov). El simulacro del 26 nov movía 27: las conjuntas («Sprint
     semanal | Teamnet y Sas», las capacitaciones «Teamnet - SAS & Smarteam»), que pasaban de Teamnet a por decidir porque

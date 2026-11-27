@@ -319,3 +319,36 @@ describe("Grupo Teamnet: dentro de una empresa que solo agrupa vale la regla del
     expect(duenoDe(reunion("Alineación CEMACO", ["a@cemaco.co.cr", "b@sukasa.com"]), ctxDe([CR, CEMACO, EC], conProyectos))).toBe("(por decidir)");
   });
 });
+
+/* Elías, 27 nov: Sukasa es una unidad de Cemaco y las reuniones «SUKASA…» siguen siendo de Cemaco · Ecuador. sukasa.com
+   es de Ecuador: la palabra de un dominio propio de una unidad no nombra a otra sola, y decide el dominio. */
+describe("Cemaco con Sukasa: el dominio propio de una unidad es una palabra suya", () => {
+  const CEMACO = { id: "cemaco", name: "Cemaco", company: null, emailDomains: [], kind: "EMPRESA", hubspotCompanyId: "59033632123" };
+  const CR = { id: "cr", name: "Cemaco · Costa Rica", company: "Cemaco Internacional", emailDomains: ["cemaco.co.cr"], siglas: ["CR"], comparteDominioConId: "cemaco", kind: "CLIENTE" };
+  const EC = { id: "ec", name: "Cemaco · Ecuador", company: null, emailDomains: ["sukasa.com", "comohogar.com"], siglas: ["EC"], comparteDominioConId: "cemaco", kind: "CLIENTE" };
+  const SUKASA = { id: "suk", name: "Cemaco · Sukasa", company: "Sukasa", emailDomains: [], comparteDominioConId: "cemaco", kind: "PROSPECTO", hubspotCompanyId: "60198830904" };
+  const c = ctxDe([CR, CEMACO, EC, SUKASA]);
+
+  it("«SUKASA + CEMACO + COMOHOGAR» con gente de sukasa.com sigue en Ecuador", () => {
+    expect(duenoDe(reunion("SUKASA + CEMACO + COMOHOGAR | ECOMMERCE", ["a@sukasa.com"]), c)).toBe("ec");
+    expect(duenoDe(reunion("SUKASA ECUADOR |  SMARTEAM", ["a@sukasa.com"]), c)).toBe("ec");
+    expect(duenoDe(reunion("CEMACO", ["a@sukasa.com", "b@sukasa.com"]), c)).toBe("ec");
+  });
+
+  it("el resto de Cemaco no cambia", () => {
+    expect(duenoDe(reunion("Sales Hub", ["a@cemaco.co.cr"]), c)).toBe("cr");
+    expect(duenoDe(reunion("Cemaco EC | Kickoff", ["a@cemaco.co.cr"]), c)).toBe("ec");
+    expect(duenoDe(reunion("Alineación CEMACO", ["a@cemaco.co.cr", "b@sukasa.com"]), c)).toBe("(por decidir)");
+  });
+
+  it("sin el dominio de Ecuador, «Sukasa» sí nombra a la unidad Sukasa", () => {
+    const sinDominio = ctxDe([CR, CEMACO, { ...EC, emailDomains: ["comohogar.com"] }, SUKASA]);
+    expect(duenoDe(reunion("SUKASA + CEMACO + COMOHOGAR | ECOMMERCE", ["a@comohogar.com"]), sinDominio)).toBe("suk");
+  });
+
+  it("Tareas y «Mi día» no sugieren Sukasa por la palabra «Sukasa»", async () => {
+    const { indiceDeClientes, clientesDeUnTexto } = await import("./clientes-por-texto");
+    const indice = indiceDeClientes([CR, CEMACO, EC, SUKASA]);
+    expect(clientesDeUnTexto("Propuesta Cemaco Sukasa", indice).sugerido).not.toBe("suk");
+  });
+});

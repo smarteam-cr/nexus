@@ -30,9 +30,9 @@ export const EMPRESAS_ARRIBA: Readonly<Record<string, EmpresaArriba>> = {
    * solo Costa Rica: se queda. Sukasa es la TERCERA unidad (Elías, 27 nov: «una unidad de negocio de Cemaco
    * Internacional, está en Ecuador y en Costa Rica»): la ficha «Sukasa» (prospecto del 18 nov, con su empresa de HubSpot
    * 60198830904, su propuesta, sus contactos y su lead) entra tal cual y suelta sukasa.com, que es de Cemaco · Ecuador
-   * desde el 9 nov (INV37: el dominio en dos fichas). Sus reuniones las sigue dando el dominio a Ecuador; las que el
-   * título nombra «Sukasa» las decide el simulacro (las muestra antes de aplicar). Pasa a llamarse «Cemaco · Sukasa» para
-   * que las tres compartan la marca (ver `renombrar`).
+   * desde el 9 nov (INV37: el dominio en dos fichas). Las reuniones «SUKASA…» siguen en Ecuador (Elías, 27 nov): el
+   * dominio propio de una unidad es una palabra suya (categorize.ts › palabrasCompartidasDelGrupo). Pasa a llamarse
+   * «Cemaco · Sukasa» para que las tres compartan la marca (ver `renombrar`).
    * ⛔ Lo usa el cliente (Marco le pasó un diagnóstico): el --apply espera el OK explícito de Elías.
    */
   cemaco: {

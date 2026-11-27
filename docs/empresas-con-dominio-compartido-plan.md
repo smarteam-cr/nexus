@@ -71,12 +71,13 @@ sencilla posible».
 | **TEC** | 0 de 232 | Contactos: AE 20, TAE 12, empresa 29 · Correos y notas: AE 10, TAE 21, empresa 78 · Tickets: TAE 5, AE 1, empresa 35 | Sí |
 | **Cemaco** (26 nov, sin Sukasa) | 0 de 53 | Contactos: CR 10, empresa 3 · Correos y notas: CR 16, empresa 54 · Tickets: empresa 1 · Negocios: EC 1, empresa 1 | Con el OK de Elías |
 | **Grupo Teamnet** (27 nov, con la regla del grupo adentro) | 0 de 73 | — (cada unidad copia de su empresa de HubSpot) | Sí |
-| **Cemaco con Sukasa** (27 nov) | **9 de 53**: de las 13 de Ecuador que el título llama «SUKASA», 7 a Sukasa y 2 por decidir | Correos y notas: Sukasa 1 (el resto, igual) | Con el OK de Elías y esas 9 decididas |
+| **Cemaco con Sukasa** (27 nov, con el dominio propio como palabra) | 0 de 53 (antes 9: las «SUKASA…» de Ecuador) | Correos y notas: Sukasa 1 (el resto, igual) | Con el OK de Elías |
 
 - **Teamnet (26 nov movía 27):** las conjuntas iban a Teamnet por la regla del grupo, que valía solo entre DOS empresas.
   Desde el 27 nov vale también dentro de una empresa que solo agrupa (Elías: «Sí, que valga»).
 - **Sukasa** entra como «Cemaco · Sukasa» y suelta `sukasa.com` (es de Ecuador). Con el nombre «Sukasa» a secas, las
-  tres unidades no comparten «Cemaco» y la sigla «CR» se llevaba 20 reuniones de otros.
+  tres unidades no comparten «Cemaco» y la sigla «CR» se llevaba 20 reuniones de otros. Las reuniones «SUKASA…» siguen
+  en Ecuador (Elías, 27 nov): el dominio propio de una unidad es una palabra suya, y sukasa.com es de Ecuador.
 - **Lo de HubSpot se cuenta por asunto y remitente.** La copia usa además los contactos asociados en HubSpot, así que
   quedan menos en la empresa.
 
@@ -86,15 +87,14 @@ sencilla posible».
 2. El deploy.
 3. `scripts/crear-empresa-de-unidades.ts --empresa tec --apply`.
 4. `--empresa teamnet --apply`.
-5. Cemaco, solo con el OK de Elías y con las 9 reuniones «SUKASA» decididas: `--empresa cemaco --apply --con-ok-de-elias`.
+5. Cemaco, solo con el OK de Elías: `--empresa cemaco --apply --con-ok-de-elias`.
 6. Esperar la copia de cada hora, o correr `sync-contactos-y-tickets`, `sync-comunicaciones-de-hubspot` y
    `sync-negocios-abiertos`.
 7. `npm run check:invariants`.
 
 ### Lo que queda abierto
 
-- **Las 9 reuniones «SUKASA + CEMACO + COMOHOGAR» y «SUKASA ECUADOR»:** hoy son de Ecuador. ¿Son de Sukasa o de
-  Ecuador? Las de Ecuador se asignan en /sessions antes del `--apply` de Cemaco. Lo decide Elías.
+- **El OK de Elías para Cemaco.** Las reuniones «SUKASA…» ya quedan en Ecuador (27 nov).
 - **Lo que no se construyó:**
   - Horas, rentabilidad y cobranza sumadas en la página de la empresa.
   - El aviso de «este dominio parece tener varios clientes» (U3).
