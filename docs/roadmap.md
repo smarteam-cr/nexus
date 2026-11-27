@@ -9,12 +9,12 @@
      Cómo se regenera: la skill regenerar-roadmap. -->
 ```ejecutivo
 {
- "corte": "2026-11-26",
- "produccion": "68c33538",
+ "corte": "2026-11-27",
+ "produccion": "1d9d9c34",
  "arriba": [
-  "En producción desde el 26 nov: el diagnóstico se valida propuesta por propuesta, Unidades de negocio en «Información del cliente» y el plan general como pieza de la cuenta, con la fase «00 · Transversal» de kölbi cargada.",
+  "En producción desde el 27 nov: la página del cronograma que ve el cliente muestra el avance y se edita desde adentro, el Diagnóstico de rendimiento ordenado por el trabajo y la empresa arriba de sus unidades (TEC y Grupo Teamnet).",
   "En curso: nada corriendo; el plan de kölbi espera que Valentina lo publique.",
-  "Te espera: rehacer el Resumen de TEC · AE con la nota sobre Meta, Centauro con Marco y las preguntas 118 y 99."
+  "Te espera: el OK para pasar Cemaco a empresa con Sukasa, el Resumen de TEC · AE con la nota sobre Meta, Centauro con Marco y las preguntas 118 y 99."
  ],
  "iniciativas": [
   {
@@ -110,7 +110,7 @@
    "nombre": "La escala y el diagnóstico",
    "color": "escala",
    "estado": "en-curso",
-   "donde": "El diagnóstico ya se valida propuesta por propuesta y las unidades de negocio tienen su pestaña; falta armar el Resumen de TEC · AE y revisar Centauro con Marco.",
+   "donde": "El diagnóstico se valida y se trabaja en orden, y TEC y Teamnet ya son empresas con sus unidades; faltan Cemaco con tu OK, el Resumen de TEC · AE y Centauro.",
    "hecho": [
     "La escala ubica a cada empresa por equipo e industria, con un radar, un Resumen que el cliente ve y su historia en el tiempo.",
     "El test del diagnóstico vive en Nexus, con su página de resultados en dinero y la escalera de niveles, igual a la curva de la app vieja.",
@@ -297,11 +297,11 @@
    "nombre": "Cronograma y entrega",
    "color": "cronograma",
    "estado": "en-curso",
-   "donde": "El plan general ya es una pieza de la cuenta; falta que Valentina publique el de kölbi, los loops del handoff y cuatro decisiones tuyas.",
+   "donde": "El cliente ya ve el avance semana por semana y el equipo edita su página; falta que Valentina publique kölbi, los loops del handoff y cuatro decisiones tuyas.",
    "hecho": [
     "El cronograma lee lo vendido (semanas, fecha y horas), avisa claro cuando algo se pasa y saca las tareas de las actividades.",
     "El plan general es una pieza de la cuenta, con su lista de proyectos y sus propias fases; kölbi tiene sus tres proyectos y la fase «00 · Transversal».",
-    "El Gantt se lee mejor: las semanas sin tareas van en una línea y el contexto arranca plegado."
+    "La página que ve el cliente pinta cada semana con su avance, y el equipo la edita desde adentro: título, logo, bienvenida y qué se muestra."
    ],
    "sigue": [
     "La sección de loops del handoff.",
@@ -371,6 +371,10 @@
     {
      "titulo": "Lo que ve el cliente",
      "pasos": [
+      {
+       "texto": "El avance a la vista y la página editable desde adentro",
+       "estado": "hecho"
+      },
       {
        "texto": "¿Marcarla hecha a mano le quita «por validar»?",
        "estado": "te-toca",
@@ -725,8 +729,8 @@
      regenera: la skill regenerar-roadmap. Lo hecho nuevo entra SOLO acá, con su «tema»; el Resumen lo toma de aquí. -->
 ```linea
 {
- "hoy": "2026-11-26",
- "produccion": "68c33538",
+ "hoy": "2026-11-27",
+ "produccion": "1d9d9c34",
  "temasHechoHasta": "2026-10-29",
  "iniciativas": [
   {
@@ -2226,6 +2230,45 @@
    "commits": [
     "14b38153"
    ]
+  },
+  {
+   "fecha": "2026-11-27",
+   "iniciativa": "cronograma",
+   "titulo": "La página del cronograma que ve el cliente muestra el avance y se edita desde adentro",
+   "que": "Cada semana se pinta con el estado de sus tareas (verde hecho, azul en curso, gris por hacer, ámbar atrasado), con línea «Hoy» y % por fase. «Lo que ve el cliente» muestra la página tal como saldrá y deja cambiar título, nombre, logo y bienvenida, y apagar atrasadas, responsables o resumen.",
+   "paraQuien": "Customer Success y el cliente",
+   "prod": "si",
+   "tema": 10,
+   "commits": [
+    "703da86e",
+    "bb2f204a"
+   ]
+  },
+  {
+   "fecha": "2026-11-27",
+   "iniciativa": "escala",
+   "titulo": "La parte de arriba del Diagnóstico de rendimiento, ordenada por el trabajo",
+   "que": "La misma información, en el orden en que se trabaja: generar el diagnóstico, revisarlo, cambiarlo con «✨ Mejorar con IA» o a mano, y publicar. La línea dice «Niveles validados» y lo que Nexus escribió sin pasar la verificación va al Historial del Resumen.",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "si",
+   "tema": 5,
+   "commits": [
+    "07ba7112"
+   ]
+  },
+  {
+   "fecha": "2026-11-27",
+   "iniciativa": "escala",
+   "titulo": "La empresa arriba de sus unidades: TEC y Grupo Teamnet",
+   "que": "La empresa es una ficha de tipo «Empresa» con el dominio y la empresa de HubSpot, sin trabajo propio; sus unidades cuelgan iguales debajo. Lo de HubSpot se reparte a cada unidad con la regla de las reuniones. TEC y Grupo Teamnet ya están así, sin mover ninguna reunión. Cemaco, con Sukasa, espera tu OK.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 5,
+   "commits": [
+    "fb93a20d",
+    "6b15861b",
+    "271a87a5"
+   ]
   }
  ],
  "sigue": [
@@ -2254,10 +2297,10 @@
   },
   {
    "iniciativa": "escala",
-   "titulo": "Unidades de negocio: lo que falta",
-   "que": "El chip «Parte de TEC · 2 unidades» en la ficha y juntar unidades de verdad desde la pantalla (hoy solo simula).",
-   "paraQuien": "Customer Success",
-   "estado": "por-hacer",
+   "titulo": "Cemaco: Sukasa como tercera unidad, con tu OK",
+   "que": "Cemaco pasa a ser empresa con tres unidades: Costa Rica, Ecuador y Sukasa. Las reuniones «SUKASA…» se quedan en Ecuador, y el simulacro da 0 reuniones que cambian. Se aplica solo cuando des el OK de Cemaco.",
+   "paraQuien": "Elías",
+   "estado": "te-toca",
    "tema": 5
   },
   {
@@ -2726,7 +2769,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "Todo está en producción (68c33538, 26 nov): el diagnóstico se valida propuesta por propuesta, Unidades de negocio y el plan general de kölbi con su fase transversal. Lo próximo: el Resumen de TEC · AE, Centauro con Marco y que Valentina publique el plan de kölbi.",
+ "dondeVamos": "Todo está en producción (1d9d9c34, 27 nov): la página del cronograma que ve el cliente, la parte de arriba del Diagnóstico de rendimiento y la empresa arriba de sus unidades (TEC y Grupo Teamnet). Lo próximo: tu OK para Cemaco, el Resumen de TEC · AE y que Valentina publique el plan de kölbi.",
  "temas": [
   {
    "n": 4,
@@ -3084,7 +3127,7 @@
      "texto": "Una tarea «por validar» ya no llega al cliente."
     }
    ],
-   "sigue": "Que Valentina publique la fase transversal de kölbi y la sección de loops del handoff. Después, lo de «lo vendido»: elegir la venta, «Fue un error mío», fases en paralelo y la línea del Kickoff.",
+   "sigue": "Que Valentina publique el plan de kölbi, ya con su página nueva, y la sección de loops del handoff. Después, lo de «lo vendido»: elegir la venta, «Fue un error mío», fases en paralelo y la línea del Kickoff.",
    "decisiones": [
     4,
     22,
@@ -3498,7 +3541,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `68c33538` (todo `main`) desde el 26 nov: el diagnóstico que se valida propuesta por propuesta, Unidades de negocio, el plan general como pieza de la cuenta (kölbi con su fase «00 · Transversal», sin publicar), «Diagnóstico de rendimiento», interlocutores por unidad, Stratosphere separado de Teamnet, 15.000 caracteres en el chat y La escala, «Guardarlo como nota» solo con lo contado, el chat «Nexus» de La escala en una sola conversación, «Ubicar» con las notas del equipo, La escala interna más limpia, La escala sin Resumen con «Responder con Nexus», la página del chat «Nexus» en Documentación, un Resumen de La escala que no pierde las cifras de la empresa, las franjas del kickoff, un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y reuniones enteras, La escala de un cliente con lo que ya sabemos, la pantalla limpia de La escala, el registro de los cambios de base, Hablar con Nexus (etapas 0 y 1), el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
+| Producción | Corre `1d9d9c34` (todo `main`) desde el 27 nov: la página del cronograma que ve el cliente (avance por semana y editable desde adentro), el Diagnóstico de rendimiento ordenado por el trabajo, la empresa arriba de sus unidades (TEC y Grupo Teamnet; Cemaco espera tu OK), el diagnóstico que se valida propuesta por propuesta, Unidades de negocio, el plan general como pieza de la cuenta (kölbi con su fase «00 · Transversal», sin publicar), «Diagnóstico de rendimiento», interlocutores por unidad, Stratosphere separado de Teamnet, 15.000 caracteres en el chat y La escala, «Guardarlo como nota» solo con lo contado, el chat «Nexus» de La escala en una sola conversación, «Ubicar» con las notas del equipo, La escala interna más limpia, La escala sin Resumen con «Responder con Nexus», la página del chat «Nexus» en Documentación, un Resumen de La escala que no pierde las cifras de la empresa, las franjas del kickoff, un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y reuniones enteras, La escala de un cliente con lo que ya sabemos, la pantalla limpia de La escala, el registro de los cambios de base, Hablar con Nexus (etapas 0 y 1), el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
 | Por desplegar | Nada. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | Por datos de antes, ninguno nuevo (28 oct): 16 reuniones colgadas de proyectos de otro cliente (INV1) y 9 tareas que citan una reunión de otro cliente (INV42), las que ordena el plan de dominio compartido; el pipeline de Secure Title (INV11: 2 proyectos y 6 en una etapa desconocida); «TEC- AE» fusionada en HubSpot (INV13 e INV54: ya solo ella, kölbi quedó bien); una reunión de Meet leída antes de ocurrir (INV16a), y el corte de cartera de hace 96 días (INV32). |
 | Pruebas | 30 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 83 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
