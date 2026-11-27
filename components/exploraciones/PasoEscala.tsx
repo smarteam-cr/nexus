@@ -47,8 +47,7 @@
  * qué equipos ve (AccesoALaEscala.tsx).
  */
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
-import { Button, Selector, useToast } from "@/components/ui";
-import { BOTON_DE_HERRAMIENTA, BOTON_DE_HERRAMIENTA_ACTIVO } from "@/components/ui/sistema";
+import { Button, Segmentado, Selector, useToast } from "@/components/ui";
 import { PUNTO_DE_NIVEL } from "@/components/escala/niveles";
 import RadarDeUnaEmpresa from "@/components/escala/RadarDeUnaEmpresa";
 import {
@@ -78,11 +77,14 @@ import { chequeoDelMapa, loQueLaFrena, type PosicionEnElMapa } from "@/lib/explo
 import { cortadasQueSeLeenEnteras, lineaDeLaEscala, marcasQueCambiaron, type LineaDeLaEscala } from "@/lib/exploraciones/linea-de-la-escala";
 import {
   cuentaDeLaValidacion,
+  enlaceDeLoSinDato,
   estadoDeLaParte,
+  franjaDeArriba,
   fraseDeLaValidacion,
   lineaDeLaValidacion,
   paraValidar,
   partesQueCuentan,
+  porQueQuedoAtras,
   queHaceActualizar,
   rotuloDeLaParte,
   validacionDelArea,
@@ -109,6 +111,7 @@ import { useUbicarLaEscala } from "./useUbicarLaEscala";
 import { ConTarjetas, PreguntaParaLlevar, useLlevarALaSesion, type DimensionDeLaTarjeta } from "./TarjetaDelRadar";
 import { DetalleDeDimension } from "./DetalleDeLaDimension";
 import PaginaDeLaEscala from "./PaginaDeLaEscala";
+import { RanuraDeArriba } from "./ranura-de-arriba";
 
 /** «A», «A y B», «A, B y C». */
 const enLista = (xs: string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`);
@@ -181,34 +184,45 @@ function useLineaDeLaUbicacion(): {
   return { linea, proyectos, contexto, elegir, corriendo, lanzando, ubicar };
 }
 
-/** La línea de cómo se ubicó la escala, sin botón (el de la IA es «Actualizar con Nexus»), con el proyecto de contexto. */
-function LineaDeLaUbicacion({ u }: { u: ReturnType<typeof useLineaDeLaUbicacion> }) {
+/** El proyecto que se lee como contexto al ubicar la escala (antes, al final de la línea de la ubicación). */
+function SelectorDelContexto({ u }: { u: ReturnType<typeof useLineaDeLaUbicacion> }) {
   const { puedeEditar } = useLienzo();
-  const { linea, proyectos, contexto, elegir, corriendo, lanzando } = u;
+  const { proyectos, contexto, elegir, corriendo, lanzando } = u;
+  if (!puedeEditar || !proyectos.length) return null;
   return (
-    <div role="status" aria-label="Cómo se ubicó la escala" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
-      <span className="min-w-0">{linea.texto}</span>
-      {puedeEditar && proyectos.length > 0 && (
-        <span className="inline-flex items-center gap-1.5">
-          Con el contexto de
-          <Selector
-            etiqueta="El proyecto que se lee como contexto al ubicar la escala"
-            placeholder="Sin un proyecto"
-            valor={contexto ?? SIN_PROYECTO}
-            disabled={corriendo || lanzando}
-            opciones={[...proyectos.map((x) => ({ value: x.id, label: x.nombre })), { value: SIN_PROYECTO, label: "Sin un proyecto", hint: "Solo las reuniones y la memoria" }]}
-            onElegir={(v) => elegir(v === SIN_PROYECTO ? null : v)}
-          />
-        </span>
-      )}
-    </div>
+    <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
+      Con el contexto de
+      <Selector
+        etiqueta="El proyecto que se lee como contexto al ubicar la escala"
+        placeholder="Sin un proyecto"
+        valor={contexto ?? SIN_PROYECTO}
+        disabled={corriendo || lanzando}
+        opciones={[...proyectos.map((x) => ({ value: x.id, label: x.nombre })), { value: SIN_PROYECTO, label: "Sin un proyecto", hint: "Solo las reuniones y la memoria" }]}
+        onElegir={(v) => elegir(v === SIN_PROYECTO ? null : v)}
+      />
+    </span>
   );
 }
 
 /** El valor de «Sin un proyecto» en el selector del contexto (un id de proyecto nunca empieza así). */
 const SIN_PROYECTO = "-sin-proyecto";
 
-// ── 2 · Arriba del diagnóstico: qué falta validar, «Validar (N)» y «Actualizar con Nexus» ───────────────────────────
+/** «Para completar el diagnóstico», debajo de la página: adonde lleva «N sin dato: respóndelas…». */
+const ID_DE_PARA_COMPLETAR = "para-completar-el-diagnostico";
+const MARCA_AL_LLEGAR = ["ring-2", "ring-brand", "ring-offset-4", "ring-offset-surface-muted"];
+
+/** Baja a «Para completar el diagnóstico» y la marca un momento (27 nov, Elías: «que uno le dé clic y le tire ahí»). */
+function irAParaCompletar() {
+  const el = document.getElementById(ID_DE_PARA_COMPLETAR);
+  if (!el) return;
+  const quieto = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({ behavior: quieto ? "auto" : "smooth", block: "start" });
+  el.focus({ preventScroll: true });
+  el.classList.add(...MARCA_AL_LLEGAR);
+  window.setTimeout(() => el.classList.remove(...MARCA_AL_LLEGAR), 1800);
+}
+
+// ── 2 · Arriba del diagnóstico: el estado, lo que sigue y «Actualizar con Nexus» ─────────────────────────────────────
 
 /**
  * Lo que registra el agente de la cuenta (EscalaDeLaCuenta › `AgenteDeLaCuenta`, con su proyecto y su venta de contexto)
@@ -221,21 +235,26 @@ export interface UbicarDeLaCuenta {
 }
 export const RegistrarUbicarDeLaCuenta = createContext<((u: UbicarDeLaCuenta | null) => void) | null>(null);
 
+/** La línea de la ubicación que mira «Actualizar con Nexus» (en la cuenta, una armada con lo que registró el agente). */
+type LineaQueMira = { estado: LineaDeLaEscala["estado"]; boton: { fuerte: boolean }; texto?: string };
+
 /**
- * «Actualizar con Nexus» (26 nov, Elías: un solo botón de la IA, arriba). Reemplaza a «Ubicar con las reuniones» /
- * «Volver a ubicar» / «Actualizar» (la línea de la ubicación), «Actualizar escala» (el agente de la cuenta), y «Armar el
- * Resumen con IA» / «Rehacer con IA» / «Volver a ubicar» del Resumen. Qué hace lo decide `queHaceActualizar`: ubica si hay
- * algo que la escala no leyó; con algo por validar no rehace el Resumen; sin nada por validar, arma o rehace el Resumen
- * si quedó atrás. Nada se confirma ni se publica solo. «✨ Mejorar con IA» y el chat «Nexus» siguen para lo demás.
+ * «Actualizar con Nexus» (26 nov, Elías: un solo botón de la IA). Reemplaza a «Ubicar con las reuniones» / «Volver a
+ * ubicar» / «Actualizar» (la línea de la ubicación), «Actualizar escala» (el agente de la cuenta), y «Armar el Resumen con
+ * IA» / «Rehacer con IA» / «Volver a ubicar» del Resumen. Qué hace lo decide `queHaceActualizar`: ubica si hay algo que
+ * la escala no leyó; con algo por validar no rehace el Resumen; sin nada por validar, arma o rehace el Resumen si quedó
+ * atrás. Sin Resumen y listo para armarlo dice «Generar con Nexus» (27 nov). Nada se confirma ni se publica solo.
+ * Devuelve también por qué quedó atrás (`motivo`): la franja amarilla lo dice al lado del botón.
  */
-function ActualizarConNexus({
+function useActualizarConNexus({
   linea,
   ubicar,
   porValidar,
   validadas,
 }: {
-  linea: { estado: LineaDeLaEscala["estado"]; boton: { fuerte: boolean } };
-  ubicar: { ubicar: () => unknown; lanzando: boolean; corriendo: boolean };
+  linea: LineaQueMira;
+  /** null: en la cuenta, mientras el agente no registró cómo se lanza (no hay botón). */
+  ubicar: { ubicar: () => unknown; lanzando: boolean; corriendo: boolean } | null;
   porValidar: number;
   validadas: number;
 }) {
@@ -255,20 +274,22 @@ function ActualizarConNexus({
         enLaPreventa: lugar === "preventa",
       }).delResumen.total
     : 0;
+  /* La página trae la firma del servidor, pero solo cuando está a la vista: lo validado después de armar el Resumen
+     también lo deja atrás (desde «Comparar áreas», la página no se vuelve a pedir). */
+  const atrasos = {
+    escalaCambio: enLaPagina.escalaCambio,
+    formatoViejo: enLaPagina.formatoViejo,
+    notas: notasDelResumen,
+    validadoDespues: validadoDespues(exp.estado.contenido.chequeo, guardado?.at ?? null),
+  };
+  const atrasado = atrasos.escalaCambio || atrasos.formatoViejo || atrasos.notas > 0 || atrasos.validadoDespues;
   const que = queHaceActualizar({
     linea,
     porValidar,
     validadas,
-    resumen: {
-      hay: !!guardado?.at,
-      corriendo: resumen.corriendo,
-      detenida: !!resumen.corrida?.detenida,
-      /* La página trae la firma del servidor, pero solo cuando está a la vista: lo validado después de armar el Resumen
-         también lo deja atrás (desde «Comparar áreas», la página no se vuelve a pedir). */
-      atrasado: enLaPagina.escalaCambio || enLaPagina.formatoViejo || notasDelResumen > 0 || validadoDespues(exp.estado.contenido.chequeo, guardado?.at ?? null),
-    },
+    resumen: { hay: !!guardado?.at, corriendo: resumen.corriendo, detenida: !!resumen.corrida?.detenida, atrasado },
   });
-  if (!puedeEditar) return null;
+  const motivo = porQueQuedoAtras({ detenida: !!resumen.corrida?.detenida, ...atrasos, lineaAtrasada: linea.estado === "resumenAtrasado" ? (linea.texto ?? null) : null });
   const armarElResumen = async () => {
     const r = await resumen.armar();
     if (!r.ok) {
@@ -277,93 +298,181 @@ function ActualizarConNexus({
       return;
     }
     const n = r.corrida.descartados.length;
-    toast.success(`Listo en ${cuantoLleva(r.corrida.empezo, Date.parse(r.corrida.termino ?? new Date().toISOString()))}.${n ? ` ${n === 1 ? "Una cosa no pasó" : `${n} cosas no pasaron`} la verificación.` : ""}`);
+    toast.success(
+      `Listo en ${cuantoLleva(r.corrida.empezo, Date.parse(r.corrida.termino ?? new Date().toISOString()))}.${n ? ` ${n === 1 ? "Una cosa no pasó" : `${n} cosas no pasaron`} la verificación: está en el Historial.` : ""}`,
+    );
     // Ya estaba corriendo otra (otra pestaña, otra persona): lo que se sumó después de que empezó no entró.
     if (r.ajena) toast.info("Ya se estaba rehaciendo cuando lo pediste: si sumaste algo después, vuelve a pedirlo.");
   };
-  const esperando = que.accion === "esperar" || ubicar.lanzando || resumen.lanzando;
-  return (
-    <Button
-      size="sm"
-      variant={que.fuerte ? "primary" : "secondary"}
-      loading={esperando}
-      // Otro trabajo del agente en esta preventa (leer una reunión, la guía): espera a que termine.
-      disabled={esperando || (que.accion === "ubicar" && ubicar.corriendo)}
-      title={que.queHace}
-      onClick={() => void (que.accion === "resumen" ? armarElResumen() : ubicar.ubicar())}
-    >
-      {esperando ? "Nexus está actualizando…" : "Actualizar con Nexus"}
-    </Button>
-  );
+  const esperando = que.accion === "esperar" || !!ubicar?.lanzando || resumen.lanzando;
+  const boton =
+    puedeEditar && ubicar ? (
+      <Button
+        size="sm"
+        variant={que.fuerte ? "primary" : "secondary"}
+        loading={esperando}
+        // Otro trabajo del agente en esta preventa (leer una reunión, la guía): espera a que termine.
+        disabled={esperando || (que.accion === "ubicar" && ubicar.corriendo)}
+        title={que.queHace}
+        onClick={() => void (que.accion === "resumen" ? armarElResumen() : ubicar.ubicar())}
+      >
+        {esperando ? "Nexus está actualizando…" : !guardado?.at && que.accion === "resumen" ? "Generar con Nexus" : "Actualizar con Nexus"}
+      </Button>
+    ) : null;
+  // Quedó atrás aunque lo que sigue no sea rehacerlo (hay algo por validar): la franja lo dice igual (revisión del 27 nov).
+  const quedoAtras = !!guardado?.at && (atrasado || !!resumen.corrida?.detenida || linea.estado === "resumenAtrasado");
+  return { que, hayResumen: !!guardado?.at, quedoAtras, motivo, boton };
 }
 
-/** «Actualizar con Nexus» de la preventa: ubica con las reuniones (y lo que ya sabemos), como la línea de la ubicación. */
-function ActualizarEnLaPreventa({ u, porValidar, validadas }: { u: ReturnType<typeof useLineaDeLaUbicacion>; porValidar: number; validadas: number }) {
-  return <ActualizarConNexus linea={u.linea} ubicar={{ ubicar: u.ubicar, lanzando: u.lanzando, corriendo: u.corriendo }} porValidar={porValidar} validadas={validadas} />;
-}
-
-/** En la cuenta: lo lanza el agente de la ficha (lo que registró); sin él todavía, no hay botón. */
-function ActualizarEnLaCuenta({ deLaCuenta, porValidar, validadas }: { deLaCuenta: UbicarDeLaCuenta | null; porValidar: number; validadas: number }) {
-  const { exp } = useLienzo();
-  if (!deLaCuenta) return null;
-  /* Nunca se ubicó en la cuenta, aunque traiga niveles copiados de la preventa (revisión del 26 nov): lo primero es leer lo
-     que Nexus sabe de la cuenta, no armar el Resumen con lo de la preventa. */
-  const nunca = !exp.estado.propuesta.corridas.some((c) => c.modo === "posicionar");
-  const linea = deLaCuenta.corriendo
-    ? { estado: "ubicando" as const, boton: { fuerte: false } }
-    : nunca
-      ? { estado: "sinUbicar" as const, boton: { fuerte: true } }
-      : { estado: "alDia" as const, boton: { fuerte: false } };
-  return <ActualizarConNexus linea={linea} ubicar={deLaCuenta} porValidar={porValidar} validadas={validadas} />;
-}
-
-/**
- * ARRIBA DEL DIAGNÓSTICO (26 nov, Elías: «la pantalla interna no tiene que explicarse»). Reemplaza a la franja «El agente
- * sugiere N niveles con evidencia, M por explorar… Nada se confirma solo» con «Revisar una por una» y «Pasar las N al
- * mapa»:
- *   · a la izquierda, qué falta: «Faltan 4 de 12 por validar», o «✓ Validado por Marco · 26 nov» cuando no falta nada
- *     (lib/exploraciones/validar-la-escala.ts › `lineaDeLaValidacion`; quién, de lo que guardó cada parte);
- *   · a la derecha, «Validar (N)» (lo principal: recorre lo propuesto una por una, ValidarLaEscala.tsx), «Usar todas»
- *     (secundaria) y «Actualizar con Nexus»;
- *   · debajo, en la preventa, la línea de cómo se ubicó la escala (sin botón: antes iba debajo de la página).
- */
-function ArribaDelDiagnostico({ deLaCuenta }: { deLaCuenta: UbicarDeLaCuenta | null }) {
-  const { lugar } = useLienzo();
-  return lugar === "preventa" ? <ArribaEnLaPreventa /> : <CabeceraDeLaValidacion nexus={(c) => <ActualizarEnLaCuenta deLaCuenta={deLaCuenta} {...c} />} />;
-}
-
-function ArribaEnLaPreventa() {
-  const u = useLineaDeLaUbicacion();
-  return <CabeceraDeLaValidacion nexus={(c) => <ActualizarEnLaPreventa u={u} {...c} />} debajo={<LineaDeLaUbicacion u={u} />} />;
-}
-
-function CabeceraDeLaValidacion({ nexus, debajo }: { nexus: (c: { porValidar: number; validadas: number }) => ReactNode; debajo?: ReactNode }) {
-  const { exp, escala, mapa, revisables, puedeEditar } = useLienzo();
+/** Lo que falta validar, para la línea de estado y «Validar (N)». */
+function useLoQueFaltaValidar() {
+  const { exp, escala, mapa, revisables } = useLienzo();
   const me = useMe();
-  const [validando, setValidando] = useState(false);
   const partes = partesQueCuentan(escala.areas, exp.estado.areas, mapa.posiciones);
   const deLaPieza = revisables.filter((it) => piezaDelDestino(it.destino) === "escala");
   const items = paraValidar({ partes, posiciones: mapa.posiciones, revisablesDeLaEscala: deLaPieza });
   const cuenta = cuentaDeLaValidacion({ partes, posiciones: mapa.posiciones, confirmado: exp.estado.contenido.chequeo, pendientes: deLaPieza });
-  const linea = lineaDeLaValidacion(cuenta, me?.email ?? null);
+  return { items, cuenta, linea: lineaDeLaValidacion(cuenta, me?.email ?? null) };
+}
+
+/**
+ * ARRIBA DEL DIAGNÓSTICO. 26 nov: qué falta validar, «Validar (N)» y un solo «Actualizar con Nexus». 27 nov (Elías: «la
+ * misma información, mejor ordenada»; diseño «Cabecera del Diagnóstico de rendimiento», v2):
+ *   · sin Resumen, un recuadro «Falta generar el diagnóstico» con el botón («Generar con Nexus») y el estado adentro;
+ *   · con Resumen, una línea de estado (lo validado, «N sin dato: respóndelas…» que baja a «Para completar el
+ *     diagnóstico», cuándo se ubicó y el contexto) y, si hay algo que hacer, una franja con el porqué y el botón al lado
+ *     (`franjaDeArriba`); si no, el botón va al final de la línea, sin destacarse.
+ */
+function ArribaDelDiagnostico({ deLaCuenta }: { deLaCuenta: UbicarDeLaCuenta | null }) {
+  const { lugar } = useLienzo();
+  return lugar === "preventa" ? <ArribaEnLaPreventa /> : <ArribaEnLaCuenta deLaCuenta={deLaCuenta} />;
+}
+
+function ArribaEnLaPreventa() {
+  const u = useLineaDeLaUbicacion();
+  const f = useLoQueFaltaValidar();
+  const act = useActualizarConNexus({ linea: u.linea, ubicar: { ubicar: u.ubicar, lanzando: u.lanzando, corriendo: u.corriendo }, porValidar: f.items.length, validadas: f.cuenta.validadas });
+  return <EstadoDelDiagnostico f={f} act={act} linea={u.linea} contexto={<SelectorDelContexto u={u} />} />;
+}
+
+/** En la cuenta lo lanza el agente de la ficha (lo que registró); sin él todavía, no hay botón. */
+function ArribaEnLaCuenta({ deLaCuenta }: { deLaCuenta: UbicarDeLaCuenta | null }) {
+  const { exp } = useLienzo();
+  const f = useLoQueFaltaValidar();
+  /* Nunca se ubicó en la cuenta, aunque traiga niveles copiados de la preventa (revisión del 26 nov): lo primero es leer lo
+     que Nexus sabe de la cuenta, no armar el Resumen con lo de la preventa. */
+  const nunca = !exp.estado.propuesta.corridas.some((c) => c.modo === "posicionar");
+  const linea: LineaQueMira = deLaCuenta?.corriendo
+    ? { estado: "ubicando", boton: { fuerte: false } }
+    : nunca
+      ? { estado: "sinUbicar", boton: { fuerte: true }, texto: "Nexus todavía no leyó lo que sabe de la cuenta." }
+      : { estado: "alDia", boton: { fuerte: false } };
+  const act = useActualizarConNexus({ linea, ubicar: deLaCuenta, porValidar: f.items.length, validadas: f.cuenta.validadas });
+  return <EstadoDelDiagnostico f={f} act={act} linea={null} textoDeLoNuevo={linea.texto} contexto={null} />;
+}
+
+function EstadoDelDiagnostico({
+  f,
+  act,
+  linea,
+  textoDeLoNuevo,
+  contexto,
+}: {
+  f: ReturnType<typeof useLoQueFaltaValidar>;
+  act: ReturnType<typeof useActualizarConNexus>;
+  /** La línea de la ubicación (solo la preventa). */
+  linea: LineaDeLaEscala | null;
+  /** En la cuenta, lo que dice la franja de lo nuevo (no hay línea de la ubicación). */
+  textoDeLoNuevo?: string;
+  contexto: ReactNode;
+}) {
+  const { puedeEditar } = useLienzo();
+  const [validando, setValidando] = useState(false);
+  const franja = franjaDeArriba({ hayResumen: act.hayResumen, accion: act.que.accion, fuerte: act.que.fuerte, atrasado: act.quedoAtras });
+  // En la franja amarilla el botón va solo cuando lo que sigue es rehacer el Resumen; si no, en la línea de estado.
+  const botonEnLaFranja = franja === "nuevo" || (franja === "atras" && act.que.accion === "resumen");
+  const sinDato = enlaceDeLoSinDato(f.cuenta.sinDato);
+  const validacion = (
+    <span role="status" className={cn("font-semibold", f.linea?.completa ? "text-success-ink" : "text-fg")}>
+      {f.linea ? `${f.linea.completa ? "✓ " : ""}${f.linea.texto}` : "Todavía no hay nada que validar"}
+    </span>
+  );
+  const enlace = sinDato ? (
+    <button type="button" onClick={irAParaCompletar} className="font-semibold text-brand hover:underline">
+      {sinDato} ↓
+    </button>
+  ) : null;
+  const validar = (
+    <>
+      {puedeEditar && f.items.length > 0 && (
+        <Button size="sm" variant="primary" onClick={() => setValidando(true)}>
+          Validar ({f.items.length})
+        </Button>
+      )}
+      {f.items.length > 1 && <BotonUsarTodas items={f.items} lugar="escala" etiqueta="Usar todas" secundario />}
+    </>
+  );
+  const drawer = <ValidarLaEscala items={f.items} abierto={validando} onCerrar={() => setValidando(false)} />;
+
+  if (franja === "sinDiagnostico")
+    return (
+      <section aria-label="Falta generar el diagnóstico" className="flex flex-col gap-2.5 rounded-xl border border-info-line bg-info-surface px-5 py-4">
+        <div className="flex flex-col gap-1">
+          <h3 className="text-[15px] font-semibold text-fg">Falta generar el diagnóstico</h3>
+          <p className="text-[13px] leading-[1.45] text-fg-secondary">
+            {[linea?.texto, "Mientras no exista, el cliente no ve esta pestaña: su enlace abre en la página de un equipo."].filter(Boolean).join(" ")}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2 text-xs">
+          {act.boton}
+          {validar}
+          {contexto}
+          {validacion}
+          {enlace}
+        </div>
+        {drawer}
+      </section>
+    );
+
+  // Lo que dice la línea de la ubicación va en la franja solo cuando es su porqué (lo nuevo, o el motivo de la amarilla).
+  const enLaFranja = franja === "nuevo" || (franja === "atras" && !!linea && act.motivo === linea.texto);
+  // En la cuenta no hay línea de la ubicación: lo nuevo (nunca se ubicó) va en la línea de estado si no tiene franja.
+  const ubicacion = linea ? (enLaFranja ? null : linea.texto) : franja === "nuevo" ? null : (textoDeLoNuevo ?? null);
   return (
-    <section aria-label="Validar el diagnóstico" className="flex flex-col gap-1.5">
+    <section aria-label="Cómo va el diagnóstico" className="flex flex-col gap-2.5">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <p role="status" className={cn("text-sm font-semibold", linea?.completa ? "text-success-ink" : "text-fg")}>
-          {linea ? `${linea.completa ? "✓ " : ""}${linea.texto}` : "Todavía no hay nada que validar"}
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          {puedeEditar && items.length > 0 && (
-            <Button size="sm" variant="primary" onClick={() => setValidando(true)}>
-              Validar ({items.length})
-            </Button>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px]">
+          {validacion}
+          {enlace}
+          {(ubicacion || contexto) && (
+            <span aria-hidden="true" className="text-fg-muted">
+              ·
+            </span>
           )}
-          {items.length > 1 && <BotonUsarTodas items={items} lugar="escala" etiqueta="Usar todas" secundario />}
-          {nexus({ porValidar: items.length, validadas: cuenta.validadas })}
+          {ubicacion && <span className="text-xs text-fg-muted">{ubicacion}</span>}
+          {contexto}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {validar}
+          {!botonEnLaFranja && act.boton}
         </div>
       </div>
-      {debajo}
-      <ValidarLaEscala items={items} abierto={validando} onCerrar={() => setValidando(false)} />
+      {franja === "atras" && (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-[10px] border border-warn-line bg-warn-surface px-3.5 py-2.5">
+          <p className="text-[13px] text-warn-ink">
+            <span className="font-semibold">El diagnóstico quedó atrás.</span> {act.motivo}
+            {!botonEnLaFranja && (f.items.length > 0 ? " Valida lo que falta y después actualízalo." : " Primero Nexus tiene que leer lo nuevo.")}
+          </p>
+          {botonEnLaFranja && act.boton}
+        </div>
+      )}
+      {franja === "nuevo" && (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-[10px] border border-info-line bg-info-surface px-3.5 py-2.5">
+          <p className="text-[13px] text-fg">{linea?.texto ?? textoDeLoNuevo ?? "Hay algo nuevo que la escala todavía no leyó."}</p>
+          {act.boton}
+        </div>
+      )}
+      {drawer}
     </section>
   );
 }
@@ -726,7 +835,7 @@ function ParaCompletarElDiagnostico() {
       return y;
     });
   return (
-    <section aria-label="Para completar el diagnóstico" className="flex flex-col gap-3">
+    <section id={ID_DE_PARA_COMPLETAR} tabIndex={-1} aria-label="Para completar el diagnóstico" className="flex scroll-mt-6 flex-col gap-3 rounded-xl outline-none transition-shadow">
       <div className="flex flex-col gap-0.5">
         <h4 className="text-sm font-semibold text-fg">Para completar el diagnóstico</h4>
         {/* Sin la explicación de lo que hace Nexus con una respuesta (26 nov: la pantalla no se explica). */}
@@ -856,15 +965,26 @@ function ParaCompletarElDiagnostico() {
 /** El área cuya lectura es «Preparación para engagement avanzado» (lib/escala/preparacion.ts lee el nivel de Marketing). */
 const AREA_DEL_ENGAGEMENT = "2";
 
-/** «Como lo ve el cliente» / «Comparar áreas»: arriba de la página, sin título desde el 24 nov. */
+/** «Como lo ve el cliente» / «Comparar áreas»: en la fila del título, con lo demás de la página (27 nov). */
 function ComoSeVe({ vista, onVista }: { vista: Vista; onVista: (v: Vista) => void }) {
+  return <Segmentado etiqueta="Cómo se ve la escala" opciones={(["pagina", "nodos"] as const).map((v) => ({ clave: v, etiqueta: NOMBRE_DE_LA_VISTA[v] }))} valor={vista} onCambio={onVista} />;
+}
+
+/**
+ * La fila de arriba (27 nov, Elías: «cómo lo ve el cliente, comparar áreas y acceso, a la par»): el título a la izquierda
+ * (sin «Dónde está cada equipo en la escala.») y, juntos a la derecha, cómo se ve, «✨ Mejorar con IA» e «Historial» (los
+ * pone la página a la vista por la ranura, ranura-de-arriba.tsx) y «Acceso».
+ */
+function FilaDeArriba({ titulo, vista, onVista, onRanura }: { titulo?: string; vista: Vista; onVista: (v: Vista) => void; onRanura: (el: HTMLElement | null) => void }) {
+  const { lugar } = useLienzo();
   return (
-    <div role="radiogroup" aria-label="Cómo se ve la escala" className="inline-flex gap-1">
-      {(["pagina", "nodos"] as const).map((v) => (
-        <button key={v} type="button" role="radio" aria-checked={vista === v} onClick={() => onVista(v)} className={vista === v ? BOTON_DE_HERRAMIENTA_ACTIVO : BOTON_DE_HERRAMIENTA}>
-          {NOMBRE_DE_LA_VISTA[v]}
-        </button>
-      ))}
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      {titulo ? <h2 className="text-lg font-semibold text-fg">{titulo}</h2> : <span aria-hidden="true" />}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <ComoSeVe vista={vista} onVista={onVista} />
+        <div ref={onRanura} className="contents" />
+        {lugar !== "proyecto" && <AccesoALaEscala />}
+      </div>
     </div>
   );
 }
@@ -1000,28 +1120,30 @@ function DondeEstaHoy({ vista }: { vista: Vista }) {
   );
 }
 
-/** `agente`: el panel del agente de este lugar (en la cuenta, «Actualizar escala»). Sin él, el de la exploración. */
-export default function PasoEscala({ agente }: { agente?: ReactNode } = {}) {
+/**
+ * `agente`: el panel del agente de este lugar (en la cuenta, el de la ficha). Sin él, el de la exploración. `titulo`: el
+ * nombre de la pieza, en la fila de arriba (la preventa; en la cuenta el título lo pone la ficha).
+ */
+export default function PasoEscala({ agente, titulo }: { agente?: ReactNode; titulo?: string } = {}) {
   const { exp, lugar } = useLienzo();
   const hayAreas = exp.estado.areas.length > 0;
   const [vista, setVista] = useState<Vista>("pagina");
   // Lo que registra el agente de la cuenta para que «Actualizar con Nexus» lo lance desde arriba (26 nov).
   const [deLaCuenta, setDeLaCuenta] = useState<UbicarDeLaCuenta | null>(null);
+  // Donde la página pone «✨ Mejorar con IA» e «Historial» (la fila de arriba).
+  const [ranura, setRanura] = useState<HTMLElement | null>(null);
   // El título y de qué va la pieza los pone el lienzo, como en las demás piezas.
   return (
     <RegistrarUbicarDeLaCuenta.Provider value={setDeLaCuenta}>
+    <RanuraDeArriba.Provider value={ranura}>
     <div className="flex flex-col gap-5">
-      {/* Arriba de todo (26 nov): qué falta validar, «Validar (N)» y «Actualizar con Nexus». Debajo, cómo se ve la escala
-          y, a la derecha, «Publicado…» y «Acceso». */}
-      <ArribaDelDiagnostico deLaCuenta={deLaCuenta} />
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <ComoSeVe vista={vista} onVista={setVista} />
-        {lugar !== "proyecto" && (
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <PublicarLaEscala />
-            <AccesoALaEscala />
-          </div>
-        )}
+      {/* 27 nov (diseño «Cabecera del Diagnóstico de rendimiento», v2): el título con cómo se ve, la IA, el historial y
+          «Acceso» a la par; debajo, el estado y lo que sigue con «Actualizar con Nexus»; «Publicar» en su franja, como
+          «Subir al cliente» del kickoff; y la página. */}
+      <div className="flex flex-col gap-3.5">
+        <FilaDeArriba titulo={titulo} vista={vista} onVista={setVista} onRanura={setRanura} />
+        <ArribaDelDiagnostico deLaCuenta={deLaCuenta} />
+        {lugar !== "proyecto" && <PublicarLaEscala />}
       </div>
       <DondeEstaHoy vista={vista} />
       <ConQueSeMide />
@@ -1032,6 +1154,7 @@ export default function PasoEscala({ agente }: { agente?: ReactNode } = {}) {
       )}
       {agente ?? <PanelDelAgente modoPrincipal="leer" compacto />}
     </div>
+    </RanuraDeArriba.Provider>
     </RegistrarUbicarDeLaCuenta.Provider>
   );
 }

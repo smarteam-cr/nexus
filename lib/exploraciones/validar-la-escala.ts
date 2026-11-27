@@ -134,8 +134,9 @@ export function nombreDeQuienValido(correo: string, miCorreo?: string | null): s
 const enLista = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`);
 
 /**
- * La línea de arriba del diagnóstico: «Faltan 4 de 12 por validar», o «Validado por Marco · 26 nov» cuando no falta nada.
- * null: todavía no hay nada (ni propuesto ni validado).
+ * La línea de arriba del diagnóstico: «Faltan 4 de 12 por validar», o «Niveles validados por Marco · 26 nov» cuando no
+ * falta nada (27 nov, Elías: «¿qué es lo de validado?»: dice qué se validó). Lo «sin dato» va aparte, como enlace a
+ * «Para completar el diagnóstico» (`c.sinDato`). null: todavía no hay nada (ni propuesto ni validado).
  */
 export function lineaDeLaValidacion(c: CuentaDeLaValidacion, miCorreo?: string | null): { texto: string; completa: boolean } | null {
   const pendientes = c.porValidar + c.otras;
@@ -148,11 +149,16 @@ export function lineaDeLaValidacion(c: CuentaDeLaValidacion, miCorreo?: string |
       completa: false,
     };
   }
-  const sinDato = c.sinDato ? ` · ${c.sinDato} sin dato` : "";
-  if (!c.quienes.length) return { texto: `Validado${c.ultima ? ` · ${diaCorto(c.ultima)}` : ""}${sinDato}`, completa: true };
+  if (!c.quienes.length) return { texto: `Niveles validados${c.ultima ? ` · ${diaCorto(c.ultima)}` : ""}`, completa: true };
   const nombres = [...new Set(c.quienes.slice(0, 3).map((q) => nombreDeQuienValido(q, miCorreo)))];
   const mas = c.quienes.length > 3 ? ` y ${c.quienes.length - 3} más` : "";
-  return { texto: `Validado por ${enLista(nombres)}${mas}${c.ultima ? ` · ${diaCorto(c.ultima)}` : ""}${sinDato}`, completa: true };
+  return { texto: `Niveles validados por ${enLista(nombres)}${mas}${c.ultima ? ` · ${diaCorto(c.ultima)}` : ""}`, completa: true };
+}
+
+/** El enlace a «Para completar el diagnóstico»: «9 sin dato: respóndelas para afinar el resultado». null sin nada sin dato. */
+export function enlaceDeLoSinDato(sinDato: number): string | null {
+  if (!sinDato) return null;
+  return `${sinDato} sin dato: ${sinDato === 1 ? "respóndela" : "respóndelas"} para afinar el resultado`;
 }
 
 /** Lo que dice la fila del diagnóstico en el menú de la izquierda: cuántas faltan, o ✓ cuando no falta ninguna. */
@@ -240,4 +246,43 @@ export function validacionDelArea(
 export function fraseDeLaValidacion(c: { validadas: number; porValidar: number; sinDato: number }, de?: number): string {
   const validadas = `${c.validadas}${de !== undefined ? ` de ${de}` : ""} ${c.validadas === 1 && de === undefined ? "validada" : "validadas"}`;
   return [validadas, c.porValidar ? `${c.porValidar} por validar` : null, c.sinDato ? `${c.sinDato} sin dato` : null].filter(Boolean).join(" · ");
+}
+
+// ── Arriba del diagnóstico: qué franja se ve (27 nov, Elías: «la misma información, mejor ordenada») ─────────────────
+
+/** Por qué el Resumen quedó atrás, en palabras: lo que la franja amarilla dice al lado de «Actualizar con Nexus». */
+export function porQueQuedoAtras(o: {
+  detenida: boolean;
+  escalaCambio: boolean;
+  validadoDespues: boolean;
+  /** Notas o respuestas que llegaron después de que el Resumen empezó a leer. */
+  notas: number;
+  formatoViejo: boolean;
+  /** El texto de la línea de la ubicación cuando ella dice que el Resumen quedó atrás (reuniones nuevas, cortadas…). */
+  lineaAtrasada: string | null;
+}): string {
+  if (o.detenida) return "Nexus se detuvo antes de terminar.";
+  if (o.escalaCambio) return "Los niveles se movieron después de generarlo.";
+  if (o.validadoDespues) return "Se validaron niveles después de generarlo.";
+  if (o.notas > 0) return o.notas === 1 ? "Llegó una respuesta o nota que todavía no leyó." : `Llegaron ${o.notas} respuestas o notas que todavía no leyó.`;
+  if (o.formatoViejo) return "Está en el formato del 9 nov: actualizarlo lo pasa al resumen ejecutivo y conserva lo que escribiste.";
+  return o.lineaAtrasada ?? "Hay algo nuevo que todavía no leyó.";
+}
+
+/**
+ * Qué va debajo de la línea de estado, arriba de la página:
+ *   · «sinDiagnostico»: todavía no hay Resumen. Un solo recuadro con el botón y el estado adentro.
+ *   · «atras»: hay Resumen y quedó atrás (franja amarilla con el porqué). Con el botón al lado cuando lo que sigue es
+ *     rehacerlo; si antes hay algo por validar o por leer, la franja lo dice igual y el botón va en la línea de estado
+ *     (revisión del 27 nov: si no, nadie se enteraba y «Publicar» seguía a la vista).
+ *   · «nuevo»: hay algo que la escala no leyó y nada por validar (franja con lo nuevo y el botón).
+ *   · null: nada urgente; «Actualizar con Nexus» va al final de la línea de estado, sin destacarse.
+ */
+export type FranjaDeArriba = "sinDiagnostico" | "atras" | "nuevo" | null;
+export function franjaDeArriba(o: { hayResumen: boolean; accion: AccionDeNexus; fuerte: boolean; atrasado: boolean }): FranjaDeArriba {
+  if (!o.hayResumen) return "sinDiagnostico";
+  if (o.accion === "resumen") return "atras";
+  if (o.accion === "ubicar" && o.fuerte) return "nuevo";
+  if (o.atrasado) return "atras";
+  return null;
 }

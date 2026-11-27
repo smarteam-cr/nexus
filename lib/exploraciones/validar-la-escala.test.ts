@@ -19,13 +19,16 @@ import { CambiosSchema, leerContenido, VALIDADOR_ESTRICTO } from "./esquemas";
 import { posicionesDelMapa } from "./mapa";
 import {
   cuentaDeLaValidacion,
+  enlaceDeLoSinDato,
   estadoDeLaParte,
+  franjaDeArriba,
   fraseDeLaValidacion,
   lineaDeLaValidacion,
   marcaDelRiel,
   nombreDeQuienValido,
   paraValidar,
   partesQueCuentan,
+  porQueQuedoAtras,
   queHaceActualizar,
   validacionDelArea,
   validadoDespues,
@@ -153,7 +156,7 @@ describe("quién validó", () => {
     expect(r.estado.contenido.chequeo["1.2"]).toEqual({ nivel: "I", fuente: "hipotesis", validada: MARCO });
     const { cuenta } = pantalla(r.estado);
     expect(cuenta).toMatchObject({ porValidar: 0, validadas: 1, sinDato: 2, quienes: [MARCO.por], ultima: MARCO.en });
-    expect(lineaDeLaValidacion(cuenta)).toEqual({ texto: "Validado por Marco · 26 nov · 2 sin dato", completa: true });
+    expect(lineaDeLaValidacion(cuenta)).toEqual({ texto: "Niveles validados por Marco · 26 nov", completa: true });
     expect(marcaDelRiel(cuenta)).toEqual({ corto: "✓", largo: "Todo validado · 2 sin dato", estado: "generada" });
   });
 
@@ -206,10 +209,10 @@ describe("quién validó", () => {
       posiciones,
       confirmado: { "1.1": { validada: MARCO }, "1.2": { validada: { por: "ana.rojas@smarteam.test", en: "2026-11-27T10:00:00.000Z" } }, "1.3": {} },
     });
-    expect(lineaDeLaValidacion(varias)?.texto).toBe("Validado por Ana y Marco · 27 nov");
-    expect(lineaDeLaValidacion(varias, "ana.rojas@smarteam.test")?.texto).toBe("Validado por ti y Marco · 27 nov");
+    expect(lineaDeLaValidacion(varias)?.texto).toBe("Niveles validados por Ana y Marco · 27 nov");
+    expect(lineaDeLaValidacion(varias, "ana.rojas@smarteam.test")?.texto).toBe("Niveles validados por ti y Marco · 27 nov");
     const sinMarca = cuentaDeLaValidacion({ ...base, posiciones, confirmado: {} });
-    expect(lineaDeLaValidacion(sinMarca)?.texto).toBe("Validado");
+    expect(lineaDeLaValidacion(sinMarca)?.texto).toBe("Niveles validados");
   });
 
   it("el nombre sale del correo", () => {
@@ -270,5 +273,42 @@ describe("«Actualizar con Nexus» hace cumplir el orden: ubicar → validar →
   it("sin nada validado no arma un Resumen vacío; al día, vuelve a ubicar sin destacarse", () => {
     expect(queHaceActualizar({ linea: alDia, porValidar: 0, validadas: 0, resumen: { ...resumen, hay: false } }).accion).toBe("ubicar");
     expect(queHaceActualizar({ linea: alDia, porValidar: 0, validadas: 3, resumen })).toMatchObject({ accion: "ubicar", fuerte: false });
+  });
+});
+
+describe("arriba del diagnóstico (27 nov: la misma información, mejor ordenada)", () => {
+  it("sin Resumen, siempre el recuadro de «Falta generar el diagnóstico», haga lo que haga el botón", () => {
+    expect(franjaDeArriba({ hayResumen: false, accion: "resumen", fuerte: true, atrasado: false })).toBe("sinDiagnostico");
+    expect(franjaDeArriba({ hayResumen: false, accion: "ubicar", fuerte: false, atrasado: true })).toBe("sinDiagnostico");
+    expect(franjaDeArriba({ hayResumen: false, accion: "esperar", fuerte: false, atrasado: false })).toBe("sinDiagnostico");
+  });
+  it("con Resumen: rehacerlo es la franja amarilla; lo nuevo sin nada por validar, la otra; lo demás, nada", () => {
+    expect(franjaDeArriba({ hayResumen: true, accion: "resumen", fuerte: true, atrasado: true })).toBe("atras");
+    expect(franjaDeArriba({ hayResumen: true, accion: "ubicar", fuerte: true, atrasado: false })).toBe("nuevo");
+    expect(franjaDeArriba({ hayResumen: true, accion: "ubicar", fuerte: false, atrasado: false })).toBeNull();
+    expect(franjaDeArriba({ hayResumen: true, accion: "esperar", fuerte: false, atrasado: false })).toBeNull();
+  });
+  it("⛔ con algo por validar y el Resumen atrás, la franja amarilla se ve igual (revisión del 27 nov)", () => {
+    // El botón vuelve a ubicar sin destacarse (hay que validar primero), pero el porqué no se esconde: «Publicar» sigue.
+    const que = queHaceActualizar({ linea: { estado: "alDia", boton: { fuerte: false } }, porValidar: 3, validadas: 5, resumen: { hay: true, corriendo: false, detenida: false, atrasado: true } });
+    expect(que).toMatchObject({ accion: "ubicar", fuerte: false });
+    expect(franjaDeArriba({ hayResumen: true, ...que, atrasado: true })).toBe("atras");
+    expect(franjaDeArriba({ hayResumen: true, ...que, atrasado: false })).toBeNull();
+  });
+  it("el porqué de la franja amarilla, del más fuerte al más suave", () => {
+    const nada = { detenida: false, escalaCambio: false, validadoDespues: false, notas: 0, formatoViejo: false, lineaAtrasada: null };
+    expect(porQueQuedoAtras({ ...nada, detenida: true, escalaCambio: true })).toBe("Nexus se detuvo antes de terminar.");
+    expect(porQueQuedoAtras({ ...nada, escalaCambio: true, notas: 2 })).toBe("Los niveles se movieron después de generarlo.");
+    expect(porQueQuedoAtras({ ...nada, validadoDespues: true })).toBe("Se validaron niveles después de generarlo.");
+    expect(porQueQuedoAtras({ ...nada, notas: 1 })).toBe("Llegó una respuesta o nota que todavía no leyó.");
+    expect(porQueQuedoAtras({ ...nada, notas: 3 })).toBe("Llegaron 3 respuestas o notas que todavía no leyó.");
+    expect(porQueQuedoAtras({ ...nada, formatoViejo: true })).toMatch(/^Está en el formato del 9 nov/);
+    expect(porQueQuedoAtras({ ...nada, lineaAtrasada: "El Resumen no leyó 2 reuniones nuevas." })).toBe("El Resumen no leyó 2 reuniones nuevas.");
+    expect(porQueQuedoAtras(nada)).toBe("Hay algo nuevo que todavía no leyó.");
+  });
+  it("lo sin dato invita a responderlo; sin nada, no hay enlace", () => {
+    expect(enlaceDeLoSinDato(0)).toBeNull();
+    expect(enlaceDeLoSinDato(1)).toBe("1 sin dato: respóndela para afinar el resultado");
+    expect(enlaceDeLoSinDato(9)).toBe("9 sin dato: respóndelas para afinar el resultado");
   });
 });

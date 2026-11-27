@@ -90,8 +90,8 @@ describe("2 · arriba, una sola línea", () => {
     expect(ubicar).toContain('lanzar("posicionar", conLoQueYaSabemos ? { proyectoDeContexto: contexto } : {})');
     // Desde el 26 nov el botón es «Actualizar con Nexus», arriba (validar-la-escala.test.ts): ubica o rehace el Resumen.
     expect(paso).toContain('onClick={() => void (que.accion === "resumen" ? armarElResumen() : ubicar.ubicar())}');
-    // La línea, sin botón, debajo de la cabecera de arriba y solo en la preventa (escala-sin-resumen.test.ts).
-    expect(paso).toContain("debajo={<LineaDeLaUbicacion u={u} />}");
+    // La línea, sin botón, en el estado de arriba y solo en la preventa (27 nov, escala-sin-resumen.test.ts).
+    expect(paso).toContain("linea={u.linea}");
     // Solo «Ubicar» cambia la frase a «ubicando»; otro trabajo del agente solo hace esperar al botón.
     expect(ubicar).toContain('ubicando: corriendo && corrida?.modo === "posicionar"');
     expect(paso).toMatch(/lineaDeLaEscala\(\{[\s\S]{0,600}\n {4}ubicando,\n/);
@@ -110,10 +110,10 @@ describe("2 · arriba, una sola línea", () => {
     for (const t of ["<PublicarLaEscala />", "<AccesoALaEscala />", '["pagina", "nodos"]']) expect(paso).toContain(t);
     expect(paso).toContain('nodos: "Comparar áreas"');
     expect(paso).toContain('pagina: "Como lo ve el cliente"');
-    // Desde el 24 nov la fila del Resumen entera va con `res.at` (sin Resumen, el aviso «Falta armar el Resumen»).
-    for (const t of ["{res.at && (", "<BotonDelHistorial", "Rehacer con IA", "{botonDePedirle}"]) expect(pagina).toContain(t);
-    // Los avisos del Resumen (formato viejo, cifras que no salen) siguen.
-    expect(pagina).toContain("Está armado con el formato del 9 nov");
+    // Desde el 24 nov los botones del Resumen van con `res.at`; desde el 27 nov, en la fila de arriba (`EnLaFilaDeArriba`).
+    for (const t of ["{res.at && (", "<EnLaFilaDeArriba>", "<BotonDelHistorial", "Rehacer con IA", "{botonDePedirle}"]) expect(pagina).toContain(t);
+    // Los avisos del Resumen siguen: el formato viejo, en la franja de arriba (27 nov); las cifras que no salen, en la página.
+    expect(codigo("lib/exploraciones/validar-la-escala.ts")).toContain("Está en el formato del 9 nov");
     expect(pagina).toContain("Ninguna cifra sale al cliente");
   });
 });

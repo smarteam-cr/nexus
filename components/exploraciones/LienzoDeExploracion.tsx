@@ -864,7 +864,8 @@ export default function LienzoDeExploracion({
         <main className="min-w-0 px-6 pb-10 pt-6 xl:px-8">
           {/* K5 (2026-10-27): «¿Es la sesión 2 con Marketing?», en cualquier pieza, y el lienzo que se pone al día solo. */}
           <SugerenciasDeAsociacion />
-          {paso !== "exploracion" && paso !== "informacion" && paso !== "procesos" && (
+          {/* El Diagnóstico de rendimiento pone su título en su propia fila, con sus botones (27 nov). */}
+          {paso !== "exploracion" && paso !== "informacion" && paso !== "procesos" && paso !== "escala" && (
             <header className="mb-5">
               <h2 className="text-lg font-semibold text-fg">{NOMBRE_DEL_PASO[paso]}</h2>
               <p className="text-sm text-fg-muted">{DE_QUE_VA[paso]}</p>
@@ -882,7 +883,7 @@ export default function LienzoDeExploracion({
           {paso === "exploracion" && <PasoExploracion />}
           {paso === "informacion" && infoDeLaEmpresa && <PasoInformacion info={infoDeLaEmpresa} />}
           {paso === "procesos" && <PasoProcesos />}
-          {paso === "escala" && <PasoEscala />}
+          {paso === "escala" && <PasoEscala titulo={NOMBRE_DEL_PASO.escala} />}
           {paso === "casos" && <PasoCasosDeUso />}
           {paso === "propuesta" && <PasoPropuesta />}
           {paso === "analisis" && conAnalisis && <PasoAnalisis />}
