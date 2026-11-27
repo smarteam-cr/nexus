@@ -24,6 +24,7 @@
  *  - Lo válido pasa INTACTO. Esto solo defaultea estructura; jamás convierte un
  *    fallo de acceso en datos — el modelo fail-closed del chokepoint no se toca.
  */
+import { leerPaginaDelCliente, type PaginaDelCliente } from "./pagina-del-cliente";
 
 export interface SnapshotBlock {
   id?: string;
@@ -105,6 +106,7 @@ export function normalizePublishedTimeline(raw: unknown): {
   anchorStartDate: string | null;
   phases: Array<Record<string, unknown>>;
   particularidades?: Array<Record<string, unknown>>;
+  pagina?: PaginaDelCliente;
 } {
   if (!isObj(raw)) return { exists: false, anchorStartDate: null, phases: [] };
   const phases = Array.isArray(raw.phases) ? raw.phases.filter(isObj) : [];
@@ -118,5 +120,8 @@ export function normalizePublishedTimeline(raw: unknown): {
   if (Array.isArray(raw.particularidades)) {
     out.particularidades = raw.particularidades.filter(isObj);
   }
+  // Lo que el equipo decidió de la página (2026-11-27): opcional, saneado campo por campo.
+  const pagina = leerPaginaDelCliente(raw.pagina);
+  if (pagina) out.pagina = pagina;
   return out;
 }

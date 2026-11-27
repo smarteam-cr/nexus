@@ -27,7 +27,8 @@ export function leerFoto(raw: unknown): ExternalTimelineData | null {
 export function hayCambiosSinPublicar(hoy: ExternalTimelineData, publicada: ExternalTimelineData | null): boolean {
   if (!publicada) return hoy.phases.length > 0;
   // Con las claves ordenadas: la foto vuelve de un JSONB, y Postgres no conserva el orden de las claves.
-  const forma = (d: ExternalTimelineData) => JSON.stringify(ordenado({ a: d.anchorStartDate, f: d.phases }));
+  // La página (título, logo, qué se muestra) también: cambiarla es algo que el cliente todavía no ve.
+  const forma = (d: ExternalTimelineData) => JSON.stringify(ordenado({ a: d.anchorStartDate, f: d.phases, p: d.pagina ?? null }));
   return forma(hoy) !== forma(publicada);
 }
 

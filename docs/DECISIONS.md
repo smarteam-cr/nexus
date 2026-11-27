@@ -18124,3 +18124,49 @@ y que le toca validarlo. La pantalla dice qué falta validar y marca solo lo que
   servidor: lo que manda la pantalla no cuenta). Lo copiado de la preventa a la cuenta entra tal cual (`copia: true`, solo
   del servidor): no lo validó quien abre la cuenta. Lo confirmado antes del 26 nov no tiene nombre: cuenta como validado
   (si nadie tiene marca, la línea dice solo «Validado»). El nombre sale del correo (la primera palabra), «ti» si eres tú.
+
+## La página del cronograma que ve el cliente: el avance a la vista y lo que el equipo decide de ella (2026-11-27, kölbi)
+
+Elías, 26 nov, mirando el plan de kölbi: «no se nota cuáles tareas ya hicimos; no da sensación de avance», y «eso que
+dice "Plan de trabajo · kölbi" debe poder borrarse». Vale para las dos páginas (`/external/plan` y `/external/cronograma`):
+las pinta el mismo `TimelineLanding` → `TimelineSection`. Diseño: https://claude.ai/artifact/XFhDNvYmMaCmYvbsV5G7uC.
+
+- **El avance se pinta por semana, con el estado de sus tareas** (`lib/timeline/avance-por-semana.ts`): hecha, en curso,
+  por hacer, con algo atrasado, sin tareas. *Por qué:* antes cada semana era una píldora del color del TIPO de la fase y
+  lo pasado salía desvaído: la página contaba el paso del tiempo, no lo hecho; y los loops de un plan no tienen tipo, así
+  que todo salía gris. Lo atrasado gana a todo; «hecha» exige todas. Sin el detalle confirmado (sin tareas) la fase sale
+  sin estado, blanca con borde punteado y «Sin detalle todavía» en la leyenda: inventar «por hacer» acusaría al equipo.
+  Una foto vieja con tareas sin estado tampoco dice nada, y una tarea sin estado nunca está atrasada. La regla de atraso
+  es una sola (`tareaAtrasada`): la usan las semanas, la fila, la línea de estado y el chip del detalle.
+- **Colores que se entienden solos, apagados:** hecha = verde salvia, en curso = azul suave, por hacer = gris claro,
+  atrasada = ámbar suave; nunca rojo. *Por qué:* Elías rechazó la primera versión por lo vibrante («no colores tan
+  vibrantes»), probó un solo tono navy y después pidió el verde para lo hecho («colores un poquito más intuitivos»). Cada
+  estado se distingue también por el peso y lo dice la leyenda, que nombra solo los estados y los tipos que aparecen. El
+  tipo de actividad sigue cruzando como cuadrado junto al rango. El kickoff (sin `showProgress`) sigue con sus semanas del
+  color de su tipo.
+- **Una línea «Hoy»** que cruza las fases y la cabecera **solo con fechas**: el «S#» es del equipo. El rango de una
+  semana dice su último día («2 – 8 nov»).
+- **Orden:** cronograma → «Pendiente de tu parte» pegado debajo → «Qué cambió en el plan» → el resumen AL FINAL (avance y
+  tiempo transcurrido). Sin «En curso ahora» ni «Lo que sigue»: Elías los descartó al simplificar.
+- **Las atrasadas se cuentan** (por fase y en la línea de estado) y el equipo las puede apagar. Con alguna a la vista,
+  `clientStatusLine` ya no dice «al día» (decía «al día» mirando solo las particularidades, con tareas vencidas en
+  pantalla). Apagadas, la línea no las cuenta pero tampoco dice «al día» si hay alguna vencida. «Pendiente de tu parte»
+  se ve siempre: es lo que el cliente tiene que hacer.
+- **El cierre proyectado sigue sin cruzar** salvo en la frase de atraso (frontera del 2026-08-08,
+  `lib/timeline/fin-solo-equipo.test.ts`): el resumen del final no lo trae.
+- **Lo que el equipo decide de la página vive en `ProjectTimeline.paginaDelCliente`** (Json; forma y valores de siempre en
+  `lib/external/pagina-del-cliente.ts`): título (vacío = sin título), nombre de la cuenta, logo, bienvenida, y si se
+  muestran las atrasadas, quién hace cada tarea y el resumen. *Por qué ahí:* un cronograma es de un proyecto o de un plan,
+  así que la misma columna sirve a las dos páginas. **Se congela en la foto** (sale del chokepoint `readClientTimeline`):
+  cambiarla es un cambio sin publicar, como mover una fase (el plan lo compara en `hayCambiosSinPublicar`; el proyecto
+  marca `lastEditedByHuman`). Lo ausente es «como siempre»: una foto vieja y una nueva sin tocar son iguales.
+- **Se edita sobre la página misma** (opción B de Elías): en el plan general y en el cronograma de cada proyecto, «Lo que
+  ve el cliente» muestra la página tal como saldrá (el mismo chokepoint que la foto) y se escribe encima. La opción A (una
+  ventana con campos al lado) se descartó.
+- La barra de cada fase tuvo tres formas en el diseño (una marca por tarea, solo la barra que se llena, semanas con su
+  estado). Elías eligió la tercera («más entendible»; la primera también le gustó).
+- **Lo que se guarda va en fila** (la vista de adentro manda la página entera, un guardado detrás del otro): dos cambios
+  seguidos mandados a la vez podían llegar al revés y dejar guardado el viejo. La validación (zod) vive aparte
+  (`pagina-del-cliente-schema.ts`): las pantallas no la cargan (C-24). En un proyecto, guardar lo mismo que ya estaba no
+  enciende «Subir al cliente»; un ida y vuelta (apagar y volver a prender) sí, porque su aviso es «editado después de
+  subir» y no compara la foto.

@@ -20,6 +20,7 @@ import { landingLang, t } from "@/components/landing/i18n";
 import type { SectionProps } from "@/components/landing/types";
 import TimelineSection from "@/components/canvas/TimelineSection";
 import { timelineSpan, fmtFull } from "@/lib/timeline/weeks";
+import { opcionesDelCronograma } from "@/lib/external/pagina-del-cliente";
 
 interface PortadaData {
   /** Lo único que aporta el cargador: desambigua a un cliente con varios proyectos. */
@@ -84,6 +85,9 @@ export const CronogramaTimelineSection: FC<SectionProps<unknown>> = ({ ctx }) =>
         showHeader={false}
         showProgress
         particularidades={t.particularidades}
+        /* Lo que el equipo apagó de la página del cliente (atrasadas, quién hace cada tarea, el resumen) tampoco va en
+           el documento ni en su PDF: es la misma entrega. */
+        opciones={opcionesDelCronograma(t.pagina)}
         pdf={ctx.pdfMode}
       />
     </div>

@@ -16,12 +16,14 @@
  * publica con «Publicar» (lib/plan-general/acceso.ts). DECISIONS «El plan general es un objeto de la cuenta» (26 nov).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, ConfirmDialog, Field, Input, Modal, useToast } from "@/components/ui";
+import { Alert, ConfirmDialog, Field, Input, Modal, Segmentado, useToast } from "@/components/ui";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton, SkeletonPanel } from "@/components/ui/Skeleton";
 import { BOTON_DE_HERRAMIENTA, BotonAzul, BotonBlanco, BotonEnlace } from "@/components/ui/sistema";
 import TimelineGantt, { type GanttPhase, type GanttTask, type GanttTaskStatus } from "@/components/canvas/TimelineGantt";
 import TaskDetailDrawer from "@/components/canvas/TaskDetailDrawer";
+import PaginaDelClienteEnNexus from "@/components/canvas/PaginaDelClienteEnNexus";
+import { PAGINA_DEL_PLAN } from "@/lib/external/pagina-del-cliente";
 import type { EstadoDelAccesoAlPlan } from "@/lib/plan-general/acceso";
 import { enlaceEnEsteNavegador } from "@/lib/external/enlace-local";
 import { rotuloDelLoop, type FaseDelPlan, type PlanGeneral, type ProyectoParaElegir, type TareaDelPlan } from "@/lib/plan-general/tipos";
@@ -58,6 +60,8 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
   const [puede, setPuede] = useState({ editar: false, borrar: false });
   const [error, setError] = useState<string | null>(null);
   const [abierta, setAbierta] = useState<{ phaseKey: string; taskKey: string } | null>(null);
+  // «Lo que ve el cliente» (27 nov): la página del plan tal como la verá al publicar, editable encima.
+  const [vista, setVista] = useState<"equipo" | "cliente">("equipo");
   const fasesRef = useRef<Fase[]>([]);
   fasesRef.current = fases;
   /** Cuánto se corren las fases propias en pantalla (un proyecto que arranca antes que el plan): se resta al guardar. */
@@ -492,7 +496,18 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
     <div className="space-y-6 px-8 pb-10 pt-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold text-fg">Plan general</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-sm font-semibold text-fg">Plan general</h2>
+            <Segmentado
+              etiqueta="Vista del plan"
+              opciones={[
+                { clave: "equipo", etiqueta: "Para el equipo" },
+                { clave: "cliente", etiqueta: "Lo que ve el cliente" },
+              ]}
+              valor={vista}
+              onCambio={setVista}
+            />
+          </div>
           <p className="max-w-2xl text-xs text-fg-muted">
             {plan.proyectos.length === 0
               ? "Las fases del plan. Todavía no tiene proyectos: súmalos en «Proyectos del plan»."
@@ -526,6 +541,16 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
         </div>
       </div>
 
+      {vista === "cliente" ? (
+        <PaginaDelClienteEnNexus
+          url={`/api/clients/${clientId}/plan-general/pagina-del-cliente`}
+          tituloDeSiempre={PAGINA_DEL_PLAN.titulo}
+          textoVacio={PAGINA_DEL_PLAN.vacio}
+          puedeEditar={puede.editar}
+          onGuardado={() => void refrescarAcceso()}
+        />
+      ) : (
+      <>
       {sinDetalle.length > 0 && (
         <Alert variant="warning">
           El cliente ve los loops de {sinDetalle.map((p) => `«${p.nombre}»`).join(", ")} sin sus tareas: falta confirmar el detalle en el
@@ -560,6 +585,8 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
           }
           onSetAnchor={puede.editar ? (ymd) => void fijarArranque(ymd) : undefined}
         />
+      )}
+      </>
       )}
 
       <TaskDetailDrawer

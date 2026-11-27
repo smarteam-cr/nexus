@@ -92,6 +92,7 @@ import {
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 import { useAgentRun } from "@/hooks/useAgentRun";
 import CronogramaContextSection from "./CronogramaContextSection";
+import PaginaDelClienteEnNexus from "./PaginaDelClienteEnNexus";
 import TimelineGantt, { type GanttPhase, type GanttTask, type GanttTaskStatus, type GanttParticularidad, PARTY_META, PARTICULARIDAD_KIND_META, effParty } from "./TimelineGantt";
 import ParticularidadEditModal, { type ParticularidadPatch } from "./ParticularidadEditModal";
 import SugerenciasParticularidad, { type SugerenciaItem } from "./SugerenciasParticularidad";
@@ -543,6 +544,11 @@ export default function CronogramaCanvas({
   const canRegenerateTimeline = me?.permissions?.sections?.cronograma?.regenerate === true;
   const canGenerateTimeline = me?.permissions?.sections?.cronograma?.generate === true;
   const [lastEditedAt, setLastEditedAt] = useState<string | null>(null);
+  /* «Lo que ve el cliente» (2026-11-27): la página del cronograma tal como la verá al «Subir», editable encima (título,
+     logo, bienvenida, qué se muestra). El Gantt del equipo sigue montado por detrás (oculto): volver no lo reabre de cero. */
+  const [verComoCliente, setVerComoCliente] = useState(false);
+  // Cambia cada vez que el Gantt termina de guardarse: «Lo que ve el cliente» se relee (no con lo de la página misma).
+  const [guardadoDelGantt, setGuardadoDelGantt] = useState<string | null>(null);
   const [publishWorking, setPublishWorking] = useState(false);
   // Modal de razón del cambio — SOLO al "Subir al cliente" (no en el auto-guardado).
   const [publishReasonOpen, setPublishReasonOpen] = useState(false);
@@ -1591,6 +1597,7 @@ export default function CronogramaCanvas({
       }
       // El PUT setea lastEditedByHuman = now → reflejarlo para que aparezca "Subir al cliente".
       setLastEditedAt(new Date().toISOString());
+      setGuardadoDelGantt(String(seq));
     } catch {
       const tras = trasUnGuardadoFallido(null, null);
       setError(tras.mensaje);
@@ -3898,6 +3905,17 @@ export default function CronogramaCanvas({
         <>
           {/* Conversar el cambio ANTES de generarlo. Solo con cronograma armado: un asistente
               sobre un documento vacío no tiene qué modificar. */}
+          {phases.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setVerComoCliente((v) => !v)}
+              aria-pressed={verComoCliente}
+              className={verComoCliente ? BOTON_DE_HERRAMIENTA_ACTIVO : BOTON_DE_HERRAMIENTA}
+              title="La página del cronograma tal como la verá el cliente al subirla. Su título, su logo y lo que muestra se editan ahí."
+            >
+              {verComoCliente ? "Volver al cronograma" : "Lo que ve el cliente"}
+            </button>
+          )}
           {canEdit && phases.length > 0 && (
             <button data-recorrido="cronograma.asistente"
               onPointerDown={() => {
@@ -4531,7 +4549,18 @@ export default function CronogramaCanvas({
               ⛔ La barra y el Gantt son HERMANOS dentro de este contenedor: un `sticky` no sale de su
               bloque padre, y así la barra queda fija mientras se recorre el Gantt entero. El Gantt es
               siempre el último hijo: aparecer o irse la barra no lo remonta. */}
-          <div ref={revision.contenedorRef} className="space-y-3">
+          {verComoCliente && (
+            <PaginaDelClienteEnNexus
+              url={`/api/projects/${projectId}/timeline/pagina-del-cliente`}
+              puedeEditar={canEdit}
+              // Guardar enciende «Subir al cliente», como cualquier cambio del cronograma (el servidor marcó la edición).
+              onGuardado={() => setLastEditedAt(new Date().toISOString())}
+              /* Si el cronograma termina de guardarse con la vista abierta (se cambió algo y se apretó enseguida), la
+                 vista se relee: si no, mostraría fechas de antes del guardado. */
+              recargarCon={saving ? null : guardadoDelGantt}
+            />
+          )}
+          <div ref={revision.contenedorRef} className={verComoCliente ? "hidden" : "space-y-3"}>
           {/* E2a P6: la línea de las tareas SUELTA, en el mismo lugar que la barra, cuando no hay barra
               que la lleve (ver `lineaSuelta`): «Paso 1 de 2 · Revisando…» solo con material elegido.
               Revisión de E2a: suelta, la propuesta no tiene cambios (ni de fases), así que no promete

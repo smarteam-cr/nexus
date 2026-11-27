@@ -32,6 +32,7 @@ import { cruzaAlCliente } from "./tarea-del-cronograma";
 import { resolveActiveAccess, touchAccess } from "./access";
 import type { ExternalTimelineData } from "./timeline-view-types";
 import { normalizePublishedTimeline } from "./snapshot-normalize";
+import { leerPaginaDelCliente } from "./pagina-del-cliente";
 import { semanasDeLaTarea } from "@/lib/timeline/weeks";
 import type { DuenoDelCronograma } from "@/lib/timeline/una-tarea";
 
@@ -72,6 +73,7 @@ async function leerParaElCliente(dueno: DuenoDelCronograma): Promise<ExternalTim
       id: true,
       anchorStartDate: true,
       detailConfirmedAt: true,
+      paginaDelCliente: true,
       phases: {
         orderBy: { order: "asc" },
         select: {
@@ -149,6 +151,8 @@ async function leerParaElCliente(dueno: DuenoDelCronograma): Promise<ExternalTim
     }));
   }
 
+  // Lo que el equipo decidió de la página (título, logo, qué se muestra): viaja con la foto y se congela con ella.
+  const pagina = leerPaginaDelCliente(tl?.paginaDelCliente);
   return {
     exists: !!tl,
     anchorStartDate: tl?.anchorStartDate?.toISOString() ?? null,
@@ -157,6 +161,7 @@ async function leerParaElCliente(dueno: DuenoDelCronograma): Promise<ExternalTim
       ...(tasksByPhase ? { tasks: tasksByPhase.get(p.id) ?? [] } : {}),
     })),
     particularidades,
+    ...(pagina ? { pagina } : {}),
   };
 }
 

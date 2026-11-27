@@ -44,3 +44,29 @@ describe("readClientTimeline — solo cruzan las tareas confirmadas (D0)", () =>
     expect(vista.phases.flatMap((f) => f.tasks ?? [])).toEqual([]);
   });
 });
+
+describe("readClientTimeline — lo que el equipo decidió de la página viaja con la foto (2026-11-27)", () => {
+  const crear = async (paginaDelCliente?: unknown) => {
+    const cliente = await prisma.client.create({ data: { name: "Cliente Página (test)" } });
+    const proyecto = await prisma.project.create({ data: { clientId: cliente.id, name: "Proyecto Página (test)" } });
+    await prisma.projectTimeline.create({
+      data: { projectId: proyecto.id, anchorStartDate: new Date("2026-10-26"), ...(paginaDelCliente !== undefined ? { paginaDelCliente: paginaDelCliente as object } : {}) },
+    });
+    return proyecto.id;
+  };
+
+  it("con la columna llena, la página llega saneada", async () => {
+    const vista = await readClientTimeline(await crear({ titulo: "", conResumen: false }));
+    expect(vista.pagina).toEqual({ titulo: "", conResumen: false });
+  });
+
+  it("⚠ sin tocar, la foto no trae la clave (una foto vieja y una nueva de lo mismo son iguales)", async () => {
+    const vista = await readClientTimeline(await crear());
+    expect("pagina" in vista).toBe(false);
+  });
+
+  it("con basura en la columna, no cruza nada raro", async () => {
+    const vista = await readClientTimeline(await crear({ titulo: 3, colorDeFondo: "rojo", conLogo: "no" }));
+    expect("pagina" in vista).toBe(false);
+  });
+});

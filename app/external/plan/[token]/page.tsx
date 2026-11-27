@@ -10,6 +10,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import ExternalShell from "@/components/external/ExternalShell";
 import TimelineLanding from "@/components/external/TimelineLanding";
+import { PAGINA_DEL_PLAN } from "@/lib/external/pagina-del-cliente";
 import { planParaElToken } from "@/lib/external/plan-view";
 import { getSmarteamLogoUrl } from "@/lib/external/smarteam-logo";
 
@@ -34,8 +35,8 @@ export default async function PlanDelClientePage({ params }: { params: Promise<{
         clientLogoUrl={d.clientLogoUrl}
         clientLogoScale={d.clientLogoScale}
         timeline={d.timeline ?? { exists: false, anchorStartDate: null, phases: [] }}
-        titulo="Plan de trabajo"
-        textoVacio="Estamos preparando tu plan de trabajo — pronto lo vas a ver aquí."
+        titulo={PAGINA_DEL_PLAN.titulo}
+        textoVacio={PAGINA_DEL_PLAN.vacio}
       />
     </ExternalShell>
   );

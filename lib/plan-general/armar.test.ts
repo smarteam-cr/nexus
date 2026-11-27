@@ -188,6 +188,22 @@ describe("la foto del cliente", () => {
     expect(hayCambiosSinPublicar(hoy, null)).toBe(true);
   });
 
+  it("la página del plan (título, logo, qué se muestra) es la de SU cronograma y cambiarla es un cambio sin publicar", () => {
+    const conPagina = unirParaElCliente([
+      { data: { ...cronograma(NOV2, [faseExterna("p", 0)]), pagina: { titulo: "" } }, loops: new Map([["p", 0]]), delPlan: true },
+      { data: { ...cronograma(NOV2, [faseExterna("l", 0)]), pagina: { conLogo: false } }, loops: new Map([["l", 1]]) },
+    ]);
+    // La de un proyecto es para SU página: no se cuela en la del plan.
+    expect(conPagina.pagina).toEqual({ titulo: "" });
+    const guardada = leerFoto(JSON.parse(JSON.stringify(fotoDelPlan(hoy))));
+    expect(hayCambiosSinPublicar({ ...hoy, pagina: { titulo: "" } }, guardada)).toBe(true);
+    // Una foto de antes (sin página) y la de hoy sin tocar la página: iguales.
+    expect(hayCambiosSinPublicar(hoy, guardada)).toBe(false);
+    const publicadaConPagina = leerFoto(JSON.parse(JSON.stringify(fotoDelPlan({ ...hoy, pagina: { bienvenida: "Hola" } }))));
+    expect(publicadaConPagina!.pagina).toEqual({ bienvenida: "Hola" });
+    expect(hayCambiosSinPublicar({ ...hoy, pagina: { bienvenida: "Hola" } }, publicadaConPagina)).toBe(false);
+  });
+
   it("las claves en otro orden (así vuelve un JSONB) no son un cambio", () => {
     const alReves = (o: unknown): unknown =>
       Array.isArray(o) ? o.map(alReves) : o && typeof o === "object" ? Object.fromEntries(Object.entries(o).reverse().map(([k, x]) => [k, alReves(x)])) : o;

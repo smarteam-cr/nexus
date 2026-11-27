@@ -224,10 +224,14 @@ export function unirParaElCliente(cronogramas: readonly CronogramaDelCliente[]):
     });
   }
   fases.sort(ordenDeLasFases);
+  // La página del plan (título, logo, qué se muestra) es la de SU cronograma, no la de un proyecto: cada proyecto tiene
+  // la suya para su propia página.
+  const pagina = propio?.data.pagina;
   return {
     exists: fases.length > 0,
     anchorStartDate: ancla,
     phases: fases.map(({ fase }, order) => ({ ...fase, order })),
     particularidades: [],
+    ...(pagina ? { pagina } : {}),
   };
 }
