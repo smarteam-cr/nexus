@@ -33,6 +33,8 @@ import {
 import { buildInternalDomainsSet } from "./categorize";
 import { belongsToClient } from "./project-sources";
 import { noEsCanceladaSinTextoSql } from "./canceladas";
+import { sinNadieDelCliente } from "./quien-estuvo";
+import { avisoDePlataforma } from "@/lib/google/plataforma-del-evento";
 
 /** Sin escribir nada: las más recientes. Es lo que se ve al abrir el buscador. */
 const TOPE_RECIENTES = 30;
@@ -58,6 +60,10 @@ export interface ReunionDelCalendario {
   soloEquipo?: boolean;
   /** Por qué no se puede elegir (es de otro cliente, o estuvo gente de afuera). null = se puede. */
   motivoNoAdoptable: string | null;
+  /** «Fue por Zoom», «Fue en persona» (2026-11-27). null = de Meet o agregada a mano. */
+  avisoDePlataforma: string | null;
+  /** Ninguno de sus invitados tiene el dominio del cliente del documento (2026-11-27). Sin dominios, false. */
+  sinNadieDelCliente: boolean;
 }
 
 export async function buscarEnTuCalendario(o: {
@@ -118,7 +124,7 @@ export async function buscarEnTuCalendario(o: {
   const ids = encontradas.slice(0, tope).map((r) => r.id);
   if (ids.length === 0) return { sesiones: [], hayMas: false };
 
-  const [filas, categorias, contenidoRows] = await Promise.all([
+  const [filas, categorias, contenidoRows, delCliente] = await Promise.all([
     prisma.firefliesSession.findMany({
       where: { id: { in: ids } },
       orderBy: { date: "desc" },
@@ -131,6 +137,7 @@ export async function buscarEnTuCalendario(o: {
         duration: true,
         resolvedClientId: true,
         manualClientId: true,
+        plataforma: true,
         projects: { select: { projectId: true, project: { select: { clientId: true } } } },
       },
     }),
@@ -147,8 +154,10 @@ export async function buscarEnTuCalendario(o: {
         ) AS "algo"
       FROM "FirefliesSession" s
       WHERE s."id" IN (${Prisma.join(ids)})`,
+    prisma.client.findUnique({ where: { id: o.clientId }, select: { emailDomains: true } }),
   ]);
   const dominiosPropios = buildInternalDomainsSet(categorias);
+  const dominiosDelCliente = new Set((delCliente?.emailDomains ?? []).map((d) => d.trim().toLowerCase()).filter(Boolean));
   const contenido = new Map(contenidoRows.map((r) => [r.id, r]));
 
   // El nombre del dueño, para decir DE QUIÉN es la reunión que no se puede elegir.
@@ -204,6 +213,8 @@ export async function buscarEnTuCalendario(o: {
         nombreDelDuenio: duenio ? (nombres.get(duenio) ?? null) : null,
         documento: o.documento,
       }),
+      avisoDePlataforma: avisoDePlataforma(s.plataforma),
+      sinNadieDelCliente: sinNadieDelCliente([...s.participants, s.organizerEmail ?? ""], dominiosDelCliente),
     };
   });
   return { sesiones, hayMas };

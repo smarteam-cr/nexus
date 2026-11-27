@@ -42,6 +42,7 @@ import DespuesDeLaSesion from "./DespuesDeLaSesion";
 import DuranteLaSesion from "./DuranteLaSesion";
 import { EquipoDeLaSesion } from "./EquipoDeLaSesion";
 import { ReunionDeTrabajo } from "./ReunionDeTrabajo";
+import { QuienEstuvoDeLaReunion } from "@/components/sessions/QuienEstuvo";
 import { partirDeLoQueYaSabemos } from "@/lib/exploraciones/posicionar";
 import Segmentos from "./Segmentos";
 import { useLienzo, type MomentoDeLaSesion } from "./contexto";
@@ -129,6 +130,14 @@ function LineaDeLaReunion({ pestana, onSumarMinuta }: { pestana: PestanaDeSesion
     case "esperando":
       return linea(<PuntoAmbar />, <span className="font-medium text-warn-ink">Esperando la transcripción</span>, "Meet puede tardar hasta una hora; cuando llegue, el agente la lee solo");
     case "sinTexto":
+      // 2026-11-27: una de Zoom, Teams o en persona no tiene texto en Google; se dice por dónde fue.
+      if (pestana.reunion?.fueraDeMeet)
+        return linea(
+          <PuntoAmbar />,
+          <span className="font-medium text-warn-ink">{pestana.reunion.fueraDeMeet}: el texto no está en Google</span>,
+          enlace("sumar la transcripción o la minuta", onSumarMinuta),
+          "o dile qué pasó con ella",
+        );
       return linea(<PuntoAmbar />, <span className="font-medium text-warn-ink">Terminó sin transcripción ni notas de Gemini</span>, enlace("sumar la minuta", onSumarMinuta), "o dile qué pasó con ella");
     case "cancelada":
       return linea(
@@ -272,7 +281,7 @@ function EncabezadoDeLaSesion({
   const datos: React.ReactNode[] = [];
   if (momento === "despues" && r) {
     // El nombre del calendario va en el título; acá solo si le cambiaste el nombre a la sesión.
-    datos.push(diaLargo(r.fecha), ORIGEN[r.origen]);
+    datos.push(diaLargo(r.fecha), r.fueraDeMeet ?? ORIGEN[r.origen]);
     if (titulo !== r.titulo.trim()) datos.push(`en el calendario: «${r.titulo}»`);
     if (r.corta) datos.push(<span className="text-warn-ink">sin transcripción</span>);
     else if (r.texto === "nada" && !r.leida) datos.push(<span className="text-warn-ink">sin transcripción ni notas</span>);
@@ -380,6 +389,12 @@ function EncabezadoDeLaSesion({
           {/* En la preventa de un cliente (24 nov): sesión de diagnóstico o reunión de trabajo (lo que ya sabemos). */}
           <ReunionDeTrabajo pestana={pestana} momento={momento} />
           {momento !== "durante" && <LineaDeLaReunion pestana={pestana} onSumarMinuta={onSumarMinuta} />}
+          {/* Quién estuvo (2026-11-27): invitados, su respuesta y, si fue por Meet, quién entró. */}
+          {r?.origen === "meet" && (
+            <div className="mt-2 max-w-2xl">
+              <QuienEstuvoDeLaReunion sessionId={r.id} />
+            </div>
+          )}
         </div>
         <span className="flex-1" />
         <div data-recorrido="preventa.sesion.momento">

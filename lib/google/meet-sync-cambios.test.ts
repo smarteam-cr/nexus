@@ -15,7 +15,10 @@ import {
   invitadosDelEvento,
   mismosParticipantes,
   participantesConOrganizador,
+  plataformaQueSeGuarda,
   respuestaDe,
+  soloLasDeAfuera,
+  sourceDelEvento,
   type EventoMeet,
   type InvitadoGuardado,
   type SesionGuardada,
@@ -108,6 +111,21 @@ describe("cambiosDeSesion — LA guarda: si nada cambió, no hay UPDATE", () => 
   it("sana las filas previas al refactor: googleEventId y source", () => {
     const vieja = guardada({ googleEventId: null, source: "fireflies" });
     expect(cambios(vieja, evento()).cambios).toEqual({ googleEventId: "ev1", source: "google_meet" });
+  });
+
+  it("una de Meet de siempre no escribe plataforma (null): ninguna de las ~600 filas cambia", () => {
+    expect(cambios(guardada({ plataforma: null }), evento()).cambios).toBeNull();
+    expect(cambios(guardada({ plataforma: undefined }), evento({ plataforma: "MEET" })).cambios).toBeNull();
+  });
+
+  it("una de Zoom guardada como Zoom no cambia; si le ponen Meet pasa al circuito de Meet", () => {
+    const zoom = guardada({ source: "google_calendar", plataforma: "ZOOM" });
+    expect(cambios(zoom, evento({ plataforma: "ZOOM" })).cambios).toBeNull();
+    expect(cambios(zoom, evento()).cambios).toEqual({ source: "google_meet", plataforma: null });
+  });
+
+  it("una de Meet que pasan a Teams sale del circuito de Meet (deja de gastar intentos)", () => {
+    expect(cambios(guardada(), evento({ plataforma: "TEAMS" })).cambios).toEqual({ source: "google_calendar", plataforma: "TEAMS" });
   });
 
   it("el organizador que cambia se escribe", () => {
@@ -338,5 +356,56 @@ describe("U1: canceladasDeLaCorrida y el calendario sin leer", () => {
     const g = { id: "p1", correo: "luis@acme.com", esDelEquipo: false, respuesta: null, entro: null };
     expect(cambiosDeInvitados([g], [], new Set(), { borrar: false }).borrar).toEqual([]);
     expect(cambiosDeInvitados([g], [], new Set()).borrar).toEqual(["p1"]);
+  });
+});
+
+describe("soloLasDeAfuera — las que no son de Meet entran solo con alguien de afuera (2026-11-27)", () => {
+  const equipo = new Set(["smarteamcr.com"]);
+  it("deja todas las de Meet y las de Zoom con un invitado de afuera; saca la daily sin Meet", () => {
+    const eventos = new Map<string, EventoMeet>([
+      ["meet", evento({ eventId: "meet", participants: ["eli@smarteamcr.com"] })],
+      [
+        "zoom",
+        evento({
+          eventId: "zoom",
+          plataforma: "ZOOM",
+          invitados: [
+            { correo: "eli@smarteamcr.com", respuesta: null },
+            { correo: "dir@lineashospitalarias.com", respuesta: "ACEPTO" },
+          ],
+        }),
+      ],
+      [
+        "daily",
+        evento({
+          eventId: "daily",
+          plataforma: "OTRA",
+          invitados: [
+            { correo: "eli@smarteamcr.com", respuesta: null },
+            { correo: "ana@smarteamcr.com", respuesta: null },
+          ],
+        }),
+      ],
+    ]);
+    /* La edición que la pone en rojo: guardar todo evento sin Meet (840 dailies y bloques del equipo por mes). */
+    expect(soloLasDeAfuera(eventos, equipo)).toBe(1);
+    expect([...eventos.keys()]).toEqual(["meet", "zoom"]);
+  });
+
+  it("el invitado de afuera puede venir en otra copia: se mira con las copias ya juntas", () => {
+    const a = evento({ plataforma: "TEAMS", invitados: [{ correo: "eli@smarteamcr.com", respuesta: null }] });
+    const b = evento({ plataforma: "TEAMS", invitados: [{ correo: "bmartinez@ice.go.cr", respuesta: null }] });
+    const eventos = new Map([["ev1", fusionarCopia(fusionarCopia(undefined, a), b)]]);
+    expect(soloLasDeAfuera(eventos, equipo)).toBe(0);
+    expect(eventos.get("ev1")?.plataforma).toBe("TEAMS");
+  });
+});
+
+describe("sourceDelEvento y plataformaQueSeGuarda", () => {
+  it("Meet escribe google_meet y plataforma null; las otras google_calendar y su plataforma", () => {
+    expect(sourceDelEvento({})).toBe("google_meet");
+    expect(plataformaQueSeGuarda({ plataforma: "MEET" })).toBeNull();
+    expect(sourceDelEvento({ plataforma: "ZOOM" })).toBe("google_calendar");
+    expect(plataformaQueSeGuarda({ plataforma: "PRESENCIAL" })).toBe("PRESENCIAL");
   });
 });

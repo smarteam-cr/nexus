@@ -61,6 +61,7 @@ import { huellaDeTexto, textoCambio } from "@/lib/sessions/analisis-ajeno";
 import { procedenciaDelTexto } from "@/lib/sessions/texto-de-otra-reunion";
 import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
 import { lecturaConFrases, textoDeLasFrases, transcripcionGuardada } from "./conferencias-reglas";
+import { SOURCE_CALENDARIO } from "./plataforma-del-evento";
 import {
   datosDeEscritura,
   debeEsperarMaterial,
@@ -321,6 +322,8 @@ async function fechasDeLaSerie(s: SesionAEnriquecer): Promise<Date[]> {
   const otras = await prisma.firefliesSession.findMany({
     where: {
       id: { not: s.id },
+      // Solo las de Meet: una de Zoom con el mismo título no tiene archivo en el Drive (2026-11-27).
+      source: { not: SOURCE_CALENDARIO },
       title: s.title,
       date: { gte: new Date(s.date.getTime() - VENTANA_DE_LA_SERIE_MS), lte: new Date(s.date.getTime() + VENTANA_DE_LA_SERIE_MS) },
     },
@@ -730,9 +733,15 @@ export async function drenarReintentos(limit = 20): Promise<EnrichResult> {
 export async function enrichSingleSession(sessionId: string): Promise<boolean> {
   const session = await prisma.firefliesSession.findUnique({
     where: { id: sessionId },
-    select: SELECT_ENRIQUECER,
+    select: { ...SELECT_ENRIQUECER, source: true },
   });
   if (!session) return false;
+  // Una de Zoom, Teams o en persona (2026-11-27) no tiene material en Google: buscar en el Drive por el título podría
+  // traer el documento de OTRA reunión. No se lee ni se gasta un intento.
+  if (session.source === SOURCE_CALENDARIO) {
+    console.log(`[google/enrich] "${session.title}" no fue por Meet — skip`);
+    return false;
+  }
   if (!listaParaLeer(session, new Date(), 0)) {
     // El botón manual tampoco enriquece lo que no ocurrió: sellaría una reunión futura
     // (INV16(a)) y el material ni siquiera existe todavía.

@@ -76,6 +76,10 @@ describe("los avisos de una reunión", () => {
     expect(viejo[0].accion?.tipo).toBe("agregar-reunion");
   });
 
+  it("una de Zoom o Teams (2026-11-27) nunca dice «Esperando la transcripción»", () => {
+    expect(avisosDeLaReunion({ ...base, tieneTexto: false, enriquecida: false, fueraDeMeet: true }).map((a) => a.clave)).toEqual(["sin-texto"]);
+  });
+
   it("sin cliente, de un aliado, de puertas adentro, sin proyecto, la lectura con error", () => {
     expect(avisosDeLaReunion({ ...base, dueno: null, proyectosDelCliente: 0 }).map((a) => a.clave)).toEqual(["sin-cliente"]);
     expect(avisosDeLaReunion({ ...base, dueno: { id: "c2", nombre: "4am", kind: "ALIADO" } }).map((a) => a.clave)).toEqual(["sin-tarjeta"]);

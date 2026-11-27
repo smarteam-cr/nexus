@@ -22,6 +22,18 @@ const r = (p: Partial<ReunionSinTranscripcion> = {}): ReunionSinTranscripcion =>
 
 describe("porQueFalta", () => {
   it("todavía no terminó", () => expect(porQueFalta(r(), mas(70))).toBe("todavia_no_termino"));
+  it("no fue por Meet (2026-11-27): su motivo lo dice la plataforma, nunca «pendiente de leer»", () => {
+    /* La edición que la pone en rojo: dejar que una de Zoom caiga en la regla de Meet (enrichedAt null → pendiente). */
+    expect(porQueFalta(r({ plataforma: "ZOOM", enrichedAt: null }), HOY)).toBe("fue_por_zoom");
+    expect(porQueFalta(r({ plataforma: "TEAMS", enrichedAt: null }), HOY)).toBe("fue_por_teams");
+    expect(porQueFalta(r({ plataforma: "OTRA", enrichedAt: null }), HOY)).toBe("fue_por_otro_enlace");
+    expect(porQueFalta(r({ plataforma: "PRESENCIAL", enrichedAt: null }), HOY)).toBe("fue_en_persona");
+    expect(DE_QUIEN_ES.fue_por_zoom.texto).toBe("Fue por Zoom: el texto no está en Google.");
+    // Cancelada o todavía sin terminar gana, como en una de Meet; y Meet sigue con su regla.
+    expect(porQueFalta(r({ plataforma: "ZOOM", canceladaEn: mas(-60) }), HOY)).toBe("cancelada");
+    expect(porQueFalta(r({ plataforma: "ZOOM" }), mas(70))).toBe("todavia_no_termino");
+    expect(porQueFalta(r({ plataforma: "MEET", enrichedAt: null }), HOY)).toBe("pendiente_de_leer");
+  });
   it("no ocurrió (la API de Meet dice que nadie entró, U3): después de que terminó, y nunca antes", () => {
     expect(porQueFalta(r({ ocurrio: false }), HOY)).toBe("no_ocurrio");
     expect(porQueFalta(r({ ocurrio: false }), mas(70))).toBe("todavia_no_termino");

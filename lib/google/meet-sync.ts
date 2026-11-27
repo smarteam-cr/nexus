@@ -4,7 +4,11 @@
  * Sincronización de sesiones Google Meet → FirefliesSession DB.
  *
  * Guarda TODOS los eventos de Google Meet del dominio (30 días por defecto, ver
- * `diasHaciaAtras`), independientemente de si pertenecen a un cliente registrado.
+ * `diasHaciaAtras`), independientemente de si pertenecen a un cliente registrado. Desde el 2026-11-27 también los que
+ * NO son de Meet (Zoom, Teams, otro enlace, en persona) si tienen al menos un invitado de afuera, con
+ * `source = "google_calendar"` y su `plataforma` (lib/google/plataforma-del-evento.ts): el circuito de lectura de
+ * Meet (enriquecimiento, conferencias, reintentos) filtra por `source = "google_meet"` y no las toca. Su id es el de
+ * siempre (`gmeet_<evento>`). Medido el 27 nov: ~52 reuniones más por mes, sobre ~545 de Meet.
  * El matching con cliente/empresa/categoría se hace en tiempo de consulta
  * (ver lib/sessions/categorize.ts).
  *
@@ -38,6 +42,7 @@ import { buildCategorizeCtx, resolveSessionClientId } from "@/lib/sessions/resol
 import { DOMINIO_PROPIO } from "@/lib/sessions/dominio-propio";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { devolverANoLeidaSiSeMovio } from "./reunion-movida";
+import { SOURCE_CALENDARIO, esDeMeet, plataformaDelEvento, puedeSerReunionFueraDeMeet } from "./plataforma-del-evento";
 import {
   cambiosDeInvitados,
   cambiosDeSesion,
@@ -52,6 +57,9 @@ import {
   idDeSesion,
   invitadosDelEvento,
   participantesConOrganizador,
+  plataformaQueSeGuarda,
+  soloLasDeAfuera,
+  sourceDelEvento,
   SELECT_SESION_GUARDADA,
   type EventoMeet,
   type InvitadoGuardado,
@@ -142,7 +150,9 @@ async function fetchMeetEventsForUser(userEmail: string, daysBack: number = DAYS
         // por el id contra lo guardado, no por su Meet.
         showDeleted: true,
         pageToken,
-        fields: "nextPageToken,items(id,status,summary,description,extendedProperties,start,end,attendees,organizer,conferenceData,attachments)",
+        // location, hangoutLink y eventType (2026-11-27): por dónde fue una reunión que no es de Meet.
+        fields:
+          "nextPageToken,items(id,status,summary,description,location,hangoutLink,eventType,extendedProperties,start,end,attendees,organizer,conferenceData,attachments)",
       });
 
       const items = res.data.items ?? [];
@@ -185,9 +195,10 @@ function processItems(
     }
     // Vivo en este calendario, se guarde o no (fuera de rango, sin Meet, bloque de tarea): no es una cancelada.
     if (item.id) vivos.push(item.id);
-    // Solo eventos con Google Meet
-    const confType = item.conferenceData?.conferenceSolution?.key?.type;
-    if (confType !== "hangoutsMeet") continue;
+    // Con Google Meet, como siempre. Sin Meet (2026-11-27), una reunión con hora que no sea una ausencia ni un bloque; si
+    // tiene a alguien de afuera se decide en `correrSync`, con los dominios del equipo (`soloLasDeAfuera`).
+    const deMeet = esDeMeet(item);
+    if (!deMeet && !puedeSerReunionFueraDeMeet(item)) continue;
     // Un bloque de una tarea de Nexus nunca es una sesión, aunque Google le haya puesto un Meet.
     if (esBloqueDeTarea(item)) continue;
 
@@ -219,7 +230,8 @@ function processItems(
 
     const organizerEmail = item.organizer?.email ?? userEmail;
 
-    const attachments = item.attachments ?? [];
+    // El Doc de Gemini solo existe en una de Meet: un documento adjunto a una de Zoom (la agenda) no es su transcripción.
+    const attachments = deMeet ? (item.attachments ?? []) : [];
     const docAttachment = attachments.find((a) => a.mimeType === MIME_GOOGLE_DOC);
     const googleDocId = docAttachment?.fileId ?? undefined;
 
@@ -232,8 +244,10 @@ function processItems(
       googleDocId,
       organizerEmail,
       descripcion: limpiarDescripcionDelEvento(item.description),
-      conferenceId: item.conferenceData?.conferenceId ?? undefined,
+      // El código de Meet solo en una de Meet (el de un Zoom no se cruza con la API de Meet).
+      conferenceId: deMeet ? (item.conferenceData?.conferenceId ?? undefined) : undefined,
       invitados: invitadosDelEvento(item.attendees, organizerEmail),
+      ...(deMeet ? {} : { plataforma: plataformaDelEvento(item) }),
     });
   }
   if (outOfRange > 0) {
@@ -335,6 +349,12 @@ async function correrSync(daysBack: number, marcarLasCanceladas: boolean): Promi
     return { ...vacio, error: `Fallaron los ${fallaron} calendarios del dominio` };
   }
 
+  // PERF #1: ctx de categorización una vez por corrida → resolvedClientId inline en cada write.
+  const categorizeCtx = await buildCategorizeCtx();
+  // «Del equipo»: la categoría interna de /sessions/categories, la misma que usa la atribución (ya viene en el ctx).
+  const dominiosDelEquipo = dominiosDelEquipoDe(categorizeCtx.internalDomains, DOMINIO_PROPIO);
+  // Las que no son de Meet entran solo con alguien de afuera (2026-11-27, lib/google/plataforma-del-evento.ts).
+  const delEquipoSinMeet = soloLasDeAfuera(eventos, dominiosDelEquipo);
 
   // 3. Leer de la base SOLO las filas de esas reuniones y SOLO las columnas que deciden si algo
   //    cambió (SELECT_SESION_GUARDADA: ni transcripción ni resumen). Antes se precargaban las
@@ -347,7 +367,7 @@ async function correrSync(daysBack: number, marcarLasCanceladas: boolean): Promi
     const filas = await prisma.firefliesSession.findMany({
       where: {
         AND: [
-          { OR: [{ source: "google_meet" }, { id: { startsWith: "gmeet_" } }] },
+          { OR: [{ source: { in: ["google_meet", SOURCE_CALENDARIO] } }, { id: { startsWith: "gmeet_" } }] },
           { OR: [{ googleEventId: { in: lote } }, { id: { in: lote.map(idDeSesion) } }] },
         ],
       },
@@ -358,11 +378,6 @@ async function correrSync(daysBack: number, marcarLasCanceladas: boolean): Promi
       if (eventId) guardadas.set(eventId, fila);
     }
   }
-
-  // PERF #1: ctx de categorización una vez por corrida → resolvedClientId inline en cada write.
-  const categorizeCtx = await buildCategorizeCtx();
-  // «Del equipo»: la categoría interna de /sessions/categories, la misma que usa la atribución (ya viene en el ctx).
-  const dominiosDelEquipo = dominiosDelEquipoDe(categorizeCtx.internalDomains, DOMINIO_PROPIO);
 
   // 4. Escribir solo lo nuevo o lo que cambió.
   let synced = 0;
@@ -419,7 +434,8 @@ async function correrSync(daysBack: number, marcarLasCanceladas: boolean): Promi
               date: event.date,
               duration: event.durationMinutes,
               participants: allParticipants,
-              source: "google_meet",
+              source: sourceDelEvento(event),
+              plataforma: plataformaQueSeGuarda(event),
               googleEventId: event.eventId,
               googleDocId: eventDocId,
               organizerEmail: event.organizerEmail,
@@ -433,7 +449,8 @@ async function correrSync(daysBack: number, marcarLasCanceladas: boolean): Promi
               date: event.date,
               duration: event.durationMinutes,
               participants: allParticipants,
-              source: "google_meet",
+              source: sourceDelEvento(event),
+              plataforma: plataformaQueSeGuarda(event),
               googleEventId: event.eventId,
               // Mismo criterio que la comparación: el Doc nunca se borra con el null de Google.
               ...(eventDocId ? { googleDocId: eventDocId } : {}),
@@ -471,7 +488,7 @@ async function correrSync(daysBack: number, marcarLasCanceladas: boolean): Promi
   console.log(
     `[google/sync] Completado en ${Math.round((Date.now() - t0) / 1000)} s: ${eventos.size} reuniones (${apariciones} apariciones en calendarios), ` +
       `${synced} nuevas, ${actualizadas} actualizadas, ${alreadyExisted - actualizadas} sin cambios (${docDiscovered} con Doc nuevo descubierto), ` +
-      `${canceladas} canceladas, ${invitados.escritos} cambios de invitados`
+      `${canceladas} canceladas, ${invitados.escritos} cambios de invitados, ${delEquipoSinMeet} del equipo sin Meet (no se guardan)`
   );
   return { synced, alreadyExisted, total, actualizadas, apariciones, canceladas, invitados: invitados.escritos };
 }

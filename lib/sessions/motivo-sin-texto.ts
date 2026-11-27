@@ -9,6 +9,7 @@
  * antes de la primera corrida del job), con el de ahora.
  */
 import { DE_QUIEN_ES, porQueFalta, type DuenoDelArreglo, type MotivoDeLaFalta, type ReunionSinTranscripcion } from "@/lib/google/por-que-falta";
+import type { Plataforma } from "@/lib/google/plataforma-del-evento";
 import type { ClaseDeTexto } from "./tiene-texto";
 
 /** Los motivos que se resuelven solos: la reunión dice «esperando la transcripción» y nada más. */
@@ -17,6 +18,14 @@ export const MOTIVOS_DE_ESPERA: ReadonlySet<MotivoDeLaFalta> = new Set<MotivoDeL
   "pendiente_de_leer",
   "esperando_a_google",
   "fallo_de_lectura_reintentando",
+]);
+
+/** Las que no fueron por Meet (2026-11-27): el texto no está en Google y se puede pegar a mano. */
+export const MOTIVOS_FUERA_DE_MEET: ReadonlySet<MotivoDeLaFalta> = new Set<MotivoDeLaFalta>([
+  "fue_por_zoom",
+  "fue_por_teams",
+  "fue_por_otro_enlace",
+  "fue_en_persona",
 ]);
 
 /** ¿El texto guardado es un motivo que Nexus conoce? Uno viejo o raro se trata como «no guardado». */
@@ -51,6 +60,12 @@ export const COMO_EVITARLO: Readonly<Record<MotivoDeLaFalta, string | null>> = {
     "En la invitación del calendario, abre las opciones de la videollamada de Meet y activa «Tomar notas con Gemini» y «Transcripción»: así arrancan solas en cada reunión.",
   organizada_por_afuera:
     "La organizó alguien de afuera: al entrar, activa tú «Tomar notas con Gemini» y «Transcripción» (el documento queda en tu Drive y Nexus lo lee), o pídeselo a quien la organizó.",
+  fue_por_zoom:
+    "Si se grabó, descarga la transcripción de Zoom (el .vtt) y pégala en la reunión. Si la organizas tú, hazla por Meet con las notas de Gemini: así llega sola.",
+  fue_por_teams:
+    "Si se transcribió, descarga la transcripción de Teams (el .vtt o el .docx copiado) y pégala en la reunión. Si la organizas tú, hazla por Meet con las notas de Gemini.",
+  fue_por_otro_enlace: "Si tienes la transcripción o tus notas, pégalas en la reunión. Si la organizas tú, hazla por Meet con las notas de Gemini.",
+  fue_en_persona: "Pega en la reunión lo que se habló (tus notas o lo que recuerdas): así cuenta para la cuenta.",
 };
 
 /** El motivo, dicho en la reunión. */
@@ -95,6 +110,8 @@ export interface FilaParaElMotivo {
   aMano: boolean;
   tieneNotas: boolean;
   motivoSinTexto: string | null;
+  /** Por dónde fue, si no es de Meet (2026-11-27). null o sin el campo = de Meet. */
+  plataforma?: Plataforma | null;
 }
 
 /** PURA. El motivo que le toca a cada fila (null = tiene texto). */
@@ -112,6 +129,7 @@ export function motivoQueLeToca(f: FilaParaElMotivo, ahora: Date): MotivoDeLaFal
       participants: f.participants ?? [],
       tieneNotas: f.tieneNotas,
       canceladaEn: f.canceladaEn,
+      plataforma: f.plataforma ?? null,
     },
     ahora,
   );

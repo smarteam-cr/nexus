@@ -53,6 +53,14 @@ interface DelCalendario {
   sinDuenio: boolean;
   soloEquipo?: boolean;
   motivoNoAdoptable: string | null;
+  /** «Fue por Zoom» (2026-11-27). Sin el campo (un servidor viejo), de Meet. */
+  avisoDePlataforma?: string | null;
+  sinNadieDelCliente?: boolean;
+}
+
+/** Lo que se dice debajo del título: por dónde fue y si no hubo nadie del cliente (2026-11-27). */
+function avisosDeLaFila(s: { avisoDePlataforma?: string | null; sinNadieDelCliente?: boolean }): string[] {
+  return [s.avisoDePlataforma ?? null, s.sinNadieDelCliente ? "sin nadie del cliente" : null].filter((x): x is string => !!x);
 }
 
 interface RespuestaDeReuniones {
@@ -483,7 +491,9 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
                   s.texto === "nada"
                     ? enHubspot(s.date)
                       ? "la grabación está en HubSpot: agrégala desde ahí"
-                      : "se lee cuando sumes la minuta"
+                      : s.avisoDePlataforma
+                        ? "pega la transcripción en la reunión y se lee"
+                        : "se lee cuando sumes la minuta"
                     : s.conMinuta
                       ? "leída al llegar"
                       : null;
@@ -502,11 +512,13 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
                         <Pildora tono="bien">con transcripción</Pildora>
                       ) : s.texto === "notas" ? (
                         <Pildora>solo notas de Gemini</Pildora>
+                      ) : s.avisoDePlataforma ? (
+                        <Pildora tono="atencion">{s.avisoDePlataforma.toLowerCase()} · sin texto</Pildora>
                       ) : (
                         <Pildora tono="atencion">sin grabación ni notas</Pildora>
                       )
                     }
-                    abajo={[sala, despues].filter(Boolean).join(" · ")}
+                    abajo={[s.sinNadieDelCliente ? "sin nadie del cliente" : null, sala, despues].filter(Boolean).join(" · ")}
                     apagada={n !== null}
                     derecha={n !== null ? yaEsLa(n) : boton(s.sessionId, { tipo: "pasada", sessionId: s.sessionId })}
                   />
@@ -565,7 +577,7 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
                   titulo={s.title}
                   fecha={diaConAnio(s.date)}
                   pildora={s.sinDuenio && !noSePuede ? <Pildora>{s.soloEquipo === false ? "sin cliente asignado" : "reunión del equipo"}</Pildora> : undefined}
-                  abajo={(noSePuede ? s.motivoNoAdoptable : sala) ?? ""}
+                  abajo={(noSePuede ? s.motivoNoAdoptable : [...avisosDeLaFila(s), sala].filter(Boolean).join(" · ")) ?? ""}
                   apagada={noSePuede || n !== null}
                   derecha={
                     n !== null ? (

@@ -887,6 +887,8 @@ describe("⭐ en qué está la reunión de una sesión (etapa A)", () => {
   it("y los de la reunión que llegó: esperando su transcripción, sin texto, corta, sin leer, solo notas, no se hizo", () => {
     expect(estadoDe({ id: "s" }, reunion({ texto: "nada", fecha: "2026-10-15T15:00:00Z" }))).toBe("esperando");
     expect(estadoDe({ id: "s" }, reunion({ texto: "nada" }))).toBe("sinTexto");
+    // Una de Zoom (2026-11-27) nunca «espera la transcripción»: Google no la va a traer.
+    expect(estadoDe({ id: "s" }, reunion({ texto: "nada", fecha: "2026-10-15T15:00:00Z", fueraDeMeet: "Fue por Zoom" }))).toBe("sinTexto");
     expect(estadoDe({ id: "s" }, reunion({ corta: { minutos: 6 } }))).toBe("corta");
     expect(estadoDe({ id: "s" }, reunion({ texto: "transcripcion" }))).toBe("sinLeer");
     expect(estadoDe({ id: "s" }, reunion({ texto: "notas" }))).toBe("soloNotasSinLeer");

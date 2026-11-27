@@ -192,6 +192,11 @@ export interface ReunionDeLaExploracion {
   /** Solo en las de Meet: qué texto dejó. Sin el dato (las de HubSpot y lo sumado a mano), tiene texto. */
   texto?: TextoDeLaReunion;
   /**
+   * 2026-11-27 · Una reunión del calendario que no fue por Meet: «Fue por Zoom», «Fue en persona». Google no va a traer
+   * su texto: nunca queda «esperando la transcripción». Sin el campo, de Meet.
+   */
+  fueraDeMeet?: string;
+  /**
    * En un cliente o un proyecto: se leyó o se eligió ANTES de la etapa A y no es la reunión de ninguna
    * sesión. No es de la exploración: va a «Fuera de la exploración» y vuelve a ser sesión con un clic.
    */
@@ -583,7 +588,7 @@ export function estadoDeLaReunionDeLaSesion(p: Pick<PestanaDeSesion, "sesion" | 
   if (r) {
     if (r.corta) return "corta";
     if (r.leida) return "leida";
-    if (r.texto === "nada") return espera(p.sesion?.evento?.fin ?? r.fecha) ? "esperando" : "sinTexto";
+    if (r.texto === "nada") return !r.fueraDeMeet && espera(p.sesion?.evento?.fin ?? r.fecha) ? "esperando" : "sinTexto";
     if (r.texto === "notas") return "soloNotasSinLeer";
     return "sinLeer";
   }

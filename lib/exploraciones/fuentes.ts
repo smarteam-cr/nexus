@@ -91,6 +91,8 @@ import { REUNIONES } from "./sesion";
 import { leerSitioWeb } from "./sitio-web";
 import { hostDelSitio } from "./sitio-web-reglas";
 import type { ResultadoDelTest } from "./test-de-marketing";
+import { avisoDePlataforma, type Plataforma } from "@/lib/google/plataforma-del-evento";
+import { sinNadieDelCliente } from "@/lib/sessions/quien-estuvo";
 
 export type { Fuente } from "./fuentes-tipos";
 
@@ -326,6 +328,8 @@ interface FilaDeMeet {
   transcripcion: boolean;
   resumen: boolean;
   corto: string | null;
+  /** Por dónde fue, si no es de Meet (2026-11-27). null = de Meet o agregada a mano. */
+  plataforma: Plataforma | null;
 }
 
 /**
@@ -339,7 +343,8 @@ async function filasDeMeet(ids: readonly string[], ahora: Date): Promise<FilaDeM
     SELECT s."id", s."title", s."date", s."googleEventId", s."participants", s."organizerEmail",
       coalesce(length(s."transcript"), 0) > 0 AS "transcripcion",
       s."summary" IS NOT NULL AS "resumen",
-      CASE WHEN length(s."transcript") < ${LARGO_DE_UNA_TRANSCRIPCION_CORTA}::int THEN s."transcript" END AS "corto"
+      CASE WHEN length(s."transcript") < ${LARGO_DE_UNA_TRANSCRIPCION_CORTA}::int THEN s."transcript" END AS "corto",
+      s."plataforma"::text AS "plataforma"
     FROM "FirefliesSession" s
     WHERE s."id" IN (${Prisma.join([...ids])}) AND s."date" <= ${ahora}`;
 }
@@ -431,6 +436,7 @@ async function armarReuniones(
         leida: leidas.has(f.id) || (texto === "notas" && soloNotas.has(f.id)),
         texto,
         ...(f.googleEventId ? { eventoId: f.googleEventId } : {}),
+        ...(avisoDePlataforma(f.plataforma) ? { fueraDeMeet: avisoDePlataforma(f.plataforma)! } : {}),
         ...(cortas.has(f.id) ? { corta: cortas.get(f.id)! } : {}),
         ...(legado.has(f.id) && !ligados.has(f.id) ? { legado: true as const } : {}),
         ...(esReunionDePuertasAdentro({ participants: f.participants ?? [], organizerEmail: f.organizerEmail }, internos) ? { puertasAdentro: true as const } : {}),
@@ -949,6 +955,10 @@ export interface ReunionDeLaEmpresa {
   texto: TextoDeLaReunion;
   /** Tiene minuta: se leyó al llegar. */
   conMinuta: boolean;
+  /** «Fue por Zoom», «Fue en persona» (2026-11-27). null = de Meet o agregada a mano. */
+  avisoDePlataforma: string | null;
+  /** Ninguno de sus invitados tiene el dominio de la empresa (2026-11-27). Sin dominios, false. */
+  sinNadieDelCliente: boolean;
 }
 
 /**
@@ -960,13 +970,18 @@ export interface ReunionDeLaEmpresa {
 export async function reunionesDeLaEmpresaParaElegir(clientId: string, ahora = new Date()): Promise<ReunionDeLaEmpresa[]> {
   const sesiones = await getClientSessions(clientId, { take: 100 });
   if (!sesiones.length) return [];
-  const filas = await prisma.$queryRaw<{ id: string; transcripcion: boolean; resumen: boolean; minuta: boolean }[]>`
-    SELECT s."id",
-      coalesce(length(s."transcript"), 0) > 0 AS "transcripcion",
-      s."summary" IS NOT NULL AS "resumen",
-      EXISTS (SELECT 1 FROM "SessionMinute" m WHERE m."sessionId" = s."id") AS "minuta"
-    FROM "FirefliesSession" s
-    WHERE s."id" IN (${Prisma.join(sesiones.map((s) => s.id))}) AND s."date" <= ${ahora}`;
+  const [filas, empresa] = await Promise.all([
+    prisma.$queryRaw<{ id: string; transcripcion: boolean; resumen: boolean; minuta: boolean; plataforma: string | null }[]>`
+      SELECT s."id",
+        coalesce(length(s."transcript"), 0) > 0 AS "transcripcion",
+        s."summary" IS NOT NULL AS "resumen",
+        EXISTS (SELECT 1 FROM "SessionMinute" m WHERE m."sessionId" = s."id") AS "minuta",
+        s."plataforma"::text AS "plataforma"
+      FROM "FirefliesSession" s
+      WHERE s."id" IN (${Prisma.join(sesiones.map((s) => s.id))}) AND s."date" <= ${ahora}`,
+    prisma.client.findUnique({ where: { id: clientId }, select: { emailDomains: true } }),
+  ]);
+  const dominios = new Set((empresa?.emailDomains ?? []).map((d) => d.trim().toLowerCase()).filter(Boolean));
   const porId = new Map(filas.map((f) => [f.id, f]));
   return sesiones.map((s) => {
     const f = porId.get(s.id);
@@ -980,6 +995,8 @@ export async function reunionesDeLaEmpresaParaElegir(clientId: string, ahora = n
       sinTranscripcion: texto !== "transcripcion",
       texto,
       conMinuta: !!f?.minuta,
+      avisoDePlataforma: avisoDePlataforma((f?.plataforma as Plataforma | null | undefined) ?? null),
+      sinNadieDelCliente: sinNadieDelCliente(s.participants, dominios),
     };
   });
 }

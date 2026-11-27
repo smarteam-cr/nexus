@@ -15,6 +15,7 @@
  */
 import { esDeNuestroEquipo, esRecursoDeCalendario } from "@/lib/sessions/dominio-propio";
 import { MARGEN_TRAS_EL_FIN_MS, MAX_ENRICH_ATTEMPTS, estaEsperandoMaterial, finDeLaReunion, listaParaLeer } from "./enrich-retry";
+import type { Plataforma } from "./plataforma-del-evento";
 
 export type MotivoDeLaFalta =
   /** El evento se canceló en el calendario (U1, `canceladaEn`): probablemente no ocurrió. Nada que hacer. */
@@ -42,7 +43,12 @@ export type MotivoDeLaFalta =
   /** Sin documento en el evento ni en Drive, y la organizó alguien del equipo: no se grabó ni se tomaron notas. */
   | "no_se_grabo"
   /** Sin documento, y la organizó alguien de afuera: el material, si existe, quedó en el Drive de esa persona. */
-  | "organizada_por_afuera";
+  | "organizada_por_afuera"
+  /** 2026-11-27 · No fue por Meet: Google no tiene ni notas ni transcripción. Se puede pegar a mano. */
+  | "fue_por_zoom"
+  | "fue_por_teams"
+  | "fue_por_otro_enlace"
+  | "fue_en_persona";
 
 export type DuenoDelArreglo = "nada" | "nexus" | "google_workspace" | "persona";
 
@@ -60,6 +66,18 @@ export const DE_QUIEN_ES: Record<MotivoDeLaFalta, { dueno: DuenoDelArreglo; text
   documento_vacio: { dueno: "google_workspace", texto: "El documento de la reunión quedó vacío (Gemini no tomó notas)." },
   no_se_grabo: { dueno: "google_workspace", texto: "No se tomaron notas ni se transcribió la reunión." },
   organizada_por_afuera: { dueno: "google_workspace", texto: "La organizó alguien de afuera y nadie del equipo activó las notas." },
+  fue_por_zoom: { dueno: "persona", texto: "Fue por Zoom: el texto no está en Google." },
+  fue_por_teams: { dueno: "persona", texto: "Fue por Teams: el texto no está en Google." },
+  fue_por_otro_enlace: { dueno: "persona", texto: "No fue por Meet: el texto no está en Google." },
+  fue_en_persona: { dueno: "persona", texto: "Fue en persona: no hay grabación." },
+};
+
+/** El motivo de una reunión que no fue por Meet (source "google_calendar"), por su plataforma. */
+const MOTIVO_POR_PLATAFORMA: Readonly<Record<Exclude<Plataforma, "MEET">, MotivoDeLaFalta>> = {
+  ZOOM: "fue_por_zoom",
+  TEAMS: "fue_por_teams",
+  OTRA: "fue_por_otro_enlace",
+  PRESENCIAL: "fue_en_persona",
 };
 
 export interface ReunionSinTranscripcion {
@@ -80,6 +98,11 @@ export interface ReunionSinTranscripcion {
    * campo = no se sabe (hoy, siempre): no cambia nada.
    */
   ocurrio?: boolean | null;
+  /**
+   * Por dónde fue, si no es de Meet (2026-11-27, `FirefliesSession.plataforma`). null, "MEET" o sin el campo = de Meet.
+   * Una que no es de Meet no pasa por la lectura de Google: su motivo lo dice la plataforma, nunca «pendiente de leer».
+   */
+  plataforma?: Plataforma | null;
 }
 
 function nuestros(r: Pick<ReunionSinTranscripcion, "organizerEmail" | "participants">): string[] {
@@ -101,6 +124,7 @@ function errorDe(enrichError: string | null): string {
 export function porQueFalta(r: ReunionSinTranscripcion, ahora: Date): MotivoDeLaFalta {
   if (r.canceladaEn) return "cancelada";
   if (!listaParaLeer(r, ahora)) return "todavia_no_termino";
+  if (r.plataforma && r.plataforma !== "MEET") return MOTIVO_POR_PLATAFORMA[r.plataforma];
   if (r.ocurrio === false) return "no_ocurrio";
   if (errorDe(r.enrichError) === "sin_interno_para_impersonar" || nuestros(r).length === 0) return "sin_nadie_del_equipo";
   if (r.enrichedAt === null) {

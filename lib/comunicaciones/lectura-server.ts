@@ -90,3 +90,31 @@ export async function unaComunicacion(clientId: string, id: string): Promise<Com
   const [c] = await leer(clientId, { tope: 1, id });
   return c ?? null;
 }
+
+/**
+ * El resumen del notetaker de HubSpot de UNA reunión del calendario (2026-11-27: las de Zoom o Teams, que no tienen texto
+ * en Google). Por el evento (el de la instancia o el de su serie) y SOLO del cliente que se pide: el dueño de la reunión
+ * por el chokepoint, nunca el de la asociación de HubSpot (invariante 1). Sin la tabla, null.
+ */
+export async function resumenDeLaReunionDeHubspot(o: { clientId: string; googleEventId: string }): Promise<{ texto: string; ocurrioAt: Date } | null> {
+  const eventos = [...new Set([o.googleEventId, o.googleEventId.split("_")[0]])];
+  try {
+    const c = await prisma.comunicacionDeHubspot.findFirst({
+      where: { tipo: "reunion", vigente: true, clientId: o.clientId, googleEventId: { in: eventos }, texto: { not: null } },
+      orderBy: { ocurrioAt: "desc" },
+      select: { texto: true, ocurrioAt: true },
+    });
+    return c?.texto ? { texto: c.texto, ocurrioAt: c.ocurrioAt } : null;
+  } catch (e) {
+    if (esquemaDesactualizado(e)) return null;
+    throw e;
+  }
+}
+
+/** Las reuniones de HubSpot con resumen de una ventana, sin el texto (para medir, solo lectura). */
+export async function reunionesDeHubspotDeLaVentana(desde: Date, hasta: Date) {
+  return prisma.comunicacionDeHubspot.findMany({
+    where: { tipo: "reunion", ocurrioAt: { gte: desde, lte: hasta } },
+    select: { googleEventId: true, ocurrioAt: true, asunto: true, clientId: true, vigente: true, texto: true },
+  });
+}

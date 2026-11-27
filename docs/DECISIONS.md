@@ -18334,3 +18334,48 @@ descartó: «no me hace mucho sentido»).
   Resumen lo abre quien ve la página (mirar es leer; usar una versión sigue pidiendo editar), así lo descartado lo sigue
   viendo quien antes lo veía.
 - «Validado» a secas confundía («¿qué es lo de validado?»): la línea dice «Niveles validados».
+
+## Todas las reuniones del calendario con alguien de afuera, no solo las de Meet; y «Quién estuvo» arriba (2026-11-27)
+
+**Contexto.** Líneas Hospitalarias (prospecto) tuvo el 27 nov una reunión por Zoom, organizada por HubSpot, con su
+director: no existía en Nexus y la preventa solo le ofrecía un sync de Smarteam con HubSpot del 11 nov, sin nadie del
+cliente. Elías: «Debería detectar que hay un evento de Google Calendar … donde están invitadas las personas con el
+dominio de la empresa … Deberían aparecer todas», y ver muy arriba de la sesión quiénes participaron, en un desplegable.
+Medido ese día, solo leyendo (`scripts/medir-reuniones-fuera-de-meet.ts`, 30 días, 20 calendarios): 543 reuniones de
+Meet; 840 eventos con hora sin Meet solo del equipo; **47 reuniones nuevas** (29 Zoom, 16 Teams, 2 otro enlace), **39
+con un cliente** (24 clientes, 8 prospectos, 7 fichas internas). De esas 47, 9 tienen el resumen del notetaker de
+HubSpot, las 9 ligadas por el evento del calendario y del mismo cliente.
+
+- **La regla:** se guarda todo evento del calendario del equipo con hora y al menos un invitado de afuera (alguien de
+  HubSpot cuenta; un buzón `no-reply@` no), sea Meet, Zoom, Teams, otro enlace o en persona. Los del equipo solo
+  (dailies, bloques de tarea) sin Meet siguen fuera, y también los de todo el día, las ausencias, la ubicación de trabajo
+  y lo que agrega Gmail. Pura en `lib/google/plataforma-del-evento.ts`; en la sync, `soloLasDeAfuera`
+  (lib/google/meet-sync-cambios.ts), con las copias de todos los calendarios ya juntas.
+- **Mismo id, otro `source`:** la fila es `gmeet_<evento>` como siempre (la preventa, «Después de cada reunión»,
+  Tareas y las horas del calendario buscan la sesión de un evento por ese id) pero con `source = "google_calendar"` y su
+  `plataforma` (enum `PlataformaDeReunion`, SQL `2026-11-27-reuniones-fuera-de-meet.sql`). *Por qué otro source:* el
+  circuito de lectura de Meet (enriquecimiento, conferencias, reintentos, INV53) ya filtra `source = "google_meet"`, así
+  que no gasta intentos ni llamadas en ellas sin tocar cada consulta. Las de Meet guardan `plataforma` null: ninguna fila
+  existente cambia (sin UPDATE de más dentro del proceso web, incidente del 2026-09-21). Si a una de Zoom le ponen Meet,
+  pasa al circuito de Meet; al revés, sale. Sin Doc de Gemini ni código de Meet en una que no es de Meet.
+- **Lo que se cerró a mano** (no filtraba por source): «Re-enriquecer» (`enrichSingleSession` se niega: buscar por el
+  título en el Drive podía traer el documento de otra reunión), la serie de títulos del Drive, el job de motivos y el
+  tablero de salud (mide lo que deja Meet: no las cuenta). La carga del equipo sigue solo con Meet (decisión de
+  «Rentabilidad conectada») y Rentabilidad sigue contando esas horas por su lado, leyendo el calendario: `leerReuniones`
+  y `eventosDeSesiones` dejan fuera `google_calendar`, así nada cuenta dos veces ni cambia de columna.
+- **El resolver y el chokepoint son los mismos** (`resolveSessionClientId`, `lib/sessions/project-sources.ts`): no hay
+  matching nuevo. Una de Zoom entra al clasificador como cualquier otra.
+- **Su motivo:** «Fue por Zoom: el texto no está en Google» (y Teams, otro enlace, en persona; `fue_por_*` en
+  lib/google/por-que-falta.ts), nunca «pendiente de leer» ni «Esperando la transcripción». En la página de la reunión,
+  «+ Pegar la transcripción» abre «Agregar reunión» con ESA reunión elegida (lo de agregar lo que pasó ya existía). Si
+  HubSpot la grabó, la página muestra su resumen (plegado), solo del mismo dueño y por el evento del calendario. La API
+  de Zoom no se integra.
+- **«Quién estuvo», arriba de cada sesión** (lib/sessions/quien-estuvo.ts, en /sessions/[id] y en la sesión de la
+  preventa): una línea plegable («Estuvieron 2 de 3 · nadie del cliente»); al abrirla, cada persona con su lado
+  (Smarteam, el cliente por el dominio o por ser contacto de HubSpot del dueño, u otro con su dominio), su respuesta y,
+  si fue por Meet y Meet ya lo dijo, si entró y sus minutos (las filas `meet:users/…` con su nombre). Una de Zoom o Teams
+  dice que solo se sabe a quién se invitó. ⚠ Los minutos son para leer la reunión, nunca para evaluar a nadie (Google lo
+  pide). En los buscadores, «Fue por Zoom» y «sin nadie del cliente» (ningún invitado con el dominio de la empresa).
+- **Pendiente:** las agendadas de la preventa (lib/exploraciones/agendadas.ts) siguen ofreciendo solo las de Meet; una
+  de Zoom futura aparece cuando ocurre. Y una reunión de Zoom con un recuerdo corto pegado da de baja el resumen de
+  HubSpot (U7: «se da de baja el día en que llegue el texto»).
