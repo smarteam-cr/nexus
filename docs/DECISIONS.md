@@ -18401,8 +18401,9 @@ tokens de peligro que ya existían.
 
 **Segunda vuelta (Elías respondió A1, B y C):**
 - **Cualquier sesión guardada se elimina**, también la que ya pasó o tiene reunión, para volver a asignarla. Nunca en
-  «En vivo». La reunión no se borra (en un prospecto vuelve a entrar sola). *Supera* la regla de la quinta vuelta
-  («solo la que todavía no pasó»). «Cambiar reunión» es un botón al lado de «Eliminar sesión» (dejó de ser un enlace en
+  «En vivo». La reunión no se borra: queda libre para unirla a otra sesión. Como ahora se va también lo marcado «En
+  vivo» y lo que pasó, el aviso trae «Deshacer» (vuelve a agregar esa sesión entera). *Supera* la regla de la quinta
+  vuelta («solo la que todavía no pasó»). «Cambiar reunión» es un botón al lado de «Eliminar sesión» (dejó de ser un enlace en
   la línea de datos y en la de la reunión agendada). «Sacar de la exploración» queda para la sesión con reunión y la
   que entró sola.
 - **Sin «Copiar enlace»**: copiaba la dirección que ya está en la barra.
@@ -18410,11 +18411,14 @@ tokens de peligro que ya existían.
   lo que recuerdas, la transcripción, un archivo y, si está prendido, el audio). **A1:** todo se guarda en la reunión
   de la empresa (la de la sesión, o una nueva que se une a ella por la puerta de «Cambiar reunión»); un Word o un PDF se
   copia y se pega. Antes el panel guardaba un documento de la exploración. **B:** «Se hizo por otro canal» dejó de ser
-  tarjeta: es «Lo que recuerdas». Una sesión marcada antes conserva la marca y se puede quitar.
+  tarjeta: es «Lo que recuerdas». Una sesión marcada antes conserva la marca y se puede quitar. Qué se hace con la
+  reunión lo decide `alContarLoQuePaso` (lib/exploraciones/guia.ts): la de esta sesión se relee; otra se une a esta
+  sesión (una reunión que entró sola se vuelve sesión primero); la que ya es de OTRA sesión no se une. Contar lo que pasó
+  quita «No se hizo» y «Por otro canal» (`marcaAlContar`; «Se cortó» se queda), como hacía «sumar la minuta».
 - **C · «Sesión interna» en «Equipo del cliente»**: opción del selector y badge azul «¿Es una sesión interna?» cuando
   «Quién estuvo» no ve a nadie de la empresa en la invitación (`pareceSesionInterna`). Elegirla abre el diálogo de
   «Sacar de la exploración»: no es un equipo que se guarde y no hay SQL. El aviso amarillo «Parece una sesión interna»
-  se fue: el mensaje sale una sola vez. *Por qué no un valor del equipo:* ninguna guía ni lectura sabría qué hacer
-  con «interna».
+  se fue: el mensaje sale una sola vez. El badge conserva su «No, es de la exploración» (y entonces vuelve la sugerencia
+  del equipo por el título). *Por qué no un valor del equipo:* ninguna guía ni lectura sabría qué hacer con «interna».
 - **El «sugerido» del equipo no se rompió**: sale solo cuando el título de la sesión, el del calendario o el objetivo
   nombran un equipo («CAMOSA | Sesión de Marketing» → Marketing); los de Líneas Hospitalarias no nombran ninguno.

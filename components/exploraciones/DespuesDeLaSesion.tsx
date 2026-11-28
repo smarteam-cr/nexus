@@ -40,7 +40,15 @@ import {
   objetivosSugeridosDeLaSiguiente,
   type Cumplimiento,
 } from "@/lib/exploraciones/despues-de-la-sesion";
-import { MAX_SESIONES, type PestanaDeSesion, type PreguntaParaMostrar, type ResultadoDeLaSesion } from "@/lib/exploraciones/guia";
+import {
+  alContarLoQuePaso,
+  marcaAlContar,
+  MAX_SESIONES,
+  type PestanaDeSesion,
+  type PreguntaParaMostrar,
+  type ResultadoDeLaSesion,
+  type SesionPlaneada,
+} from "@/lib/exploraciones/guia";
 import { claveDeNotaDeSesion } from "@/lib/exploraciones/notas-de-sesion";
 import ComoTrabajasteEstaSesion from "@/components/analizador-venta/ComoTrabajasteEstaSesion";
 import { useAnalisisDeLaVenta } from "@/components/analizador-venta/useAnalisisDeLaVenta";
@@ -492,6 +500,7 @@ function QuePaso({
   onMinuta: (sesionId: string | null) => void;
 }) {
   const { exp, escala, marco, puedeEditar, guardando, recargar, sesion: seleccion } = useLienzo();
+  const { todas } = useSesiones();
   const toast = useToast();
   const editar = useEditarLaSesion(pestana, "despues");
   // Lo que tenía preparado, si no se armó su guía: lo que falta hoy (en la preventa, el plan de la guía).
@@ -523,7 +532,31 @@ function QuePaso({
      (la sesión no tenía reunión, o se eligió otra del día), se une a ESTA sesión por la puerta de siempre (POST …/sesiones
      con `paraSesionId`: la misma de «Cambiar reunión»). */
   const alContar = async (sessionId: string) => {
-    if ((r && r.origen === "meet" && r.id === sessionId) || !s) {
+    const que = alContarLoQuePaso({ pestana, sessionId, pestanas: todas });
+    if (que.accion === "deOtraSesion") {
+      // Dos sesiones con la misma reunión la leerían dos veces: el texto quedó en esa reunión y no se une.
+      toast.error("Esa reunión ya es la de otra sesión: lo que contaste quedó en ella. Aquí elige otra reunión o una nueva.");
+      await recargar();
+      return;
+    }
+    // Se hizo y ya tiene texto: «No se hizo» y «Por otro canal» se van (antes de unir, así no se pisa lo que escribe el servidor).
+    const marca = marcaAlContar(resultado ?? undefined);
+    const conMarcaNueva = (x: SesionPlaneada): SesionPlaneada => {
+      const { resultado: _r, pasaron: _p, ...resto } = x;
+      void _r;
+      void _p;
+      return marca ? { ...resto, resultado: marca, ...(x.pasaron ? { pasaron: x.pasaron } : {}) } : resto;
+    };
+    const cambiaLaMarca = (resultado ?? undefined) !== marca;
+    if (que.accion === "releer") {
+      if (cambiaLaMarca) await editar(conMarcaNueva);
+      await recargar();
+      return;
+    }
+    // Una reunión que entró sola se vuelve sesión primero (como hacía «sumar la minuta»), para poder unirle otra.
+    const sesionId = que.volverSesion || cambiaLaMarca ? await editar(cambiaLaMarca ? conMarcaNueva : null) : (s?.id ?? null);
+    if (!sesionId) {
+      toast.error("Lo que contaste quedó en la reunión, pero no se pudo unir a esta sesión. Únela con «Cambiar reunión».");
       await recargar();
       return;
     }
@@ -531,7 +564,7 @@ function QuePaso({
       const res = await fetch(`/api/sales/exploraciones/${exp.id}/sesiones`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tipo: "pasada", sessionId, paraSesionId: s.id }),
+        body: JSON.stringify({ tipo: "pasada", sessionId, paraSesionId: sesionId }),
       });
       const d = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) toast.error(d.error ?? "Lo que contaste quedó en la reunión, pero no se pudo unir a esta sesión. Únela con «Cambiar reunión».");

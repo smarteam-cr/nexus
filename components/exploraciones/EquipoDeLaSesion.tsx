@@ -58,8 +58,11 @@ export function EquipoDeLaSesion({ pestana, momento, interna = null }: { pestana
   const { exp, escala, marco, puedeEditar, guardando } = useLienzo();
   const editar = useEditarLaSesion(pestana, momento);
   const actual = pestana.sesion?.equipo ?? null;
+  /* «No» en el badge (revisión del 28 nov: el aviso amarillo tenía «No, es de la exploración» y se perdía): la sugerencia
+     no vuelve en esta sesión mientras dure la pantalla, y vuelve a sugerirse el equipo por el título. */
+  const [noEsInterna, setNoEsInterna] = useState<Record<string, true>>({});
   // Con la interna sugerida, el badge es ese: no se sugiere a la vez un equipo del cliente.
-  const internaSugerida = !!interna?.sugerida;
+  const internaSugerida = !!interna?.sugerida && !noEsInterna[pestana.clave];
   const sugerido = actual || internaSugerida ? null : sugerirEquipoDeLaSesion(pestana);
   /* Por sesión (su clave): si la persona le acaba de cambiar el equipo en esta pantalla, lo que ya rehízo y si cerró el
      aviso. Vive en la pantalla: al volver a abrirla, solo queda lo que se sabe de los datos (la lectura de otro equipo). */
@@ -181,6 +184,9 @@ export function EquipoDeLaSesion({ pestana, momento, interna = null }: { pestana
             <BotonAzul disabled={guardando} className="rounded-full px-2.5 py-0.5" onClick={interna.alElegir}>
               Usar
             </BotonAzul>
+            <BotonTexto className="px-2 py-0.5 text-[12px]" onClick={() => setNoEsInterna((x) => ({ ...x, [pestana.clave]: true }))}>
+              No, es de la exploración
+            </BotonTexto>
           </span>
         )}
         {sugerido && (

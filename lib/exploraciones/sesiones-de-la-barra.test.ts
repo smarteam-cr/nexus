@@ -1,7 +1,43 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { opcionesDeLasPestanas, pestanaDeLaReunion, pestanasDeSesiones, type ReunionDeLaExploracion } from "./guia";
+import { alContarLoQuePaso, marcaAlContar, opcionesDeLasPestanas, pestanaDeLaReunion, pestanasDeSesiones, type ReunionDeLaExploracion } from "./guia";
+
+describe("alContarLoQuePaso — lo que cuentas en «¿Qué pasó?» queda en la sesión correcta (segunda vuelta)", () => {
+  const zoom: ReunionDeLaExploracion = { id: "gmeet_zoom", titulo: "Zoom", fecha: "2026-11-27T20:00:00.000Z", origen: "meet", leida: false, texto: "nada" };
+  const otra: ReunionDeLaExploracion = { id: "gmeet_otra", titulo: "Otra", fecha: "2026-11-27T22:00:00.000Z", origen: "meet", leida: false, texto: "nada" };
+  const dosDelDia = pestanasDeSesiones(
+    [
+      { id: "s2", fecha: "2026-11-27", reunion: { id: "gmeet_zoom", origen: "meet" } },
+      { id: "s3", fecha: "2026-11-27", reunion: { id: "gmeet_otra", origen: "meet" } },
+    ],
+    [zoom, otra],
+    "2026-11-28",
+  );
+  const s2 = dosDelDia.find((p) => p.clave === "s2")!;
+
+  it("si es la reunión de esta sesión, se relee; si es una nueva, se une", () => {
+    expect(alContarLoQuePaso({ pestana: s2, sessionId: "gmeet_zoom", pestanas: dosDelDia })).toEqual({ accion: "releer" });
+    expect(alContarLoQuePaso({ pestana: s2, sessionId: "manual_nueva", pestanas: dosDelDia })).toEqual({ accion: "unir", volverSesion: false });
+  });
+
+  it("la reunión que ya es de la sesión 3 no se une a la 2 (quedarían dos sesiones con la misma reunión)", () => {
+    /* La edición que la pone en rojo: unir sin mirar las otras pestañas (la revisión del 28 nov lo encontró). */
+    expect(alContarLoQuePaso({ pestana: s2, sessionId: "gmeet_otra", pestanas: dosDelDia })).toEqual({ accion: "deOtraSesion", clave: "s3" });
+  });
+
+  it("una reunión que entró sola (sin sesión guardada) se vuelve sesión antes de unirle otra", () => {
+    const sola = pestanasDeSesiones([], [zoom], "2026-11-28", opcionesDeLasPestanas(true, []));
+    expect(alContarLoQuePaso({ pestana: sola[0], sessionId: "manual_nueva", pestanas: sola })).toEqual({ accion: "unir", volverSesion: true });
+  });
+
+  it("contar lo que pasó quita «No se hizo» y «Por otro canal»; «Se cortó» se queda", () => {
+    expect(marcaAlContar("noSeHizo")).toBeUndefined();
+    expect(marcaAlContar("otroCanal")).toBeUndefined();
+    expect(marcaAlContar("cortada")).toBe("cortada");
+    expect(marcaAlContar(undefined)).toBeUndefined();
+  });
+});
 
 describe("pestanaDeLaReunion — pegar una transcripción no duplica la sesión", () => {
   const zoom: ReunionDeLaExploracion = { id: "gmeet_zoom", titulo: "Propuesta CRM", fecha: "2026-11-27T20:00:00.000Z", origen: "meet", leida: false, texto: "nada", fueraDeMeet: "Fue por Zoom" };
@@ -75,8 +111,9 @@ describe("la preventa después de probarla con Líneas Hospitalarias", () => {
     const d = leer("components/exploraciones/DespuesDeLaSesion.tsx");
     expect(d).toMatch(/titulo="Se hizo: cuéntale a Nexus qué pasó"/);
     expect(d).toMatch(/<AgregarReunion[\s\S]{0,600}onAgregada=\{\(sessionId\) => void alContar\(sessionId\)\}/);
-    // La otra reunión se une a ESTA sesión por la puerta de «Cambiar reunión».
-    expect(d).toMatch(/tipo: "pasada", sessionId, paraSesionId: s\.id/);
+    // La otra reunión se une a ESTA sesión por la puerta de «Cambiar reunión», decidido por la regla pura.
+    expect(d).toMatch(/alContarLoQuePaso\(\{ pestana, sessionId, pestanas: todas \}\)/);
+    expect(d).toMatch(/tipo: "pasada", sessionId, paraSesionId: sesionId/);
     // Ni la tarjeta de «otro canal» ni el panel del documento de la exploración.
     expect(d).not.toMatch(/titulo: "Se hizo por otro canal"/);
     expect(d).not.toMatch(/<SumarAMano/);

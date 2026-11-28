@@ -488,18 +488,25 @@ function EncabezadoDeLaSesion({
           open={quitando}
           title={`¿Eliminar la sesión ${pestana.numero}?`}
           description={
-            r || s.reunion || s.evento
-              ? exp.automaticas
-                ? "Se va con su guía, su objetivo y lo que preparaste para ella. La reunión no se borra: queda libre para unirla a otra sesión y, como es un prospecto, vuelve a entrar sola como sesión."
-                : "Se va con su guía, su objetivo y lo que preparaste para ella. La reunión no se borra: queda libre para unirla a otra sesión."
-              : "Se va con su guía, su objetivo y lo que preparaste para ella. Las otras sesiones no se tocan."
+            (pestana.hecha || estado === "ocurrio"
+              ? "Se va con su guía, su objetivo, lo que marcaste «En vivo» y lo que pasó con ella."
+              : "Se va con su guía, su objetivo y lo que preparaste para ella.") +
+            (r || s.reunion || s.evento ? " La reunión no se borra: queda libre para unirla a otra sesión." : " Las otras sesiones no se tocan.") +
+            " Lo puedes recuperar con «Deshacer» en el aviso."
           }
           confirmLabel="Eliminar sesión"
           onCancel={() => setQuitando(false)}
           onConfirm={async () => {
+            /* Como «Sacar de la exploración»: con «Deshacer», ahora que también se elimina una sesión que ya pasó. Deshacer
+               vuelve a agregar ESA sesión entera (`agregarSesion` no reemplaza la lista: no se lleva lo que cambió entretanto). */
+            const eliminada = s;
             const ok = await guardar(sesiones.filter((x) => x.id !== s.id));
             setQuitando(false);
-            if (ok) seleccion.elegir(claveDeLaProxima);
+            if (!ok) return;
+            seleccion.elegir(claveDeLaProxima);
+            toast.success(`Eliminaste la sesión ${pestana.numero}. La reunión no se borra.`, {
+              action: { label: "Deshacer", onClick: () => void cambiar([{ op: "agregarSesion", sesion: eliminada }]) },
+            });
           }}
         />
       )}
