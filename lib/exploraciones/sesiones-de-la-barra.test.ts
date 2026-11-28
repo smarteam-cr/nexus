@@ -51,10 +51,35 @@ describe("la preventa después de probarla con Líneas Hospitalarias", () => {
     expect(s).not.toMatch(/confirmLabel="Quitar la sesión"/);
   });
 
-  it("la sesión interna se RECOMIENDA con un clic (sacarla de la exploración) y se puede descartar; no cambia sola", () => {
+  it("la sesión interna va en «Equipo del cliente»: opción del selector y badge azul que abren «Sacar de la exploración» (segunda vuelta)", () => {
     const s = leer("components/exploraciones/SesionesDeExploracion.tsx");
-    expect(s).toMatch(/pareceSesionInterna\(quienEstuvo\) && sePuedeSacar/);
-    expect(s).toMatch(/Es interna: sacarla de la exploración[\s\S]*No, es de la exploración/);
+    const e = leer("components/exploraciones/EquipoDeLaSesion.tsx");
+    // La sugiere la regla de «Quién estuvo», solo donde se puede sacar, y elegirla abre el diálogo (nada cambia solo).
+    expect(s).toMatch(/const interna: SesionInterna \| null = sePuedeSacar[\s\S]{0,200}pareceSesionInterna\(quienEstuvo\)[\s\S]{0,400}alElegir: \(\) => setSacando\(true\)/);
+    expect(s).toMatch(/<EquipoDeLaSesion pestana=\{pestana\} momento=\{momento\} interna=\{interna\} \/>/);
+    expect(e).toMatch(/key: "interna"[\s\S]{0,600}Sesión interna[\s\S]{0,600}onSelect: interna\.alElegir/);
+    expect(e).toMatch(/¿Es una <span className="font-semibold text-fg">sesión interna<\/span>\?/);
+    // El aviso amarillo se fue: el mensaje sale una sola vez.
+    expect(s).not.toMatch(/Parece una sesión interna:/);
+    expect(s).not.toMatch(/Es interna: sacarla de la exploración/);
+  });
+
+  it("cualquier sesión se elimina, «Cambiar reunión» va al lado y «Copiar enlace» ya no está (segunda vuelta)", () => {
+    const s = leer("components/exploraciones/SesionesDeExploracion.tsx");
+    expect(s).toMatch(/\{sePuedeCambiarReunion && \([\s\S]{0,400}Cambiar reunión[\s\S]{0,200}<\/Button>\s*\)\}\s*\{sePuedeQuitar && \(/);
+    expect(s).not.toMatch(/Copiar enlace\s*</);
+    expect(s).not.toMatch(/enlace\("cambiar reunión"/);
+  });
+
+  it("«¿Qué pasó con esta sesión?» abre el MISMO cajón que «Pegar una transcripción», y todo va a la reunión (A1 y B)", () => {
+    const d = leer("components/exploraciones/DespuesDeLaSesion.tsx");
+    expect(d).toMatch(/titulo="Se hizo: cuéntale a Nexus qué pasó"/);
+    expect(d).toMatch(/<AgregarReunion[\s\S]{0,600}onAgregada=\{\(sessionId\) => void alContar\(sessionId\)\}/);
+    // La otra reunión se une a ESTA sesión por la puerta de «Cambiar reunión».
+    expect(d).toMatch(/tipo: "pasada", sessionId, paraSesionId: s\.id/);
+    // Ni la tarjeta de «otro canal» ni el panel del documento de la exploración.
+    expect(d).not.toMatch(/titulo: "Se hizo por otro canal"/);
+    expect(d).not.toMatch(/<SumarAMano/);
   });
 
   it("«Quién estuvo» va en la «i» a la izquierda del estado de la sesión", () => {

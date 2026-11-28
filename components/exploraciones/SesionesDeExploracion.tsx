@@ -40,7 +40,7 @@ import { EVENTO_DEL_RECORRIDO, type AccionDelRecorrido } from "@/lib/recorridos/
 import AntesDeLaSesion from "./AntesDeLaSesion";
 import DespuesDeLaSesion from "./DespuesDeLaSesion";
 import DuranteLaSesion from "./DuranteLaSesion";
-import { EquipoDeLaSesion } from "./EquipoDeLaSesion";
+import { EquipoDeLaSesion, type SesionInterna } from "./EquipoDeLaSesion";
 import { ReunionDeTrabajo } from "./ReunionDeTrabajo";
 import { InfoDeQuienEstuvo, useQuienEstuvo } from "@/components/sessions/QuienEstuvo";
 import { pareceSesionInterna } from "@/lib/sessions/quien-estuvo";
@@ -194,8 +194,17 @@ function EncabezadoDeLaSesion({
   const [sacando, setSacando] = useState(false);
   // Quién estuvo en su reunión (de Meet, Zoom o agregada a mano): el globo y la recomendación de sesión interna.
   const quienEstuvo = useQuienEstuvo(r?.origen === "meet" ? r.id : null);
-  // «No, es de la exploración»: la recomendación no vuelve a salir en esta sesión mientras dure la pantalla.
-  const [descartada, setDescartada] = useState<string | null>(null);
+  /* «Sesión interna» en «Equipo del cliente» (2026-11-28, C): elegirla es sacarla de la exploración, con su diálogo. Nexus
+     la sugiere cuando «Quién estuvo» no ve a nadie de la empresa en la invitación. Solo donde «Sacar» se puede. */
+  const interna: SesionInterna | null = sePuedeSacar
+    ? {
+        sugerida: !!quienEstuvo && pareceSesionInterna(quienEstuvo),
+        porque: quienEstuvo?.dominiosDeAfuera.length
+          ? `nadie de ${exp.empresa.nombre} en la invitación, solo Smarteam y ${quienEstuvo.dominiosDeAfuera.join(", ")}`
+          : `nadie de ${exp.empresa.nombre} en la invitación`,
+        alElegir: () => setSacando(true),
+      }
+    : null;
   const sacar = async () => {
     setSacando(false);
     const { ops, sacadas } = sacarDeLaExploracion(todas, [pestana.clave], exp.automaticas, reuniones);
@@ -376,32 +385,13 @@ function EncabezadoDeLaSesion({
           </p>
           {/* Con qué equipo del cliente es (2026-10-23): decide qué pregunta la guía. */}
           <div className="mt-1.5">
-            <EquipoDeLaSesion pestana={pestana} momento={momento} />
+            <EquipoDeLaSesion pestana={pestana} momento={momento} interna={interna} />
           </div>
           {/* En la preventa de un cliente (24 nov): sesión de diagnóstico o reunión de trabajo (lo que ya sabemos). */}
           <ReunionDeTrabajo pestana={pestana} momento={momento} />
           {momento !== "durante" && <LineaDeLaReunion pestana={pestana} onSumarMinuta={onSumarMinuta} />}
-          {/* 2026-11-28 · Sin nadie de la empresa en la invitación: se RECOMIENDA que es interna, con un clic (sacarla de la
-              exploración, lo mismo que «Sacar de la exploración»). Nada cambia solo. */}
-          {quienEstuvo && pareceSesionInterna(quienEstuvo) && sePuedeSacar && descartada !== pestana.clave && (
-            <div className="mt-2 max-w-2xl">
-              <Alert variant="warning">
-                <p className="text-[13px]">
-                  Parece una sesión interna: en la invitación no hay nadie de {exp.empresa.nombre}
-                  {quienEstuvo.dominiosDeAfuera.length ? ` (solo Smarteam y ${quienEstuvo.dominiosDeAfuera.join(", ")})` : ""}.
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {/* El mismo diálogo de «Sacar de la exploración»: se va lo que se preparó para ella (revisión del 28 nov). */}
-                  <Button variant="secondary" size="sm" disabled={guardando} onClick={() => setSacando(true)}>
-                    Es interna: sacarla de la exploración
-                  </Button>
-                  <Button variant="secondary" size="sm" onClick={() => setDescartada(pestana.clave)}>
-                    No, es de la exploración
-                  </Button>
-                </div>
-              </Alert>
-            </div>
-          )}
+          {/* El aviso amarillo «Parece una sesión interna» se fue el 2026-11-28 (Elías, C): la recomendación es el badge
+              «¿Es una sesión interna?» de «Equipo del cliente», que abre el mismo diálogo de «Sacar de la exploración». */}
         </div>
         <span className="flex-1" />
         <div data-recorrido="preventa.sesion.momento">

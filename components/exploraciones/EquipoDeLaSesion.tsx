@@ -41,11 +41,26 @@ function queCambia(enProyecto: boolean): string {
   return `Elegir el equipo cambia la guía de preguntas (se le pregunta como a ese equipo), la lectura de la reunión y su lugar en la escala (lo que cuenta ese equipo va a las dimensiones de su área)${enProyecto ? "" : " y el análisis de la sesión"}. Nexus lo sugiere por el título; nunca lo elige solo.`;
 }
 
-export function EquipoDeLaSesion({ pestana, momento }: { pestana: PestanaDeSesion; momento: MomentoDeLaSesion }) {
+/**
+ * «Sesión interna» (2026-11-28, Elías: C). No es un equipo que se guarde: elegirla abre el diálogo de «Sacar de la
+ * exploración» (la cabecera de la sesión lo tiene), así que no hay valor nuevo ni SQL. `sugerida`: «Quién estuvo» dice que
+ * no hay nadie de la empresa en la invitación (lib/sessions/quien-estuvo.ts › `pareceSesionInterna`); Nexus la sugiere con
+ * el mismo badge que un equipo. Reemplaza al aviso amarillo «Parece una sesión interna»: el mensaje sale una sola vez.
+ */
+export interface SesionInterna {
+  sugerida: boolean;
+  /** «solo Smarteam y hubspot.com»: de dónde sale la sugerencia. */
+  porque: string;
+  alElegir: () => void;
+}
+
+export function EquipoDeLaSesion({ pestana, momento, interna = null }: { pestana: PestanaDeSesion; momento: MomentoDeLaSesion; interna?: SesionInterna | null }) {
   const { exp, escala, marco, puedeEditar, guardando } = useLienzo();
   const editar = useEditarLaSesion(pestana, momento);
   const actual = pestana.sesion?.equipo ?? null;
-  const sugerido = actual ? null : sugerirEquipoDeLaSesion(pestana);
+  // Con la interna sugerida, el badge es ese: no se sugiere a la vez un equipo del cliente.
+  const internaSugerida = !!interna?.sugerida;
+  const sugerido = actual || internaSugerida ? null : sugerirEquipoDeLaSesion(pestana);
   /* Por sesión (su clave): si la persona le acaba de cambiar el equipo en esta pantalla, lo que ya rehízo y si cerró el
      aviso. Vive en la pantalla: al volver a abrirla, solo queda lo que se sabe de los datos (la lectura de otro equipo). */
   const [avisos, setAvisos] = useState<Record<string, { recien: boolean; listo: QueRehacer[]; cerrado?: boolean }>>({});
@@ -136,8 +151,38 @@ export function EquipoDeLaSesion({ pestana, momento }: { pestana: PestanaDeSesio
               ),
               onSelect: () => elegir(null),
             },
+            ...(interna
+              ? [
+                  {
+                    key: "interna",
+                    separatorBefore: true,
+                    disabled: guardando,
+                    label: (
+                      <span className="flex flex-col gap-0.5">
+                        <span className="text-[13px] font-semibold text-fg">
+                          Sesión interna
+                          {internaSugerida ? <span className="ml-1.5 text-[11px] font-medium text-brand">sugerido</span> : null}
+                        </span>
+                        <span className="text-[11.5px] leading-[15px] text-fg-muted">Sin nadie de la empresa: sale de la exploración. La reunión no se borra.</span>
+                      </span>
+                    ),
+                    onSelect: interna.alElegir,
+                  },
+                ]
+              : []),
           ]}
         />
+        {interna && internaSugerida && !actual && (
+          <span className="inline-flex flex-wrap items-center gap-2 rounded-full border border-info-line bg-info-surface py-0.5 pl-2.5 pr-1 text-[12.5px] text-fg-secondary">
+            <IconoDeSugerencia className="h-3 w-3 text-brand" />
+            <span>
+              ¿Es una <span className="font-semibold text-fg">sesión interna</span>? <span className="text-fg-muted">{interna.porque}</span>
+            </span>
+            <BotonAzul disabled={guardando} className="rounded-full px-2.5 py-0.5" onClick={interna.alElegir}>
+              Usar
+            </BotonAzul>
+          </span>
+        )}
         {sugerido && (
           <span className="inline-flex flex-wrap items-center gap-2 rounded-full border border-info-line bg-info-surface py-0.5 pl-2.5 pr-1 text-[12.5px] text-fg-secondary">
             <IconoDeSugerencia className="h-3 w-3 text-brand" />
