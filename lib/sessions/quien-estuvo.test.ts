@@ -133,6 +133,24 @@ describe("pareceSesionInterna — recomendar que es interna (2026-11-28, el sync
     expect(q.nadieDelCliente).toBe(true);
     expect(pareceSesionInterna(q)).toBe(false);
   });
+  it("alguien anotado por su nombre, sin correo (una reunión pegada a mano), puede ser del cliente: no se recomienda", () => {
+    /* La edición que la pone en rojo: contar a «Ana Pérez» como «de afuera» (la revisión del 28 nov lo cazó así). */
+    const q = armarQuienEstuvo(entrada({ participantes: ["eli@smarteamcr.com", "nferrero@hubspot.com", "Ana Pérez"] }));
+    expect(pareceSesionInterna(q)).toBe(false);
+    expect(q.nadieDelCliente).toBe(false);
+    expect(q.resumen).toBe("3 invitados");
+  });
+
+  it("quien entró a Meet sin cuenta también frena la recomendación", () => {
+    const q = armarQuienEstuvo(
+      entrada({
+        estadoDeConferencia: "OCURRIO",
+        filas: [fila("liz@smarteamcr.com", { entro: new Date() }), fila("nferrero@hubspot.com", { entro: new Date() }), fila("meet:users/9", { esDelEquipo: false, respuesta: null, entro: new Date(), nombre: "Invitado" })],
+      }),
+    );
+    expect(pareceSesionInterna(q)).toBe(false);
+  });
+
   it("solo el equipo (de puertas adentro), o sin dominios del cliente: no se recomienda", () => {
     expect(pareceSesionInterna(armarQuienEstuvo(entrada({ filas: [fila("liz@smarteamcr.com"), fila("eli@smarteamcr.com")] })))).toBe(false);
     expect(pareceSesionInterna(armarQuienEstuvo(entrada({ dominiosDelCliente: new Set(), filas: [fila("nferrero@hubspot.com")] })))).toBe(false);

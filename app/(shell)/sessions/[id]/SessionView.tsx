@@ -183,7 +183,7 @@ export default function SessionView({
           )}
         </div>
         {/* Quién estuvo (2026-11-28): la «i» que abre la lista de invitados, como en la sesión de la preventa. */}
-        {session.quienEstuvo && (
+        {session.quienEstuvo && session.quienEstuvo.personas.length > 0 && (
           <div className="mt-2 flex items-center gap-2 text-xs text-fg-muted">
             <InfoDeQuienEstuvo datos={session.quienEstuvo} />
             <span>Quién estuvo · {session.quienEstuvo.resumen}</span>

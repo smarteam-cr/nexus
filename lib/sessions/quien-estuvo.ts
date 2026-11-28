@@ -162,16 +162,19 @@ export function armarQuienEstuvo(e: EntradaDeQuienEstuvo): QuienEstuvo {
   const delCliente = (p: PersonaDeLaReunion) => p.lado === "cliente";
   // Sin dominios del dueño ni contactos (una reunión sin dueño, o una ficha sin dominios), no hay con qué reconocer a
   // alguien del cliente: no se afirma «nadie del cliente» (la misma regla que el buscador, `sinNadieDelCliente`).
-  const sePuedeSaber = e.dominiosDelCliente.size > 0 || e.contactos.size > 0;
+  // ⚠ Y alguien sin correo (anotado por su nombre en una reunión agregada a mano, o entrado a Meet sin cuenta) puede ser
+  // del cliente: con él en la lista tampoco se afirma (revisión del 2026-11-28: «Ana Pérez» pegada a mano daba «interna»).
+  const sinCorreoEn = (lista: readonly PersonaDeLaReunion[]) => lista.some((p) => !p.dominio);
+  const sePuedeSaberEn = (lista: readonly PersonaDeLaReunion[]) => (e.dominiosDelCliente.size > 0 || e.contactos.size > 0) && !sinCorreoEn(lista);
   const delClienteEn = (lista: readonly PersonaDeLaReunion[]) => {
     const n = lista.filter(delCliente).length;
-    return n > 0 ? ` · ${n} del cliente` : sePuedeSaber ? " · nadie del cliente" : "";
+    return n > 0 ? ` · ${n} del cliente` : sePuedeSaberEn(lista) ? " · nadie del cliente" : "";
   };
   let resumen: string;
   let nadieDelCliente: boolean;
   if (conAsistencia) {
     const entraron = personas.filter((p) => p.entro === true);
-    nadieDelCliente = sePuedeSaber && !entraron.some(delCliente);
+    nadieDelCliente = sePuedeSaberEn(entraron) && !entraron.some(delCliente);
     const deCuantos = Math.max(invitados.length, entraron.length);
     resumen =
       entraron.length === 0
@@ -179,14 +182,16 @@ export function armarQuienEstuvo(e: EntradaDeQuienEstuvo): QuienEstuvo {
         : `${entraron.length === 1 ? "Estuvo" : "Estuvieron"} ${entraron.length} de ${deCuantos}`;
     resumen += delClienteEn(entraron);
   } else {
-    nadieDelCliente = sePuedeSaber && !invitados.some(delCliente);
+    nadieDelCliente = sePuedeSaberEn(invitados) && !invitados.some(delCliente);
     const n = invitados.length;
     resumen = `${n} ${n === 1 ? "invitado" : "invitados"}` + delClienteEn(invitados);
   }
 
   const dominiosDeAfuera = [...new Set(invitados.filter((p) => p.lado === "otro" && p.dominio).map((p) => p.dominio as string))].sort();
   // Hace falta alguien de afuera del equipo: una de puertas adentro ya no entra sola a la exploración (otra regla).
-  const ningunInvitadoDelCliente = sePuedeSaber && !invitados.some(delCliente) && invitados.some((p) => p.lado === "otro");
+  // Los de afuera cuentan solo con correo y dominio; uno sin correo (en la lista o entrado a Meet) frena la recomendación.
+  const ningunInvitadoDelCliente =
+    sePuedeSaberEn([...invitados, ...personas.filter((p) => p.entro === true)]) && !invitados.some(delCliente) && invitados.some((p) => p.lado === "otro" && !!p.dominio);
   const aviso = avisoDePlataforma(e.plataforma);
   const nota = aviso
     ? `${aviso}: solo sabemos a quién se invitó, no quién entró.`

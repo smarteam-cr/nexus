@@ -406,7 +406,8 @@ function EncabezadoDeLaSesion({
                   {quienEstuvo.dominiosDeAfuera.length ? ` (solo Smarteam y ${quienEstuvo.dominiosDeAfuera.join(", ")})` : ""}.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <Button variant="secondary" size="sm" disabled={guardando} onClick={() => void sacar()}>
+                  {/* El mismo diálogo de «Sacar de la exploración»: se va lo que se preparó para ella (revisión del 28 nov). */}
+                  <Button variant="secondary" size="sm" disabled={guardando} onClick={() => setSacando(true)}>
                     Es interna: sacarla de la exploración
                   </Button>
                   <Button variant="secondary" size="sm" onClick={() => setDescartada(pestana.clave)}>
@@ -441,13 +442,12 @@ function EncabezadoDeLaSesion({
         )}
         {sePuedeQuitar && (
           <Button
-            variant="secondary"
+            // Rojo claro (2026-11-28, Elías): la variante del vocabulario con los tokens de peligro que ya existen.
+            variant="destructive-soft"
             size="sm"
             disabled={guardando}
             onClick={() => setQuitando(true)}
             title="Elimina esta sesión, que todavía no pasó, con su guía"
-            // Rojo claro con los tokens de peligro que ya existen (2026-11-28, Elías): se ve que borra.
-            className="border-danger-line bg-danger-surface text-danger-ink hover:bg-danger-surface hover:text-danger-ink hover:opacity-90"
           >
             <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
             Eliminar sesión

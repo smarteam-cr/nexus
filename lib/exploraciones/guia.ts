@@ -401,6 +401,15 @@ export interface PestanaDeSesion {
   ligadaPor?: ComoSeLigo;
 }
 
+/**
+ * La pestaña que ya muestra esta reunión (de Meet, Zoom o agregada a mano), sea por su sesión (elegida, por su evento o
+ * por la fecha) o porque entró sola. null = no es de ninguna. «Pegar una transcripción» (2026-11-28) la usa para no
+ * sumar una sesión 3 con la reunión que ya era la sesión 2.
+ */
+export function pestanaDeLaReunion(pestanas: readonly Pick<PestanaDeSesion, "clave" | "reunion">[], sessionId: string): string | null {
+  return pestanas.find((p) => p.reunion?.origen === "meet" && p.reunion.id === sessionId)?.clave ?? null;
+}
+
 /** Cómo se nombra una pestaña: «Sesión 3», o «No se hizo» si no cuenta. */
 export function nombreDeLaPestana(p: Pick<PestanaDeSesion, "numero" | "noSeHizo">): string {
   return p.noSeHizo ? "No se hizo" : `Sesión ${p.numero}`;
