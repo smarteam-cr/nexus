@@ -9,8 +9,8 @@
      Cómo se regenera: la skill regenerar-roadmap. -->
 ```ejecutivo
 {
- "corte": "2026-11-27",
- "produccion": "9d9a5708",
+ "corte": "2026-11-28",
+ "produccion": "ab2e4545",
  "arriba": [
   "En producción desde el 27 nov: las reuniones de Zoom y Teams con quién estuvo, la página del cronograma que ve el cliente, el Diagnóstico de rendimiento ordenado por el trabajo y la empresa arriba de sus unidades (TEC y Grupo Teamnet).",
   "En curso: nada corriendo; el plan de kölbi espera que Valentina lo publique.",
@@ -729,8 +729,8 @@
      regenera: la skill regenerar-roadmap. Lo hecho nuevo entra SOLO acá, con su «tema»; el Resumen lo toma de aquí. -->
 ```linea
 {
- "hoy": "2026-11-27",
- "produccion": "9d9a5708",
+ "hoy": "2026-11-28",
+ "produccion": "ab2e4545",
  "temasHechoHasta": "2026-10-29",
  "iniciativas": [
   {
@@ -2295,6 +2295,20 @@
     "2d9ab46e",
     "9281c471"
    ]
+  },
+  {
+   "fecha": "2026-11-28",
+   "iniciativa": "preventa",
+   "titulo": "La preventa, segunda vuelta: eliminar cualquier sesión y «Sesión interna» sugerida",
+   "que": "Se puede eliminar cualquier sesión con «Deshacer», con «Cambiar reunión» al lado, y se quitó «Copiar enlace». «¿Qué pasó con esta sesión?» abre el mismo cajón que pegar una transcripción, y todo se guarda en la reunión. «Sesión interna» es una opción del equipo del cliente, sugerida con el badge azul.",
+   "paraQuien": "Ventas y CS",
+   "prod": "si",
+   "tema": 2,
+   "commits": [
+    "e3e8d40c",
+    "8d3bf486",
+    "ea8b65ed"
+   ]
   }
  ],
  "sigue": [
@@ -2811,7 +2825,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "Todo está en producción (9d9a5708, 27 nov): las reuniones de Zoom y Teams con quién estuvo, la página del cronograma que ve el cliente, la parte de arriba del Diagnóstico de rendimiento y la empresa arriba de sus unidades (TEC y Grupo Teamnet). Lo próximo: tu OK para Cemaco, el Resumen de TEC · AE y que Valentina publique el plan de kölbi.",
+ "dondeVamos": "Todo está en producción (ab2e4545, 28 nov): las reuniones de Zoom y Teams con quién estuvo, la página del cronograma que ve el cliente, la parte de arriba del Diagnóstico de rendimiento y la empresa arriba de sus unidades (TEC y Grupo Teamnet). Lo próximo: tu OK para Cemaco, el Resumen de TEC · AE y que Valentina publique el plan de kölbi.",
  "temas": [
   {
    "n": 4,
@@ -3583,7 +3597,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `9d9a5708` (todo `main`) desde el 27 nov: la preventa con sesión interna recomendada, pegar transcripción y «Quién estuvo» en una «i», las reuniones de Zoom y Teams con «Quién estuvo» arriba de cada sesión, la página del cronograma que ve el cliente (avance por semana y editable desde adentro), el Diagnóstico de rendimiento ordenado por el trabajo, la empresa arriba de sus unidades (TEC y Grupo Teamnet; Cemaco espera tu OK), el diagnóstico que se valida propuesta por propuesta, Unidades de negocio, el plan general como pieza de la cuenta (kölbi con su fase «00 · Transversal», sin publicar), «Diagnóstico de rendimiento», interlocutores por unidad, Stratosphere separado de Teamnet, 15.000 caracteres en el chat y La escala, «Guardarlo como nota» solo con lo contado, el chat «Nexus» de La escala en una sola conversación, «Ubicar» con las notas del equipo, La escala interna más limpia, La escala sin Resumen con «Responder con Nexus», la página del chat «Nexus» en Documentación, un Resumen de La escala que no pierde las cifras de la empresa, las franjas del kickoff, un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y reuniones enteras, La escala de un cliente con lo que ya sabemos, la pantalla limpia de La escala, el registro de los cambios de base, Hablar con Nexus (etapas 0 y 1), el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
+| Producción | Corre `ab2e4545` (todo `main`) desde el 28 nov: eliminar cualquier sesión y «Sesión interna» sugerida en la preventa, la preventa con sesión interna recomendada, pegar transcripción y «Quién estuvo» en una «i», las reuniones de Zoom y Teams con «Quién estuvo» arriba de cada sesión, la página del cronograma que ve el cliente (avance por semana y editable desde adentro), el Diagnóstico de rendimiento ordenado por el trabajo, la empresa arriba de sus unidades (TEC y Grupo Teamnet; Cemaco espera tu OK), el diagnóstico que se valida propuesta por propuesta, Unidades de negocio, el plan general como pieza de la cuenta (kölbi con su fase «00 · Transversal», sin publicar), «Diagnóstico de rendimiento», interlocutores por unidad, Stratosphere separado de Teamnet, 15.000 caracteres en el chat y La escala, «Guardarlo como nota» solo con lo contado, el chat «Nexus» de La escala en una sola conversación, «Ubicar» con las notas del equipo, La escala interna más limpia, La escala sin Resumen con «Responder con Nexus», la página del chat «Nexus» en Documentación, un Resumen de La escala que no pierde las cifras de la empresa, las franjas del kickoff, un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y reuniones enteras, La escala de un cliente con lo que ya sabemos, la pantalla limpia de La escala, el registro de los cambios de base, Hablar con Nexus (etapas 0 y 1), el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
 | Por desplegar | Nada. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | Por datos de antes, ninguno nuevo (28 oct): 16 reuniones colgadas de proyectos de otro cliente (INV1) y 9 tareas que citan una reunión de otro cliente (INV42), las que ordena el plan de dominio compartido; el pipeline de Secure Title (INV11: 2 proyectos y 6 en una etapa desconocida); «TEC- AE» fusionada en HubSpot (INV13 e INV54: ya solo ella, kölbi quedó bien); una reunión de Meet leída antes de ocurrir (INV16a), y el corte de cartera de hace 96 días (INV32). |
 | Pruebas | 30 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 83 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
