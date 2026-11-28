@@ -139,7 +139,9 @@ const AVISO_DE_LA_MARCA: Partial<Record<EstadoDeLaReunion, string>> = {
  */
 export function Sesiones({ abierta, alElegir, extras = [] }: { abierta: boolean; alElegir: (clave: string) => void; extras?: readonly FilaExtraDelRiel[] }) {
   const { sesion, puedeEditar } = useLienzo();
-  const { pestanas, activa, estadoDe, estadoDeLaReunion } = useSesiones();
+  // `todas`, no `pestanas` (2026-11-28, Líneas Hospitalarias): la próxima sin agendar («Sesión 2 · próxima», la que se
+  // prepara) también va en la barra. Antes salía en el Resumen y no acá, y parecía que «+ Agregar sesión» no la sumaba.
+  const { todas: pestanas, activa, estadoDe, estadoDeLaReunion } = useSesiones();
   const marca = (p: PestanaDeSesion, actual: boolean, estado: EstadoDeLaReunion) => {
     if (actual) return <span aria-hidden="true">●</span>;
     if (estado === "noSeHizo")

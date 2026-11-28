@@ -42,6 +42,9 @@ export const buttonVariants = cva(
         destructive: "bg-transparent text-fg-muted hover:text-red-400 hover:bg-red-500/10",
         // Peligro sólido — par de intención (mismos valores que el viejo red-600/white)
         "destructive-solid": "bg-destructive text-destructive-fg hover:bg-destructive-hover",
+        // Peligro claro — un botón que borra y se ve sin gritar («Eliminar sesión», 2026-11-28). Los tokens de peligro
+        // que ya usan Alert y los avisos: nada nuevo de color.
+        "destructive-soft": "bg-danger-surface text-danger-ink border border-danger-line hover:opacity-90",
         // Link / texto plano
         link: "bg-transparent text-brand-light hover:text-brand underline-offset-4 hover:underline p-0 h-auto",
       },

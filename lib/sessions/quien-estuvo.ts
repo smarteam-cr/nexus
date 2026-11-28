@@ -56,6 +56,19 @@ export interface QuienEstuvo {
   nadieDelCliente: boolean;
   /** «Fue por Zoom: solo sabemos a quién se invitó». null = de Meet. */
   nota: string | null;
+  /**
+   * 2026-11-28 · Ni un invitado es del cliente (por su dominio o por ser su contacto de HubSpot), y sí hay alguien de
+   * afuera del equipo (HubSpot, una agencia): la base para RECOMENDAR que es una sesión interna. Más estricto que
+   * `nadieDelCliente`, que con asistencia mira solo a quien entró. false sin dominios ni contactos del dueño.
+   */
+  ningunInvitadoDelCliente: boolean;
+  /** Los dominios de afuera que no son del cliente («hubspot.com»), para decirlo en la recomendación. */
+  dominiosDeAfuera: string[];
+}
+
+/** PURA. ¿Recomendar que la sesión es interna? Sin nadie del cliente en la invitación, y con alguien de afuera. */
+export function pareceSesionInterna(q: Pick<QuienEstuvo, "ningunInvitadoDelCliente">): boolean {
+  return q.ningunInvitadoDelCliente;
 }
 
 export interface EntradaDeQuienEstuvo {
@@ -149,16 +162,19 @@ export function armarQuienEstuvo(e: EntradaDeQuienEstuvo): QuienEstuvo {
   const delCliente = (p: PersonaDeLaReunion) => p.lado === "cliente";
   // Sin dominios del dueño ni contactos (una reunión sin dueño, o una ficha sin dominios), no hay con qué reconocer a
   // alguien del cliente: no se afirma «nadie del cliente» (la misma regla que el buscador, `sinNadieDelCliente`).
-  const sePuedeSaber = e.dominiosDelCliente.size > 0 || e.contactos.size > 0;
+  // ⚠ Y alguien sin correo (anotado por su nombre en una reunión agregada a mano, o entrado a Meet sin cuenta) puede ser
+  // del cliente: con él en la lista tampoco se afirma (revisión del 2026-11-28: «Ana Pérez» pegada a mano daba «interna»).
+  const sinCorreoEn = (lista: readonly PersonaDeLaReunion[]) => lista.some((p) => !p.dominio);
+  const sePuedeSaberEn = (lista: readonly PersonaDeLaReunion[]) => (e.dominiosDelCliente.size > 0 || e.contactos.size > 0) && !sinCorreoEn(lista);
   const delClienteEn = (lista: readonly PersonaDeLaReunion[]) => {
     const n = lista.filter(delCliente).length;
-    return n > 0 ? ` · ${n} del cliente` : sePuedeSaber ? " · nadie del cliente" : "";
+    return n > 0 ? ` · ${n} del cliente` : sePuedeSaberEn(lista) ? " · nadie del cliente" : "";
   };
   let resumen: string;
   let nadieDelCliente: boolean;
   if (conAsistencia) {
     const entraron = personas.filter((p) => p.entro === true);
-    nadieDelCliente = sePuedeSaber && !entraron.some(delCliente);
+    nadieDelCliente = sePuedeSaberEn(entraron) && !entraron.some(delCliente);
     const deCuantos = Math.max(invitados.length, entraron.length);
     resumen =
       entraron.length === 0
@@ -166,11 +182,16 @@ export function armarQuienEstuvo(e: EntradaDeQuienEstuvo): QuienEstuvo {
         : `${entraron.length === 1 ? "Estuvo" : "Estuvieron"} ${entraron.length} de ${deCuantos}`;
     resumen += delClienteEn(entraron);
   } else {
-    nadieDelCliente = sePuedeSaber && !invitados.some(delCliente);
+    nadieDelCliente = sePuedeSaberEn(invitados) && !invitados.some(delCliente);
     const n = invitados.length;
     resumen = `${n} ${n === 1 ? "invitado" : "invitados"}` + delClienteEn(invitados);
   }
 
+  const dominiosDeAfuera = [...new Set(invitados.filter((p) => p.lado === "otro" && p.dominio).map((p) => p.dominio as string))].sort();
+  // Hace falta alguien de afuera del equipo: una de puertas adentro ya no entra sola a la exploración (otra regla).
+  // Los de afuera cuentan solo con correo y dominio; uno sin correo (en la lista o entrado a Meet) frena la recomendación.
+  const ningunInvitadoDelCliente =
+    sePuedeSaberEn([...invitados, ...personas.filter((p) => p.entro === true)]) && !invitados.some(delCliente) && invitados.some((p) => p.lado === "otro" && !!p.dominio);
   const aviso = avisoDePlataforma(e.plataforma);
   const nota = aviso
     ? `${aviso}: solo sabemos a quién se invitó, no quién entró.`
@@ -179,7 +200,18 @@ export function armarQuienEstuvo(e: EntradaDeQuienEstuvo): QuienEstuvo {
       : e.estadoDeConferencia === "SIN_ACCESO"
         ? "La organizó alguien de afuera y nadie del equipo entró: Meet no dice quién estuvo."
         : "Meet todavía no dice quién entró: por ahora, los invitados.";
-  return { personas, resumen, conAsistencia, nadieDelCliente, nota };
+  return { personas, resumen, conAsistencia, nadieDelCliente, nota, ningunInvitadoDelCliente, dominiosDeAfuera };
+}
+
+/** PURA. Las iniciales para el círculo de la persona, como en Google Calendar («Liz Navarro» → «LN», «ana@x.com» → «A»). */
+export function inicialesDe(p: Pick<PersonaDeLaReunion, "nombre" | "correo">): string {
+  const base = (p.nombre ?? p.correo ?? "?").trim();
+  const palabras = base.includes("@") ? [base.split("@")[0]] : base.split(/\s+/);
+  return palabras
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join("");
 }
 
 /**

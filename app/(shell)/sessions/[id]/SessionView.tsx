@@ -29,7 +29,7 @@ import { AvisosDeLaReunion } from "@/components/sessions/reunion/AvisosDeLaReuni
 import { AgendaDeLaReunion } from "@/components/sessions/reunion/AgendaDeLaReunion";
 import { TareasDeLaReunion } from "@/components/sessions/reunion/TareasDeLaReunion";
 import { DespuesDeLaReunion } from "@/components/sessions/reunion/DespuesDeLaReunion";
-import QuienEstuvo from "@/components/sessions/QuienEstuvo";
+import { InfoDeQuienEstuvo } from "@/components/sessions/QuienEstuvo";
 import type { QuienEstuvo as QuienEstuvoDatos } from "@/lib/sessions/quien-estuvo";
 
 // ─── Tipos compartidos con page.tsx ──────────────────────────────────────────
@@ -182,9 +182,11 @@ export default function SessionView({
             </>
           )}
         </div>
-        {session.quienEstuvo && (
-          <div className="mt-3">
-            <QuienEstuvo datos={session.quienEstuvo} />
+        {/* Quién estuvo (2026-11-28): la «i» que abre la lista de invitados, como en la sesión de la preventa. */}
+        {session.quienEstuvo && session.quienEstuvo.personas.length > 0 && (
+          <div className="mt-2 flex items-center gap-2 text-xs text-fg-muted">
+            <InfoDeQuienEstuvo datos={session.quienEstuvo} />
+            <span>Quién estuvo · {session.quienEstuvo.resumen}</span>
           </div>
         )}
         {session.resumenDeHubspot && (

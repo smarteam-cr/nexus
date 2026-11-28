@@ -42,7 +42,8 @@ import DespuesDeLaSesion from "./DespuesDeLaSesion";
 import DuranteLaSesion from "./DuranteLaSesion";
 import { EquipoDeLaSesion } from "./EquipoDeLaSesion";
 import { ReunionDeTrabajo } from "./ReunionDeTrabajo";
-import { QuienEstuvoDeLaReunion } from "@/components/sessions/QuienEstuvo";
+import { InfoDeQuienEstuvo, useQuienEstuvo } from "@/components/sessions/QuienEstuvo";
+import { pareceSesionInterna } from "@/lib/sessions/quien-estuvo";
 import { partirDeLoQueYaSabemos } from "@/lib/exploraciones/posicionar";
 import Segmentos from "./Segmentos";
 import { useLienzo, type MomentoDeLaSesion } from "./contexto";
@@ -187,6 +188,10 @@ function EncabezadoDeLaSesion({
   const sePuedeSacar =
     puedeEditar && !sePuedeQuitar && momento !== "durante" && pestana.clave !== CLAVE_DE_LA_PROXIMA && pestana.clave !== claveDeLaProxima && (!!r || estado === "ocurrio");
   const [sacando, setSacando] = useState(false);
+  // Quién estuvo en su reunión (de Meet, Zoom o agregada a mano): el globo y la recomendación de sesión interna.
+  const quienEstuvo = useQuienEstuvo(r?.origen === "meet" ? r.id : null);
+  // «No, es de la exploración»: la recomendación no vuelve a salir en esta sesión mientras dure la pantalla.
+  const [descartada, setDescartada] = useState<string | null>(null);
   const sacar = async () => {
     setSacando(false);
     const { ops, sacadas } = sacarDeLaExploracion(todas, [pestana.clave], exp.automaticas, reuniones);
@@ -367,6 +372,8 @@ function EncabezadoDeLaSesion({
                 }}
               />
             )}
+            {/* Quién estuvo (2026-11-28): un globo como la lista de invitados de Google Calendar, a la izquierda del estado. */}
+            {quienEstuvo && <InfoDeQuienEstuvo datos={quienEstuvo} />}
             <EstadoDeLaSesionChip estado={estado} noSeHizo={pestana.noSeHizo} />
           </div>
           {renombrando && (
@@ -389,10 +396,25 @@ function EncabezadoDeLaSesion({
           {/* En la preventa de un cliente (24 nov): sesión de diagnóstico o reunión de trabajo (lo que ya sabemos). */}
           <ReunionDeTrabajo pestana={pestana} momento={momento} />
           {momento !== "durante" && <LineaDeLaReunion pestana={pestana} onSumarMinuta={onSumarMinuta} />}
-          {/* Quién estuvo (2026-11-27): invitados, su respuesta y, si fue por Meet, quién entró. */}
-          {r?.origen === "meet" && (
+          {/* 2026-11-28 · Sin nadie de la empresa en la invitación: se RECOMIENDA que es interna, con un clic (sacarla de la
+              exploración, lo mismo que «Sacar de la exploración»). Nada cambia solo. */}
+          {quienEstuvo && pareceSesionInterna(quienEstuvo) && sePuedeSacar && descartada !== pestana.clave && (
             <div className="mt-2 max-w-2xl">
-              <QuienEstuvoDeLaReunion sessionId={r.id} />
+              <Alert variant="warning">
+                <p className="text-[13px]">
+                  Parece una sesión interna: en la invitación no hay nadie de {exp.empresa.nombre}
+                  {quienEstuvo.dominiosDeAfuera.length ? ` (solo Smarteam y ${quienEstuvo.dominiosDeAfuera.join(", ")})` : ""}.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {/* El mismo diálogo de «Sacar de la exploración»: se va lo que se preparó para ella (revisión del 28 nov). */}
+                  <Button variant="secondary" size="sm" disabled={guardando} onClick={() => setSacando(true)}>
+                    Es interna: sacarla de la exploración
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => setDescartada(pestana.clave)}>
+                    No, es de la exploración
+                  </Button>
+                </div>
+              </Alert>
             </div>
           )}
         </div>
@@ -419,9 +441,16 @@ function EncabezadoDeLaSesion({
           </Button>
         )}
         {sePuedeQuitar && (
-          <Button variant="secondary" size="sm" disabled={guardando} onClick={() => setQuitando(true)} title="Quita esta sesión, que todavía no pasó, con su guía">
+          <Button
+            // Rojo claro (2026-11-28, Elías): la variante del vocabulario con los tokens de peligro que ya existen.
+            variant="destructive-soft"
+            size="sm"
+            disabled={guardando}
+            onClick={() => setQuitando(true)}
+            title="Elimina esta sesión, que todavía no pasó, con su guía"
+          >
             <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-            Quitar la sesión
+            Eliminar sesión
           </Button>
         )}
         {sePuedeSacar && (
@@ -483,9 +512,9 @@ function EncabezadoDeLaSesion({
       {s && (
         <ConfirmDialog
           open={quitando}
-          title={`¿Quitar la sesión ${pestana.numero}?`}
+          title={`¿Eliminar la sesión ${pestana.numero}?`}
           description="Se va con su guía, su objetivo y lo que preparaste para ella. Las sesiones que ya pasaron no se tocan."
-          confirmLabel="Quitar la sesión"
+          confirmLabel="Eliminar sesión"
           onCancel={() => setQuitando(false)}
           onConfirm={async () => {
             const ok = await guardar(sesiones.filter((x) => x.id !== s.id));

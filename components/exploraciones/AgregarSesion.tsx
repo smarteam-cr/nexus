@@ -6,10 +6,15 @@
  * que ya pasó (de la empresa o de tu calendario) o una sin reunión todavía (para preparar la guía antes
  * de agendarla). Las dos primeras abren el selector (BuscarReunionesDeLaPreventa); la tercera crea la
  * sesión y la abre en su preparación. Lo usan la página de inicio y el riel.
+ *
+ * Desde el 2026-11-28 también «Pegar una transcripción» (Elías, con Líneas Hospitalarias): sin buscar la reunión en el
+ * calendario, se pega su texto en el cajón de «Agregar una reunión» y queda como sesión, leída como cualquier otra.
  */
-import { Menu } from "@/components/ui";
+import { useState } from "react";
+import { Menu, useToast } from "@/components/ui";
+import { AgregarReunion } from "@/components/sessions/AgregarReunion";
 import { cn } from "@/lib/cn";
-import { MAX_SESIONES } from "@/lib/exploraciones/guia";
+import { MAX_SESIONES, pestanaDeLaReunion } from "@/lib/exploraciones/guia";
 import { useLienzo } from "./contexto";
 import { useSesiones } from "./useSesiones";
 
@@ -24,6 +29,7 @@ function Icono({ d, className }: { d: string; className: string }) {
 const CALENDARIO = "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z";
 const VIDEO = "M15 10l4.5-3v10L15 14M5 6h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z";
 const MAS = "M12 5v14M5 12h14";
+const TEXTO = "M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h6";
 
 function Opcion({ titulo, texto }: { titulo: string; texto: string }) {
   return (
@@ -35,8 +41,37 @@ function Opcion({ titulo, texto }: { titulo: string; texto: string }) {
 }
 
 export default function AgregarSesion({ variante }: { variante: "boton" | "riel" }) {
-  const { puedeEditar, guardando, sesion } = useLienzo();
-  const { sesiones, agregar } = useSesiones();
+  const { puedeEditar, guardando, sesion, exp, recargar } = useLienzo();
+  const { sesiones, todas, agregar } = useSesiones();
+  const toast = useToast();
+  const [pegando, setPegando] = useState(false);
+  /** La reunión con la transcripción pegada, como sesión de la exploración (POST …/sesiones, como «Una que ya pasó»). */
+  const comoSesion = async (sessionId: string) => {
+    // Se le pegó el texto a una reunión del día que ya era la de una pestaña (su sesión, por su evento o su fecha, o
+    // porque entró sola): no se agrega otra, se relee (`pestanaDeLaReunion`).
+    if (pestanaDeLaReunion(todas, sessionId)) {
+      await recargar();
+      toast.success("Listo: la transcripción quedó en esa sesión. Nexus la lee.");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/sales/exploraciones/${exp.id}/sesiones`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo: "pasada", sessionId }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { error?: string; sesionId?: string };
+      if (!res.ok) {
+        toast.error(d.error ?? "La reunión quedó guardada, pero no se pudo agregar como sesión. Agrégala con «Una reunión que ya pasó».");
+        return;
+      }
+      // Sin ir a la sesión: el cajón sigue abierto si falta subir el audio, y la sesión ya está en la barra.
+      await recargar();
+      toast.success("Sesión agregada: Nexus lee la transcripción y la suma a la guía.");
+    } catch {
+      toast.error("La reunión quedó guardada, pero no se pudo agregar como sesión: revisa la conexión.");
+    }
+  };
   if (!puedeEditar) return null;
 
   const lleno = sesiones.length >= MAX_SESIONES;
@@ -45,12 +80,27 @@ export default function AgregarSesion({ variante }: { variante: "boton" | "riel"
       ? "inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-[13px] font-semibold text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50"
       : // En la barra (también la de la ficha) se ve como lo que es: un menú, con su flecha (2026-11-06, Elías: parecía un enlace).
         "flex w-full items-center justify-between gap-1.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg";
+  /* El cajón vive acá aunque la exploración se llene con la sesión que agrega: si no, se cerraría antes de subir el audio. */
+  const cajon = pegando ? (
+    <AgregarReunion
+      open={pegando}
+      onClose={() => setPegando(false)}
+      clienteFijo={{ id: exp.empresa.clientId, nombre: exp.empresa.nombre }}
+      tipoInicial="transcripcion"
+      onAgregada={(sessionId) => void comoSesion(sessionId)}
+    />
+  ) : null;
   if (lleno) {
-    return variante === "boton" ? (
-      <button type="button" disabled title={`Ya hay ${MAX_SESIONES} sesiones: saca una antes de agregar otra.`} className={claseDelBoton}>
-        + Agregar sesión
-      </button>
-    ) : null;
+    return (
+      <>
+        {variante === "boton" && (
+          <button type="button" disabled title={`Ya hay ${MAX_SESIONES} sesiones: saca una antes de agregar otra.`} className={claseDelBoton}>
+            + Agregar sesión
+          </button>
+        )}
+        {cajon}
+      </>
+    );
   }
 
   return (
@@ -82,6 +132,13 @@ export default function AgregarSesion({ variante }: { variante: "boton" | "riel"
             onSelect: () => sesion.buscarReunion({ tipo: "nueva", ver: "pasadas" }),
           },
           {
+            key: "transcripcion",
+            icon: <Icono d={TEXTO} className="text-fg-muted" />,
+            label: <Opcion titulo="Pegar una transcripción" texto="La de una reunión que no está en tu calendario (Zoom, Teams, en persona). Nexus la lee y arma la guía con ella." />,
+            disabled: guardando,
+            onSelect: () => setPegando(true),
+          },
+          {
             key: "sinReunion",
             icon: <Icono d={MAS} className="text-fg-muted" />,
             label: <Opcion titulo="Sin reunión todavía" texto="Para preparar la guía antes de agendarla." />,
@@ -90,6 +147,9 @@ export default function AgregarSesion({ variante }: { variante: "boton" | "riel"
           },
         ]}
       />
+      {/* 2026-11-28 · El mismo cajón de «+ Pegar la transcripción» (components/sessions/AgregarReunion.tsx): la reunión queda
+          de la empresa y, al guardarla, se agrega como sesión por la misma puerta que «Una reunión que ya pasó». */}
+      {cajon}
     </div>
   );
 }
