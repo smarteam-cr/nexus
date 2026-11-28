@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { armarQuienEstuvo, conElLadoDe, sinNadieDelCliente, textoDeLaRespuesta, type EntradaDeQuienEstuvo, type FilaDeQuienEstuvo } from "./quien-estuvo";
+import { armarQuienEstuvo, conElLadoDe, inicialesDe, pareceSesionInterna, sinNadieDelCliente, textoDeLaRespuesta, type EntradaDeQuienEstuvo, type FilaDeQuienEstuvo } from "./quien-estuvo";
 
 const equipo = new Map([
   ["liz@smarteamcr.com", "Liz Navarro"],
@@ -114,6 +114,36 @@ describe("sinNadieDelCliente (el buscador)", () => {
   });
   it("sin dominios del cliente no afirma nada", () => {
     expect(sinNadieDelCliente(["liz@smarteamcr.com"], new Set())).toBe(false);
+  });
+});
+
+describe("pareceSesionInterna — recomendar que es interna (2026-11-28, el sync del 11 nov de Líneas Hospitalarias)", () => {
+  it("Smarteam y HubSpot, nadie del cliente: sí, y dice de dónde son los de afuera", () => {
+    const q = armarQuienEstuvo(entrada({ filas: [fila("liz@smarteamcr.com"), fila("nferrero@hubspot.com")] }));
+    expect(pareceSesionInterna(q)).toBe(true);
+    expect(q.dominiosDeAfuera).toEqual(["hubspot.com"]);
+  });
+  it("con alguien del cliente invitado, aunque no haya entrado: no", () => {
+    const q = armarQuienEstuvo(
+      entrada({
+        estadoDeConferencia: "OCURRIO",
+        filas: [fila("liz@smarteamcr.com", { entro: new Date(), minutos: 12 }), fila("nferrero@hubspot.com", { entro: new Date() }), fila("dir@lineashospitalarias.com")],
+      }),
+    );
+    expect(q.nadieDelCliente).toBe(true);
+    expect(pareceSesionInterna(q)).toBe(false);
+  });
+  it("solo el equipo (de puertas adentro), o sin dominios del cliente: no se recomienda", () => {
+    expect(pareceSesionInterna(armarQuienEstuvo(entrada({ filas: [fila("liz@smarteamcr.com"), fila("eli@smarteamcr.com")] })))).toBe(false);
+    expect(pareceSesionInterna(armarQuienEstuvo(entrada({ dominiosDelCliente: new Set(), filas: [fila("nferrero@hubspot.com")] })))).toBe(false);
+  });
+});
+
+describe("inicialesDe", () => {
+  it("como en Google Calendar", () => {
+    expect(inicialesDe({ nombre: "Liz Navarro", correo: "liz@smarteamcr.com" })).toBe("LN");
+    expect(inicialesDe({ nombre: null, correo: "nferrero@hubspot.com" })).toBe("N");
+    expect(inicialesDe({ nombre: null, correo: null })).toBe("?");
   });
 });
 

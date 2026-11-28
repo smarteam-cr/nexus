@@ -7,7 +7,8 @@
  * La exploración son sus SESIONES (etapa A, 2026-10-09). En un prospecto, cada reunión con la empresa
  * que no está en una sesión entra sola como sesión (`automaticas`), menos las que alguien sacó
  * (`contenido.fuera`); en un cliente o un proyecto nada entra solo: se agrega con «+ Agregar sesión».
- * Sin una sesión por delante, la próxima existe igual (`nueva`): es la que se prepara, y no se lista.
+ * Sin una sesión por delante, la próxima existe igual (`nueva`): es la que se prepara. Desde el 2026-11-28 la barra de
+ * la izquierda la lista como el Resumen (`todas`); la lista de sesiones del Resumen la sigue mostrando aparte, arriba.
  */
 import {
   estadoDeLaReunionDeLaSesion,
