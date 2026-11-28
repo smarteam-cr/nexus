@@ -10,9 +10,9 @@
 ```ejecutivo
 {
  "corte": "2026-11-27",
- "produccion": "1d9d9c34",
+ "produccion": "70286360",
  "arriba": [
-  "En producción desde el 27 nov: la página del cronograma que ve el cliente muestra el avance y se edita desde adentro, el Diagnóstico de rendimiento ordenado por el trabajo y la empresa arriba de sus unidades (TEC y Grupo Teamnet).",
+  "En producción desde el 27 nov: las reuniones de Zoom y Teams con quién estuvo, la página del cronograma que ve el cliente, el Diagnóstico de rendimiento ordenado por el trabajo y la empresa arriba de sus unidades (TEC y Grupo Teamnet).",
   "En curso: nada corriendo; el plan de kölbi espera que Valentina lo publique.",
   "Te espera: el OK para pasar Cemaco a empresa con Sukasa, el Resumen de TEC · AE con la nota sobre Meta, Centauro con Marco y las preguntas 118 y 99."
  ],
@@ -485,7 +485,7 @@
    "estado": "en-curso",
    "donde": "Todo chat y todo «✨ Mejorar con IA» abren el mismo «Nexus», y en la preventa es una sola conversación; el conector de Claude espera la pregunta 99.",
    "hecho": [
-    "Cada reunión se lee una vez y queda como memoria de la cuenta, y cada uno lee solo las reuniones de sus clientes.",
+    "Cada reunión se lee una vez y queda como memoria de la cuenta, cada uno lee solo las de sus clientes, y entran también las de Zoom y Teams con quién estuvo arriba de cada sesión.",
     "Hablar con Nexus guarda lo que cuentas como notas con sus hechos, con tope de US$ 100 al mes, y lo que confirma el equipo llega a la memoria y a los casos de uso sin lo interno.",
     "Un solo chat «Nexus» en toda la app, con una sola conversación en la preventa donde cuentas, preguntas y pides tareas, siguiente paso o la guía; el conector de Claude ya responde en local."
    ],
@@ -730,7 +730,7 @@
 ```linea
 {
  "hoy": "2026-11-27",
- "produccion": "1d9d9c34",
+ "produccion": "70286360",
  "temasHechoHasta": "2026-10-29",
  "iniciativas": [
   {
@@ -2269,6 +2269,19 @@
     "6b15861b",
     "271a87a5"
    ]
+  },
+  {
+   "fecha": "2026-11-27",
+   "iniciativa": "reuniones",
+   "titulo": "Las reuniones de Zoom y Teams entran a Nexus, y cada sesión dice quién estuvo",
+   "que": "Toda reunión del calendario con alguien de afuera entra, sea de Meet, Zoom, Teams o en persona: se busca y dice «fue por Zoom · sin texto». Arriba de cada sesión, «Quién estuvo»: cada persona con su lado y, en Meet, sus minutos. Se ve el resumen del grabador de HubSpot y se puede pegar la transcripción.",
+   "paraQuien": "Todo el equipo",
+   "prod": "si",
+   "tema": 2,
+   "commits": [
+    "651638bd",
+    "086c9e43"
+   ]
   }
  ],
  "sigue": [
@@ -2332,6 +2345,14 @@
    "preguntas": [
     96
    ]
+  },
+  {
+   "iniciativa": "reuniones",
+   "titulo": "Las reuniones agendadas de la preventa ofrecen también Zoom y Teams",
+   "que": "Hoy la lista de reuniones que vienen solo muestra las de Meet: una de Zoom aparece recién cuando ocurrió.",
+   "paraQuien": "Ventas",
+   "estado": "por-hacer",
+   "tema": 2
   },
   {
    "iniciativa": "reuniones",
@@ -2769,7 +2790,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "Todo está en producción (1d9d9c34, 27 nov): la página del cronograma que ve el cliente, la parte de arriba del Diagnóstico de rendimiento y la empresa arriba de sus unidades (TEC y Grupo Teamnet). Lo próximo: tu OK para Cemaco, el Resumen de TEC · AE y que Valentina publique el plan de kölbi.",
+ "dondeVamos": "Todo está en producción (70286360, 27 nov): las reuniones de Zoom y Teams con quién estuvo, la página del cronograma que ve el cliente, la parte de arriba del Diagnóstico de rendimiento y la empresa arriba de sus unidades (TEC y Grupo Teamnet). Lo próximo: tu OK para Cemaco, el Resumen de TEC · AE y que Valentina publique el plan de kölbi.",
  "temas": [
   {
    "n": 4,
@@ -3244,7 +3265,7 @@
      "texto": "El plan de las empresas que comparten dominio: la pared es el proyecto y el nombre de la reunión pesa más."
     }
    ],
-   "sigue": "Que lo cambiado en lo que ve el cliente vuelva a la memoria. Tus respuestas al plan de dominio compartido.",
+   "sigue": "Que la lista de reuniones agendadas de la preventa ofrezca también las de Zoom y Teams. Que lo cambiado en lo que ve el cliente vuelva a la memoria. Tus respuestas al plan de dominio compartido.",
    "decisiones": [
     21,
     34,
@@ -3541,7 +3562,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `1d9d9c34` (todo `main`) desde el 27 nov: la página del cronograma que ve el cliente (avance por semana y editable desde adentro), el Diagnóstico de rendimiento ordenado por el trabajo, la empresa arriba de sus unidades (TEC y Grupo Teamnet; Cemaco espera tu OK), el diagnóstico que se valida propuesta por propuesta, Unidades de negocio, el plan general como pieza de la cuenta (kölbi con su fase «00 · Transversal», sin publicar), «Diagnóstico de rendimiento», interlocutores por unidad, Stratosphere separado de Teamnet, 15.000 caracteres en el chat y La escala, «Guardarlo como nota» solo con lo contado, el chat «Nexus» de La escala en una sola conversación, «Ubicar» con las notas del equipo, La escala interna más limpia, La escala sin Resumen con «Responder con Nexus», la página del chat «Nexus» en Documentación, un Resumen de La escala que no pierde las cifras de la empresa, las franjas del kickoff, un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y reuniones enteras, La escala de un cliente con lo que ya sabemos, la pantalla limpia de La escala, el registro de los cambios de base, Hablar con Nexus (etapas 0 y 1), el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
+| Producción | Corre `70286360` (todo `main`) desde el 27 nov: las reuniones de Zoom y Teams con «Quién estuvo» arriba de cada sesión, la página del cronograma que ve el cliente (avance por semana y editable desde adentro), el Diagnóstico de rendimiento ordenado por el trabajo, la empresa arriba de sus unidades (TEC y Grupo Teamnet; Cemaco espera tu OK), el diagnóstico que se valida propuesta por propuesta, Unidades de negocio, el plan general como pieza de la cuenta (kölbi con su fase «00 · Transversal», sin publicar), «Diagnóstico de rendimiento», interlocutores por unidad, Stratosphere separado de Teamnet, 15.000 caracteres en el chat y La escala, «Guardarlo como nota» solo con lo contado, el chat «Nexus» de La escala en una sola conversación, «Ubicar» con las notas del equipo, La escala interna más limpia, La escala sin Resumen con «Responder con Nexus», la página del chat «Nexus» en Documentación, un Resumen de La escala que no pierde las cifras de la empresa, las franjas del kickoff, un solo chat «Nexus» en toda la app con una sola conversación en la preventa, el Resumen de La escala con «Diagnóstico de rendimiento» y reuniones enteras, La escala de un cliente con lo que ya sabemos, la pantalla limpia de La escala, el registro de los cambios de base, Hablar con Nexus (etapas 0 y 1), el historial de versiones, las lecturas de reuniones con guarda y el conector de Claude apagado. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
 | Por desplegar | Nada. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | Por datos de antes, ninguno nuevo (28 oct): 16 reuniones colgadas de proyectos de otro cliente (INV1) y 9 tareas que citan una reunión de otro cliente (INV42), las que ordena el plan de dominio compartido; el pipeline de Secure Title (INV11: 2 proyectos y 6 en una etapa desconocida); «TEC- AE» fusionada en HubSpot (INV13 e INV54: ya solo ella, kölbi quedó bien); una reunión de Meet leída antes de ocurrir (INV16a), y el corte de cartera de hace 96 días (INV32). |
 | Pruebas | 30 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 83 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
