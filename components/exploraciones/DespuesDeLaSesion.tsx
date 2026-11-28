@@ -14,10 +14,14 @@
  * plegados a un clic.
  *
  * Una reunión que casi no tiene conversación (o una sesión sin reunión, o una que terminó sin transcripción
- * ni notas) no espera una lectura: pregunta qué pasó —se hizo y la transcripción llega ahora, se hizo por
- * otro canal y, bajo «Otra cosa pasó», se cortó o no se hizo— para que no quede como una reunión hecha que
- * nadie analizó. La primera abre el formulario: lo sumado pasa a ser la reunión de ESA sesión, con su
- * nombre y su fecha, y la sesión deja de estar marcada (SumarAMano › `paraSesion`).
+ * ni notas) no espera una lectura: pregunta qué pasó —se hizo y le cuentas a Nexus qué pasó y, bajo «Otra
+ * cosa pasó», se cortó o no se hizo— para que no quede como una reunión hecha que nadie analizó.
+ *
+ * Desde el 2026-11-28 (Elías, segunda vuelta de Líneas Hospitalarias: A1 y B) «Se hizo; la transcripción la tengo ahora»
+ * y «Se hizo por otro canal» son UNA tarjeta, «Se hizo: cuéntale a Nexus qué pasó», que abre el MISMO cajón de «+ Agregar
+ * sesión › Pegar una transcripción» (components/sessions/AgregarReunion.tsx): lo que recuerdas, la transcripción o un
+ * archivo. Todo se guarda en la reunión de la empresa (la de la sesión, o una nueva unida a ella); un Word o un PDF se
+ * copia y se pega. Antes, el panel guardaba un documento de la exploración (SumarAMano › `paraSesion`).
  */
 import { useState } from "react";
 import { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia } from "@/components/ui/sistema";
@@ -36,7 +40,15 @@ import {
   objetivosSugeridosDeLaSiguiente,
   type Cumplimiento,
 } from "@/lib/exploraciones/despues-de-la-sesion";
-import { MAX_SESIONES, tituloDeLaSesion, type PestanaDeSesion, type PreguntaParaMostrar, type ResultadoDeLaSesion } from "@/lib/exploraciones/guia";
+import {
+  alContarLoQuePaso,
+  marcaAlContar,
+  MAX_SESIONES,
+  type PestanaDeSesion,
+  type PreguntaParaMostrar,
+  type ResultadoDeLaSesion,
+  type SesionPlaneada,
+} from "@/lib/exploraciones/guia";
 import { claveDeNotaDeSesion } from "@/lib/exploraciones/notas-de-sesion";
 import ComoTrabajasteEstaSesion from "@/components/analizador-venta/ComoTrabajasteEstaSesion";
 import { useAnalisisDeLaVenta } from "@/components/analizador-venta/useAnalisisDeLaVenta";
@@ -45,7 +57,9 @@ import { Casilla } from "./Casilla";
 import { CorreoDeSeguimiento } from "./CorreoDeSeguimiento";
 import { useLienzo } from "./contexto";
 import ReunionesMalLeidas from "./ReunionesMalLeidas";
-import SumarAMano from "./SumarAMano";
+import { useToast } from "@/components/ui";
+import { AgregarReunion } from "@/components/sessions/AgregarReunion";
+import { diaEnCostaRica, type TipoDeContenido } from "@/lib/sessions/reunion-a-mano";
 import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useEditarLaSesion, useFocoDeLaGuia } from "./piezas-de-la-sesion";
 import { FilaCompacta, ListaCompacta, UsadasHoy } from "./Propuestas";
 import { useCorrida } from "./useCorrida";
@@ -431,13 +445,9 @@ function TusNotas({ pestana, vacio }: { pestana: PestanaDeSesion; vacio?: boolea
 
 /* Elías (2026-11-17, Ulacit): faltaba el caso más común —se hizo y la transcripción llega ahora— y estaba como un
    enlace al pie. Va primero y abre el formulario: no se guarda como resultado, la sesión pasa a tener su reunión.
-   «Se cortó» y «No se hizo» siguen (lo de la cortada pasa a la próxima sesión), pero bajo «Otra cosa pasó». */
+   «Se cortó» y «No se hizo» siguen (lo de la cortada pasa a la próxima sesión), pero bajo «Otra cosa pasó».
+   2026-11-28: «Se hizo por otro canal» dejó de ser tarjeta: es «Lo que recuerdas» del mismo cajón. */
 type Opcion = { clave: ResultadoDeLaSesion; titulo: string; ayuda: (siguiente: number) => string };
-const OTRO_CANAL: Opcion = {
-  clave: "otroCanal",
-  titulo: "Se hizo por otro canal",
-  ayuda: () => "Teléfono o WhatsApp, sin transcripción. Escribe lo que pasó en «En vivo» y el agente lo lee como tus notas.",
-};
 const OTRA_COSA: Opcion[] = [
   { clave: "cortada", titulo: "Se cortó: hay que reagendarla", ayuda: (n) => `Lo que tenía preparado pasa a la sesión ${n}.` },
   { clave: "noSeHizo", titulo: "No se hizo", ayuda: () => "Sale de las sesiones. La reunión sigue en Meet." },
@@ -487,18 +497,21 @@ function QuePaso({
   numeroSiguiente: number;
   claveSiguiente: string | null;
   minutaAbierta: boolean;
-  onMinuta: (sesionId: string) => void;
+  onMinuta: (sesionId: string | null) => void;
 }) {
-  const { exp, escala, marco, puedeEditar, guardando, sesion: seleccion } = useLienzo();
+  const { exp, escala, marco, puedeEditar, guardando, recargar, sesion: seleccion } = useLienzo();
+  const { todas } = useSesiones();
+  const toast = useToast();
   const editar = useEditarLaSesion(pestana, "despues");
   // Lo que tenía preparado, si no se armó su guía: lo que falta hoy (en la preventa, el plan de la guía).
   const { foco } = useFocoDeLaGuia(pestana.sesion?.id ?? null);
-  /* «Sumar la minuta»: el formulario, con la sesión de la que es. Si era una reunión suelta, se vuelve
-     sesión primero (cambia de pestaña: por eso lo abierto vive en SesionesDeExploracion). */
-  const minutaDe = minutaAbierta ? (pestana.sesion?.id ?? null) : null;
-  const sumarLaMinuta = async () => {
-    const id = await editar(null);
-    if (id) onMinuta(id);
+  /* «Cuéntale a Nexus qué pasó» (2026-11-28): el cajón de «Agregar una reunión», abierto en lo que recuerdas, la
+     transcripción o un archivo. También lo abre el enlace «sumar la minuta» de la cabecera (`minutaAbierta`). */
+  const [contar, setContar] = useState<TipoDeContenido | null>(null);
+  const abierto = contar !== null || minutaAbierta;
+  const cerrar = () => {
+    setContar(null);
+    onMinuta(null);
   };
   const r = pestana.reunion;
   const s = pestana.sesion;
@@ -513,9 +526,53 @@ function QuePaso({
       const guia = e.propuesta.guias[x.id] ?? null;
       const pasaron = guia ? [...guia.huecos, ...guia.enfoque] : [...foco.huecos, ...foco.enfoque];
       return { ...x, resultado: clave, pasaron: pasaron.slice(0, 20) };
-    }).then((id) => {
-      if (id && clave === "otroCanal" && resultado !== "otroCanal") seleccion.ponerMomento(id, "durante");
     });
+
+  /* Lo contado queda en la reunión de la empresa (A1). Si era la reunión de esta sesión, alcanza con releer; si es otra
+     (la sesión no tenía reunión, o se eligió otra del día), se une a ESTA sesión por la puerta de siempre (POST …/sesiones
+     con `paraSesionId`: la misma de «Cambiar reunión»). */
+  const alContar = async (sessionId: string) => {
+    const que = alContarLoQuePaso({ pestana, sessionId, pestanas: todas });
+    if (que.accion === "deOtraSesion") {
+      // Dos sesiones con la misma reunión la leerían dos veces: el texto quedó en esa reunión y no se une.
+      toast.error("Esa reunión ya es la de otra sesión: lo que contaste quedó en ella. Aquí elige otra reunión o una nueva.");
+      await recargar();
+      return;
+    }
+    // Se hizo y ya tiene texto: «No se hizo» y «Por otro canal» se van (antes de unir, así no se pisa lo que escribe el servidor).
+    const marca = marcaAlContar(resultado ?? undefined);
+    const conMarcaNueva = (x: SesionPlaneada): SesionPlaneada => {
+      const { resultado: _r, pasaron: _p, ...resto } = x;
+      void _r;
+      void _p;
+      return marca ? { ...resto, resultado: marca, ...(x.pasaron ? { pasaron: x.pasaron } : {}) } : resto;
+    };
+    const cambiaLaMarca = (resultado ?? undefined) !== marca;
+    if (que.accion === "releer") {
+      if (cambiaLaMarca) await editar(conMarcaNueva);
+      await recargar();
+      return;
+    }
+    // Una reunión que entró sola se vuelve sesión primero (como hacía «sumar la minuta»), para poder unirle otra.
+    const sesionId = que.volverSesion || cambiaLaMarca ? await editar(cambiaLaMarca ? conMarcaNueva : null) : (s?.id ?? null);
+    if (!sesionId) {
+      toast.error("Lo que contaste quedó en la reunión, pero no se pudo unir a esta sesión. Únela con «Cambiar reunión».");
+      await recargar();
+      return;
+    }
+    try {
+      const res = await fetch(`/api/sales/exploraciones/${exp.id}/sesiones`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo: "pasada", sessionId, paraSesionId: sesionId }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) toast.error(d.error ?? "Lo que contaste quedó en la reunión, pero no se pudo unir a esta sesión. Únela con «Cambiar reunión».");
+      await recargar();
+    } catch {
+      toast.error("Lo que contaste quedó en la reunión, pero no se pudo unir a esta sesión: revisa la conexión.");
+    }
+  };
 
   const irALaSiguiente = () => {
     if (!claveSiguiente) return;
@@ -526,8 +583,6 @@ function QuePaso({
   // Abierto si una de sus opciones está elegida: lo marcado no se esconde.
   const [otraCosa, setOtraCosa] = useState(false);
   const otraCosaAbierta = otraCosa || resultado === "cortada" || resultado === "noSeHizo";
-  // El nombre que se ve en la pestaña (el suyo, el de su reunión o el del evento): unir la minuta no lo cambia.
-  const nombreDeLaSesion = (tituloDeLaSesion(pestana) ?? `Sesión ${pestana.numero}`).slice(0, 120);
 
   return (
     <>
@@ -545,21 +600,23 @@ function QuePaso({
           <h3 className="text-[15px] font-semibold text-fg">¿Qué pasó con esta sesión?</h3>
           <p className="mt-0.5 text-[12.5px] text-fg-muted">Así no queda como una reunión hecha que nadie analizó.</p>
         </header>
-        <div className="grid gap-3 px-[18px] pt-3.5 md:grid-cols-2">
+        <div className="grid gap-3 px-[18px] pt-3.5">
           <TarjetaDeOpcion
-            titulo="Se hizo; la transcripción la tengo ahora"
-            ayuda="No se grabó o llegó después. Pégala o sube el archivo (o una minuta) y el agente la lee."
-            elegida={!!minutaDe}
+            titulo="Se hizo: cuéntale a Nexus qué pasó"
+            ayuda="Lo que recuerdas (fue por teléfono o WhatsApp), la transcripción que llegó después o un archivo. Queda en la reunión y el agente la lee."
+            elegida={abierto}
             disabled={!puedeEditar || guardando}
-            onClick={() => void sumarLaMinuta()}
+            onClick={() => setContar(r && r.texto === "nada" ? "transcripcion" : "recuerdo")}
           />
-          <TarjetaDeOpcion
-            titulo={OTRO_CANAL.titulo}
-            ayuda={OTRO_CANAL.ayuda(numeroSiguiente)}
-            elegida={resultado === OTRO_CANAL.clave}
-            disabled={!puedeEditar || guardando}
-            onClick={() => elegir(OTRO_CANAL.clave)}
-          />
+          {/* Una sesión marcada antes del 28 nov «se hizo por otro canal»: la marca se puede quitar (ya no hay tarjeta). */}
+          {resultado === "otroCanal" && (
+            <p className="text-[12.5px] text-fg-muted">
+              Está marcada «se hizo por otro canal».{" "}
+              <button type="button" className="text-brand hover:underline" disabled={!puedeEditar || guardando} onClick={() => elegir("otroCanal")}>
+                Quitar la marca
+              </button>
+            </p>
+          )}
         </div>
         <div className="px-[18px] pb-3.5 pt-2">
           <button
@@ -601,12 +658,19 @@ function QuePaso({
             Ya no cuenta como sesión. Si te equivocaste, vuelve a tocar «No se hizo».
           </div>
         )}
-        {minutaDe && (
-          <div className="px-[18px] pb-4">
-            <SumarAMano paraSesion={{ id: minutaDe, titulo: nombreDeLaSesion, fecha: s?.fecha ?? pestana.fecha }} sinLista abiertoAlInicio />
-          </div>
-        )}
       </section>
+      {abierto && (
+        <AgregarReunion
+          key={contar ?? "minuta"}
+          open={abierto}
+          onClose={cerrar}
+          clienteFijo={{ id: exp.empresa.clientId, nombre: exp.empresa.nombre }}
+          reunionInicial={r && r.origen === "meet" ? { id: r.id, fecha: diaEnCostaRica(new Date(r.fecha)) } : undefined}
+          fechaInicial={s?.fecha ?? pestana.fecha ?? undefined}
+          tipoInicial={contar ?? "transcripcion"}
+          onAgregada={(sessionId) => void alContar(sessionId)}
+        />
+      )}
       <TusNotas pestana={pestana} vacio />
     </>
   );
@@ -623,7 +687,8 @@ export default function DespuesDeLaSesion({
   pestana: PestanaDeSesion;
   /** «Sumar la minuta» abierto (también desde el enlace del encabezado de una sesión que terminó sin transcripción). */
   minutaAbierta?: boolean;
-  onMinuta: (sesionId: string) => void;
+  /** null = se cerró el cajón. */
+  onMinuta: (sesionId: string | null) => void;
   numeroSiguiente: number;
   /** La sesión siguiente, si ya existe (para ir a ella). */
   claveSiguiente: string | null;

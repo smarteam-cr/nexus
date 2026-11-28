@@ -57,6 +57,8 @@ export interface AgregarReunionProps {
    * «Pegar la transcripción»). `fecha` = su día en Costa Rica (yyyy-mm-dd). Si no está entre las del día, se elige a mano.
    */
   reunionInicial?: { id: string; fecha: string };
+  /** El día con que abre (yyyy-mm-dd, Costa Rica) cuando no hay reunión elegida: el de la sesión de la preventa. */
+  fechaInicial?: string;
   /** Qué se agrega al abrir. Sin esto, lo que recuerdas. */
   tipoInicial?: TipoDeContenido;
   onAgregada?: (sessionId: string) => void;
@@ -70,14 +72,14 @@ function horaCR(iso: string): string {
   return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
 }
 
-export function AgregarReunion({ open, onClose, clienteFijo, clientes, proyectoInicial, reunionInicial, tipoInicial, onAgregada }: AgregarReunionProps) {
+export function AgregarReunion({ open, onClose, clienteFijo, clientes, proyectoInicial, reunionInicial, fechaInicial, tipoInicial, onAgregada }: AgregarReunionProps) {
   const toast = useToast();
   const router = useRouter();
   const me = useMe();
   const archivoRef = useRef<HTMLInputElement>(null);
 
   const [clientId, setClientId] = useState(clienteFijo?.id ?? "");
-  const [fecha, setFecha] = useState(() => reunionInicial?.fecha ?? diaEnCostaRica(new Date()));
+  const [fecha, setFecha] = useState(() => reunionInicial?.fecha ?? fechaInicial ?? diaEnCostaRica(new Date()));
   const [hora, setHora] = useState("");
   const [opciones, setOpciones] = useState<Opciones | null>(null);
   const [cargando, setCargando] = useState(false);

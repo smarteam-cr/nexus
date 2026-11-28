@@ -410,6 +410,35 @@ export function pestanaDeLaReunion(pestanas: readonly Pick<PestanaDeSesion, "cla
   return pestanas.find((p) => p.reunion?.origen === "meet" && p.reunion.id === sessionId)?.clave ?? null;
 }
 
+/** Qué hacer con la reunión en la que alguien contó lo que pasó desde «¿Qué pasó con esta sesión?» (2026-11-28). */
+export type AlContarLoQuePaso =
+  /** Era la reunión de ESTA pestaña: el texto ya quedó en ella, alcanza con releer. */
+  | { accion: "releer" }
+  /** Otra reunión (nueva, u otra del día libre): se une a esta sesión; si la pestaña era una reunión que entró sola, primero se vuelve sesión. */
+  | { accion: "unir"; volverSesion: boolean }
+  /** La reunión elegida ya es la de OTRA pestaña: no se une (quedarían dos sesiones con la misma reunión). */
+  | { accion: "deOtraSesion"; clave: string };
+
+/** PURA. Ver `AlContarLoQuePaso`. */
+export function alContarLoQuePaso(o: {
+  pestana: Pick<PestanaDeSesion, "clave" | "sesion" | "reunion">;
+  sessionId: string;
+  pestanas: readonly Pick<PestanaDeSesion, "clave" | "reunion">[];
+}): AlContarLoQuePaso {
+  if (o.pestana.reunion?.origen === "meet" && o.pestana.reunion.id === o.sessionId) return { accion: "releer" };
+  const otra = pestanaDeLaReunion(o.pestanas, o.sessionId);
+  if (otra && otra !== o.pestana.clave) return { accion: "deOtraSesion", clave: otra };
+  return { accion: "unir", volverSesion: !o.pestana.sesion };
+}
+
+/**
+ * PURA. La marca de la sesión después de contar lo que pasó: «No se hizo» y «Por otro canal» se van (se hizo y ya tiene
+ * su texto); «Se cortó» se queda (lo que tenía preparado ya pasó a la próxima). La misma regla de `sesionConLaMinuta`.
+ */
+export function marcaAlContar(resultado: ResultadoDeLaSesion | undefined): ResultadoDeLaSesion | undefined {
+  return resultado === "cortada" ? resultado : undefined;
+}
+
 /** Cómo se nombra una pestaña: «Sesión 3», o «No se hizo» si no cuenta. */
 export function nombreDeLaPestana(p: Pick<PestanaDeSesion, "numero" | "noSeHizo">): string {
   return p.noSeHizo ? "No se hizo" : `Sesión ${p.numero}`;

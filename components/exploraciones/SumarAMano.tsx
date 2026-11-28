@@ -13,9 +13,8 @@
  * no se borra: queda en Información del cliente › Documentos, a nivel de empresa.
  *
  * Desde la etapa A (2026-10-09) vive en la página de inicio de Exploración (y en el «Contexto adicional»
- * de Preparación). Con `paraSesion` («sumar la minuta» de una sesión que terminó sin transcripción),
- * lo sumado pasa a ser la reunión de ESA sesión, sin quedar como sesión suelta, y su nombre y su fecha no se
- * vuelven a pedir (2026-11-17).
+ * de Preparación). Del 2026-11-17 al 2026-11-28 también hacía de «sumar la minuta» de una sesión (`paraSesion`); eso
+ * pasó al cajón de «Agregar una reunión» (ver abajo).
  */
 import { useState } from "react";
 import { useToast } from "@/components/ui";
@@ -23,7 +22,7 @@ import { ContextColumnList, ContextRow, CTX_ICONS } from "@/components/clients/c
 import { VACIO_DE_LAS_FUENTES } from "@/components/clients/FuentesManualesColumn";
 import SumarFuente, { type DatosPegados, type DatosSubidos } from "@/components/contexto/SumarFuente";
 import { conEspaciosComunes, diaConAnio, diaCorto } from "@/lib/exploraciones/fechas";
-import { MAX_TEXTO_PEGADO, sesionConLaMinuta } from "@/lib/exploraciones/minuta-de-la-sesion";
+import { MAX_TEXTO_PEGADO } from "@/lib/exploraciones/minuta-de-la-sesion";
 import { subirDirecto } from "@/lib/storage/subir-directo";
 import { useLienzo } from "./contexto";
 import { useCorrida } from "./useCorrida";
@@ -40,18 +39,11 @@ function mensajeDelError(r: { error?: string; detalle?: unknown }): string {
   return r.error ?? "No se pudo sumar.";
 }
 
-export default function SumarAMano({
-  abiertoAlInicio = false,
-  paraSesion,
-  sinLista = false,
-}: {
-  abiertoAlInicio?: boolean;
-  /** La sesión de la que es la minuta: lo sumado pasa a ser su reunión, con su nombre y su fecha. */
-  paraSesion?: { id: string; titulo: string; fecha: string | null };
-  /** Solo el formulario, sin la lista de lo sumado. */
-  sinLista?: boolean;
-} = {}) {
-  const { exp, documentos, puedeEditar, recargar, cambiar } = useLienzo();
+/* 2026-11-28 · Se retiró `paraSesion` («sumar la minuta» de una sesión): «¿Qué pasó con esta sesión?» abre el cajón de
+   «Agregar una reunión» y lo contado queda en la reunión de la empresa (DespuesDeLaSesion › `alContar`; DECISIONS «La
+   sesión de la preventa después de probarla con Líneas Hospitalarias»). Acá queda lo sumado a mano de la exploración. */
+export default function SumarAMano({ abiertoAlInicio = false }: { abiertoAlInicio?: boolean } = {}) {
+  const { exp, documentos, puedeEditar, recargar } = useLienzo();
   const { seguir, corriendo } = useCorrida();
   const toast = useToast();
   const [quitando, setQuitando] = useState<string | null>(null);
@@ -59,23 +51,6 @@ export default function SumarAMano({
   const ruta = `/api/sales/exploraciones/${exp.id}/documentos`;
 
   async function alListo(data: Respuesta) {
-    /* La minuta de una sesión: lo sumado pasa a ser su reunión y la sesión deja de estar marcada como «sin nada que
-       leer» (antes de releer, sobre las sesiones que se ven). Si eso no se guarda, no se dice «Listo»: `cambiar` ya
-       mostró el error, el texto quedó como documento y el agente lo está leyendo. Pegarlo otra vez lo duplicaría (y se
-       leería dos veces), así que se dice cómo unirlo; con la fecha de la sesión, además, se liga solo por fecha. */
-    if (paraSesion && data.id) {
-      const id = data.id;
-      const sesiones = exp.estado.contenido.sesiones;
-      if (sesiones.some((s) => s.id === paraSesion.id)) {
-        const ok = await cambiar([{ op: "sesiones", sesiones: sesiones.map((s) => (s.id === paraSesion.id ? sesionConLaMinuta(s, id) : s)) }]);
-        if (!ok) {
-          await recargar();
-          toast.info("El texto quedó guardado y el agente lo está leyendo: no lo vuelvas a pegar. Si no aparece en esta sesión, únelo con «Buscar reuniones».");
-          if (data.corrida && !data.corrida.yaCorria) void seguir();
-          return;
-        }
-      }
-    }
     await recargar();
     if (data.corrida && !data.corrida.yaCorria) {
       toast.info("Listo: el agente lo está leyendo.");
@@ -120,21 +95,19 @@ export default function SumarAMano({
   // Igual que la columna de Reuniones: la lista arriba y el enlace al pie, a la misma altura (Elías, 2026-10-07).
   return (
     <div className="flex flex-1 flex-col gap-2">
-      {!sinLista && (
-        <ContextColumnList empty={VACIO_DE_LAS_FUENTES}>
-          {documentos.map((d) => (
-            <ContextRow
-              key={d.id}
-              icon={CTX_ICONS.note}
-              meta={`${d.fecha ? `Sesión del ${diaConAnio(d.fecha)}` : `Sumado el ${diaCorto(d.creadoEn)}`}${d.nombreArchivo ? ` · ${d.nombreArchivo}` : " · pegado"}`}
-              title={d.titulo}
-              snippet={`${conEspaciosComunes(d.caracteres.toLocaleString("es-CR"))} caracteres`}
-              badge={leidos.has(d.id) ? { label: "Leído", tone: "green" } : { label: "Sin leer", tone: "amber" }}
-              onRemove={puedeEditar && quitando !== d.id ? () => void quitar(d.id) : undefined}
-            />
-          ))}
-        </ContextColumnList>
-      )}
+      <ContextColumnList empty={VACIO_DE_LAS_FUENTES}>
+        {documentos.map((d) => (
+          <ContextRow
+            key={d.id}
+            icon={CTX_ICONS.note}
+            meta={`${d.fecha ? `Sesión del ${diaConAnio(d.fecha)}` : `Sumado el ${diaCorto(d.creadoEn)}`}${d.nombreArchivo ? ` · ${d.nombreArchivo}` : " · pegado"}`}
+            title={d.titulo}
+            snippet={`${conEspaciosComunes(d.caracteres.toLocaleString("es-CR"))} caracteres`}
+            badge={leidos.has(d.id) ? { label: "Leído", tone: "green" } : { label: "Sin leer", tone: "amber" }}
+            onRemove={puedeEditar && quitando !== d.id ? () => void quitar(d.id) : undefined}
+          />
+        ))}
+      </ContextColumnList>
       {puedeEditar && (
         <SumarFuente
           alPegar={alPegar}
@@ -145,7 +118,6 @@ export default function SumarAMano({
           minimo={40}
           ocupado={corriendo}
           notaAlPegar="Al menos unas líneas: el agente necesita de dónde sacar."
-          deLaSesion={paraSesion ? { titulo: paraSesion.titulo, fecha: paraSesion.fecha } : undefined}
           tope={MAX_TEXTO_PEGADO}
         />
       )}

@@ -15,14 +15,14 @@
  * la reunión abre el selector de «Agregar sesión» en modo «unir».
  */
 import { useEffect, useRef, useState } from "react";
-import { Link2, LogOut, Pencil, Trash2 } from "lucide-react";
+import { LogOut, Pencil, Repeat, Trash2 } from "lucide-react";
 import { Alert, Button, ConfirmDialog, IconButton, Select, useToast } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { Persona } from "@/lib/exploraciones/casillas";
 import type { Operacion } from "@/lib/exploraciones/contenido";
 import { aFecha, diaConAnio, diaCorto, hoyEnCostaRica } from "@/lib/exploraciones/fechas";
 import { devolverALaExploracion, horario, sacarDeLaExploracion } from "@/lib/exploraciones/inicio";
-import { CLAVE_DE_LA_PROXIMA, conLaSesion, enlaceDeLaSesion, type DondeVive } from "@/lib/exploraciones/enlace-de-la-sesion";
+import { CLAVE_DE_LA_PROXIMA } from "@/lib/exploraciones/enlace-de-la-sesion";
 import { DURACION_POR_DEFECTO, duracionDeLaSesion } from "@/lib/exploraciones/contexto-de-la-exploracion";
 import {
   ETIQUETA_DEL_ESTADO,
@@ -40,7 +40,7 @@ import { EVENTO_DEL_RECORRIDO, type AccionDelRecorrido } from "@/lib/recorridos/
 import AntesDeLaSesion from "./AntesDeLaSesion";
 import DespuesDeLaSesion from "./DespuesDeLaSesion";
 import DuranteLaSesion from "./DuranteLaSesion";
-import { EquipoDeLaSesion } from "./EquipoDeLaSesion";
+import { EquipoDeLaSesion, type SesionInterna } from "./EquipoDeLaSesion";
 import { ReunionDeTrabajo } from "./ReunionDeTrabajo";
 import { InfoDeQuienEstuvo, useQuienEstuvo } from "@/components/sessions/QuienEstuvo";
 import { pareceSesionInterna } from "@/lib/sessions/quien-estuvo";
@@ -52,8 +52,6 @@ import { useCorrida } from "./useCorrida";
 import { nuevoIdDeSesion, useSesiones } from "./useSesiones";
 
 const ORIGEN: Record<OrigenDeReunion, string> = { meet: "Google Meet", hubspot: "HubSpot", documento: "sumada a mano" };
-/** Cómo se nombra cada pestaña de la sesión en el aviso de «Copiar enlace»: las palabras de los segmentos. */
-const NOMBRE_DEL_MOMENTO: Record<MomentoDeLaSesion, string> = { antes: "su Preparación", durante: "En vivo", despues: "su Análisis" };
 
 const TONO_DEL_ESTADO: Record<EstadoDeLaSesion, string> = {
   ocurrio: "border-success-line bg-success-surface text-success-ink",
@@ -124,7 +122,7 @@ function LineaDeLaReunion({ pestana, onSumarMinuta }: { pestana: PestanaDeSesion
     case "agendada":
       return (
         <>
-          {linea(<IconoDeCalendario azul />, <span className="text-fg-secondary">{unida}</span>, "cuando ocurra, Nexus espera su transcripción y la lee sola", enlace("cambiar reunión", unir))}
+          {linea(<IconoDeCalendario azul />, <span className="text-fg-secondary">{unida}</span>, "cuando ocurra, Nexus espera su transcripción y la lee sola")}
           {!deHubspot && <p className="mt-1 text-xs text-fg-muted">Si la mueven en el calendario, la sesión toma la fecha nueva.</p>}
         </>
       );
@@ -167,7 +165,7 @@ function EncabezadoDeLaSesion({
   alMomento: (m: MomentoDeLaSesion) => void;
   onSumarMinuta: () => void;
 }) {
-  const { exp, lugar, puedeEditar, guardando, cambiar, reuniones, sesion: seleccion } = useLienzo();
+  const { exp, puedeEditar, guardando, cambiar, reuniones, sesion: seleccion } = useLienzo();
   const { todas, sesiones, guardar, claveDeLaProxima, proxima, agregar, estadoDe, yaEmpezo } = useSesiones();
   const toast = useToast();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
@@ -179,19 +177,34 @@ function EncabezadoDeLaSesion({
   /* Solo una sesión guardada que todavía no pasó: ni la que ocurrió, ni la que ya empezó o espera su transcripción. Una que
      ya pasó se marca «no se hizo» o se saca de la exploración, no se borra. Y solo en la Preparación, como el enlace de antes:
      en «En vivo» se borraría lo marcado durante la llamada (revisión del 2026-11-08). */
-  const sePuedeQuitar = puedeEditar && !!s && !pestana.hecha && estado !== "ocurrio" && !yaEmpezo(pestana) && momento === "antes";
+  /* 2026-11-28, segunda vuelta (Elías): CUALQUIER sesión guardada se elimina, también la que ya pasó o tiene su reunión,
+     para volver a asignarla si alguien se equivocó. La reunión no se borra. Nunca «En vivo» (ahí se borraría lo marcado
+     durante la llamada). Supera la regla de la quinta vuelta («solo la que todavía no pasó»). */
+  const sePuedeQuitar = puedeEditar && !!s && momento !== "durante";
   /* «Sacar de la exploración» (9 nov, Elías: «salen 2 sesiones, y no se puede borrar»): la que ya pasó, o la reunión que
      entró sola, se saca desde su propia cabecera y no solo con la X que aparece al pasar el cursor en el inicio de
      Exploración. Lo mismo que esa X (lib/exploraciones/inicio.ts › sacarDeLaExploracion): la reunión no se borra, en un
      prospecto pasa a «Fuera de la exploración», y se deshace desde el aviso. Con confirmación: se va lo que se preparó para
      ella. Ni en la próxima ni «En vivo» (ahí se borraría lo marcado durante la llamada, revisión del 9 nov). */
+  // Una sesión guardada sin reunión ya se elimina: «Sacar» queda para la que tiene reunión y para la que entró sola.
   const sePuedeSacar =
-    puedeEditar && !sePuedeQuitar && momento !== "durante" && pestana.clave !== CLAVE_DE_LA_PROXIMA && pestana.clave !== claveDeLaProxima && (!!r || estado === "ocurrio");
+    puedeEditar && momento !== "durante" && pestana.clave !== CLAVE_DE_LA_PROXIMA && pestana.clave !== claveDeLaProxima && (s ? !!r : !!r || estado === "ocurrio");
+  // «Cambiar reunión» (2026-11-28): el botón al lado de «Eliminar sesión», para la sesión que ya tiene reunión o evento.
+  const sePuedeCambiarReunion = puedeEditar && !!s && momento !== "durante" && (!!r || !!s.evento || !!s.reunion);
   const [sacando, setSacando] = useState(false);
   // Quién estuvo en su reunión (de Meet, Zoom o agregada a mano): el globo y la recomendación de sesión interna.
   const quienEstuvo = useQuienEstuvo(r?.origen === "meet" ? r.id : null);
-  // «No, es de la exploración»: la recomendación no vuelve a salir en esta sesión mientras dure la pantalla.
-  const [descartada, setDescartada] = useState<string | null>(null);
+  /* «Sesión interna» en «Equipo del cliente» (2026-11-28, C): elegirla es sacarla de la exploración, con su diálogo. Nexus
+     la sugiere cuando «Quién estuvo» no ve a nadie de la empresa en la invitación. Solo donde «Sacar» se puede. */
+  const interna: SesionInterna | null = sePuedeSacar
+    ? {
+        sugerida: !!quienEstuvo && pareceSesionInterna(quienEstuvo),
+        porque: quienEstuvo?.dominiosDeAfuera.length
+          ? `nadie de ${exp.empresa.nombre} en la invitación, solo Smarteam y ${quienEstuvo.dominiosDeAfuera.join(", ")}`
+          : `nadie de ${exp.empresa.nombre} en la invitación`,
+        alElegir: () => setSacando(true),
+      }
+    : null;
   const sacar = async () => {
     setSacando(false);
     const { ops, sacadas } = sacarDeLaExploracion(todas, [pestana.clave], exp.automaticas, reuniones);
@@ -254,27 +267,8 @@ function EncabezadoDeLaSesion({
   const evento = s?.evento;
   const hora = evento && !evento.cancelada ? horario(evento.inicio, evento.fin) : "";
 
-  /**
-   * «Copiar enlace» (Elías, 2026-10-28): la dirección de ESTA sesión en la pestaña que se ve, para pasársela a alguien del
-   * equipo. Es interna: quien la abre necesita su sesión de Nexus y acceso a la empresa (lib/exploraciones/enlace-de-la-sesion.ts).
-   */
-  const copiarEnlace = async () => {
-    const donde: DondeVive | null =
-      lugar === "preventa"
-        ? { lugar: "preventa", exploracionId: exp.id }
-        : exp.projectId
-          ? { lugar: "proyecto", clientId: exp.empresa.clientId, projectId: exp.projectId }
-          : null;
-    const url = donde
-      ? enlaceDeLaSesion(window.location.origin, donde, pestana.clave, momento)
-      : conLaSesion(new URL(window.location.href), pestana.clave, momento).href;
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success(`Enlace copiado: abre «${titulo ?? nombreDeLaPestana(pestana)}» en ${NOMBRE_DEL_MOMENTO[momento]}.`);
-    } catch {
-      toast.error("No se pudo copiar el enlace. Cópialo de la barra de direcciones.");
-    }
-  };
+  /* «Copiar enlace» se retiró el 2026-11-28 (Elías: copiaba la dirección que ya está en la barra y no servía). La
+     dirección de cada sesión se sigue escribiendo sola en la barra (LienzoDeExploracion › `conLaSesion`). */
 
   const enlace = (texto: string, onClick: () => void) => (
     <button type="button" className="text-brand hover:underline" onClick={onClick}>
@@ -292,8 +286,8 @@ function EncabezadoDeLaSesion({
     else if (r.texto === "nada" && !r.leida) datos.push(<span className="text-warn-ink">sin transcripción ni notas</span>);
     else datos.push(r.leida ? <span className="text-success-ink">leída por el agente ✓</span> : <span className="text-warn-ink">sin leer</span>);
     // La del mismo día, sin que nadie la eligiera: se dice, para poder cambiarla.
+    // «cambiar reunión» pasó a un botón al lado de «Eliminar sesión» (2026-11-28).
     if (pestana.ligadaPor === "fecha") datos.push("ligada por fecha");
-    if (puedeEditar && s) datos.push(enlace("cambiar reunión", cambiarReunion));
   } else if (momento === "despues" && s) {
     datos.push(s.fecha ? diaLargo(s.fecha) : "sin fecha");
     if (hora) datos.push(hora);
@@ -391,32 +385,13 @@ function EncabezadoDeLaSesion({
           </p>
           {/* Con qué equipo del cliente es (2026-10-23): decide qué pregunta la guía. */}
           <div className="mt-1.5">
-            <EquipoDeLaSesion pestana={pestana} momento={momento} />
+            <EquipoDeLaSesion pestana={pestana} momento={momento} interna={interna} />
           </div>
           {/* En la preventa de un cliente (24 nov): sesión de diagnóstico o reunión de trabajo (lo que ya sabemos). */}
           <ReunionDeTrabajo pestana={pestana} momento={momento} />
           {momento !== "durante" && <LineaDeLaReunion pestana={pestana} onSumarMinuta={onSumarMinuta} />}
-          {/* 2026-11-28 · Sin nadie de la empresa en la invitación: se RECOMIENDA que es interna, con un clic (sacarla de la
-              exploración, lo mismo que «Sacar de la exploración»). Nada cambia solo. */}
-          {quienEstuvo && pareceSesionInterna(quienEstuvo) && sePuedeSacar && descartada !== pestana.clave && (
-            <div className="mt-2 max-w-2xl">
-              <Alert variant="warning">
-                <p className="text-[13px]">
-                  Parece una sesión interna: en la invitación no hay nadie de {exp.empresa.nombre}
-                  {quienEstuvo.dominiosDeAfuera.length ? ` (solo Smarteam y ${quienEstuvo.dominiosDeAfuera.join(", ")})` : ""}.
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {/* El mismo diálogo de «Sacar de la exploración»: se va lo que se preparó para ella (revisión del 28 nov). */}
-                  <Button variant="secondary" size="sm" disabled={guardando} onClick={() => setSacando(true)}>
-                    Es interna: sacarla de la exploración
-                  </Button>
-                  <Button variant="secondary" size="sm" onClick={() => setDescartada(pestana.clave)}>
-                    No, es de la exploración
-                  </Button>
-                </div>
-              </Alert>
-            </div>
-          )}
+          {/* El aviso amarillo «Parece una sesión interna» se fue el 2026-11-28 (Elías, C): la recomendación es el badge
+              «¿Es una sesión interna?» de «Equipo del cliente», que abre el mismo diálogo de «Sacar de la exploración». */}
         </div>
         <span className="flex-1" />
         <div data-recorrido="preventa.sesion.momento">
@@ -433,11 +408,10 @@ function EncabezadoDeLaSesion({
             onCambiar={alMomento}
           />
         </div>
-        {/* La próxima sin planear no tiene id todavía: su enlace mañana abriría otra sesión. */}
-        {pestana.clave !== CLAVE_DE_LA_PROXIMA && (
-          <Button variant="secondary" size="sm" onClick={() => void copiarEnlace()} title="Copia la dirección de esta sesión, en esta pestaña, para pasársela a alguien del equipo">
-            <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
-            Copiar enlace
+        {sePuedeCambiarReunion && (
+          <Button variant="secondary" size="sm" disabled={guardando} onClick={cambiarReunion} title="Une esta sesión a otra reunión">
+            <Repeat className="h-3.5 w-3.5" aria-hidden="true" />
+            Cambiar reunión
           </Button>
         )}
         {sePuedeQuitar && (
@@ -447,7 +421,7 @@ function EncabezadoDeLaSesion({
             size="sm"
             disabled={guardando}
             onClick={() => setQuitando(true)}
-            title="Elimina esta sesión, que todavía no pasó, con su guía"
+            title="Elimina esta sesión con su guía. La reunión no se borra"
           >
             <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
             Eliminar sesión
@@ -513,13 +487,26 @@ function EncabezadoDeLaSesion({
         <ConfirmDialog
           open={quitando}
           title={`¿Eliminar la sesión ${pestana.numero}?`}
-          description="Se va con su guía, su objetivo y lo que preparaste para ella. Las sesiones que ya pasaron no se tocan."
+          description={
+            (pestana.hecha || estado === "ocurrio"
+              ? "Se va con su guía, su objetivo, lo que marcaste «En vivo» y lo que pasó con ella."
+              : "Se va con su guía, su objetivo y lo que preparaste para ella.") +
+            (r || s.reunion || s.evento ? " La reunión no se borra: queda libre para unirla a otra sesión." : " Las otras sesiones no se tocan.") +
+            " Lo puedes recuperar con «Deshacer» en el aviso."
+          }
           confirmLabel="Eliminar sesión"
           onCancel={() => setQuitando(false)}
           onConfirm={async () => {
+            /* Como «Sacar de la exploración»: con «Deshacer», ahora que también se elimina una sesión que ya pasó. Deshacer
+               vuelve a agregar ESA sesión entera (`agregarSesion` no reemplaza la lista: no se lleva lo que cambió entretanto). */
+            const eliminada = s;
             const ok = await guardar(sesiones.filter((x) => x.id !== s.id));
             setQuitando(false);
-            if (ok) seleccion.elegir(claveDeLaProxima);
+            if (!ok) return;
+            seleccion.elegir(claveDeLaProxima);
+            toast.success(`Eliminaste la sesión ${pestana.numero}. La reunión no se borra.`, {
+              action: { label: "Deshacer", onClick: () => void cambiar([{ op: "agregarSesion", sesion: eliminada }]) },
+            });
           }}
         />
       )}
