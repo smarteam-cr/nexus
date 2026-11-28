@@ -572,10 +572,11 @@ describe("quinta vuelta (2026-11-08)", () => {
     expect(p.system as string).toMatch(/La guía sirve a DOS objetivos/);
   });
 
-  it("quitar la sesión: con el diálogo de confirmación de la app y solo si todavía no pasó", () => {
+  it("eliminar la sesión: con el diálogo de confirmación de la app; cualquier sesión guardada, nunca «En vivo» (2026-11-28)", () => {
     const fuente = leer("components", "exploraciones", "SesionesDeExploracion.tsx");
     expect(fuente).toMatch(/<ConfirmDialog/);
-    expect(fuente).toMatch(/const sePuedeQuitar = puedeEditar && !!s && !pestana\.hecha && estado !== "ocurrio" && !yaEmpezo\(pestana\) && momento === "antes";/);
+    // Segunda vuelta del 28 nov (Elías): también la que ya pasó o tiene reunión, para volver a asignarla.
+    expect(fuente).toMatch(/const sePuedeQuitar = puedeEditar && !!s && momento !== "durante";/);
     // El botón y el diálogo solo salen con esa condición: ni el botón suelto, ni otro que abra el diálogo.
     expect(fuente).toMatch(/\{sePuedeQuitar && \(\s*<Button[^>]*onClick=\{\(\) => setQuitando\(true\)\}/);
     expect(fuente.match(/setQuitando\(true\)/g)).toHaveLength(1);
